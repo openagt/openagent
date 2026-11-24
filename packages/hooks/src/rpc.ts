@@ -7,6 +7,7 @@
 // data is taken in from origin again, and what was read of it is read anew.
 import type { GitAccess, GitAccounts } from './account.js'
 import type { InboxLine } from './agent.js'
+import type { ProjectsLifecycle } from './app.js'
 import type { ProjectRef } from './project.js'
 import type { RunFound, RunQuestion } from './run.js'
 import type { Settings } from './settings.js'
@@ -14,12 +15,19 @@ import type { Settings } from './settings.js'
 /** Where a pull request stands on the git host: still being asked, or answered (with its merge commit when merged, and the last commit of the branch it merged, when the git host says it). */
 export type MergeLookup = { pending: true } | { pending: false; commit?: string; head?: string }
 
-/** What every function is handed: the settings, read and saved through the store, the registered projects, and OpenAgent's accounts at the git hosts. */
+/**
+ * What every function is handed: the settings, read and saved through the store, the registered
+ * projects, OpenAgent's accounts at the git hosts, and the app's word to the modules.
+ */
 export interface RpcComputerHost {
   readonly settings: Settings
   /** The projects of this computer's registry, in its order. */
   projects(): Promise<ProjectRef[]>
   readonly accounts: GitAccounts
+  /** How git reaches `remote`, an https address, as one of the modules' accounts (`account.access`); none when no module has one for it. */
+  gitAccess(remote: string): Promise<GitAccess | undefined>
+  /** Tell the modules the list of projects changed: what the module that keeps the list does. */
+  readonly lifecycle: ProjectsLifecycle
 }
 
 /** What a function of a project's module is handed: also the project it is called in, and where its runs have their work. */
@@ -50,8 +58,6 @@ export interface RpcHost extends RpcComputerHost {
    * for the person, where the record cannot be written.
    */
   landed(agentId: string, landed: { commit: string; from: string }): Promise<void>
-  /** How git reaches `remote` as an account, as the distribution's `account.access` says: none when no module has an account for it. */
-  gitAccess(remote: string): Promise<GitAccess | undefined>
   /**
    * The modules on in the project, in the distribution's order, each with what it gives the
    * project's runs; for a session with no project, the ones it has as the distribution starts them.

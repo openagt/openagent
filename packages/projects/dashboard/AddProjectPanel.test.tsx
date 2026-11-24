@@ -1,12 +1,23 @@
 import { useRef, useState } from 'react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
+import type { ReactElement } from 'react'
+import { fakeHost, onProjectsChanged, renderWithHost } from '@openagt/ui/module/testing'
 
 const sendAddProject = vi.hoisted(() => vi.fn())
 const sendPickProjectDirectory = vi.hoisted(() => vi.fn())
 const onCloneTarget = vi.hoisted(() => vi.fn())
 const sendAddProjectFromAddress = vi.hoisted(() => vi.fn())
-vi.mock('../rpc/projects.js', () => ({ sendAddProject, sendPickProjectDirectory, onCloneTarget, sendAddProjectFromAddress }))
+// The module's calls of its server, each as the old RPC it took the place of.
+vi.mock('./calls.js', () => ({
+  addProject: (_host: unknown, path: string) => sendAddProject(path),
+  pickDirectory: () => sendPickProjectDirectory(),
+  cloneTargetFor: (_host: unknown, address: string) => onCloneTarget(address),
+  addFromAddress: (_host: unknown, address: string) => sendAddProjectFromAddress(address),
+}))
+
+/** Drawn as the dashboard draws the module's piece. */
+const render = (ui: ReactElement) => renderWithHost(ui, fakeHost('@openagt/projects'))
 
 const { AddProjectPanel } = await import('./AddProjectPanel.js')
 
@@ -205,5 +216,20 @@ describe('AddProjectPanel (#1150)', () => {
     expect(screen.getByLabelText(/The repository\u2019s address/)).toBeTruthy()
     // Still said: why the person is asked for an address when they asked for a folder.
     expect(screen.getByText(/has no desktop session/)).toBeTruthy()
+  })
+
+  test('for a first project, what adding one does is said under the trust question; once added the shell is told the list changed', async () => {
+    sendAddProject.mockResolvedValue({ ok: true, alreadyActivated: false })
+    const changes: unknown[] = []
+    const stop = onProjectsChanged(change => void changes.push(change))
+    try {
+      render(<AddProjectPanel opener={NO_OPENER} folder="/Users/dev/here" effects onAdded={() => {}} onClose={() => {}} />)
+      expect(screen.getByRole('dialog', { name: 'Add project' }).textContent).toContain('makes no commit on your branch')
+      fireEvent.click(screen.getByRole('button', { name: 'I trust it, add it' }))
+      await screen.findByText('Project added')
+      expect(changes).toEqual([{ added: true }])
+    } finally {
+      stop()
+    }
   })
 })

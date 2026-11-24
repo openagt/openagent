@@ -468,14 +468,17 @@ export interface OptionPlaces {
     offered?(project: UiProject | undefined): boolean
   }
   /**
-   * The project picker's entries beside the registered projects: the repos a module's accounts
-   * reach, which a pick adds as a project, cloned as the account that reaches it
-   * (`account.access`). The picker leaves out the ones on this computer already.
+   * The project picker's entries beside the registered projects: the repos on this computer that
+   * are not projects yet, and the repos a module's accounts reach, which a pick adds as a project,
+   * cloned as the account that reaches it (`account.access`). The picker leaves out a repo at an
+   * address that is on this computer already.
    */
   'composer.where': {
     /** The heading the repos are listed under: "On GitHub". */
     label: string
     description?: string
+    /** What the picker says while some of its repos are still being read: "Asking GitHub for repos…". */
+    loadingWords?: string
     /** The repos it offers now; `loading` while some are still being read, `unreached` in words when an account could not be read. */
     repos(host: UiHost): Promise<{ repos: UiWhereRepo[]; loading?: boolean; unreached?: string }>
   }
@@ -502,10 +505,12 @@ export interface UiCommand {
   waiting?: string
 }
 
-/** A repository the project picker offers to add as a project. */
+/** A repository the project picker offers to add as a project: a folder on this computer, or an address it is cloned from. */
 export interface UiWhereRepo {
-  /** Its address, as `ProjectRef.remote` names a repository (`github.com/me/shop`): what a pick clones. */
-  address: string
+  /** Its address, as `ProjectRef.remote` names a repository (`github.com/me/shop`): what a pick clones, with no `folder`. None for a folder whose repository has no remote. */
+  address?: string
+  /** Its folder on this computer, absolute: a pick adds it as it is, and nothing is cloned. */
+  folder?: string
   /** Its name in the list: `me/shop`. */
   label: string
   /** What the list says after its name: its description. */

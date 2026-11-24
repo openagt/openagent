@@ -12,6 +12,7 @@ import { memoryStore } from '@openagt/hooks/testing'
 import { gitBranchesModule } from '@openagt/git-branches/module'
 import { githubModule, type GithubDeps } from '@openagt/github/module'
 import { skillsModule } from '@openagt/skills/module'
+import { projectsModule } from '@openagt/projects/module'
 import agentDriver from './module.js'
 import { git } from './test-repo.js'
 
@@ -210,7 +211,7 @@ export const TEST_AGENTS: ModuleDefinition = { name: 'test-agents', hooks: { 'ru
 
 /**
  * The modules a test's run goes through, as OpenAgent's distribution lists them for a run: a store
- * kept in memory (the person's settings: the plugins' Enabled rows, the profiles), git-branches and
+ * kept in memory (the person's settings: the plugins' Enabled rows, the profiles), projects, git-branches and
  * github, each with what the test stands in for, the skills module, agent-driver, the plugins
  * logs and ask, and any module of the test's own.
  */
@@ -218,6 +219,7 @@ export function testModules(deps: { gitHost?: GitHost; git?: GitRunner; github?:
   const gitHost = deps.gitHost ?? noGitHost
   return [
     { module: { name: 'test-store', hooks: { 'store.backend': deps.store ?? memoryStore() } } },
+    { module: projectsModule() },
     { module: gitBranchesModule(deps.git ? { git: deps.git } : {}) },
     { module: githubModule({ ...(deps.github ?? noGithub), requestOfBranch: (dir, branch) => gitHost.requestOfBranch(dir, branch) }) },
     { module: skillsModule() },

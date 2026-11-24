@@ -17,9 +17,6 @@
     "bin/scheduler",
     "SKILL.md"
   ],
-  "openagent": {
-    "cleanup": "scheduler"
-  },
   "bin": {
     "scheduler": "bin/scheduler"
   },

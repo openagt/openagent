@@ -215,7 +215,7 @@ describe('the Settings list', () => {
 
   test("two groups: yours and this computer's, the computer's packages among them; then the picked project's packages", () => {
     show('', 'p1')
-    expect(entries('You and this computer')).toEqual(['Profile', 'Appearance', 'Plugins', 'Your agent data', 'Repos', 'Keyboard shortcuts', 'Claude web'])
+    expect(entries('You and this computer')).toEqual(['Profile', 'Appearance', 'Plugins', 'Your agent data', 'Repos on GitHub', 'Keyboard shortcuts', 'Claude web'])
     // gemstack has tickets and no scheduler; every project has its skills, whose entry says it goes first, and its plugins.
     expect(entries('Project')).toEqual(['Skills', 'Plugins', 'Project agent data', 'Tickets', 'List'])
     expect(showing(select('Project'))).toBe('gemstack')
@@ -305,7 +305,7 @@ describe('the Settings list', () => {
         <SettingsDialog entry="profile" onEntry={() => {}} onClose={onClose} scope={null} projects={[]} />
       </ModulesContext.Provider>,
     )
-    expect(entries('You and this computer')).toEqual(['Profile', 'Appearance', 'Plugins', 'Plain', 'Lights', 'Repos', 'Keyboard shortcuts'])
+    expect(entries('You and this computer')).toEqual(['Profile', 'Appearance', 'Plugins', 'Plain', 'Lights', 'Repos on GitHub', 'Keyboard shortcuts'])
   })
 
   test('opened with no entry, a computer shows the first and its address says so; a phone shows the list, whose address is none', () => {

@@ -13,10 +13,9 @@ const onCommands = vi.hoisted(() => vi.fn())
 const onStartCheck = vi.hoisted(() => vi.fn())
 
 const onProjects = vi.hoisted(() => vi.fn(async () => [] as unknown[]))
-const onRepos = vi.hoisted(() => vi.fn(async () => ({ repos: [] as { path: string; name: string; url?: string }[], canAddFolder: false })))
 // The hosts beside this computer the project's modules bring: none unless a test says.
 const onRunHosts = vi.hoisted(() => vi.fn(async () => [] as { id: string; label: string }[]))
-vi.mock('../rpc/projects.js', () => ({ onCommands, onStartCheck, onProjects, onRepos, onRunHosts, sendAddRepoFolder: vi.fn() }))
+vi.mock('../rpc/projects.js', () => ({ onCommands, onStartCheck, onProjects, onRunHosts }))
 
 // Mutable so a test can pick the coding agent and the model; reset after each.
 const prefs = vi.hoisted(() => ({ current: {} as Record<string, unknown> }))
@@ -113,6 +112,10 @@ const ON_CODEX = { 'agent-driver': { driver: 'codex', model: 'gpt-5' } }
 /** Where the agent starts, as the row above the box says it. */
 const startsAt = (): string => screen.getByTestId('starts-at').textContent ?? ''
 
+/** The repos on this computer as the projects module offers them (`composer.where`). */
+const reposHere = (repos: { folder: string; label: string; detail: string }[]) =>
+  mountedOf({ options: { 'composer.where': [{ place: 'composer.where', id: 'this-computer', label: 'Repos', order: 0, repos: async () => ({ repos, loading: false }), package: '@openagt/projects', projects: [], computer: true }] } })
+
 const { StartAgentForm } = await import('./StartAgentForm.js')
 
 // No check hook unless a test gives one: nothing to say.
@@ -179,7 +182,7 @@ const level = (id: string, label: string, description: string, offered?: (projec
 const AUTO = mountedOf({ options: { 'composer.auto': [level('commit', 'Commit', 'It commits its work on its branch.'), level('branch', 'Publish branch', 'It commits and pushes its branch.', project => project === undefined || project.remote !== undefined)] } })
 /** The form, with the levels git-branches brings mounted. */
 const render = (page: ReactElement) => renderPage(page, { wrapper: ({ children }) => <ModulesContext.Provider value={AUTO}>{children}</ModulesContext.Provider> })
-const props = { projectId: 'p1', files: [], context: new Set<string>(), addContext: noop, removeContext: noop, toggleContext: noop, projects: [], onPickProject: noop, onProjectAdded: noop }
+const props = { projectId: 'p1', files: [], context: new Set<string>(), addContext: noop, removeContext: noop, toggleContext: noop, projects: [], onPickProject: noop }
 
 describe('StartAgentForm (#1774)', () => {
   test('the project\'s commands are no buttons: they are in the box\'s `/` list, and nothing starts', async () => {
@@ -575,51 +578,35 @@ describe('StartAgentForm (#1774)', () => {
     await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('then start again'))
   })
 
-  test('the row above the box starts with where the session works: the project\'s name, on the button of the picker', () => {
+  test("where the session works is the projects module's control, before the row's own: the launcher's box lets it move the launcher to another project, or to none, the typed prompt taken along", () => {
     onCommands.mockResolvedValue({ commands: [], gitHost: true })
-    render(<StartAgentForm {...props} projectName="gemstack" />)
-    expect(startsAt()).toBe('gemstack')
-    const picker = screen.getByRole('combobox', { name: 'The session works in' })
-    expect(picker.textContent).toBe('gemstack')
-    expect(picker.querySelector('svg')).not.toBeNull()
-    // Cut short with an ellipsis where the row is too narrow for it.
-    expect(screen.getByText('gemstack').className).toContain('truncate')
+    const onPickProject = vi.fn()
+    render(<StartAgentForm {...props} projectName="gemstack" onPickProject={onPickProject} />)
+    // No project word of the shell's, nor a branch: the row above the box is the modules' controls alone.
+    expect(startsAt()).toBe('')
+    const box = composerProps.current.controlBox as { in: string; projectId: string; pickProject: (id: string | undefined) => void }
+    expect(box.in).toBe('launcher')
+    expect(box.projectId).toBe('p1')
+    ;(composerProps.current.onPromptChange as (value: string) => void)('fix the login page')
+    act(() => box.pickProject('alpha-1'))
+    expect(onPickProject).toHaveBeenLastCalledWith('alpha-1')
+    expect(takePendingDraft()).toBe('fix the login page')
+    act(() => box.pickProject(undefined))
+    expect(onPickProject).toHaveBeenLastCalledWith('session')
     // No heading over the box: the page is laid out as an agent's chat, whose box has none.
     expect(screen.queryByText('Start an agent')).toBeNull()
   })
 
-  test('until the project\'s name is known there is no project word, and the row is asked for all the same', () => {
-    onCommands.mockResolvedValue({ commands: [], gitHost: true })
-    const { rerender } = render(<StartAgentForm {...props} />)
-    expect(startsAt()).toBe('')
-    expect(screen.queryByRole('combobox', { name: 'The session works in' })).toBeNull()
-    rerender(<StartAgentForm {...props} projectName="gemstack" />)
-    expect(startsAt()).toBe('gemstack')
-  })
-
-  test('another project picked takes the typed prompt along to its page', async () => {
-    onCommands.mockResolvedValue({ commands: [], gitHost: true })
-    const onPickProject = vi.fn()
-    const alpha = { id: 'alpha-1', path: '/home/me/alpha', name: 'alpha', activated: true, gitHost: true }
-    render(<StartAgentForm {...props} projectId="session" projects={[alpha]} onPickProject={onPickProject} />)
-    ;(composerProps.current.onPromptChange as (value: string) => void)('fix the login page')
-    await openMenu(screen.getByRole('combobox', { name: 'The session works in' }))
-    fireEvent.click(await screen.findByRole('option', { name: 'alpha' }))
-    expect(onPickProject).toHaveBeenCalledWith('alpha-1')
-    expect(takePendingDraft()).toBe('fix the login page')
-  })
-
   test("with no project, Context ticks repos on and off, a project's or one that is none, as many as wanted; its button says how many, and the Start sends their folders; nothing is made a project", async () => {
     onCommands.mockResolvedValue({ commands: [], gitHost: true })
-    onRepos.mockResolvedValue({ repos: [{ path: '/home/me/oss/vike', name: 'vike', url: 'https://github.com/vikejs/vike.git' }], canAddFolder: false })
     start.mockResolvedValue({ agentId: 'r1' })
     const onAgentStarted = vi.fn()
     const onPickProject = vi.fn()
     const alpha = { id: 'alpha-1', path: '/home/me/alpha', name: 'alpha', activated: true, gitHost: true }
-    render(<StartAgentForm {...props} projectId="session" projects={[alpha]} onPickProject={onPickProject} onAgentStarted={onAgentStarted} />)
+    render(<ModulesContext.Provider value={reposHere([{ folder: '/home/me/oss/vike', label: 'vike', detail: 'github.com/vikejs/vike' }])}><StartAgentForm {...props} projectId="session" projects={[alpha]} onPickProject={onPickProject} onAgentStarted={onAgentStarted} /></ModulesContext.Provider>)
     const context = () => within(screen.getByTestId('controls')).getByRole('combobox', { name: /^Context/ })
-    // The row above the box says where the session works, and nothing of its repos.
-    expect(startsAt()).toBe('No project')
+    // The row above the box says nothing of its repos.
+    expect(startsAt()).toBe('')
     expect(context().textContent).toBe('Context')
     await openMenu(context())
     // The menu stays open while its rows are ticked.
@@ -633,7 +620,7 @@ describe('StartAgentForm (#1774)', () => {
     expect(context().textContent).toBe('Context · 1 repo')
     fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
     expect(onPickProject).not.toHaveBeenCalled()
-    expect(startsAt()).toBe('No project')
+    expect(startsAt()).toBe('')
 
     fireEvent.click(screen.getByText('submit-typed'))
     // The level in force goes with the repos it is for: Commit until the person picks.
@@ -645,10 +632,9 @@ describe('StartAgentForm (#1774)', () => {
 
   test("a project's Context is the same menu, and a repo ticked there is pointed at, not copied: it is told to the Context, and the Start sends no repos", async () => {
     onCommands.mockResolvedValue({ commands: [], gitHost: true })
-    onRepos.mockResolvedValue({ repos: [{ path: '/home/me/oss/vike', name: 'vike' }], canAddFolder: false })
     start.mockResolvedValue({ agentId: 'r1' })
     const toggleContext = vi.fn()
-    render(<StartAgentForm {...props} projectName="gemstack" toggleContext={toggleContext} />)
+    render(<ModulesContext.Provider value={reposHere([{ folder: '/home/me/oss/vike', label: 'vike', detail: '/home/me/oss/vike' }])}><StartAgentForm {...props} projectName="gemstack" toggleContext={toggleContext} /></ModulesContext.Provider>)
     const context = within(screen.getByTestId('controls')).getByRole('combobox', { name: 'Context' })
     await openMenu(context)
     fireEvent.click(await screen.findByRole('option', { name: /vike/ }))

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { projectId, sessionsHome } from '@openagt/agent-data'
 import { SESSIONS_ID } from '../project-address.js'
-import { addProject } from '../registry.js'
+import { listTestProject } from '../test-projects.js'
 import { onModules, runComputerCommand, runModuleCommand } from './modules.js'
 import { callModule } from './module-calls.js'
 
@@ -71,8 +71,8 @@ test('the dashboard\'s modules are every registered project\'s, one per package,
     const b = join(dir, 'b')
     await project(a)
     await project(b)
-    await addProject(a, '2026-09-19T00:00:00.000Z')
-    await addProject(b, '2026-09-19T00:00:01.000Z')
+    await listTestProject(a, '2026-09-19T00:00:00.000Z')
+    await listTestProject(b, '2026-09-19T00:00:01.000Z')
 
     await withDistribution(dir, [...COMPUTER, '@openagt/store-filesystem', '@openagt/ui-pane-changes', '@openagt/ui-pane-files', 'logs', 'plain', 'queue'], async () => {
       await switchOn(b, 'queue')
@@ -81,6 +81,7 @@ test('the dashboard\'s modules are every registered project\'s, one per package,
         { package: '@openagt/agent-driver', url: '/_computer-modules/%40openagt%2Fagent-driver/dashboard.js', projects: [], computer: true },
         { package: '@openagt/notifications-browser', url: '/_computer-modules/%40openagt%2Fnotifications-browser/dashboard.js', projects: [], computer: true },
         { package: '@openagt/profiles', url: '/_computer-modules/%40openagt%2Fprofiles/dashboard.js', projects: [], computer: true },
+        { package: '@openagt/projects', url: '/_computer-modules/%40openagt%2Fprojects/dashboard.js', projects: [], computer: true },
         { package: '@openagt/store-git-repository', url: '/_computer-modules/%40openagt%2Fstore-git-repository/dashboard.js', projects: [], computer: true },
         { package: '@openagt/ui-card-waiting', url: '/_computer-modules/%40openagt%2Fui-card-waiting/dashboard.js', projects: [], computer: true },
         { package: '@openagt/ui-renderer-markdown', url: '/_computer-modules/%40openagt%2Fui-renderer-markdown/dashboard.js', projects: [], computer: true },
@@ -116,6 +117,7 @@ test("with no project added, the computer's modules are there and run their own 
         { package: '@openagt/agent-driver', url: '/_computer-modules/%40openagt%2Fagent-driver/dashboard.js', projects: [], computer: true },
         { package: '@openagt/notifications-browser', url: '/_computer-modules/%40openagt%2Fnotifications-browser/dashboard.js', projects: [], computer: true },
         { package: '@openagt/profiles', url: '/_computer-modules/%40openagt%2Fprofiles/dashboard.js', projects: [], computer: true },
+        { package: '@openagt/projects', url: '/_computer-modules/%40openagt%2Fprojects/dashboard.js', projects: [], computer: true },
         { package: '@openagt/store-git-repository', url: '/_computer-modules/%40openagt%2Fstore-git-repository/dashboard.js', projects: [], computer: true },
         { package: '@openagt/ui-card-waiting', url: '/_computer-modules/%40openagt%2Fui-card-waiting/dashboard.js', projects: [], computer: true },
         { package: '@openagt/ui-renderer-markdown', url: '/_computer-modules/%40openagt%2Fui-renderer-markdown/dashboard.js', projects: [], computer: true },
@@ -135,7 +137,7 @@ test("with no project added, the computer's modules are there and run their own 
 
       const a = join(dir, 'a')
       await project(a)
-      await addProject(a, '2026-09-19T00:00:00.000Z')
+      await listTestProject(a, '2026-09-19T00:00:00.000Z')
       assert.deepEqual(await runComputerCommand('queue', []), { ok: false, error: "queue is not this computer's" })
       assert.deepEqual(await runModuleCommand(projectId(a), '@openagt/agent-driver', ['adding']), { ok: false, error: '@openagt/agent-driver brings no module to this project' })
     })
@@ -161,9 +163,9 @@ test("a module calls its own server part's functions, in its own project, which 
     })
     const a = join(dir, 'a')
     await project(a)
-    await addProject(a, '2026-09-19T00:00:00.000Z')
+    await listTestProject(a, '2026-09-19T00:00:00.000Z')
 
-    await withDistribution(dir, ['reader', 'logs', '@openagt/ui-pane-files'], async () => {
+    await withDistribution(dir, ['@openagt/store-filesystem', 'reader', 'logs', '@openagt/ui-pane-files'], async () => {
       assert.deepEqual(await callModule(projectId(a), 'reader', 'where', { path: 'x' }), { ok: true, output: { root: a, project: { id: projectId(a), name: 'a', dir: a }, input: { path: 'x' } } })
       assert.deepEqual(await callModule(SESSIONS_ID, 'reader', 'where', {}), { ok: true, output: { root: sessionsHome(), project: undefined, input: {} } })
       assert.deepEqual(await callModule(projectId(a), 'logs', 'where', {}), { ok: false, error: 'logs has no server part' })

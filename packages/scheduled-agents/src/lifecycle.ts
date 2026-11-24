@@ -1,4 +1,5 @@
 import type { AppContext, AppLifecycle } from '@openagt/hooks'
+import { cleanup } from './cleanup.js'
 
 /** How often the projects the plugin is on in are looked at again: one it was switched on in starts its scheduler, one it was switched off in stops it. */
 export const LOOK_AGAIN_MS = 60_000
@@ -18,8 +19,9 @@ export interface SchedulersDeps {
  * every minute) runs in each project the plugin is on in. It starts as OpenAgent starts, as a
  * project is added, and within a minute of the plugin being switched on there; it stops within a
  * minute of the plugin being switched off there. As OpenAgent stops, and as a project is removed,
- * it stops unless a person set it to keep running (`stop --unless-keep-alive`). A start that fails
- * is told, and tried again at the next look.
+ * it stops unless a person set it to keep running (`stop --unless-keep-alive`); a project removed
+ * with its files loses what this tool left in it then (`cleanup.ts`). A start that fails is told,
+ * and tried again at the next look.
  */
 export function schedulersLifecycle(deps: Partial<SchedulersDeps> = {}): AppLifecycle {
   // Read only once a scheduler is started: OpenAgent loads every plugin's module, on or not.
@@ -67,8 +69,13 @@ export function schedulersLifecycle(deps: Partial<SchedulersDeps> = {}): AppLife
     async projectAdded(project) {
       await startIn(project.dir)
     },
-    async projectRemoved(project) {
+    async projectRemoved(project, _app, { files }) {
       await stopIn(project.dir, { unlessKeepAlive: true })
+      if (!files) return undefined
+      // With its files: what this tool left in the project goes too, once its scheduler is stopped (`cleanup.ts`).
+      const outcome = await cleanup(project.dir)
+      if (!outcome.ok) throw new Error(`the scheduler is running here (pid ${outcome.pid}): stop it first with npx @openagt/scheduled-agents@0.1 stop`)
+      return { removed: outcome.removed, kept: outcome.kept }
     },
   }
 }

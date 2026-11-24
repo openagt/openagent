@@ -3,7 +3,7 @@ import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { GitAccess } from './account.js'
-import { ROUTE_PATH, type AppContext, type AppRoute, type AppStart, type AttentionArgs, type AttentionRead } from './app.js'
+import { ROUTE_PATH, type AppContext, type AppRoute, type AppStart, type AttentionArgs, type AttentionRead, type CleanupReport, type GivenFolder, type ProjectRemoval, type ProjectsLifecycle } from './app.js'
 import { HOOK_NAMES, MODULE_NAME, type HookName, type ModuleDefinition, type OwnRow } from './module.js'
 import { runPipeline, type OrderedStep, type PipelineResult } from './pipeline.js'
 import type { ProjectRef } from './project.js'
@@ -102,7 +102,12 @@ export interface Hooks {
   /** The app is stopping: the modules started, the last first. */
   stopping(): Promise<void>
   projectAdded(project: ProjectRef): Promise<void>
-  projectRemoved(project: ProjectRef): Promise<void>
+  /** Every module is told, each cleaning up its own data; what they removed and kept in the folder with `files`, and a line for each that refused or failed. */
+  projectRemoved(project: ProjectRef, removal?: ProjectRemoval): Promise<CleanupReport>
+  /** The folder `openagent` was typed in, made a project by the first module that answers for it: the modules on in it are told when it was added just now. */
+  folderGiven(folder: string): Promise<GivenFolder | undefined>
+  /** What the module that keeps the list of projects tells the others through ({@link AppContext.lifecycle}). */
+  readonly lifecycle: ProjectsLifecycle
 }
 
 /** Load a distribution's modules. Throws for a distribution that is wrong: a name that is not one, two modules of one name, a hook that is no hook. */
@@ -164,6 +169,70 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
   }
 
   let app: AppStart | undefined
+  const gitAccess = async (remote: string) => {
+    for (const module of await onModules(undefined, undefined, 'account.access')) {
+      const access = module.hooks['account.access']
+      if (!access?.git) continue
+      try {
+        const answer = await access.git(remote)
+        if (answer) return answer
+      } catch (error) {
+        report(module.name, 'account.access', error)
+      }
+    }
+    return undefined
+  }
+  const projectAdded = async (project: ProjectRef): Promise<void> => {
+    for (const module of await onModules(project, undefined, 'app.lifecycle')) {
+      const lifecycle = module.hooks['app.lifecycle']
+      if (!lifecycle?.projectAdded) continue
+      try {
+        await lifecycle.projectAdded(project, appContext(module))
+      } catch (error) {
+        report(module.name, 'app.lifecycle.projectAdded', error)
+      }
+    }
+  }
+  const projectRemoved = async (project: ProjectRef, removal: ProjectRemoval = { files: false }): Promise<CleanupReport> => {
+    const cleaned: CleanupReport = { removed: [], kept: [], failed: [] }
+    // Every module, on or not there now: each cleans up whatever it kept while it was.
+    for (const module of modules) {
+      const lifecycle = module.hooks['app.lifecycle']
+      if (!lifecycle?.projectRemoved) continue
+      try {
+        const answer = await lifecycle.projectRemoved(project, appContext(module), removal)
+        if (answer) {
+          cleaned.removed.push(...answer.removed)
+          cleaned.kept.push(...answer.kept)
+        }
+      } catch (error) {
+        report(module.name, 'app.lifecycle.projectRemoved', error)
+        cleaned.failed.push(`${module.name}: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
+    return cleaned
+  }
+  // Every module, on or not there now, as each is told of the removal: the first that refuses
+  // keeps the project. One that cannot tell refuses too, in its words: a run of its may be at work.
+  const refusal = async (project: ProjectRef): Promise<string | undefined> => {
+    for (const module of modules) {
+      const refuse = module.hooks['app.lifecycle']?.refuseRemoval
+      if (!refuse) continue
+      try {
+        const reason = await refuse(project, appContext(module))
+        if (reason !== undefined) return reason
+      } catch (error) {
+        report(module.name, 'app.lifecycle.refuseRemoval', error)
+        return `${module.name} could not tell whether the project may go: ${error instanceof Error ? error.message : String(error)}`
+      }
+    }
+    return undefined
+  }
+  const lifecycle: ProjectsLifecycle = {
+    added: projectAdded,
+    refusal,
+    removed: projectRemoved,
+  }
   /** The modules started, in the order they were, each with what aborts its signal. */
   const live = new Map<ModuleDefinition, AbortController>()
   const appContext = (module: ModuleDefinition): AppContext => ({
@@ -175,11 +244,13 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
     },
     store,
     settings,
-    gitAccess: remote => hooks.gitAccess(remote),
     get signal() {
       return live.get(module)?.signal ?? app?.signal ?? new AbortController().signal
     },
     ...(app !== undefined ? { url: app.url } : {}),
+    gitAccess,
+    lifecycle,
+    skills: (args, opts) => hooks.skills(args, opts),
   })
   const startOne = async (module: ModuleDefinition, start: AppStart): Promise<void> => {
     const stop = new AbortController()
@@ -261,19 +332,7 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
       const given = (await onModules(undefined, undefined, 'app.route')).flatMap(module => (module.hooks['app.route'] ?? []).map(item => ({ module: module.name, item })))
       return firstOfEach(given, route => `a route at ${route.path}`, 'app.route')
     },
-    async gitAccess(remote) {
-      for (const module of await onModules(undefined, undefined, 'account.access')) {
-        const access = module.hooks['account.access']
-        if (!access?.git) continue
-        try {
-          const answer = await access.git(remote)
-          if (answer) return answer
-        } catch (error) {
-          report(module.name, 'account.access', error)
-        }
-      }
-      return undefined
-    },
+    gitAccess,
     async attention(args) {
       // Asked about this computer, with no project: a plugin kept per project is asked as the
       // distribution starts it, and also where it is on in one of the registry's projects.
@@ -315,29 +374,21 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
     async stopping() {
       for (const module of [...live.keys()].reverse()) await stopOne(module)
     },
-    async projectAdded(project) {
-      for (const module of await onModules(project, undefined, 'app.lifecycle')) {
-        const lifecycle = module.hooks['app.lifecycle']
-        if (!lifecycle?.projectAdded) continue
-        try {
-          await lifecycle.projectAdded(project, appContext(module))
-        } catch (error) {
-          report(module.name, 'app.lifecycle.projectAdded', error)
-        }
-      }
-    },
-    async projectRemoved(project) {
-      // Every module, on or not there now: each cleans up whatever it kept while it was.
+    projectAdded,
+    projectRemoved,
+    async folderGiven(folder) {
       for (const module of modules) {
         const lifecycle = module.hooks['app.lifecycle']
-        if (!lifecycle?.projectRemoved) continue
-        try {
-          await lifecycle.projectRemoved(project, appContext(module))
-        } catch (error) {
-          report(module.name, 'app.lifecycle.projectRemoved', error)
-        }
+        if (!lifecycle?.folderGiven) continue
+        // Not caught: the folder is asked about by the person who typed the command, and told why it is no project.
+        const given = await lifecycle.folderGiven(folder, appContext(module))
+        if (!given) continue
+        if (given.added) await projectAdded(given.project)
+        return given
       }
+      return undefined
     },
+    lifecycle,
   }
   return hooks
 }

@@ -2,7 +2,6 @@ import { useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Combobox } from '@base-ui/react/combobox'
 import { Check, FolderGit2, Layers, Search } from 'lucide-react'
 import type { ProjectSummary } from '../../src/index.js'
-import { onRepos, type ReposRead } from '../rpc/projects.js'
 import { useLoaded } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
 import { BoxOfRow, rowButtonClass } from './ui/row-item.js'
@@ -11,7 +10,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, MENU_BODY_CLASS, MENU_ITEM_CLASS, MENU_POPUP_CLASS, MENU_TRIGGER_OPEN_CLASS, MenuMark } from './ui/dropdown-menu.js'
 import { usePopupPosition } from './ui/popup-placement.js'
 import { usePickerSearch } from './ui/picker-search.js'
-import { ASK_AGAIN_MS, REPOS_SHOWN, repoDetail } from './ProjectPicker.js'
+import { useOptionsAt } from './Places.js'
 import { MiddleCut } from './MiddleCut.js'
 
 /** The room the menu takes over the box at its full height: its search, its list (20rem) and the page's edge. */
@@ -19,6 +18,45 @@ const ROOM_ABOVE_PX = 400
 
 /** The most rows a search lists. */
 const SEARCH_SHOWN = 200
+
+/** How many repos the menu lists before a search: the search reaches the rest. */
+const REPOS_SHOWN = 20
+
+/** How soon the menu asks again while the repos on this computer are still being looked for. */
+const ASK_AGAIN_MS = 2000
+
+/** A repo on this computer that is no project, as a module offers it (`composer.where`). */
+interface RepoHere {
+  path: string
+  name: string
+  /** Its address at its host, or its folder. */
+  detail: string
+}
+
+/**
+ * The repos on this computer the modules offer (`composer.where`, the projects module's): each by
+ * its folder, a repo only at an address left out, since a session's context is copied from a
+ * folder. Read each time the menu opens, and again shortly while one is still being read.
+ */
+function useReposHere(open: boolean): { repos: RepoHere[]; loading: boolean } | null {
+  const where = useOptionsAt('composer.where', undefined)
+  const [again, setAgain] = useState(0)
+  const read = useLoaded<{ repos: RepoHere[]; loading: boolean } | null>(
+    async () => {
+      const answers = await Promise.all(where.map(({ option, host }) => option.repos(host).catch(() => ({ repos: [], loading: false }))))
+      const repos = answers.flatMap(answer => answer.repos.flatMap(repo => (repo.folder !== undefined ? [{ path: repo.folder, name: repo.label, detail: repo.detail ?? repo.folder }] : [])))
+      return { repos, loading: answers.some(answer => answer.loading === true) }
+    },
+    null,
+    [open, again, where],
+  )
+  useEffect(() => {
+    if (!open || !read?.loading) return
+    const later = setTimeout(() => setAgain(k => k + 1), ASK_AGAIN_MS)
+    return () => clearTimeout(later)
+  }, [open, read])
+  return read
+}
 
 /** A repo picked as a session's context: its folder on this computer, and the name its copy in the session's folder has. */
 export interface PickedRepo {
@@ -120,20 +158,13 @@ export function ReposMenu({
   // would cover the row it was opened from.
   const box = useContext(BoxOfRow)
   const above = open && box?.current != null && box.current.getBoundingClientRect().top >= ROOM_ABOVE_PX
-  // Asked again shortly while the look through this computer is still on its way, and the menu is open.
-  const [again, setAgain] = useState(0)
-  const repos = useLoaded<ReposRead | null>(() => onRepos().catch(() => ({ repos: [], hosted: [], reposLoading: false, hostedLoading: false, canAddFolder: false })), null, [open, again])
-  useEffect(() => {
-    if (!open || !repos?.reposLoading) return
-    const later = setTimeout(() => setAgain(k => k + 1), ASK_AGAIN_MS)
-    return () => clearTimeout(later)
-  }, [open, repos])
+  const repos = useReposHere(open)
   const projectRows = useMemo<Row[]>(
     () => projects.filter(p => p.path !== without).map(p => ({ value: `project:${p.id}`, label: folderName(p.path), detail: p.path, path: p.path, search: p.path })),
     [projects, without],
   )
   const repoRows = useMemo<Row[]>(
-    () => (repos?.repos ?? []).filter(repo => repo.path !== without).map(repo => ({ value: `repo:${repo.path}`, label: repo.name, detail: repoDetail(repo), path: repo.path, search: `${repo.path}\n${repo.url ?? ''}` })),
+    () => (repos?.repos ?? []).filter(repo => repo.path !== without).map(repo => ({ value: `repo:${repo.path}`, label: repo.name, detail: repo.detail, path: repo.path, search: `${repo.path}\n${repo.detail}` })),
     [repos, without],
   )
   const groups = repoGroups(projectRows, repoRows, picked, typed)
@@ -220,7 +251,7 @@ export function ReposMenu({
                     </Combobox.Group>
                   )}
                 </Combobox.List>
-                {repos === null || repos.reposLoading ? (
+                {repos === null || repos.loading ? (
                   <p role="status" className="px-2 py-1.5 text-xs text-muted-foreground">Looking for repos on this computer…</p>
                 ) : !typed.trim() && repos.repos.length > REPOS_SHOWN ? (
                   <p className="px-2 py-1.5 text-xs text-muted-foreground">Search to see more of the {repos.repos.length} repos.</p>

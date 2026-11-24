@@ -280,7 +280,7 @@ export { rowButtonClass, rowItemClass, RowChevron, RowSaid, RowItem, BoxOfRow } 
 // A line of the gear's menu under the message box (`composer.control` at `setup`).
 export { SetupLine, SetupPress, SetupSaid } from '../components/SessionSetup.js'
 // The places a module draws itself: a profile's editor draws every control of the message box, the usage card the usage bar's line.
-export { ComposerControls, HandoffOffers, ViewsAt, useViewsAt, useControlsSaid, type ControlBox, type ControlsSaid } from '../components/Places.js'
+export { ComposerControls, HandoffOffers, ViewsAt, useViewsAt, useControlsSaid, useOptionsAt, type ControlBox, type ControlsSaid } from '../components/Places.js'
 export { ModuleSlot } from '../components/ModulePageView.js'
 // A row of the panel of a session's work above its message box (`chat.work`): a repo's name, its branch, what it holds, its next steps.
 export { WorkRow } from '../components/AgentWorkPanel.js'
@@ -288,6 +288,10 @@ export { WorkRow } from '../components/AgentWorkPanel.js'
 export { nextRunAgain, tellNextRunPicked } from '../lib/next-run-picked.js'
 /** Keep the page's entry while something typed would be lost by leaving it: Back asks first, and so does the browser on a reload. */
 export { holdEntry } from '../lib/use-route.js'
+// The projects the shell lists, and the word a module that changes the list sends it (the projects module's).
+export { useProjects, projectsChanged, type ProjectsChange } from '../lib/shell-projects.js'
+export { useProjectLabel } from '../lib/project-labels.js'
+export type { ProjectSummary } from '../../src/dashboard/projects.js'
 export { inWords } from '../lib/in-words.js'
 export { formatBytes } from '../../src/format-bytes.js'
 /** For a read of what the plugins give: read again the moment a plugin is switched in Settings. */
@@ -334,7 +338,9 @@ export { SendAs, firstSendAs } from '../components/SendAs.js'
 export { typedRepository, type TypedRepository } from '../../src/typed-repository.js'
 export { PathStrip } from '../components/PathStrip.js'
 
-export { Dialog } from '../components/ui/dialog.js'
+export { Dialog, BACKDROP_CLASS, DIALOG_POPUP_CLASS, DIALOG_PRESSES_CLASS } from '../components/ui/dialog.js'
+// A question that is a dialog of its own, drawn as the module draws it: the same Base UI as the dashboard's confirmations.
+export { AlertDialog } from '@base-ui/react/alert-dialog'
 export { useCodingAgents, type CodingAgent } from '../lib/agents.js'
 export { effortLabel } from '../lib/effort.js'
 export { FocusHome } from '../lib/focus-home.js'

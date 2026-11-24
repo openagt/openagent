@@ -69,7 +69,7 @@ test('a project taken off the list is pulled no more, and one no longer shared s
   const sync = dataSync({ pull, everyMs: 10, log: () => {} })
   sync.lifecycle.started?.(appWith(() => shared))
   await until(async () => (await sync.attention({ project: blog }, fakeApp())).length === 1, 'both fail at first')
-  await sync.lifecycle.projectRemoved?.(shop, appWith(() => shared))
+  await sync.lifecycle.projectRemoved?.(shop, appWith(() => shared), { files: false })
   assert.deepEqual(await sync.attention({ project: shop }, fakeApp()), [], 'a removed project says nothing')
   pulled.length = 0
   await until(() => pulled.length >= 2, 'two more pulls')

@@ -1,24 +1,35 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { openMenu } from '../test-utils.js'
-import { forgetRemembered } from '../lib/use-async.js'
-import type { ProjectSummary } from '../../src/index.js'
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
+import type { ReactElement } from 'react'
+import { fakeHost, mountedOf, renderWithHost, ShellProjectsContext, type MountedModules } from '@openagt/ui/module/testing'
+import { forgetRemembered, type ProjectSummary, type UiWhereRepo } from '@openagt/ui/module'
 
-const onRepos = vi.hoisted(() => vi.fn())
-const sendAddRepoFolder = vi.hoisted(() => vi.fn())
-const sendAddProject = vi.hoisted(() => vi.fn())
-const onCloneTarget = vi.hoisted(() => vi.fn())
-const sendAddProjectFromAddress = vi.hoisted(() => vi.fn())
-vi.mock('../rpc/projects.js', () => ({ onRepos, sendAddRepoFolder, sendAddProject, sendPickProjectDirectory: vi.fn(), onCloneTarget, sendAddProjectFromAddress }))
+const readRepos = vi.hoisted(() => vi.fn())
+const addFolderToSearch = vi.hoisted(() => vi.fn())
+const addProject = vi.hoisted(() => vi.fn())
+const cloneTargetFor = vi.hoisted(() => vi.fn())
+const addFromAddress = vi.hoisted(() => vi.fn())
+vi.mock('./calls.js', () => ({
+  readRepos: () => readRepos(),
+  addFolderToSearch: () => addFolderToSearch(),
+  addProject: (_host: unknown, path: string) => addProject(path),
+  pickDirectory: vi.fn(),
+  cloneTargetFor: (_host: unknown, address: string) => cloneTargetFor(address),
+  addFromAddress: (_host: unknown, address: string) => addFromAddress(address),
+}))
 
-const { ProjectPicker, REPOS_SHOWN, repoDetail, shownAddress } = await import('./ProjectPicker.js')
+const { ProjectControl, ProjectPicker, REPOS_SHOWN, repoDetail, shownAddress } = await import('./ProjectPicker.js')
+const { default: projectsUi } = await import('./index.js')
 
 const ALPHA: ProjectSummary = { id: 'alpha-1', path: '/home/me/alpha', name: 'alpha', activated: true, gitHost: true }
 const VIKE = { path: '/home/me/oss/vike', name: 'vike', url: 'https://github.com/vikejs/vike.git' }
 const NOTES = { path: '/home/me/notes', name: 'notes' }
 
+/** This computer's repos as the module's server answers them. */
+const reposRead = (repos: { path: string; name: string; url?: string }[], over: { loading?: boolean; canAddFolder?: boolean } = {}) => ({ repos, loading: false, canAddFolder: true, projects: [], ...over })
+
 beforeEach(() => {
-  onRepos.mockResolvedValue({ repos: [VIKE, NOTES], hosted: [], reposLoading: false, hostedLoading: false, canAddFolder: true })
+  readRepos.mockResolvedValue(reposRead([VIKE, NOTES]))
 })
 afterEach(() => {
   cleanup()
@@ -28,12 +39,38 @@ afterEach(() => {
 
 const NO_PROJECT = { label: 'No project', tip: 'The session works in a folder of its own' }
 
-function renderPicker(over: Partial<Parameters<typeof ProjectPicker>[0]> = {}) {
+/** The repos a module offers (`composer.where`), mounted as the dashboard mounts a computer's module's. */
+type Where = { id: string; label: string; loadingWords?: string; repos: () => Promise<{ repos: UiWhereRepo[]; loading?: boolean; unreached?: string }> }
+
+/** The modules beside the picker: this one's repos on this computer, and any other module's `where`. */
+function modulesWith(...others: Where[]): MountedModules {
+  const own = (projectsUi.hooks['ui.option'] ?? []).filter(option => option.place === 'composer.where').map(option => ({ ...option, package: '@openagt/projects', projects: [], computer: true as const }))
+  const more = others.map((where, i) => ({ place: 'composer.where' as const, order: 10 + i, ...where, package: '@openagt/github', projects: [], computer: true as const }))
+  return mountedOf({ options: { 'composer.where': [...own, ...more] } })
+}
+
+type PickerProps = Parameters<typeof ProjectPicker>[0]
+
+function renderPicker(over: Partial<PickerProps> & { projects?: ProjectSummary[]; where?: Where[] } = {}) {
   const onPick = vi.fn()
-  const onProjectAdded = vi.fn()
-  const props = { look: 'row' as const, none: NO_PROJECT, picked: null, projects: [ALPHA], busy: false, onPick, onProjectAdded, ...over }
-  const view = render(<ProjectPicker {...props} />)
-  return { onPick, onProjectAdded, props, ...view }
+  const { projects = [ALPHA], where = [], ...rest } = over
+  const props: PickerProps = { none: NO_PROJECT, picked: null, busy: false, onPick, ...rest }
+  const modules = modulesWith(...where)
+  const shell = (ui: ReactElement, listed: ProjectSummary[]) => <ShellProjectsContext.Provider value={listed}>{ui}</ShellProjectsContext.Provider>
+  const view = renderWithHost(shell(<ProjectPicker {...props} />, projects), fakeHost('@openagt/projects'), modules)
+  const rerender = (next: Partial<PickerProps> & { projects?: ProjectSummary[] }) => {
+    const { projects: listed = projects, ...nextProps } = next
+    view.rerender(shell(<ProjectPicker {...props} {...nextProps} />, listed))
+  }
+  return { onPick, props, rerender }
+}
+
+/** Open the menu `trigger` opens, as a person's press does. */
+async function openMenu(trigger: Element): Promise<void> {
+  await waitFor(() => {
+    if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger)
+    if (trigger.getAttribute('aria-expanded') !== 'true') throw new Error('the menu did not open')
+  })
 }
 
 const trigger = () => screen.getByRole('combobox', { name: 'The session works in' })
@@ -46,14 +83,10 @@ const said = (row: Element) => {
 }
 const options = () => screen.getAllByRole('option').map(said)
 
-describe('ProjectPicker', () => {
-  test('as a button that adds a project (the first steps): its words on it, and no "no project" row, only what can be added', async () => {
-    renderPicker({ look: 'add', none: { label: 'Add a project' }, projects: [] })
-    await openMenu(screen.getByRole('combobox', { name: 'Add a project' }))
-    await screen.findByRole('option', { name: /vike/ })
-    expect(options()).toEqual(['vikegithub.com/vikejs/vike', 'notes/home/me/notes'])
-  })
+/** A git host's repos as the github module offers them: by address, not on this computer. */
+const GITHUB = (repos: UiWhereRepo[], more: { loading?: boolean; unreached?: string } = {}): Where => ({ id: 'github', label: 'On GitHub', loadingWords: 'Asking GitHub for repos…', repos: async () => ({ repos, ...more }) })
 
+describe('ProjectPicker', () => {
   test('a repo\'s address is said as its host and path, over https or ssh, and never with a login in it', () => {
     expect(shownAddress('https://github.com/vikejs/vike.git')).toBe('github.com/vikejs/vike')
     expect(shownAddress('git@github.com:vikejs/vike.git')).toBe('github.com/vikejs/vike')
@@ -72,22 +105,8 @@ describe('ProjectPicker', () => {
     renderPicker()
     expect(trigger().textContent).toBe('No project')
     cleanup()
-    renderPicker({ picked: 'alpha-1', pickedName: 'alpha' })
+    renderPicker({ picked: 'alpha-1' })
     expect(trigger().textContent).toBe('alpha')
-  })
-
-  test('in the sidebar: the same menu under a full-width button that names the project every page shows, or all of them; a bar while the one the address names is not read', async () => {
-    const { rerender, props } = renderPicker({ look: 'sidebar', none: { label: 'All projects' } })
-    expect(screen.getByRole('combobox', { name: 'Project: All projects' }).textContent).toBe('All projects')
-    rerender(<ProjectPicker {...props} look="sidebar" none={{ label: 'All projects' }} picked="alpha-1" />)
-    expect(screen.getByRole('combobox', { name: 'Project: alpha' }).textContent).toBe('alpha')
-    await openMenu(screen.getByRole('combobox', { name: 'Project: alpha' }))
-    await screen.findByRole('option', { name: /vike/ })
-    expect(options()).toEqual(['All projects', 'alpha', 'vikegithub.com/vikejs/vike', 'notes/home/me/notes'])
-    fireEvent.click(screen.getByRole('option', { name: 'All projects' }))
-    expect(props.onPick).toHaveBeenLastCalledWith(null)
-    rerender(<ProjectPicker {...props} look="sidebar" none={{ label: 'All projects' }} picked="alpha-1" pending />)
-    expect((screen.getByRole('combobox', { name: 'Project: loading' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
   test("a project's row says what is wrong with it, that it is not activated, or how its records are kept", async () => {
@@ -106,9 +125,9 @@ describe('ProjectPicker', () => {
   })
 
   test("a repository's address typed into the search is offered to add, unless a project or repo has it; picked, the trust question says where it is cloned to, and on a yes it is a project", async () => {
-    onCloneTarget.mockResolvedValue({ ok: true, address: 'github.com/ada/shop', path: '/home/me/projects/shop' })
-    sendAddProjectFromAddress.mockResolvedValue({ ok: true, alreadyActivated: false, path: '/home/me/projects/shop' })
-    const { onPick, onProjectAdded, props, rerender } = renderPicker()
+    cloneTargetFor.mockResolvedValue({ ok: true, address: 'github.com/ada/shop', path: '/home/me/projects/shop' })
+    addFromAddress.mockResolvedValue({ ok: true, alreadyActivated: false, path: '/home/me/projects/shop' })
+    const { onPick, rerender } = renderPicker()
     await openMenu(trigger())
     await screen.findByRole('option', { name: /vike/ })
     fireEvent.change(search(), { target: { value: 'github.com/vikejs/vike' } })
@@ -119,12 +138,12 @@ describe('ProjectPicker', () => {
     expect(options()).toEqual(['Add github.com/ada/shopCloned to this computer, as a project'])
     fireEvent.click(screen.getByRole('option', { name: /Add github.com\/ada\/shop/ }))
     expect(await screen.findByText('Do you trust this repository?')).toBeTruthy()
-    await waitFor(() => expect(onCloneTarget).toHaveBeenCalledWith('https://github.com/ada/shop'))
+    await waitFor(() => expect(cloneTargetFor).toHaveBeenCalledWith('https://github.com/ada/shop'))
     expect(screen.getByTitle('/home/me/projects/shop')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'I trust it, clone and add it' }))
-    await waitFor(() => expect(sendAddProjectFromAddress).toHaveBeenCalledWith('https://github.com/ada/shop'))
-    await waitFor(() => expect(onProjectAdded).toHaveBeenCalledTimes(1))
-    rerender(<ProjectPicker {...props} projects={[ALPHA, { id: 'shop-5', path: '/home/me/projects/shop', name: 'shop', activated: true, gitHost: true }]} />)
+    await waitFor(() => expect(addFromAddress).toHaveBeenCalledWith('https://github.com/ada/shop'))
+    await screen.findByText('Project added')
+    rerender({ projects: [ALPHA, { id: 'shop-5', path: '/home/me/projects/shop', name: 'shop', activated: true, gitHost: true }] })
     await waitFor(() => expect(onPick).toHaveBeenCalledWith('shop-5'))
     // Picked, it still says it was added, until Done.
     expect(screen.getByRole('status').textContent).toBe('Project added')
@@ -132,67 +151,64 @@ describe('ProjectPicker', () => {
     expect(screen.queryByRole('dialog', { name: 'Add project' })).toBeNull()
   })
 
-  test("the git hosts' repos follow the ones on this computer, with their address and why they are listed; picked, one is cloned the way a typed address is", async () => {
-    onRepos.mockResolvedValue({
-      repos: [VIKE, NOTES],
-      hosted: [
-        { address: 'github.com/octo-agent/shop', url: 'https://github.com/octo-agent/shop', private: true, from: '@octo-agent' },
-        { address: 'github.com/vikejs/bati', url: 'https://github.com/vikejs/bati', private: false, description: 'Scaffolder', from: 'vikejs' },
-      ],
-      reposLoading: false,
-      hostedLoading: false,
-      canAddFolder: false,
-    })
-    onCloneTarget.mockResolvedValue({ ok: true, address: 'github.com/vikejs/bati', path: '/home/me/projects/bati' })
-    renderPicker()
+  test("another module's repos follow the ones on this computer, under its own heading; one only at an address is listed once, by its folder where this computer has it; picked, it is cloned the way a typed address is", async () => {
+    cloneTargetFor.mockResolvedValue({ ok: true, address: 'github.com/vikejs/bati', path: '/home/me/projects/bati' })
+    const hosted: UiWhereRepo[] = [
+      { address: 'github.com/octo-agent/shop', label: 'octo-agent/shop', detail: 'Private·Not on this computer·@octo-agent' },
+      { address: 'github.com/vikejs/bati', label: 'vikejs/bati', detail: 'Scaffolder·Not on this computer·vikejs' },
+      { address: 'github.com/vikejs/vike', label: 'vikejs/vike', detail: 'Not on this computer·vikejs' },
+    ]
+    renderPicker({ where: [GITHUB(hosted)] })
     await openMenu(trigger())
     await screen.findByRole('option', { name: /bati/ })
-    expect(options()).toEqual(['No project', 'alpha', 'vikegithub.com/vikejs/vike', 'notes/home/me/notes', 'octo-agent/shopPrivate·Not on this computer·@octo-agent', 'vikejs/batiNot on this computer·vikejs'])
-    // Found by its description too; its address is no "Add" row.
+    expect(options()).toEqual(['No project', 'alpha', 'vikegithub.com/vikejs/vike', 'notes/home/me/notes', 'octo-agent/shopPrivate·Not on this computer·@octo-agent', 'vikejs/batiScaffolder·Not on this computer·vikejs'])
+    expect(screen.getByText('On GitHub')).toBeTruthy()
+    // Found by its detail too; its address is no "Add" row.
     fireEvent.change(search(), { target: { value: 'scaffold' } })
-    expect(options()).toEqual(['vikejs/batiNot on this computer·vikejs'])
+    expect(options()).toEqual(['vikejs/batiScaffolder·Not on this computer·vikejs'])
     fireEvent.change(search(), { target: { value: 'github.com/vikejs/bati' } })
-    expect(options()).toEqual(['vikejs/batiNot on this computer·vikejs'])
+    expect(options()).toEqual(['vikejs/batiScaffolder·Not on this computer·vikejs'])
     fireEvent.click(screen.getByRole('option', { name: /vikejs\/bati/ }))
     expect(await screen.findByText('Do you trust this repository?')).toBeTruthy()
-    await waitFor(() => expect(onCloneTarget).toHaveBeenCalledWith('github.com/vikejs/bati'))
+    await waitFor(() => expect(cloneTargetFor).toHaveBeenCalledWith('github.com/vikejs/bati'))
   })
 
-  test('a git host that could not be reached is said so, under the repos that are listed', async () => {
-    onRepos.mockResolvedValue({ repos: [VIKE], hosted: [], reposLoading: false, hostedLoading: false, hostedUnreached: true, canAddFolder: false })
-    renderPicker()
+  test("a module's repos that could not all be read are said so, under the repos that are listed, and one whose read fails says it in its own words", async () => {
+    const broken: Where = { id: 'broken', label: 'On GitLab', repos: async () => Promise.reject(new Error('down')) }
+    renderPicker({ where: [GITHUB([], { unreached: 'GitHub could not be reached: its repos are not listed.' }), broken] })
     await openMenu(trigger())
     expect(await screen.findByText('GitHub could not be reached: its repos are not listed.')).toBeTruthy()
+    expect(screen.getByText('On GitLab could not be read: its repos are not listed.')).toBeTruthy()
     expect(screen.getByRole('option', { name: /vike/ })).toBeTruthy()
   })
 
-  test("while the git hosts are being asked, the menu says so and asks again", async () => {
-    onRepos.mockResolvedValue({ repos: [VIKE], hosted: [], reposLoading: false, hostedLoading: true, canAddFolder: false })
-    renderPicker()
+  test("while a module's repos are being read, the menu says so in its words and asks again", async () => {
+    const asked = vi.fn(async () => ({ repos: [] as UiWhereRepo[], loading: true }))
+    renderPicker({ where: [{ ...GITHUB([]), repos: asked }] })
     await openMenu(trigger())
     expect(await screen.findByText('Asking GitHub for repos…')).toBeTruthy()
-    const before = onRepos.mock.calls.length
-    onRepos.mockResolvedValue({ repos: [VIKE], hosted: [{ address: 'github.com/octo/app', url: 'https://github.com/octo/app', private: false, from: '@octo' }], reposLoading: false, hostedLoading: false, canAddFolder: false })
-    await waitFor(() => expect(onRepos.mock.calls.length).toBeGreaterThan(before), { timeout: 4000 })
+    const before = asked.mock.calls.length
+    asked.mockResolvedValue({ repos: [{ address: 'github.com/octo/app', label: 'octo/app', detail: 'Not on this computer·@octo' }], loading: false })
+    await waitFor(() => expect(asked.mock.calls.length).toBeGreaterThan(before), { timeout: 4000 })
     expect(await screen.findByRole('option', { name: /octo\/app/ })).toBeTruthy()
     expect(screen.queryByText('Asking GitHub for repos…')).toBeNull()
   })
 
   test('while the look through this computer is still on its way, the menu says so and asks again', async () => {
-    onRepos.mockResolvedValue({ repos: [], hosted: [], reposLoading: true, hostedLoading: false, canAddFolder: false })
+    readRepos.mockResolvedValue(reposRead([], { loading: true, canAddFolder: false }))
     renderPicker()
     await openMenu(trigger())
     expect(await screen.findByText('Looking for repos on this computer…')).toBeTruthy()
-    const before = onRepos.mock.calls.length
-    onRepos.mockResolvedValue({ repos: [VIKE], hosted: [], reposLoading: false, hostedLoading: false, canAddFolder: false })
-    await waitFor(() => expect(onRepos.mock.calls.length).toBeGreaterThan(before), { timeout: 4000 })
+    const before = readRepos.mock.calls.length
+    readRepos.mockResolvedValue(reposRead([VIKE], { canAddFolder: false }))
+    await waitFor(() => expect(readRepos.mock.calls.length).toBeGreaterThan(before), { timeout: 4000 })
     expect(await screen.findByRole('option', { name: /vike/ })).toBeTruthy()
     expect(screen.queryByText('Looking for repos on this computer…')).toBeNull()
   })
 
   test('the repos are read as the page opens, before the menu is: the crawl behind them has run by then', async () => {
     renderPicker()
-    await waitFor(() => expect(onRepos).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(readRepos).toHaveBeenCalled())
   })
 
   test('the menu lists no project, the projects, then the repos that are not projects, each with its address or its folder', async () => {
@@ -231,7 +247,7 @@ describe('ProjectPicker', () => {
 
   test('with nothing typed only the first repos are listed, and the search reaches the rest', async () => {
     const many = Array.from({ length: REPOS_SHOWN + 5 }, (_, i) => ({ path: `/home/me/r${i}`, name: `r${i}` }))
-    onRepos.mockResolvedValue({ repos: many, hosted: [], reposLoading: false, hostedLoading: false, canAddFolder: false })
+    readRepos.mockResolvedValue(reposRead(many, { canAddFolder: false }))
     renderPicker({ projects: [] })
     await openMenu(trigger())
     await screen.findByRole('option', { name: /^r0/ })
@@ -244,7 +260,7 @@ describe('ProjectPicker', () => {
   })
 
   test('a project opens its page, and no project the page of a session with none', async () => {
-    const { onPick } = renderPicker({ picked: 'alpha-1', pickedName: 'alpha' })
+    const { onPick } = renderPicker({ picked: 'alpha-1' })
     await openMenu(trigger())
     // The pick is the tick at the row's end; the other rows carry none.
     expect(screen.getByRole('option', { name: 'alpha' }).lastElementChild!.querySelector('.lucide-check') !== null).toBe(true)
@@ -259,32 +275,32 @@ describe('ProjectPicker', () => {
   })
 
   test('a repo is asked the trust question for its folder; on a yes it is a project, and once the projects have it, its page opens', async () => {
-    sendAddProject.mockResolvedValue({ ok: true, alreadyActivated: false })
-    const { onPick, onProjectAdded, props, rerender } = renderPicker()
+    addProject.mockResolvedValue({ ok: true, alreadyActivated: false })
+    const { onPick, rerender } = renderPicker()
     await openMenu(trigger())
     fireEvent.click(await screen.findByRole('option', { name: /vike/ }))
     expect(onPick).not.toHaveBeenCalled()
     expect(await screen.findByText('Do you trust this repository?')).toBeTruthy()
     expect(screen.getByTitle(VIKE.path)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'I trust it, add it' }))
-    await waitFor(() => expect(sendAddProject).toHaveBeenCalledWith(VIKE.path))
-    await waitFor(() => expect(onProjectAdded).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(addProject).toHaveBeenCalledWith(VIKE.path))
+    await screen.findByText('Project added')
     expect(onPick).not.toHaveBeenCalled()
-    rerender(<ProjectPicker {...props} projects={[ALPHA, { id: 'vike-9', path: VIKE.path, name: 'vike', activated: true, gitHost: true }]} />)
+    rerender({ projects: [ALPHA, { id: 'vike-9', path: VIKE.path, name: 'vike', activated: true, gitHost: true }] })
     await waitFor(() => expect(onPick).toHaveBeenCalledWith('vike-9'))
     expect(screen.queryByText('Do you trust this repository?')).toBeNull()
   })
 
   test('a project added is picked once the projects read again have it, after its panel has gone too, unless another was picked meanwhile', async () => {
-    sendAddProject.mockResolvedValue({ ok: true, alreadyActivated: false })
+    addProject.mockResolvedValue({ ok: true, alreadyActivated: false })
     const VIKE_PROJECT = { id: 'vike-9', path: VIKE.path, name: 'vike', activated: true, gitHost: true }
-    const { onPick, props, rerender } = renderPicker()
+    const { onPick, rerender } = renderPicker()
     await openMenu(trigger())
     fireEvent.click(await screen.findByRole('option', { name: /vike/ }))
     fireEvent.click(await screen.findByRole('button', { name: 'I trust it, add it' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Done' }))
     expect(screen.queryByRole('dialog', { name: 'Add project' })).toBeNull()
-    rerender(<ProjectPicker {...props} projects={[ALPHA, VIKE_PROJECT]} />)
+    rerender({ projects: [ALPHA, VIKE_PROJECT] })
     await waitFor(() => expect(onPick).toHaveBeenCalledWith('vike-9'))
     cleanup()
     // alpha opened before the projects are read again: alpha stays.
@@ -293,8 +309,8 @@ describe('ProjectPicker', () => {
     fireEvent.click(await screen.findByRole('option', { name: /vike/ }))
     fireEvent.click(await screen.findByRole('button', { name: 'I trust it, add it' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Done' }))
-    second.rerender(<ProjectPicker {...second.props} picked="alpha-1" />)
-    second.rerender(<ProjectPicker {...second.props} picked="alpha-1" projects={[ALPHA, VIKE_PROJECT]} />)
+    second.rerender({ picked: 'alpha-1' })
+    second.rerender({ picked: 'alpha-1', projects: [ALPHA, VIKE_PROJECT] })
     await new Promise(resolve => setTimeout(resolve, 50))
     expect(second.onPick).not.toHaveBeenCalled()
   })
@@ -305,12 +321,12 @@ describe('ProjectPicker', () => {
     fireEvent.click(await screen.findByRole('option', { name: /notes/ }))
     fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }))
     expect(screen.queryByText('Do you trust this repository?')).toBeNull()
-    expect(sendAddProject).not.toHaveBeenCalled()
+    expect(addProject).not.toHaveBeenCalled()
     expect(onPick).not.toHaveBeenCalled()
   })
 
   test('the trust question closed, by Escape or a yes, gives focus back to the picker', async () => {
-    sendAddProject.mockResolvedValue({ ok: true, alreadyActivated: false })
+    addProject.mockResolvedValue({ ok: true, alreadyActivated: false })
     renderPicker()
     await openMenu(trigger())
     fireEvent.click(await screen.findByRole('option', { name: /notes/ }))
@@ -325,15 +341,36 @@ describe('ProjectPicker', () => {
   })
 
   test('"Search another folder…" adds a folder to look in, and the repos are read again', async () => {
-    sendAddRepoFolder.mockResolvedValue({ ok: true, added: true })
+    addFolderToSearch.mockResolvedValue({ ok: true, added: true })
     renderPicker()
     await openMenu(trigger())
     await screen.findByRole('option', { name: /vike/ })
-    const before = onRepos.mock.calls.length
-    onRepos.mockResolvedValue({ repos: [VIKE, NOTES, { path: '/work/client', name: 'client' }], hosted: [], reposLoading: false, hostedLoading: false, canAddFolder: true })
+    readRepos.mockResolvedValue(reposRead([VIKE, NOTES, { path: '/work/client', name: 'client' }]))
     fireEvent.click(screen.getByText('Search another folder…'))
-    await waitFor(() => expect(sendAddRepoFolder).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(addFolderToSearch).toHaveBeenCalledTimes(1))
     await screen.findByRole('option', { name: /client/ })
-    expect(onRepos.mock.calls.length).toBe(before + 1)
+  })
+
+  test("the launcher's control is the picker, a pick moving the launcher; a session's box and a profile's have none", async () => {
+    const pickProject = vi.fn()
+    const control = (props: Record<string, unknown>) =>
+      renderWithHost(
+        <ShellProjectsContext.Provider value={[ALPHA]}>
+          <ProjectControl {...({ in: 'launcher', projectId: 'alpha-1', busy: false, pickProject, ...props } as unknown as Parameters<typeof ProjectControl>[0])} />
+        </ShellProjectsContext.Provider>,
+        fakeHost('@openagt/projects'),
+        modulesWith(),
+      )
+    control({})
+    expect(trigger().textContent).toBe('alpha')
+    await openMenu(trigger())
+    fireEvent.click(await screen.findByRole('option', { name: 'No project' }))
+    expect(pickProject).toHaveBeenLastCalledWith(undefined)
+    cleanup()
+    control({ in: 'session' })
+    expect(screen.queryByRole('combobox')).toBeNull()
+    cleanup()
+    control({ pickProject: undefined })
+    expect(screen.queryByRole('combobox')).toBeNull()
   })
 })

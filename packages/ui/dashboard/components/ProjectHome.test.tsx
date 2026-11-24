@@ -39,7 +39,7 @@ describe('ProjectHome', () => {
         onOpenAgent={() => {}}
         projects={[]}
         onPickProject={() => {}}
-        onProjectAdded={() => {}}
+       
       />,
     )
     await act(async () => {
@@ -72,7 +72,7 @@ describe('ProjectHome', () => {
   })
 
   test('what the project needs is said under what waits on you', () => {
-    render(<ProjectHome projectId="p1" waiting={[WAITS]} files={[]} context={new Set()} addContext={() => {}} removeContext={() => {}} toggleContext={() => {}} onOpenAgent={() => {}} projects={[]} onPickProject={() => {}} onProjectAdded={() => {}} />)
+    render(<ProjectHome projectId="p1" waiting={[WAITS]} files={[]} context={new Set()} addContext={() => {}} removeContext={() => {}} toggleContext={() => {}} onOpenAgent={() => {}} projects={[]} onPickProject={() => {}} />)
     const line = screen.getByText('what p1 needs')
     const waiting = screen.getByRole('region', { name: 'Waiting on you' })
     expect(waiting.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
@@ -80,7 +80,7 @@ describe('ProjectHome', () => {
   })
 
   test('with nothing waiting, what the project needs stands over the box, at the page’s top, not under it', () => {
-    render(<ProjectHome projectId="p1" waiting={[]} files={[]} context={new Set()} addContext={() => {}} removeContext={() => {}} toggleContext={() => {}} onOpenAgent={() => {}} projects={[]} onPickProject={() => {}} onProjectAdded={() => {}} />)
+    render(<ProjectHome projectId="p1" waiting={[]} files={[]} context={new Set()} addContext={() => {}} removeContext={() => {}} toggleContext={() => {}} onOpenAgent={() => {}} projects={[]} onPickProject={() => {}} />)
     const lines = screen.getAllByText('what p1 needs')
     expect(lines).toHaveLength(1)
     expect(lines[0]!.compareDocumentPosition(screen.getByText('start form')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
@@ -88,7 +88,7 @@ describe('ProjectHome', () => {
   })
 
   test('the page’s first row stands 48px under the top bar, with something waiting and with nothing (his pick)', () => {
-    const page = (waiting: Waiting[]) => render(<ProjectHome projectId="p1" waiting={waiting} files={[]} context={new Set()} addContext={() => {}} removeContext={() => {}} toggleContext={() => {}} onOpenAgent={() => {}} projects={[]} onPickProject={() => {}} onProjectAdded={() => {}} />)
+    const page = (waiting: Waiting[]) => render(<ProjectHome projectId="p1" waiting={waiting} files={[]} context={new Set()} addContext={() => {}} removeContext={() => {}} toggleContext={() => {}} onOpenAgent={() => {}} projects={[]} onPickProject={() => {}} />)
     page([WAITS])
     expect(screen.getByRole('region', { name: 'Waiting on you' }).parentElement!.className.split(' ')).toContain('pt-12')
     cleanup()
@@ -97,7 +97,7 @@ describe('ProjectHome', () => {
   })
 
   test('nothing waits: no section, no heading', () => {
-    render(<ProjectHome projectId="p1" waiting={[]} files={[]} context={new Set()} addContext={() => {}} removeContext={() => {}} toggleContext={() => {}} onOpenAgent={() => {}} projects={[]} onPickProject={() => {}} onProjectAdded={() => {}} />)
+    render(<ProjectHome projectId="p1" waiting={[]} files={[]} context={new Set()} addContext={() => {}} removeContext={() => {}} toggleContext={() => {}} onOpenAgent={() => {}} projects={[]} onPickProject={() => {}} />)
     expect(screen.queryByRole('region', { name: 'Waiting on you' })).toBeNull()
     expect(screen.queryByText(/Waiting on you/)).toBeNull()
   })

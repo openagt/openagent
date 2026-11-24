@@ -39,9 +39,7 @@ export function testHost(): RunHost {
 export function testDashboardContext(over: Partial<DashboardContext> = {}): DashboardContext {
   return {
     startAgent: () => ({ ok: false, error: 'not wired in this test' }),
-    addProject: () => ({ ok: false, error: 'not wired in this test' }),
     startedIn: () => ({ ok: false, error: 'not wired in this test' }),
-    removeProject: () => ({ ok: false, error: 'not wired in this test' }),
     host: testHost(),
     otherHosts: async () => [],
     preferences: registryPreferencesStore(),

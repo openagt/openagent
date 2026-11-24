@@ -58,12 +58,11 @@ vi.mock('../lib/run-hosts.js', async importOriginal => ({
 // The `actions` and `summary` slots of the bar above the message box ARE rendered, so the handoff
 // cluster and the modules' summaries stay reachable.
 vi.mock('./AgentActionBar.js', () => ({
-  AgentActionBar: ({ live, ready, checkout, status, onToggle, onProjectRemoved }: { live?: boolean; ready?: boolean; checkout: unknown; status?: string; onToggle?: () => void; onProjectRemoved?: () => void }) => (
+  AgentActionBar: ({ live, ready, checkout, status, onToggle }: { live?: boolean; ready?: boolean; checkout: unknown; status?: string; onToggle?: () => void }) => (
     <>
       <span data-testid="bar-status">{String(status)}</span>
       <span data-testid="bar-frame" />
       <span data-testid="bar-live">{String(live)}</span>
-      <button type="button" onClick={onProjectRemoved}>project removed</button>
       <button type="button" onClick={onToggle}>details</button>
       <span data-testid="bar-ready">{String(ready)}</span>
       <span data-testid="bar-checkout">{JSON.stringify(checkout)}</span>
@@ -1075,13 +1074,6 @@ describe('a run the launcher just started, before its record is there', () => {
     render(view({ live: true, events: [], picks, card: { status: 'running' as const } }))
     expect(row('composer-auto', 'publish')).toBe('')
   })
-})
-
-test('the top bar is told what to do once the project is removed', () => {
-  const removed = vi.fn()
-  render(view({ card: { status: 'done' as const }, onProjectRemoved: removed }))
-  fireEvent.click(screen.getByRole('button', { name: 'project removed' }))
-  expect(removed).toHaveBeenCalledOnce()
 })
 
 describe('the row under the message box', () => {

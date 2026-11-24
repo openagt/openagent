@@ -1,7 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { GitAccess } from './account.js'
 import type { ProjectRef } from './project.js'
-import type { RunOptions, RunQuestion } from './run.js'
+import type { GivenSkill } from './loader.js'
+import type { RunOptions, RunQuestion, SkillArgs } from './run.js'
 import type { Settings } from './settings.js'
 import type { Store } from './store.js'
 
@@ -15,12 +16,51 @@ export interface AppContext {
   projects(): Promise<ProjectRef[]>
   readonly store: Store
   readonly settings: Settings
-  /** How git reaches `remote` as an account, as the modules' `account.access` says: none when no module has an account for it. */
-  gitAccess(remote: string): Promise<GitAccess | undefined>
   /** Aborted when the app stops, or a plugin kept per person or per computer is switched off: a module's own timers end with it. */
   readonly signal: AbortSignal
   /** Where the app answers on this computer, for a module's own process to call it at; none before the app started. */
   readonly url?: string
+  /** How git reaches `remote`, an https address, as one of the modules' accounts (`account.access`); none when no module has one for it. */
+  gitAccess(remote: string): Promise<GitAccess | undefined>
+  /** Tell the other modules the list of projects changed: what the module that keeps the list does. */
+  readonly lifecycle: ProjectsLifecycle
+  /** The skills the modules give a run, as the app's `skills` answers them: with `every`, every module's, the plugins that are off too. */
+  skills(args: SkillArgs, opts?: { every?: boolean }): Promise<GivenSkill[]>
+}
+
+/**
+ * How the module that keeps the list of projects tells every module that it changed, through the
+ * app: the others start their work in a project added, and clean up after one removed.
+ */
+export interface ProjectsLifecycle {
+  /** `project` was added to the list: the modules on in it are told (`AppLifecycle.projectAdded`). */
+  added(project: ProjectRef): Promise<void>
+  /** Why `project` may not be taken off the list now, in words, as the first module that refuses it says (`AppLifecycle.refuseRemoval`: an agent at work in it); nothing when it may. */
+  refusal(project: ProjectRef): Promise<string | undefined>
+  /** `project` was taken off the list: every module is told, each cleaning up its own data (`AppLifecycle.projectRemoved`), and what they removed and kept is answered. */
+  removed(project: ProjectRef, removal: ProjectRemoval): Promise<CleanupReport>
+}
+
+/** How a project is removed: off the list alone, or with what OpenAgent left in its folder (`files`), a person's box in the Remove dialog. */
+export interface ProjectRemoval {
+  files: boolean
+}
+
+/** What one module removed of what it left in a removed project's folder, and what it left there, each with why, by its path from the project's root. */
+export interface ProjectCleanup {
+  removed: string[]
+  kept: { path: string; reason: string }[]
+}
+
+/** What every module removed and kept, and, in words, what could not be cleaned up: one line for each module that refused or failed. */
+export interface CleanupReport extends ProjectCleanup {
+  failed: string[]
+}
+
+/** A project, and whether it was added to the list just now. */
+export interface GivenFolder {
+  project: ProjectRef
+  added: boolean
 }
 
 /** What the app says of itself as it starts its modules ({@link AppContext}). */
@@ -43,8 +83,24 @@ export interface AppLifecycle {
   stopping?(): void | Promise<void>
   /** A project was added: called for the modules that are on in it. */
   projectAdded?(project: ProjectRef, app: AppContext): void | Promise<void>
-  /** A project was removed: called for every module, each cleaning up its own data. */
-  projectRemoved?(project: ProjectRef, app: AppContext): void | Promise<void>
+  /**
+   * A project is to be taken off the list: why the module refuses it now, in words (a run of its
+   * own at work there); nothing when it may go. Asked of every module, on in the project or not,
+   * before any is told it was removed: the first that refuses keeps it on the list.
+   */
+  refuseRemoval?(project: ProjectRef, app: AppContext): string | undefined | Promise<string | undefined>
+  /**
+   * A project was removed: called for every module, each cleaning up its own data, and, with
+   * `removal.files`, what it left in the project's folder, answering what it removed and kept
+   * there. One that may not clean up now (a run of its own is alive there) throws why, in words.
+   */
+  projectRemoved?(project: ProjectRef, app: AppContext, removal: ProjectRemoval): void | ProjectCleanup | Promise<void | ProjectCleanup>
+  /**
+   * The folder `openagent` was typed in, handed over by the command: the project that holds it,
+   * or the folder made one and added to the list (`added`); nothing when it is no project's to
+   * be, a folder outside any repository. The first module that answers is the one.
+   */
+  folderGiven?(folder: string, app: AppContext): Promise<GivenFolder | undefined>
 }
 
 /**

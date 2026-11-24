@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { projectId } from '@openagt/agent-data'
 import { DISTRIBUTION_ENV } from '@openagt/hooks'
-import { computerPackages, distributionPackages, lookupProvided, packagesOf, providedCommand, runCleanups, type DashboardPackage } from './distribution-packages.js'
+import { computerPackages, distributionPackages, lookupProvided, packagesOf, providedCommand, type DashboardPackage } from './distribution-packages.js'
 import { distributionHooks, projectRefAt } from './distribution-hooks.js'
 import { readComputerModules, readProjectModules } from './project-modules.js'
 import { providedGitHost } from './store/git-host.js'
@@ -84,16 +84,16 @@ test("a project shows its Logs page once logs is on there", async () => {
   }
 })
 
-test("the person's own folder, the coding agents, how markdown looks, the Human Queue, the person's profile, the agent profiles, the runs with their accounts and the notifications are the computer's: their parts are there with no project, and no project has them; the plugins' only while they are on", async () => {
-  assert.deepEqual((await computerPackages()).map(pkg => pkg.name), ['@openagt/store-git-repository', '@openagt/agent-driver-claude-code', '@openagt/agent-driver-codex', '@openagt/ui-renderer-markdown', '@openagt/ui-card-waiting', '@openagt/user-info', '@openagt/profiles', '@openagt/notifications-browser', '@openagt/agent-driver'])
-  assert.deepEqual((await readComputerModules()).map(module => module.package), ['@openagt/agent-driver', '@openagt/notifications-browser', '@openagt/profiles', '@openagt/store-git-repository', '@openagt/ui-card-waiting', '@openagt/ui-renderer-markdown', '@openagt/user-info'])
-  assert.deepEqual((await readComputerModules()).map(module => Object.keys(module.bins)), [['agent-runner', 'account-rotation'], [], [], [], [], [], []])
+test("the person's own folder, the list of projects, the coding agents, how markdown looks, the Human Queue, the person's profile, the agent profiles, the runs with their accounts and the notifications are the computer's: their parts are there with no project, and no project has them; the plugins' only while they are on", async () => {
+  assert.deepEqual((await computerPackages()).map(pkg => pkg.name), ['@openagt/store-git-repository', '@openagt/projects', '@openagt/agent-driver-claude-code', '@openagt/agent-driver-codex', '@openagt/ui-renderer-markdown', '@openagt/ui-card-waiting', '@openagt/user-info', '@openagt/profiles', '@openagt/notifications-browser', '@openagt/agent-driver'])
+  assert.deepEqual((await readComputerModules()).map(module => module.package), ['@openagt/agent-driver', '@openagt/notifications-browser', '@openagt/profiles', '@openagt/projects', '@openagt/store-git-repository', '@openagt/ui-card-waiting', '@openagt/ui-renderer-markdown', '@openagt/user-info'])
+  assert.deepEqual((await readComputerModules()).map(module => Object.keys(module.bins)), [['agent-runner', 'account-rotation'], [], [], [], [], [], [], []])
   const hooks = await distributionHooks()
   await hooks.setEnabled('notifications-browser', false)
   await hooks.setEnabled('notifications-command', true)
   try {
-    assert.deepEqual((await computerPackages()).map(pkg => pkg.name), ['@openagt/store-git-repository', '@openagt/agent-driver-claude-code', '@openagt/agent-driver-codex', '@openagt/ui-renderer-markdown', '@openagt/ui-card-waiting', '@openagt/user-info', '@openagt/profiles', '@openagt/notifications-command', '@openagt/agent-driver'])
-    assert.deepEqual((await readComputerModules()).map(module => module.package), ['@openagt/agent-driver', '@openagt/notifications-command', '@openagt/profiles', '@openagt/store-git-repository', '@openagt/ui-card-waiting', '@openagt/ui-renderer-markdown', '@openagt/user-info'])
+    assert.deepEqual((await computerPackages()).map(pkg => pkg.name), ['@openagt/store-git-repository', '@openagt/projects', '@openagt/agent-driver-claude-code', '@openagt/agent-driver-codex', '@openagt/ui-renderer-markdown', '@openagt/ui-card-waiting', '@openagt/user-info', '@openagt/profiles', '@openagt/notifications-command', '@openagt/agent-driver'])
+    assert.deepEqual((await readComputerModules()).map(module => module.package), ['@openagt/agent-driver', '@openagt/notifications-command', '@openagt/profiles', '@openagt/projects', '@openagt/store-git-repository', '@openagt/ui-card-waiting', '@openagt/ui-renderer-markdown', '@openagt/user-info'])
   } finally {
     await hooks.setEnabled('notifications-browser', true)
     await hooks.setEnabled('notifications-command', false)
@@ -197,26 +197,3 @@ test('two packages of the distribution that provide one kind provide it neither,
   }
 })
 
-test("every package of the distribution that declares a clean-up is asked, one the project does not have too; a refusal, a failure and an answer that is not one are each a line, and the rest still run", async () => {
-  const root = await scratch('cleanup')
-  try {
-    execFileSync('git', ['init', '-q'], { cwd: root })
-    await withPackages(
-      [
-        { entry: { package: 'tidy' }, fields: { openagent: { cleanup: 'tidy' } }, script: `require('node:fs').writeFileSync('asked.txt', process.argv.slice(2).join(' ')); console.log(JSON.stringify({ ok: true, removed: ['.tidy'], kept: [{ path: '.tidy-notes', reason: 'yours' }] }))` },
-        { entry: { package: 'busy' }, fields: { openagent: { cleanup: 'busy' } }, script: `console.log(JSON.stringify({ ok: false, reason: 'running' })); console.error('a run is still working here'); process.exit(1)` },
-        { entry: { package: 'odd', for: 'computer' }, fields: { openagent: { cleanup: 'odd' } }, script: `console.log(JSON.stringify({ ok: true, removed: 'everything' }))` },
-      ],
-      async () => {
-        assert.deepEqual(await runCleanups(root), {
-          removed: ['.tidy'],
-          kept: [{ path: '.tidy-notes', reason: 'yours' }],
-          failed: ['busy: a run is still working here', 'odd: its clean-up answered something else than what it removed and kept'],
-        })
-        assert.equal(execFileSync('cat', ['asked.txt'], { cwd: root, encoding: 'utf8' }), 'cleanup', 'run in the project, with the one word')
-      },
-    )
-  } finally {
-    await rm(root, { recursive: true, force: true })
-  }
-})

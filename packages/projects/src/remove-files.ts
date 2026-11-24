@@ -1,18 +1,16 @@
 import { lstat, readdir, rm, rmdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import { DATA_BRANCH, clearSharing, nodeGitRunner, removeFileBranch, removePersonalData, SHARE_SETTING, type GitRunner } from '@openagt/agent-data'
-import { OPENAGENT_DIR } from './openagent-dir.js'
-import { runCleanups } from './distribution-packages.js'
-import { errorMessage } from './error-message.js'
-import type { CleanupReport } from './dashboard/types.js'
+import { DATA_BRANCH, OPENAGENT_DIR, clearSharing, errorMessage, nodeGitRunner, removeFileBranch, removePersonalData, SHARE_SETTING, type GitRunner } from '@openagt/agent-data'
+import type { CleanupReport } from '@openagt/hooks'
 
 /**
  * What OpenAgent left in a project's folder, removed: what a person asks for with the box in the
  * "Remove project" dialog. Three owners, each removing its own:
  *
- * - every tool that declares a `cleanup` command: asked to run it, and its answer passed on. One
- *   that refuses or fails ends the pass there: the records and the dashboard's directory stay.
- *   The runner refuses while a run is alive, the scheduler while one set to keep running is.
+ * - every module, told the project was removed with its files (`app.lifecycle`), which answers
+ *   what it removed and kept (`modules`). One that refused or failed ends the pass there: the
+ *   records and the dashboard's directory stay. agent-driver refuses while a run is alive,
+ *   scheduled-agents while a scheduler set to keep running is.
  * - the agents' records: the project's directory in the personal folder, the `agent-data`
  *   checkout and local branch, and the person's answer to "share the records". Left alone when
  *   another project on the list is a checkout of the same repository, since both places are the
@@ -28,17 +26,13 @@ export interface RemoveFilesOptions {
   git?: GitRunner
 }
 
-export async function removeProjectFiles(root: string, opts: RemoveFilesOptions = {}): Promise<CleanupReport> {
+export async function removeProjectFiles(root: string, modules: CleanupReport, opts: RemoveFilesOptions = {}): Promise<CleanupReport> {
   const git = opts.git ?? nodeGitRunner()
-  const report: CleanupReport = { removed: [], kept: [], failed: [] }
+  const report: CleanupReport = { removed: [...modules.removed], kept: [...modules.kept], failed: [...modules.failed] }
 
-  // The tools first: the runner refuses while a run of this machine is alive, and then nothing
+  // The modules first: agent-driver refuses while a run of this machine is alive, and then nothing
   // of the records or the dashboard's directory may go from under that run.
-  const tools = await runCleanups(root)
-  report.removed.push(...tools.removed)
-  report.kept.push(...tools.kept)
-  report.failed.push(...tools.failed)
-  if (tools.failed.length > 0) {
+  if (modules.failed.length > 0) {
     const reason = 'a clean-up before it did not finish'
     report.kept.push({ path: `branch ${DATA_BRANCH}`, reason }, { path: OPENAGENT_DIR, reason })
     return report
@@ -54,7 +48,7 @@ export async function removeProjectFiles(root: string, opts: RemoveFilesOptions 
     if (!records.ok) report.failed.push(`the agents' records: ${records.error}`)
     else {
       report.removed.push(...records.removed)
-      // The records' checkout was another tool's "not mine" a moment ago; now it is gone.
+      // The records' checkout was another module's "not mine" a moment ago; now it is gone.
       report.kept = report.kept.filter(kept => !records.removed.includes(kept.path))
       report.kept.push(...records.kept)
       // The answer goes with the records it was about; while anything of them stays, so does it.

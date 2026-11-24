@@ -7,7 +7,7 @@ import { nodeGitRunner } from '@openagt/agent-data'
 import { RunOrder, type GitBranchesFacts, type ProjectRef, type RunContext, type RunStep } from '@openagt/hooks'
 import { fakeRun } from '@openagt/hooks/testing'
 import { gitBranchesModule } from './module.js'
-import { copiesLine, SESSION_FOLDER_STAYS } from './session-folder.js'
+import { SESSION_FOLDER_STAYS } from './session-folder.js'
 import { worktreePath } from './worktree.js'
 
 // git-branches as a module: its steps, run alone on a real repository, each reading and writing
@@ -133,7 +133,7 @@ test('a run with no project works in a folder of its own, which stays; a run who
   }
 })
 
-test('a run in a project with repos: its checkout of the project, a copy of each repo in a session folder, and a line for the agent on the copies made now', async () => {
+test('a run in a project with repos: its checkout of the project, a copy of each repo in a session folder, and its facts name the copies made now', async () => {
   const p = await project()
   const other = await project()
   const home = await realpath(await mkdtemp(join(tmpdir(), 'git-branches-home-')))
@@ -151,15 +151,12 @@ test('a run in a project with repos: its checkout of the project, a copy of each
     const folder = join(home, 'openagent-sessions', 'run1')
     assert.equal((await git(['branch', '--show-current'], join(folder, 'other'))).trim(), 'agent-run1', 'the copy is on a branch of its own')
     assert.equal((await git(['branch', '--show-current'], other.dir)).trim(), 'main', "the repo's own folder is left on its branch")
-    assert.deepEqual(ctx.context, [
-      `Context: this session has its own copy of a repo, on the branch agent-run1: ${join(folder, 'other')} (copied from ${other.dir}). Read and change it there, not in the folder copied from.`,
-    ])
-    assert.match(copiesLine(folder, 'run1', [...repos, { name: 'site', from: '/x/site' }]), /its own copies of repos, .*\/other \(copied from .*\), .*\/site \(copied from \/x\/site\)\. Read and change them there, not in the folders copied from\.$/)
+    assert.deepEqual(ctx.facts['git-branches']?.copies, { folder, branch: 'agent-run1', made: repos })
 
-    // A resumed run has its copy already: nothing is made, and nothing is said again.
+    // A resumed run has its copy already: nothing is made.
     const resumed: RunContext = fakeRun({ id: 'run1', project: p, options: { 'git-branches': { repos } }, resume: { text: 'go on' }, facts: ctx.facts })
     await checkout.run(resumed)
-    assert.deepEqual(resumed.context, [])
+    assert.deepEqual(resumed.facts['git-branches']?.copies?.made, [])
 
     // The run ends with work in its copy: the copy stays. One it never touched goes, and the empty folder with it.
     await writeFile(join(folder, 'other', 'work.txt'), 'x\n')

@@ -18,6 +18,10 @@ import { runCli } from '@openagt/ui/cli'
 process.exit(await runCli(process.argv.slice(2), { distribution: '/path/to/distribution.js' }))
 ```
 
+The list of projects is a setting of this computer's (`PROJECTS`, `@openagt/hooks`), which the
+projects module writes (`@openagt/projects`) and the shell reads: its sidebar and its routes. A
+module that changes it says so in the page (`projectsChanged`), and the shell reads it again.
+
 The distribution's file is handed down to every process the dashboard starts
 (`OPENAGENT_DISTRIBUTION`), a run's own among them. Its package is the one OpenAgent is installed
 as: the version the dashboard says, and checks npm for, is that package's.

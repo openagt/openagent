@@ -6,7 +6,7 @@ import { hostname, tmpdir } from 'node:os'
 import { sendStop, sendMessage, sendOpenPullRequest } from './control.js'
 import { callModule } from './module-calls.js'
 import { onRetainedWorktrees, onAgents, onRecentAgents } from './reads.js'
-import { addProject } from '../registry.js'
+import { listTestProject } from '../test-projects.js'
 import { DATA_BRANCH, fileBranchPath, nodeGitRunner, projectId as idFor } from '@openagt/agent-data'
 import { worktreePath, addWorktree, agentBranchName } from '@openagt/git-branches'
 import { OPENAGENT_DIR } from '../openagent-dir.js'
@@ -70,7 +70,7 @@ async function projectWithWorktreeAgent(
   await mkdir(process.env.XDG_CONFIG_HOME, { recursive: true })
   // Its record, as its tool keeps it, in the project's data under this config home: what a resume is refused without.
   if (run.record !== false) assert.ok((await writeRun(dir, card as Parameters<typeof writeRun>[1], [])).ok, 'the record landed')
-  await addProject(dir, new Date().toISOString())
+  await listTestProject(dir, new Date().toISOString())
   // The context every RPC reads (D3). In tests it is a global that outlives an await,
   // unlike the request-scoped one a real serve() provides.
   provideTestContext()

@@ -116,15 +116,6 @@ export async function openSessionFolder(home: string, id: string, repos: readonl
 }
 
 /**
- * What a run in a project is told of the copies just made for it: where each is and where it came
- * from. A run with no project is told nothing: it starts in the folder that holds them.
- */
-export function copiesLine(folder: string, id: string, made: readonly SessionRepo[]): string {
-  const copies = made.map(repo => `${join(folder, repo.name)} (copied from ${repo.from})`).join(', ')
-  return `Context: this session has its own ${made.length === 1 ? 'copy of a repo' : 'copies of repos'}, on the branch ${agentBranchName(id)}: ${copies}. Read and change ${made.length === 1 ? 'it' : 'them'} there, not in the folder${made.length === 1 ? '' : 's'} copied from.`
-}
-
-/**
  * A run in a project is over: the copies it never touched go, and its session folder with them
  * once it is empty. A copy is untouched when its tree is clean and no branch of it holds a commit
  * beyond the one it was made at, which the copy itself names. One with work stays, pushed or not:

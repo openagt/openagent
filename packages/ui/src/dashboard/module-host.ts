@@ -1,15 +1,16 @@
 import { pathToFileURL } from 'node:url'
 import { isRunId } from '../store/index.js'
+import { providedDataChanged } from '../store/provided.js'
 import { cachedPrsForBranch, type LinkedPr } from './pull-requests.js'
 import type { Cached } from './cache.js'
-import type { GitAccess, GitAccounts, ProjectRef, RunFound, RunQuestion, Settings, InboxLine } from '@openagt/hooks'
+import type { GitAccounts, Hooks, ProjectRef, RunFound, RunQuestion, InboxLine } from '@openagt/hooks'
 import { rpcKind, type MergeLookup, type ModuleOn, type RpcComputerHost, type RpcFunction, type RpcHost, type RpcKind } from '@openagt/hooks/rpc'
 
 // The daemon's side of a module's server part (`@openagt/hooks/rpc`): the host a function is given
-// (the settings, the registered projects, OpenAgent's accounts at the git hosts; for a project's
-// module, the project's folder and the project, where its runs have their work, the questions they
-// wait on, a line said to one, a landing written down on one's record, how git reaches a remote as
-// an account, and what the modules on give its runs) and the one way a function is
+// (the settings, the registered projects, OpenAgent's accounts at the git hosts, the modules'
+// accounts and the app's word to the modules; for a project's module, the project's folder and the
+// project, where its runs have their work, the questions they wait on, a line said to one, a landing
+// written down on one's record, and what the modules on give its runs) and the one way a function is
 // called. Where a run's work is, is its host's to say; what a module makes of it is its own.
 
 /** What {@link computerHost} reads through. */
@@ -31,23 +32,42 @@ export interface ServerHostDeps extends ComputerHostDeps {
   say: (agentId: string, line: InboxLine) => Promise<void>
   /** Write down on a run's record that its work was landed; throws why it is not written. */
   landed: (agentId: string, landed: { commit: string; from: string }) => Promise<void>
-  /** How git reaches a remote as an account, as the distribution's `account.access` says. */
-  gitAccess: (remote: string) => Promise<GitAccess | undefined>
   /** The modules on in the project, with what each gives its runs. */
   modulesOn: (opts?: { every?: boolean }) => Promise<ModuleOn[]>
   /** The project's pull requests from a branch, as the git host last said; the production reader when absent. */
   prs?: (root: string, branch: string) => Promise<Cached<LinkedPr[]>>
 }
 
-/** The host a function of a module of the computer's is given, called in no project. */
-export function computerHost(settings: Settings, deps: ComputerHostDeps): RpcComputerHost {
-  return { settings, projects: deps.projects, accounts: deps.accounts }
+/** What every function's host is made of: the distribution's settings, its modules' accounts, and its lifecycle. */
+export type AppOfHost = Pick<Hooks, 'settings' | 'gitAccess' | 'lifecycle'>
+
+/**
+ * The host a function of a module of the computer's is given, called in no project. A project
+ * taken off the list is told to every module through `app`, and what this daemon read of its data
+ * is read anew.
+ */
+export function computerHost(app: AppOfHost, deps: ComputerHostDeps): RpcComputerHost {
+  return {
+    settings: app.settings,
+    projects: deps.projects,
+    accounts: deps.accounts,
+    gitAccess: remote => app.gitAccess(remote),
+    lifecycle: {
+      added: project => app.lifecycle.added(project),
+      refusal: project => app.lifecycle.refusal(project),
+      async removed(project, removal) {
+        const cleaned = await app.lifecycle.removed(project, removal)
+        providedDataChanged(project.dir)
+        return cleaned
+      },
+    },
+  }
 }
 
 /** The host a function called in the project at `root` is given. A string that is no run's id is never asked about, nor said anything. */
-export function serverHost(root: string, settings: Settings, deps: ServerHostDeps): RpcHost {
+export function serverHost(root: string, app: AppOfHost, deps: ServerHostDeps): RpcHost {
   return {
-    ...computerHost(settings, deps),
+    ...computerHost(app, deps),
     root,
     project: deps.project,
     modulesOn: deps.modulesOn,
@@ -67,7 +87,6 @@ export function serverHost(root: string, settings: Settings, deps: ServerHostDep
       if (typeof agentId !== 'string' || !isRunId(agentId)) throw new Error('unknown session')
       return deps.landed(agentId, landed)
     },
-    gitAccess: remote => deps.gitAccess(remote),
     async mergeCommit(branch: string, number: number): Promise<MergeLookup> {
       const read = await (deps.prs ?? cachedPrsForBranch)(root, branch).catch((): Cached<LinkedPr[]> => ({ value: undefined, pending: false }))
       if (read.pending && read.value === undefined) return { pending: true }

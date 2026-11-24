@@ -1,5 +1,5 @@
-// What adding a project does to the folder, said before the person adds it: on the onboarding
-// checklist, beside its button. The dialog that asks says only the trust question.
+// What adding a project does to the folder, said before the person adds it: in the dialog "Add
+// your first project" opens, under the trust question it asks.
 export function AddProjectEffects() {
   const code = 'rounded-sm bg-muted px-1 font-mono'
   return (

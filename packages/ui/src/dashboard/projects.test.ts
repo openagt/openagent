@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { summarizeProject, defaultProjectsProvider, type SummarizeDeps } from './projects.js'
-import type { ProjectRecord } from '../registry.js'
+import type { ProjectRecord } from '@openagt/hooks'
 import { type AgentMeta } from '../store/index.js'
 
 const RECORD: ProjectRecord = { id: 'app-a-1', path: '/repos/app-a', addedAt: '2026-07-11T00:00:00.000Z' }

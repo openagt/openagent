@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import type { DashboardData, ProjectSummary } from '../../src/index.js'
+import type { DashboardData } from '../../src/index.js'
 import { Check, Info, X } from 'lucide-react'
 import { onDashboard } from '../rpc/reads.js'
 import { usePolled } from '../lib/use-async.js'
@@ -8,8 +8,6 @@ import { Button } from './ui/button.js'
 import { Facts, Panel, PanelGroup, StepNumber } from './ui/panel.js'
 import { Skeleton } from './ui/skeleton.js'
 import { updatePreferences } from '../lib/preferences.js'
-import { AddProjectEffects } from './AddProjectEffects.js'
-import { ProjectPicker } from './ProjectPicker.js'
 import { HostFix } from './AddGitAccount.js'
 import { hostLoginState, hostWords, useGitHosts } from './Logins.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
@@ -19,10 +17,10 @@ import { attentionDetail, attentionKey, useAttentionFixes } from './Attention.js
 // "Discover OpenAgent", the Overview's first steps (#958): what a new install can set up, each with
 // the state it is actually in rather than a static list to read past.
 //
-// Every "done" is derived from a real fact — a login, a registered project — so a step cannot be
-// ticked by clicking it, and a step done outside the dashboard shows up ticked anyway. What the
-// modules say needs setting up on this computer (`app.attention`: the tickets and the queue to
-// populate, say) are steps too, each there until it is done. Numbered, not boxes: a box invites a
+// Every "done" is derived from a real fact — a login, say — so a step cannot be ticked by clicking
+// it, and a step done outside the dashboard shows up ticked anyway. What the modules say needs
+// setting up on this computer (`app.attention`: a first project to add, the tickets and the queue
+// to populate, say) are steps too, each there until it is done. Numbered, not boxes: a box invites a
 // click that can tick nothing.
 //
 // One step is open at a time (his pick): the next one to do, its words and its button at the row's
@@ -53,18 +51,10 @@ interface Step {
   action?: ReactNode
 }
 
-export function OnboardingChecklist({
-  projects,
-  onProjectAdded,
-}: {
-  /** The projects as the app read them: the picker sees one it added land, and closes on it. */
-  projects: readonly ProjectSummary[]
-  /** A project was added here: the app reads its projects again. */
-  onProjectAdded: () => void
-}) {
+export function OnboardingChecklist() {
   // Slower than the Overview's own 5s poll: these change at human speed.
   // Kept for the next visit: the steps open where they stood, not as titles that then grow.
-  const { value: data, reload, state } = usePolled<DashboardData | null>(onDashboard, null, 10_000, [], { remember: 'onboarding:dashboard', stored: true })
+  const { reload, state } = usePolled<DashboardData | null>(onDashboard, null, 10_000, [], { remember: 'onboarding:dashboard', stored: true })
   // What sessions need on this computer: an account at each git host, and what the modules say (a coding agent to connect).
   const { view: hosts, reload: reloadHosts } = useGitHosts()
   // The step the person opened; by default, the first one not done.
@@ -73,8 +63,6 @@ export function OnboardingChecklist({
   const setupItems = (attention ?? []).filter(item => item.kind === 'setup' && item.scope === 'computer')
   const fixes = useAttentionFixes(undefined, () => void reload())
 
-  // Before the projects are read, the app's own list says whether there is one.
-  const projectCount = data?.totals.projects ?? projects.length
 
   const hostSteps: Step[] = (hosts?.hosts ?? []).flatMap(row => {
     const p = row.provider
@@ -109,31 +97,10 @@ export function OnboardingChecklist({
   const steps: Step[] = [
     ...moduleSteps,
     ...hostSteps,
-    {
-      key: 'project',
-      label: 'Add your first project',
-      description: 'A git repo your agents work in, each in its own copy and on its own branch. Your files and your branch stay as they are.',
-      info: <AddProjectEffects />,
-      done: projectCount > 0,
-      ...(projects.length > 0 ? { doneNote: projects.map(project => project.name).join(', ') } : {}),
-      // The picker of the sidebar and the box: the repos on this computer and at GitHub, another folder, an address.
-      action: (
-        <ProjectPicker
-          look="add"
-          none={{ label: 'Add a project' }}
-          picked={null}
-          projects={projects}
-          onPick={() => void reload()}
-          onProjectAdded={() => {
-            onProjectAdded()
-            void reload()
-          }}
-        />
-      ),
-    },
   ]
 
-  // No step before its reads have said where it stands: an unread project count is not "no project".
+  // No step before its reads have said where it stands, and the modules' steps (the projects
+  // module's "Add your first project") come with what they say.
   const loginsRead = attention !== null && hosts !== undefined
   const reading = state === 'unknown' || !loginsRead
   const open = picked !== undefined && steps.some(step => step.key === picked && !step.done) ? picked : steps.find(step => !step.done)?.key

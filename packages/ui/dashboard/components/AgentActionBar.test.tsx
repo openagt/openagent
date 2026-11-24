@@ -52,18 +52,15 @@ describe('AgentActionBar', () => {
   })
 
   test('the project\'s ⋮ stands where the "New agent session" page has it: past the spacer, just before the panes\' icons, acting on the project', () => {
-    const removed = () => {}
     const error = { kind: 'error', message: 'The push was rejected' }
-    const { container } = render(<AgentActionBar projectId="p1" agentId="run-1" events={[...AGENTS.running!, error] as RunEvent[]} label="Dark mode" checkout={DIRTY} onProjectRemoved={removed} />)
+    const { container } = render(<AgentActionBar projectId="p1" agentId="run-1" events={[...AGENTS.running!, error] as RunEvent[]} label="Dark mode" checkout={DIRTY} />)
     const project = menus.at(-1)!
     expect(project['agentId']).toBeUndefined()
     expect(project['projectId']).toBe('p1')
     expect(project['events']).toEqual([])
-    expect(project['onProjectRemoved']).toBe(removed)
-    // The session's own menu keeps the session, and offers no removal of the project.
+    // The session's own menu keeps the session.
     const session = menus.at(-2)!
     expect(session['agentId']).toBe('run-1')
-    expect(session['onProjectRemoved']).toBeUndefined()
     const [name, ...rest] = [...container.firstElementChild!.firstElementChild!.children]
     expect(name!.textContent).toBe('[Dark mode ⌄]')
     expect(rest.map(child => child.textContent)).toEqual(['', '1 error', '[⋮]'])

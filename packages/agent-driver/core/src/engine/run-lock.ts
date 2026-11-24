@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { excludeFromGit } from '@openagt/agent-data'
 import { RUNNER_DIR, RUNS_DIR } from './names.js'
@@ -47,6 +47,14 @@ async function readHolder(repo: string, id: string): Promise<number | undefined>
 export async function lockHolder(repo: string, id: string, isAlive: (pid: number) => boolean): Promise<number | undefined> {
   const pid = await readHolder(repo, id)
   return pid !== undefined && isAlive(pid) ? pid : undefined
+}
+
+/** The runs of `repo` whose lock a live process holds: the runs at work in it on this machine. */
+export async function runsAlive(repo: string, isAlive: (pid: number) => boolean = isPidAlive): Promise<string[]> {
+  const names = await readdir(join(repo, RUNNER_DIR, RUNS_DIR)).catch((): string[] => [])
+  const ids = names.filter(name => name.endsWith('.lock')).map(name => name.slice(0, -'.lock'.length))
+  const held = await Promise.all(ids.map(async id => ((await lockHolder(repo, id, isAlive)) !== undefined ? [id] : [])))
+  return held.flat()
 }
 
 /** Take the run's lock for `pid`, waiting while another live process holds it. A lock already naming `pid` is its own. */

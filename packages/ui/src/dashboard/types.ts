@@ -10,15 +10,6 @@ import type { PublishPick } from '../publish-levels.js'
 export type DeleteAgentResult = { ok: true } | { ok: false; error: string }
 
 /**
- * The outcome of an add-project attempt (#396): registered, or was already, or why not.
- * `noRemote` says the person asked to share the agents' records and the repository has no remote
- * to share with: they are kept on this machine.
- */
-export type AddProjectResult =
-  | { ok: true; alreadyActivated: boolean; noRemote?: true; /** For a project added by its repository's address: the folder it is in. */ path?: string }
-  | { ok: false; error: string }
-
-/**
  * The project a folder `openagent` was started in is, on the dashboard's list: the listed project
  * holding the folder, or the folder, added now. `id` always opens its page; `address` is the one
  * the page writes (`src/project-address.ts`).
@@ -32,20 +23,6 @@ export interface StartedProject {
 
 /** The {@link StartedProject}, or why the folder could not be added. */
 export type StartedInResult = ({ ok: true } & StartedProject) | { ok: false; error: string }
-
-/**
- * What removing OpenAgent's files from a project's folder did: what went, what stayed with the
- * reason, and what could not be done, each line in words for a person. Paths are from the
- * project's root.
- */
-export interface CleanupReport {
-  removed: string[]
-  kept: { path: string; reason: string }[]
-  failed: string[]
-}
-
-/** The outcome of removing a project from the list: gone from it, with what the clean-up did when one was asked for, or why not. */
-export type RemoveProjectResult = { ok: true; cleanup?: CleanupReport } | { ok: false; error: string }
 
 /**
  * What a Start carries besides its prompt: the person's picks, handed to the run's host as the run

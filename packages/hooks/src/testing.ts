@@ -1,6 +1,6 @@
 // `@openagt/hooks/testing`: fakes of the hooks, so a module is tested alone: a store kept in
-// memory, a host whose runs a test drives, a run's context for a step, and the host a server
-// part's function is handed.
+// memory, a host whose runs a test drives, a run's context for a step, the app a module's life is
+// told, and the host a server part's function is handed.
 import { StoreOrder } from './order.js'
 import type { InboxLine } from './agent.js'
 import type { GitAccounts } from './account.js'
@@ -204,12 +204,6 @@ export function fakeRun(given: Partial<Omit<RunContext, 'store' | 'settings'>> &
   }
 }
 
-/** What a module's life in the app is handed, for its tests: `projects` its projects (none when unsaid), a store and its settings in memory, no account at any git host, and a signal never aborted. */
-export function fakeApp(given: Partial<AppContext> = {}): AppContext {
-  const store = given.store ?? chainStore([memoryStore()])
-  return { projects: async () => [], store, settings: settingsIn(store), gitAccess: async () => undefined, signal: new AbortController().signal, ...given }
-}
-
 /** OpenAgent's accounts for a test: none at any host, so nothing can be sent. */
 const NO_ACCOUNTS: GitAccounts = {
   hosts: async () => [],
@@ -217,11 +211,30 @@ const NO_ACCOUNTS: GitAccounts = {
 }
 
 /**
- * The host a function of a module of the computer's is handed, for the module's server tests:
- * settings in memory, no project registered and no account at any git host, unless `given` says otherwise.
+ * The host a function of a module of the computer's is handed, for its server tests: settings in
+ * memory, no project registered, no account at any git host nor for any remote, and a list of
+ * projects whose changes nobody is told of and that refuses no removal, unless `given` says otherwise.
  */
 export function computerRpcHost(given: Partial<RpcComputerHost> = {}): RpcComputerHost {
-  return { settings: memorySettings(), projects: async () => [], accounts: NO_ACCOUNTS, ...given }
+  return {
+    settings: memorySettings(),
+    projects: async () => [],
+    accounts: NO_ACCOUNTS,
+    gitAccess: async () => undefined,
+    lifecycle: { added: async () => {}, refusal: async () => undefined, removed: async () => ({ removed: [], kept: [], failed: [] }) },
+    ...given,
+  }
+}
+
+/**
+ * The app a module's life is told (`app.lifecycle`), for its tests: no project, a store and settings
+ * in memory, never aborted, and the rest as {@link computerRpcHost}'s, with no skill given, unless
+ * `given` says otherwise.
+ */
+export function fakeApp(given: Partial<AppContext> = {}): AppContext {
+  const store = given.store ?? chainStore([memoryStore()])
+  const { gitAccess, lifecycle } = computerRpcHost()
+  return { projects: async () => [], store, settings: settingsIn(store), signal: new AbortController().signal, gitAccess, lifecycle, skills: async () => [], ...given }
 }
 
 /**
@@ -231,9 +244,8 @@ export function computerRpcHost(given: Partial<RpcComputerHost> = {}): RpcComput
  */
 export function rpcHost(given: Partial<RpcHost> = {}): RpcHost {
   return {
-    settings: memorySettings(),
+    ...computerRpcHost(),
     projects: async () => [{ id: 'project', name: 'project', dir: '/work/project' }],
-    accounts: NO_ACCOUNTS,
     root: '/work/project',
     project: async () => ({ id: 'project', name: 'project', dir: '/work/project' }),
     run: async () => undefined,
@@ -245,7 +257,6 @@ export function rpcHost(given: Partial<RpcHost> = {}): RpcHost {
     landed: async () => {
       throw new Error('no run of this test keeps a record')
     },
-    gitAccess: async () => undefined,
     modulesOn: async () => [],
     ...given,
   }

@@ -1,25 +1,38 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Combobox } from '@base-ui/react/combobox'
+import { Check, Cloud, Folder, FolderGit2, FolderSearch, Layers, Plus, Search } from 'lucide-react'
+import {
+  cn,
+  Combobox,
+  MENU_BODY_CLASS,
+  MENU_ITEM_CLASS,
+  MENU_POPUP_CLASS,
+  MENU_TRIGGER_OPEN_CLASS,
+  MenuMark,
+  MiddleCut,
+  rowButtonClass,
+  RowChevron,
+  ScrollArea,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  useLoaded,
+  useModuleHost,
+  useOptionsAt,
+  usePickerSearch,
+  usePopupPosition,
+  useProjectLabel,
+  useProjects,
+  type ProjectSummary,
+  type ModuleHost,
+  type UiComposerControlProps,
+  type UiHost,
+  type UiWhereRepo,
+} from '@openagt/ui/module'
 import { addressOfRemote } from '@openagt/agent-data/repository-address'
-import { Cloud, Check, ChevronsUpDown, Folder, FolderGit2, FolderPlus, FolderSearch, Layers, Plus, Search } from 'lucide-react'
-import type { ProjectSummary } from '../../src/index.js'
-import { typedRepository } from '../../src/client.js'
-import { onRepos, sendAddRepoFolder, type ReposRead } from '../rpc/projects.js'
-import { useLoaded } from '../lib/use-async.js'
-import { useProjectLabel } from '../lib/project-labels.js'
-import { cn } from '../lib/utils.js'
-import { rowButtonClass, RowChevron } from './ui/row-item.js'
-import { buttonVariants } from './ui/button.js'
-import { ScrollArea } from './ui/scroll-area.js'
-import { Skeleton, useSkeleton } from './ui/skeleton.js'
-import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
-import { MENU_BODY_CLASS, MENU_ITEM_CLASS, MENU_POPUP_CLASS, MENU_TRIGGER_OPEN_CLASS, MenuMark } from './ui/dropdown-menu.js'
-import { PROJECT_ROW_CLASS } from './ui/nav-row.js'
-import { usePopupPosition } from './ui/popup-placement.js'
-import { usePickerSearch } from './ui/picker-search.js'
+import { typedRepository } from '../src/typed-repository.js'
+import type { ReposRead } from '../src/server.js'
+import { addFolderToSearch, readRepos } from './calls.js'
 import { AddProjectPanel } from './AddProjectPanel.js'
-import { Facts } from './ui/panel.js'
-import { MiddleCut } from './MiddleCut.js'
 
 /** How many repos the menu lists before a search: the search reaches the rest. */
 export const REPOS_SHOWN = 20
@@ -36,7 +49,7 @@ interface Row {
   label: string
   /** Under the label, muted: a repo's address, or its folder when it has none. */
   detail?: ReactNode
-  pick: { kind: 'none' } | { kind: 'project'; project: ProjectSummary } | { kind: 'repo'; path: string } | { kind: 'hosted'; address: string } | { kind: 'address'; typed: string }
+  pick: { kind: 'none' } | { kind: 'project'; project: ProjectSummary } | { kind: 'repo'; path: string } | { kind: 'where'; address: string } | { kind: 'address'; typed: string }
   /** What the search matches besides the label. */
   search: string
 }
@@ -71,25 +84,37 @@ const sameRow = (a: Row, b: Row): boolean => a.value === b.value
 const matches = (row: Row, query: string): boolean => `${row.label}\n${row.search}`.toLowerCase().includes(query)
 
 /**
- * The groups the menu lists for a search: the first row (no project, or all of them), the
- * projects, then the repos that are not projects. With nothing typed, only the first
- * {@link REPOS_SHOWN} repos; a search finds any of them, by name, folder or address. A group with
- * nothing that matches is not listed. Typed as a repository's address that no row has, one more
- * row offers to add it: cloned here and made a project, as the Add-by-address way did.
+ * The groups the menu lists for a search: the first row (no project), the projects, then each
+ * module's repos (`composer.where`) under its own heading: the repos on this computer that are not
+ * projects (this module's), and those a module's accounts reach. With nothing typed, only the first
+ * {@link REPOS_SHOWN} repos of each; a search finds any of them, by name, folder or address. A
+ * group with nothing that matches is not listed. Typed as a repository's address that no row has,
+ * one more row offers to add it: cloned here and made a project, as the Add-by-address way did.
  */
-function pickerGroups(none: Row | undefined, projects: readonly Row[], repos: readonly Row[], typed: string): Group[] {
+function pickerGroups(none: Row, projects: readonly Row[], where: readonly Group[], typed: string): Group[] {
   const query = typed.trim().toLowerCase()
   const kept = (rows: readonly Row[], most: number) => (query ? rows.filter(row => matches(row, query)) : rows).slice(0, most)
   const address = typedRepository(typed)?.address
-  const known = address !== undefined && [...projects, ...repos].some(row => row.search.toLowerCase().includes(address))
+  const known = address !== undefined && [...projects, ...where.flatMap(group => group.items)].some(row => row.search.toLowerCase().includes(address))
   const add: Row[] = address !== undefined && !known ? [{ value: `address:${address}`, label: `Add ${address}`, detail: 'Cloned to this computer, as a project', pick: { kind: 'address', typed: typed.trim() }, search: '' }] : []
   const groups: Group[] = [
-    { value: 'none', items: none ? kept([none], 1) : [] },
+    { value: 'none', items: kept([none], 1) },
     { value: 'projects', label: 'Projects', items: kept(projects, SEARCH_SHOWN) },
-    { value: 'repos', label: 'Repos', items: kept(repos, query ? SEARCH_SHOWN : REPOS_SHOWN) },
+    ...where.map(group => ({ ...group, items: kept(group.items, query ? SEARCH_SHOWN : REPOS_SHOWN) })),
     { value: 'address', items: add },
   ]
   return groups.filter(group => group.items.length > 0)
+}
+
+/** What a module's repos (`composer.where`) answered: its heading, its repos, and whether it is still reading or could not. */
+interface WhereRead {
+  key: string
+  label: string
+  /** What is said while it is still reading. */
+  loadingWords: string
+  repos: UiWhereRepo[]
+  loading: boolean
+  unreached?: string
 }
 
 /** A project's state as a dot: red when the daemon recorded an error for it (#1500), else whether it is activated. */
@@ -134,46 +159,85 @@ function ProjectLine({ project, label }: { project: ProjectSummary; label: strin
   )
 }
 
-// The one picker of a project, in two places (Rom's "repos are not projects"): in the row above
-// the box on the "New agent session" page, where a session works — no project, one of the
-// projects, or any repo on this computer; and at the top of the sidebar, the project every page
-// shows (#1513) — all of them, or one. The menu is the same: the first row, the projects with
-// their lines, the repos searchable, "Search another folder…" to look in one more folder, and a
+
+/**
+ * The repos every module offers (`composer.where`): read as the picker is drawn, each time its menu
+ * opens or `again` changes, and again shortly while the menu is open and one is still being read.
+ * A module whose read fails lists nothing, and says it could not be read.
+ */
+function useWhere(open: boolean, again: number, known: ReadonlySet<string>): WhereRead[] {
+  const where = useOptionsAt('composer.where', undefined)
+  const [read, setRead] = useState<WhereRead[]>([])
+  const [more, setMore] = useState(0)
+  // Read as the picker is drawn, so the crawl that finds this computer's repos has run by the time the menu opens.
+  useEffect(() => {
+    if (where.length === 0) return
+    let live = true
+    void Promise.all(
+      where.map(async ({ option, host }): Promise<WhereRead> => {
+        const key = `${option.package}/${option.id}`
+        const loadingWords = option.loadingWords ?? `${option.label}: still being read…`
+        try {
+          const answer = await option.repos(host)
+          return { key, label: option.label, loadingWords, repos: answer.repos, loading: answer.loading === true, ...(answer.unreached !== undefined ? { unreached: answer.unreached } : {}) }
+        } catch {
+          return { key, label: option.label, loadingWords, repos: [], loading: false, unreached: `${option.label} could not be read: its repos are not listed.` }
+        }
+      }),
+    ).then(answers => live && setRead(answers))
+    return () => {
+      live = false
+    }
+  }, [open, where, again, more])
+  useEffect(() => {
+    if (!open || !read.some(one => one.loading)) return
+    const timer = setTimeout(() => setMore(n => n + 1), ASK_AGAIN_MS)
+    return () => clearTimeout(timer)
+  }, [open, read])
+  // A repository here already, as a repo or a project, is listed once: by its folder.
+  const here = new Set([...known, ...read.flatMap(one => one.repos.flatMap(repo => (repo.folder !== undefined && repo.address !== undefined ? [repo.address.toLowerCase()] : [])))])
+  return read.map(one => ({ ...one, repos: one.repos.filter(repo => repo.folder !== undefined || repo.address === undefined || !here.has(repo.address.toLowerCase())) }))
+}
+
+/** This computer's repos that are not projects yet, as the picker lists a module's (`composer.where`): each by its folder. */
+export async function reposHere(host: UiHost): Promise<{ repos: UiWhereRepo[]; loading: boolean }> {
+  const read = await readRepos(host as unknown as ModuleHost)
+  return {
+    repos: read.repos.map(repo => {
+      const address = repo.url ? addressOfRemote(repo.url) : undefined
+      return { folder: repo.path, label: repo.name, detail: repoDetail(repo), ...(address !== undefined ? { address } : {}) }
+    }),
+    loading: read.loading,
+  }
+}
+
+// The project picker of the launcher, in the row above its box (Rom's "repos are not projects"):
+// where a session works — no project, one of the projects, any repo on this computer, or one a
+// module's accounts reach (`composer.where`). The menu is the first row, the projects with their
+// lines, the repos searchable, "Search another folder…" to look in one more folder, and a
 // repository's address typed into the search offered to add. The button reads the pick, so it is
 // on screen with the menu shut.
 //
 // A repo that is not a project is asked the trust question for its folder, and on a yes it is a
-// project (a sticky repo) and picked: the session works in it, or the pages show it. The repos
-// are read when the page opens, so the crawl that finds them has run by the time the menu is
-// opened, and again each time it opens: an old list is crawled again behind the answer.
+// project (a sticky repo) and picked: the session works in it. The repos are read when the picker
+// is drawn, so the crawl that finds them has run by the time the menu is opened, and again each
+// time it opens: an old list is crawled again behind the answer.
 export function ProjectPicker({
   picked,
-  pickedName,
-  projects,
   busy = false,
-  pending = false,
   none,
-  look,
   onPick,
-  onProjectAdded,
 }: {
   /** The project picked, or null for none. */
   picked: string | null
-  /** The picked project's name, where it is known before the projects are read. */
-  pickedName?: string | null | undefined
-  projects: readonly ProjectSummary[]
   busy?: boolean
-  /** The address names a project the dashboard has not read yet: which one it is, or whether it is one, is not known. */
-  pending?: boolean
-  /** The first row: what no project means here; for the `add` look, the button's words. */
-  none: { label: string; tip?: string }
-  /** The button: a row button under the box, the sidebar's full-width one, or a button that adds a project (the Overview's first steps). */
-  look: 'row' | 'sidebar' | 'add'
+  /** The first row: what no project means here. */
+  none: { label: string; tip: string }
   /** A project, or none, was picked. */
   onPick: (projectId: string | null) => void
-  /** A repo was added as a project: the projects are to be read again. */
-  onProjectAdded: () => void
 }) {
+  const host = useModuleHost()
+  const projects = useProjects()
   const label = useProjectLabel()
   const position = usePopupPosition()
   const search = usePickerSearch()
@@ -192,15 +256,12 @@ export function ProjectPicker({
   // says it was added until it closes itself or Done closes it, whether the pick came yet or not.
   const [added, setAdded] = useState<{ path: string; over: string | null } | null>(null)
   const [folderError, setFolderError] = useState<string | null>(null)
-  // Read again after a folder is added: the daemon has crawled it by then.
+  // Read again after a folder is added: the crawl has looked in it by then.
   const [folders, setFolders] = useState(0)
-  const repos = useLoaded<ReposRead | null>(() => onRepos().catch(() => ({ repos: [], hosted: [], reposLoading: false, hostedLoading: false, canAddFolder: false })), null, [open, folders])
-  // This computer's or the git hosts' lists are still being read: asked again shortly, while the menu is open.
-  useEffect(() => {
-    if (!open || !(repos?.reposLoading || repos?.hostedLoading)) return
-    const again = setTimeout(() => setFolders(k => k + 1), ASK_AGAIN_MS)
-    return () => clearTimeout(again)
-  }, [open, repos])
+  // What this computer can do (a folder dialog), and the projects' addresses, which a module's repo at one is not listed under.
+  const here = useLoaded<ReposRead | null>(() => readRepos(host).catch(() => null), null, [open, folders])
+  const known = useMemo(() => new Set(here?.projects ?? []), [here])
+  const where = useWhere(open, folders, known)
 
   useEffect(() => {
     if (added === null) return
@@ -216,62 +277,46 @@ export function ProjectPicker({
     () => projects.map(p => ({ value: `project:${p.id}`, label: label(p.id, p.name), pick: { kind: 'project', project: p }, search: p.path })),
     [projects, label],
   )
-  const repoRows = useMemo<Row[]>(
-    () => [
-      ...(repos?.repos ?? []).map((repo): Row => ({ value: `repo:${repo.path}`, label: repo.name, detail: repoDetail(repo), pick: { kind: 'repo', path: repo.path }, search: `${repo.path}\n${repo.url ?? ''}` })),
-      // Not on this computer: picked, it is cloned, as an address typed is.
-      ...(repos?.hosted ?? []).map((repo): Row => ({
-        value: `hosted:${repo.address}`,
-        label: repo.address.split('/').slice(1).join('/'),
-        detail: <Facts facts={[repo.private && 'Private', 'Not on this computer', repo.from]} />,
-        pick: { kind: 'hosted', address: repo.address },
-        search: `${repo.address}\n${repo.description ?? ''}`,
+  // A folder here is added as it is; one only at an address is cloned, as an address typed is.
+  const whereGroups = useMemo<Group[]>(
+    () =>
+      where.map(one => ({
+        value: `where:${one.key}`,
+        label: one.label,
+        items: one.repos.map(
+          (repo): Row => ({
+            value: repo.folder !== undefined ? `repo:${repo.folder}` : `where:${repo.address}`,
+            label: repo.label,
+            ...(repo.detail !== undefined ? { detail: repo.detail } : {}),
+            pick: repo.folder !== undefined ? { kind: 'repo', path: repo.folder } : { kind: 'where', address: repo.address ?? '' },
+            search: `${repo.folder ?? ''}\n${repo.address ?? ''}\n${repo.detail ?? ''}`,
+          }),
+        ),
       })),
-    ],
-    [repos],
+    [where],
   )
-  // A button that adds one has no "none" to pick: it is what the button says.
-  const groups = pickerGroups(look === 'add' ? undefined : NONE, projectRows, repoRows, typed)
-  const current = picked === null ? NONE : (projectRows.find(row => row.value === `project:${picked}`) ?? { value: `project:${picked}`, label: pickedName ?? '', pick: { kind: 'none' }, search: '' })
+  const groups = pickerGroups(NONE, projectRows, whereGroups, typed)
+  const current = picked === null ? NONE : (projectRows.find(row => row.value === `project:${picked}`) ?? { value: `project:${picked}`, label: '', pick: { kind: 'none' }, search: '' })
   const shown = current.label
-  const loading = useSkeleton(pending)
   // No project word until the name is known, never a wrong one.
-  if (!shown && !pending) return null
-  const project = current.pick.kind === 'project' ? current.pick.project : undefined
+  if (!shown) return null
 
   const addFolder = async () => {
     setFolderError(null)
-    const outcome = await sendAddRepoFolder().catch(() => ({ ok: false as const, error: 'Could not reach the daemon.' }))
+    const outcome = await addFolderToSearch(host).catch(() => ({ ok: false as const, error: 'Could not reach the daemon.' }))
     if (!outcome.ok) setFolderError(outcome.error)
     else if (outcome.added) setFolders(k => k + 1)
   }
 
-  const name = look === 'sidebar' ? `Project: ${pending ? 'loading' : shown}` : look === 'add' ? none.label : 'The session works in'
-  const button =
-    look === 'add' ? (
-      <button type="button" className={buttonVariants()}>
-        <FolderPlus className="h-3.5 w-3.5" aria-hidden />
-        {none.label}
-      </button>
-    ) : look === 'sidebar' ? (
-      // A card on the sidebar, as high whatever it shows, so the rows under it never move: the chevrons say it opens.
-      <button type="button" className={PROJECT_ROW_CLASS}>
-        <span className="flex size-4 shrink-0 items-center justify-center">
-          {pending ? null : project ? <ProjectDot project={project} /> : <Layers className="size-4 text-muted-foreground" aria-hidden />}
-        </span>
-        {/* Until the projects are read, the project the address names is not known: a bar where its
-            name goes, rather than "All projects" for a moment. */}
-        {loading ? <Skeleton className="h-4 w-24" /> : <span className="flex-1 truncate text-left">{pending ? '' : shown}</span>}
-        <ChevronsUpDown className="ml-auto" aria-hidden />
-      </button>
-    ) : (
-      <button type="button" className={cn(rowButtonClass, 'max-w-[16rem]!')}>
-        <Folder className="h-3.5 w-3.5 shrink-0" aria-hidden />
-        <span className="truncate">{shown}</span>
-        <RowChevron />
-      </button>
-    )
-  const trigger = <Combobox.Trigger ref={triggerRef} disabled={busy || pending} aria-label={name} className={MENU_TRIGGER_OPEN_CLASS} render={button} {...search.trigger} {...(look === 'sidebar' ? { 'data-project-picker': '' } : {})} />
+  const name = 'The session works in'
+  const button = (
+    <button type="button" className={cn(rowButtonClass, 'max-w-[16rem]!')}>
+      <Folder className="h-3.5 w-3.5 shrink-0" aria-hidden />
+      <span className="truncate">{shown}</span>
+      <RowChevron />
+    </button>
+  )
+  const trigger = <Combobox.Trigger ref={triggerRef} disabled={busy} aria-label={name} className={MENU_TRIGGER_OPEN_CLASS} render={button} {...search.trigger} />
 
   return (
     <>
@@ -288,18 +333,14 @@ export function ProjectPicker({
           if (row.pick.kind === 'none') onPick(null)
           else if (row.pick.kind === 'project') onPick(row.pick.project.id)
           else if (row.pick.kind === 'repo') setAdding({ folder: row.pick.path })
-          else if (row.pick.kind === 'hosted') setAdding({ address: row.pick.address })
+          else if (row.pick.kind === 'where') setAdding({ address: row.pick.address })
           else setAdding({ address: row.pick.typed })
         }}
       >
-        {look === 'row' ? (
-          <Tooltip>
-            <TooltipTrigger render={trigger} />
-            <TooltipContent>{picked === null ? none.tip : `The session works in ${shown}`}</TooltipContent>
-          </Tooltip>
-        ) : (
-          trigger
-        )}
+        <Tooltip>
+          <TooltipTrigger render={trigger} />
+          <TooltipContent>{picked === null ? none.tip : `The session works in ${shown}`}</TooltipContent>
+        </Tooltip>
         <Combobox.Portal>
           <Combobox.Positioner {...position} sideOffset={6} align="start" className="z-50 outline-none">
             <Combobox.Popup data-overlay="picker" aria-label={name} className={cn(MENU_POPUP_CLASS, 'w-[22rem] max-w-[var(--available-width)]')}>
@@ -331,7 +372,7 @@ export function ProjectPicker({
                                 <MenuMark>
                                   <FolderGit2 className="size-3.5 text-muted-foreground" aria-hidden />
                                 </MenuMark>
-                              ) : row.pick.kind === 'hosted' ? (
+                              ) : row.pick.kind === 'where' ? (
                                 <MenuMark>
                                   <Cloud className="size-3.5 text-muted-foreground" aria-hidden />
                                 </MenuMark>
@@ -365,21 +406,24 @@ export function ProjectPicker({
                       </Combobox.Group>
                     )}
                   </Combobox.List>
-                  {repos === null || repos.reposLoading ? (
-                    <p role="status" className="px-2 py-1.5 text-xs text-muted-foreground">Looking for repos on this computer…</p>
-                  ) : !typed.trim() && repoRows.length > REPOS_SHOWN ? (
-                    <p className="px-2 py-1.5 text-xs text-muted-foreground">Search to see more of the {repoRows.length} repos.</p>
-                  ) : null}
-                  {repos?.hostedLoading ? (
-                    <p role="status" className="px-2 py-1.5 text-xs text-muted-foreground">
-                      Asking GitHub for repos…
-                    </p>
-                  ) : repos?.hostedUnreached ? (
-                    <p className="px-2 py-1.5 text-xs text-muted-foreground">GitHub could not be reached: its repos are not listed.</p>
-                  ) : null}
+                  {where.map(one =>
+                    one.loading ? (
+                      <p key={one.key} role="status" className="px-2 py-1.5 text-xs text-muted-foreground">
+                        {one.loadingWords}
+                      </p>
+                    ) : !typed.trim() && one.repos.length > REPOS_SHOWN ? (
+                      <p key={one.key} className="px-2 py-1.5 text-xs text-muted-foreground">
+                        Search to see more of the {one.repos.length} repos.
+                      </p>
+                    ) : one.unreached ? (
+                      <p key={one.key} className="px-2 py-1.5 text-xs text-muted-foreground">
+                        {one.unreached}
+                      </p>
+                    ) : null,
+                  )}
                 </div>
               </ScrollArea>
-              {repos?.canAddFolder && (
+              {here?.canAddFolder && (
                 <div className="border-t border-border p-1">
                   <button type="button" onClick={() => void addFolder()} className={cn(MENU_ITEM_CLASS, 'w-full text-muted-foreground')}>
                     <FolderSearch className="h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -396,13 +440,20 @@ export function ProjectPicker({
         <AddProjectPanel
           {...('folder' in adding ? { folder: adding.folder } : { address: adding.address })}
           opener={triggerRef}
-          onAdded={path => {
-            setAdded({ path, over: picked })
-            onProjectAdded()
-          }}
+          onAdded={path => setAdded({ path, over: picked })}
           onClose={() => setAdding(null)}
         />
       )}
     </>
   )
+}
+
+/**
+ * The picker as the launcher's control (`composer.control` at `start`): where the next session
+ * works, a pick moving the launcher to that project, or to none, with what is typed. A session's
+ * box says its project elsewhere, and a profile is for any project: neither has it.
+ */
+export function ProjectControl({ in: box, projectId, busy, pickProject }: UiComposerControlProps) {
+  if (box !== 'launcher' || !pickProject) return null
+  return <ProjectPicker none={{ label: 'No project', tip: 'The session works in a folder of its own' }} picked={projectId ?? null} busy={busy} onPick={id => pickProject(id ?? undefined)} />
 }

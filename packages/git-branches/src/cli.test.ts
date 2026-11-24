@@ -303,7 +303,7 @@ test('prune: removes what the rule allows and reports each checkout it kept, wit
 test('outside a repository every command refuses rather than failing on git', async () => {
   const dir = await realpath(await mkdtemp(join(tmpdir(), 'branches-norepo-')))
   try {
-    for (const argv of [['list'], ['create', 'a1'], ['name', 'x'], ['status'], ['remove', 'a1'], ['prune'], ['cleanup']]) {
+    for (const argv of [['list'], ['create', 'a1'], ['name', 'x'], ['status'], ['remove', 'a1'], ['prune']]) {
       const ran = await run(dir, ...argv)
       assert.equal(ran.code, 1, argv.join(' '))
       assert.deepEqual(ran.out, { ok: false, reason: 'not-a-repo' }, argv.join(' '))
@@ -317,7 +317,7 @@ test('outside a repository every command refuses rather than failing on git', as
 test('a command that cannot be read gets the usage and exit code 2, and no JSON', async () => {
   const repo = await repoWithOrigin()
   try {
-    for (const argv of [[], ['bogus'], ['name'], ['create'], ['attach', 'a1'], ['status', 'a', 'b'], ['list', '--nope']]) {
+    for (const argv of [[], ['bogus'], ['name'], ['create'], ['attach', 'a1'], ['status', 'a', 'b'], ['list', '--nope'], ['cleanup']]) {
       const ran = await run(repo, ...argv)
       assert.equal(ran.code, 2, argv.join(' '))
       assert.equal(ran.out, undefined, argv.join(' '))

@@ -26,7 +26,6 @@ export function AgentActionBar({
   live = false,
   retainedWorktree = false,
   onDeleted,
-  onProjectRemoved,
   label,
   naming,
   expanded = false,
@@ -54,8 +53,6 @@ export function AgentActionBar({
   /** Told after this session is deleted, so the caller can leave it (#1032). Given only for a
    * finished run: absent, no delete is offered. */
   onDeleted?: (() => void) | undefined
-  /** Told once the project is off the list; given, the project's menu offers "Remove project". */
-  onProjectRemoved?: (() => void) | undefined
   /** Whether the details strip the caller renders under this bar is shown. */
   expanded?: boolean
   /** Given, the session's menu shows and hides that strip. */
@@ -109,7 +106,7 @@ export function AgentActionBar({
             count is only useful if it is whole. */}
         {ready && <AgentErrorCount events={events} />}
         {/* A session with no project has no project's menu. */}
-        <PaneToggles before={projectId !== SESSIONS_ID && <ProjectMenu projectId={projectId} onProjectRemoved={onProjectRemoved} />} />
+        <PaneToggles before={projectId !== SESSIONS_ID && <ProjectMenu projectId={projectId} />} />
       </div>
     </TopBar>
   )

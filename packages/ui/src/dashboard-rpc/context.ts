@@ -4,7 +4,7 @@ import { defaultProjectsProvider, type ProjectsProvider } from '../dashboard/pro
 import type { PreferencesStore } from '../registry.js'
 import type { OpenAgentUpdates } from '../dashboard/openagent-update.js'
 import type { ProjectStateReader } from '../project-state.js'
-import type { AddProjectResult, RemoveProjectResult, StartAgentOptions, StartAgentResult, StartedInResult } from '../dashboard/types.js'
+import type { StartAgentOptions, StartAgentResult, StartedInResult } from '../dashboard/types.js'
 import { LOCAL_HOST, type ProjectRef, type RunHost, type RunRef } from '@openagt/hooks'
 
 /** Wired by the daemon so `sendStart` can reach the daemon's own `startAgent` closure. */
@@ -14,14 +14,10 @@ export type StartAgentHandler = (
   projectId?: string,
 ) => StartAgentResult | Promise<StartAgentResult>
 
-/** Wired by the daemon so `sendAddProject` can install + register a repo (#433). */
-export type AddProjectHandler = (path: string, share: boolean) => AddProjectResult | Promise<AddProjectResult>
 
 /** Wired by the daemon so `sendStartedAgain` can find or add the project a second `openagent` was started in. */
-export type StartedInHandler = (folder: string) => StartedInResult | Promise<StartedInResult>
+export type StartedInHandler = (folder: string) => StartedInResult | undefined | Promise<StartedInResult | undefined>
 
-/** Wired by the daemon so `sendRemoveProject` can take a project off the list, by its id, and with `files` remove what OpenAgent left in its folder. */
-export type RemoveProjectHandler = (projectId: string, files: boolean) => RemoveProjectResult | Promise<RemoveProjectResult>
 
 /**
  * What every RPC acts through.
@@ -33,9 +29,7 @@ export type RemoveProjectHandler = (projectId: string, files: boolean) => Remove
  */
 export interface DashboardContext {
   startAgent: StartAgentHandler
-  addProject: AddProjectHandler
   startedIn: StartedInHandler
-  removeProject: RemoveProjectHandler
   /** This computer's host (`run.host`, #2394): where a run starts when no other host is picked. */
   host: RunHost
   /**
@@ -175,17 +169,8 @@ export function contextStartAgent(): DashboardContext['startAgent'] {
   return fromContext('startAgent')
 }
 
-/** Install + register a repo (#433), which only the daemon can do. */
-export function contextAddProject(): DashboardContext['addProject'] {
-  return fromContext('addProject')
-}
-
 /** Find or add the project a second `openagent` was started in (#2141), which only the daemon can do. */
 export function contextStartedIn(): DashboardContext['startedIn'] {
   return fromContext('startedIn')
 }
 
-/** Take a project off the list, which only the daemon can do: it runs the project's close hooks first. */
-export function contextRemoveProject(): DashboardContext['removeProject'] {
-  return fromContext('removeProject')
-}

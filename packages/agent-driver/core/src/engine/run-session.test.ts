@@ -13,7 +13,8 @@ import { markerCard, writeMarker } from './records.js'
 import { sweep } from './sweep.js'
 import { runCli } from './cli.js'
 import { runArgs } from './runner.js'
-import { copiesLine, SESSION_FOLDER_STAYS, sessionRepos, worktreePath } from '@openagt/git-branches'
+import { SESSION_FOLDER_STAYS, sessionRepos, worktreePath } from '@openagt/git-branches'
+import { copiesLine } from '@openagt/projects/module'
 import { NOW, testModules } from './run-test-support.js'
 import { git, removeRepo, testRepo } from './test-repo.js'
 
@@ -208,7 +209,7 @@ test('a run in a project with repos works in its checkout of the project, has a 
     assert.equal(await branchOf(other), 'main', "the repo's own folder is left as it was")
     assert.equal((await git(['branch', '--list', `agent-${first.id}`], other)).trim(), '', 'no branch is made in the repo')
     assert.deepEqual((await findRun(project, first.id))?.caller?.['repos'], repos, 'the record names the repos')
-    const told = copiesLine(folder, first.id, repos)
+    const told = copiesLine(folder, `agent-${first.id}`, repos)
     assert.ok(told.includes(`${copy} (copied from ${other})`), 'the line names the copy and where it came from')
     assert.equal((await readDiary(project, first.id))?.find(line => line.kind === 'start')?.['attached'], told, 'the agent is handed where the copies are, with its prompt')
 

@@ -109,6 +109,7 @@
     "@openagt/host-github-actions": "workspace:*",
     "@openagt/notifications-browser": "workspace:*",
     "@openagt/notifications-command": "workspace:*",
+    "@openagt/projects": "workspace:*",
     "@openagt/saved-prompts": "workspace:*",
     "@openagt/ask": "workspace:*",
     "@openagt/browser": "workspace:*",

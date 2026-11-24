@@ -14,6 +14,7 @@ export const DASHBOARD_PACKAGES: DashboardDistribution = [
   { package: '@openagt/store-filesystem' },
   { package: '@openagt/store-git-repository', for: 'computer' },
   { package: '@openagt/store-git-branch' },
+  { package: '@openagt/projects', for: 'computer' },
   { package: '@openagt/git-branches' },
   { package: '@openagt/github' },
   { package: '@openagt/skills' },

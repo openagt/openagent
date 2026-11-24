@@ -99,6 +99,12 @@ export interface GitBranchesFacts {
   again?: true
   /** How the run's checkout went once the run ended: reclaimed, with the branches that went with it, or kept and why. */
   reclaimed?: { reclaimed: true; deleted?: string[] } | { reclaimed: false; reason: string }
+  /**
+   * The copies of the run's repos (`GitBranchesOptions.repos`) made for this start of a run in a
+   * project, beside its checkout: the folder they are in, the branch each is on, and the repos
+   * copied now. The agent is told where they are, at `RunOrder.CONTEXT`.
+   */
+  copies?: { folder: string; branch: string; made: { name: string; from: string }[] }
 }
 
 /** A pull request, as a run's facts name it. */

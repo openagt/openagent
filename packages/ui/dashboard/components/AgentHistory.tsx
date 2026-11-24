@@ -30,7 +30,7 @@ import { agentLabel, awaitingName } from '../lib/agent-label.js'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuCheckboxItem, DropdownMenuSeparator } from './ui/dropdown-menu.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
-import { ProjectPicker } from './ProjectPicker.js'
+import { SidebarProjectPicker } from './SidebarProjectPicker.js'
 import { navRowClass } from './ui/nav-row.js'
 import {
   Sidebar,
@@ -96,7 +96,6 @@ export function AgentHistory({
   onSelectRecent,
   projects = [],
   onNewAgentInProject,
-  onProjectAdded,
   startTick = 0,
   startIntent = '',
   startTitle,
@@ -159,8 +158,6 @@ export function AgentHistory({
   projects?: ProjectSummary[]
   /** Start a new session in a project (its launcher). */
   onNewAgentInProject?: (projectId: string) => void
-  /** A project was just added, so the shell can refresh its list. */
-  onProjectAdded?: () => void
   startTick?: number
   startIntent?: string
   /** The name the daemon had for that run before the run's own row is in: the stand-in shows it. */
@@ -369,7 +366,7 @@ export function AgentHistory({
             </span>
           </div>
           {/* The "Landing page | Dashboard" switch (`ViewToggle`) stood here: hidden for now, its code kept. */}
-          <ProjectPicker look="sidebar" none={{ label: 'All projects' }} picked={scope ?? null} pending={scopePending} projects={projects} onPick={onScope} onProjectAdded={onProjectAdded ?? (() => {})} />
+          <SidebarProjectPicker picked={scope ?? null} pending={scopePending} projects={projects} onPick={onScope} />
         </SidebarHeader>
         {/* Everything under the project select is one scroll (his pick, 2026-11-24): the pages, what
             waits and the Log. The pages used to stand still over the lists, which left the Log only
@@ -550,7 +547,7 @@ function NavRow({
 
 // The "New" launcher: one click to the "New agent session" page, of the project picked at the top of
 // the rail, or with all of them showing, of no project. Where the session works is picked on that
-// page, in the row above the box (ProjectPicker), not here.
+// page, in the row above the box (the projects module's picker), not here.
 function NewButton({
   scope,
   href,

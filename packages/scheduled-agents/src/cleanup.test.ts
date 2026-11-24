@@ -3,7 +3,8 @@ import { test } from 'node:test'
 import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { cleanup } from './cleanup.js'
-import { runCli } from './cli.js'
+import type { AppContext } from '@openagt/hooks'
+import { schedulersLifecycle } from './lifecycle.js'
 import { SCHEDULER_LOG, STATE_DIR } from './names.js'
 import { DEFAULT_STATE, statePath, writeState } from './state.js'
 import { git, removeRepo, testRepo } from './test-repo.js'
@@ -100,20 +101,22 @@ test('the automations a person keeps on this machine stay, with the directory an
   }
 })
 
-test('the command: refused with the pid while the scheduler runs, and the JSON of what went once it does not', async () => {
+test('a project taken off the list with its files: its scheduler is stopped, and the module removes what the function removes, refused in words while the scheduler runs; without its files nothing goes', async () => {
   const repo = await testRepo()
+  const stopped: string[] = []
+  const lifecycle = schedulersLifecycle({ stop: async dir => void stopped.push(dir) })
+  const project = { id: 'repo-1', dir: repo, name: 'repo' }
+  const app = {} as AppContext
   try {
-    const run = async () => {
-      const out: string[] = []
-      const err: string[] = []
-      const code = await runCli(['cleanup'], { cwd: repo, stdout: line => out.push(line), stderr: line => err.push(line) })
-      return { code, out: JSON.parse(out.join('\n')) as unknown, err: err.join('\n') }
-    }
+    await ran(repo)
+    assert.equal(await lifecycle.projectRemoved!(project, app, { files: false }), undefined)
+    assert.equal(await exists(join(repo, STATE_DIR)), true)
     // This test's own process is alive: a state naming it reads as a scheduler that runs.
     await ran(repo, process.pid)
-    assert.deepEqual(await run(), { code: 1, out: { ok: false, reason: 'running', pid: process.pid }, err: `the scheduler is running here (pid ${process.pid}): stop it first with npx @openagt/scheduled-agents@0.1 stop` })
+    await assert.rejects(async () => lifecycle.projectRemoved!(project, app, { files: true }), { message: `the scheduler is running here (pid ${process.pid}): stop it first with npx @openagt/scheduled-agents@0.1 stop` })
     await ran(repo)
-    assert.deepEqual(await run(), { code: 0, out: { ok: true, removed: [STATE_DIR], kept: [] }, err: '' })
+    assert.deepEqual(await lifecycle.projectRemoved!(project, app, { files: true }), { removed: [STATE_DIR], kept: [] })
+    assert.deepEqual(stopped, [], 'a scheduler this OpenAgent did not start is not stopped')
   } finally {
     await removeRepo(repo)
   }

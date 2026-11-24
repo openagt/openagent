@@ -16,7 +16,6 @@ import { keepDraft, keepDraftImages, stashPendingDraft } from '../lib/draft-hand
 import { AutoMenu, autoCovers, autoPickIn, autoSaid, useAutoLevels } from './AutoMenu.js'
 import { ProjectContextMenu, isRepoPath } from './ContextMenu.js'
 import { Composer, type ComposerHandle } from './Composer.js'
-import { ProjectPicker } from './ProjectPicker.js'
 import { ReposMenu, folderName, type PickedRepo } from './SessionRepos.js'
 import { Dots } from './ToolCalls.js'
 import { useGitAccountSetup, useSessionAccount } from './GitHosts.js'
@@ -46,8 +45,8 @@ const STARTING_SAID_AFTER_MS = 300
 // picked files ride the prompt as one `Context:` line at its end, and the repos go with the Start,
 // which copies them for the session.
 // The row above the box says where the Start goes: the "Run on" pick, which the Composer draws
-// first, then the project's name, then the modules' controls there (`composer.control` at
-// `start`: the branch the agent starts from).
+// first, then the modules' controls there (`composer.control` at `start`: the project, the projects
+// module's picker, and the branch the agent starts from).
 // Under the box, first, the gear: the session's setup in one menu (SessionSetup.tsx), then the
 // Context picker; the model menu is at the right. The gear's hover says its picks, so nothing is hidden.
 // Its last line, set apart, "When it finishes": what the agent does by itself then (the Auto level).
@@ -76,18 +75,15 @@ export function StartAgentForm({
   toggleContext,
   projects,
   onPickProject,
-  onProjectAdded,
   onOverview = false,
 }: {
   projectId: string
   /** The box is the Overview's: as wide as the page's cards, whose edges it stands on, where the launcher's is a session's message box's. */
   onOverview?: boolean
-  /** Every project, for the picker of where the session works (ProjectPicker). */
+  /** Every project, for the repos a session with no project works with (SessionRepos). */
   projects: readonly ProjectSummary[]
   /** Another project, or no project, was picked for the session: the launcher opens its "New agent session" page, the Overview shows that project's. */
   onPickProject: (projectId: string) => void
-  /** A repo was added as a project from the picker: the projects are to be read again. */
-  onProjectAdded: () => void
   /** The project's name, for the row above the box; absent until the projects are read. */
   projectName?: string | null | undefined
   /** `runsOn` names the host a run on one beside this computer goes to, for the "runs on <host>" marker. */
@@ -241,12 +237,6 @@ export function StartAgentForm({
         files={files}
         addContext={addContext}
         removeContext={removeContext}
-        // Where the agent starts, above the box after the "Run on" pick: the project, then the
-        // modules' controls there. No project word until the name is known, never a wrong one: the
-        // row's height is fixed, so the name landing moves nothing.
-        startsAt={
-          <ProjectPicker look="row" none={{ label: 'No project', tip: 'The session works in a folder of its own' }} picked={noProject ? null : projectId} pickedName={projectName} projects={projects} busy={busy} onPick={id => pickProject(id ?? SESSIONS_ID)} onProjectAdded={onProjectAdded} />
-        }
         controlBox={{ in: 'launcher', projectId, options, onChange: setOptions, busy, pickProject: id => pickProject(id ?? SESSIONS_ID) }}
         // The gear's lines (his order), after the modules': who it pushes as, the project's git host
         // account, picked for this session; and, set apart, what becomes of the work. The gear is in the warning's colour while the host has no account.

@@ -1,8 +1,9 @@
+import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
 
 // The repos on this computer (Rom's "repos are not projects"): every Git repository a quick look
 // through the person's folders finds, so a new session can be started in one that is not a project
-// yet. A project is a repo the person pinned: the registry's list. A repo is only a folder with
+// yet. A project is a repo the person pinned: the list of projects. A repo is only a folder with
 // its Git address.
 //
 // The look is a crawl of the home folder and of the folders the person added, shallowest first so a
@@ -198,13 +199,9 @@ let thisComputer: RepoIndex | undefined
 
 /**
  * This computer's repos: one list for the daemon, first crawled when a page asks. It looks in the home folder
- * and in the folders the person added (`repoFolders` in the registry).
+ * and in the folders the person added (`REPO_FOLDERS`), as `folders` reads them.
  */
-export function thisComputersRepos(): RepoIndex {
-  thisComputer ??= repoIndex(async () => {
-    const { homedir } = await import('node:os')
-    const { listRepoFolders } = await import('../registry.js')
-    return [homedir(), ...(await listRepoFolders())]
-  })
+export function thisComputersRepos(folders: () => Promise<string[]>): RepoIndex {
+  thisComputer ??= repoIndex(async () => [homedir(), ...(await folders())])
   return thisComputer
 }

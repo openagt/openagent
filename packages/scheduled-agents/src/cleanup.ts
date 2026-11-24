@@ -7,10 +7,9 @@ import { readState } from './state.js'
 import { readPicks, savePicks } from './picks.js'
 
 /**
- * `cleanup`: what this tool left in a project, removed, for a person who takes the project out of
- * a dashboard and asks for the tools' files to go too. The tool removes its own and nothing else:
- * a dashboard asks for it by the `cleanup` kind the package declares under `openagent` in its
- * package.json, and holds no list of this tool's files.
+ * What this tool left in a project, removed, for a person who takes the project off the list and
+ * asks for the tools' files to go too (`app.lifecycle`'s `projectRemoved`, `lifecycle.ts`). The
+ * tool removes its own and nothing else: the projects module holds no list of this tool's files.
  *
  * What goes is this machine's switches and paces of the project's commands, the state file and the
  * scheduler's log, then the directory once it is empty, then the rule hiding it from git

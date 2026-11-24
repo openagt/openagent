@@ -3,10 +3,11 @@ import { test } from 'node:test'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { memorySettings } from '@openagt/hooks/testing'
-import { callModuleFunction, functionKind, serverHost, MAX_CALL_INPUT, type ServerHostDeps } from './module-host.js'
+import { computerRpcHost, memorySettings } from '@openagt/hooks/testing'
+import { callModuleFunction, computerHost, functionKind, serverHost, MAX_CALL_INPUT, type AppOfHost, type ServerHostDeps } from './module-host.js'
 
-const SETTINGS = memorySettings()
+/** The app a host is made of in a test: settings in memory, no account, and a lifecycle that tells nobody. */
+const SETTINGS: AppOfHost = { settings: memorySettings(), gitAccess: async () => undefined, lifecycle: computerRpcHost().lifecycle }
 
 /** A project whose runs' host knows nothing of any run: what a call about none is given. */
 const NO_RUNS: ServerHostDeps = {
@@ -21,7 +22,6 @@ const NO_RUNS: ServerHostDeps = {
   landed: async () => {
     throw new Error('unknown session')
   },
-  gitAccess: async () => undefined,
   modulesOn: async () => [],
 }
 
@@ -103,4 +103,23 @@ export default { echo }`,
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
+})
+
+test("a host passes the app's word on: the modules' accounts, and a project added or removed told to every module", async () => {
+  const told: string[] = []
+  const project = { id: 'p', name: 'p', dir: '/p' }
+  const host = computerHost({
+    settings: memorySettings(),
+    gitAccess: async remote => (remote === 'https://example.com/o/r' ? { env: { GIT_AUTHOR_NAME: 'octo-agent' } } : undefined),
+    lifecycle: {
+      added: async added => void told.push(`added ${added.id}`),
+      refusal: async () => 'An agent is working in this project.',
+      removed: async (removed, { files }) => (told.push(`removed ${removed.id}${files ? ' with its files' : ''}`), { removed: ['.branches'], kept: [], failed: [] }),
+    },
+  }, NO_RUNS)
+  assert.deepEqual(await host.gitAccess('https://example.com/o/r'), { env: { GIT_AUTHOR_NAME: 'octo-agent' } })
+  await host.lifecycle.added(project)
+  assert.equal(await host.lifecycle.refusal(project), 'An agent is working in this project.')
+  assert.deepEqual(await host.lifecycle.removed(project, { files: true }), { removed: ['.branches'], kept: [], failed: [] })
+  assert.deepEqual(told, ['added p', 'removed p with its files'])
 })

@@ -3,7 +3,8 @@ import { test } from 'node:test'
 import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { makeWorld } from './harness.js'
-import { onProjects, sendAddProject } from '../dashboard-rpc/projects.js'
+import { onProjects } from '../dashboard-rpc/projects.js'
+import { callModule } from '../dashboard-rpc/module-calls.js'
 import { onGitHostHome, onAgents, onDocs } from '../dashboard-rpc/reads.js'
 import { onPreferences, patchPreferences } from '../dashboard-rpc/preferences.js'
 import { sendStart } from '../dashboard-rpc/control.js'
@@ -32,13 +33,13 @@ test('add a project: it is installed, registered, and readable like the sidebar 
     assert.deepEqual(await rpc(onAgents)(project.id), [])
 
     // Adding the same repo again is a no-op the dialog can explain, not a duplicate.
-    const again = await rpc(sendAddProject)(project.cwd)
-    assert.deepEqual(again, { ok: true, alreadyActivated: true })
+    const addProject = (path: string) => rpc(callModule)(null, '@openagt/projects', 'addProject', { path })
+    assert.deepEqual(await addProject(project.cwd), { ok: true, output: { ok: true, alreadyActivated: true } })
     assert.equal((await rpc(onProjects)()).filter(p => p.id === project.id).length, 1)
 
     // A bogus path is refused with a reason, not a crash.
-    const bogus = await rpc(sendAddProject)(join(world.home, 'nope'))
-    assert.equal(bogus.ok, false)
+    const bogus = await addProject(join(world.home, 'nope'))
+    assert.equal(bogus.ok && (bogus.output as { ok: boolean }).ok, false)
   } finally {
     await world.close()
   }

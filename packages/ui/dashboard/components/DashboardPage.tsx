@@ -43,7 +43,6 @@ export function DashboardPage({
   active,
   projects,
   scope,
-  onProjectAdded,
   start,
 }: {
   /** The box that starts a session (StartAgentForm), the page's first part: in the picked project, else in none. */
@@ -60,8 +59,6 @@ export function DashboardPage({
   projects: ProjectSummary[]
   /** The one project the page shows (#1513), or null for all: the agents at work and the packages' cards show only its, and a card of a package it does not have is not drawn. */
   scope: string | null
-  /** A project was added from the first steps: the app reads its projects again. */
-  onProjectAdded: () => void
 }) {
   // Its ✕ hides it (#958), and a switch in Settings › Appearance shows it again.
   const onboardingDismissed = usePreferences().onboardingDismissed ?? false
@@ -221,7 +218,7 @@ export function DashboardPage({
       {/* Arranging keeps the parts in their order and where they stand: the updates stay, and what arranging adds comes after the parts. */}
       <div className="space-y-10">
         {/* What a new install can still set up, first while a step is open (his pick): a session cannot start before its first one. */}
-        {!onboardingDismissed && <OnboardingChecklist projects={projects} onProjectAdded={onProjectAdded} />}
+        {!onboardingDismissed && <OnboardingChecklist />}
         {/* The page's own, before every card (his and Rom's pick): arranging the cards neither moves it nor takes it off. */}
         {start}
         {!layoutRead ? null : editing ? (

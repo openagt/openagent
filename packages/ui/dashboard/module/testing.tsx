@@ -7,6 +7,7 @@ import { SidebarProvider, useSidebar } from '../components/ui/sidebar.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
 import { ModulesContext, mountedOf, type Mounted, type MountedModules } from '../lib/use-modules.js'
 export { mountedOf } from '../lib/use-modules.js'
+export { onProjectsChanged, ShellProjectsContext } from '../lib/shell-projects.js'
 import { ModuleHostContext, type ModuleCallResult, type ModuleCommandResult, type ModuleHost, type UiModuleDefinition, type UiRender } from './index.js'
 
 // What a module's tests need of the dashboard, faked (`@openagt/ui/module/testing`, which

@@ -97,14 +97,14 @@ export const Composer = forwardRef<ComposerHandle, {
   addContext?: ((path: string) => void) | undefined
   /** Drop a path from the Context when its `@`/`#` chip leaves the editor (#948). */
   removeContext?: ((path: string) => void) | undefined
-  /** Where the agent starts, in the row above the box after the "Run on" pick: the launcher's
-   *  project and the branch it starts from. */
+  /** Where the agent starts, in the row above the box after the "Run on" pick and the modules'
+   *  controls there (the project): the branch it starts from. */
   startsAt?: ReactNode
   /** The session's setup, behind the gear that leads the row under the box: the profile, the skills, the git host account and the Auto level. */
   setup?: SessionSetup | undefined
   /**
    * The box the modules' controls are drawn for (`composer.control`): the launcher's picks, or the
-   * session's. Its controls stand after `startsAt` above the box (the launcher's), in the gear's
+   * session's. Its controls stand before `startsAt` above the box (the launcher's), in the gear's
    * menu after the setup's lines, after the caller's controls under the box, and at that row's right.
    */
   controlBox?: ControlBox | undefined
@@ -401,8 +401,8 @@ export const Composer = forwardRef<ComposerHandle, {
         ) : (
           <RowAboveBox>
             {runOnEl}
-            {startsAt}
             {controlBox && <ComposerControls at="start" box={controlBox} />}
+            {startsAt}
           </RowAboveBox>
         )}
 

@@ -465,3 +465,62 @@ test('with no store in the distribution, a plugin is off, and why is told', asyn
   assert.equal(await hooks.enabled('notifications-command'), false)
   assert.deepEqual(messages(errors), ['notifications-command enabled: No store keeps the computer data'])
 })
+
+test('a project removed with its files: each module answers what it removed and kept there, one that refuses is a line of what failed, and the others still clean up', async () => {
+  const errors: HandlerError[] = []
+  const said: boolean[] = []
+  const hooks = hooksOf(
+    [
+      { module: defineModule({ name: 'git-branches', hooks: { 'app.lifecycle': { projectRemoved: (_project, _app, { files }) => (said.push(files), files ? { removed: ['.branches'], kept: [{ path: '.branches/agent-1', reason: 'uncommitted work' }] } : undefined) } } }) },
+      {
+        module: defineModule({
+          name: 'agent-driver',
+          hooks: {
+            'app.lifecycle': {
+              projectRemoved: () => {
+                throw new Error('a run is still working here')
+              },
+            },
+          },
+        }),
+      },
+      { module: defineModule({ name: 'scheduled-agents', hooks: { 'app.lifecycle': { projectRemoved: () => ({ removed: ['.scheduler'], kept: [] }) } } }) },
+    ],
+    errors,
+  )
+  assert.deepEqual(await hooks.projectRemoved(P1, { files: true }), {
+    removed: ['.branches', '.scheduler'],
+    kept: [{ path: '.branches/agent-1', reason: 'uncommitted work' }],
+    failed: ['agent-driver: a run is still working here'],
+  })
+  assert.deepEqual(await hooks.projectRemoved(P1), { removed: ['.scheduler'], kept: [], failed: ['agent-driver: a run is still working here'] })
+  assert.deepEqual(said, [true, false])
+})
+
+test("the folder the command was typed in: the first module that answers makes it a project, and the modules on in it are told when it was added just now", async () => {
+  const added: string[] = []
+  const hooks = hooksOf([
+    { module: defineModule({ name: 'other', hooks: { 'app.lifecycle': { folderGiven: async () => undefined, projectAdded: project => void added.push(`other ${project.id}`) } } }) },
+    { module: defineModule({ name: 'projects', hooks: { 'app.lifecycle': { folderGiven: async folder => ({ project: { ...P2, dir: folder }, added: folder === '/projects/two' }) } } }) },
+  ])
+  assert.deepEqual(await hooks.folderGiven('/projects/two'), { project: P2, added: true })
+  assert.deepEqual(await hooks.folderGiven('/projects/two/src').then(given => given?.added), false)
+  assert.deepEqual(added, ['other p2'])
+})
+
+test('a project may not go while a module refuses it: the first refusal is said, one that cannot tell refuses in its words, and with none refusing it may', async () => {
+  const errors: HandlerError[] = []
+  const asked: string[] = []
+  const refusing = (name: string, reason: (project: ProjectRef) => string | undefined): DistributionEntry => ({
+    module: defineModule({ name, hooks: { 'app.lifecycle': { refuseRemoval: project => (asked.push(name), reason(project)) } } }),
+  })
+  const quiet = hooksOf([refusing('free', () => undefined)])
+  assert.equal(await quiet.lifecycle.refusal(P1), undefined)
+  const busy = hooksOf([refusing('free', () => undefined), refusing('runs', project => `An agent is working in ${project.name}.`), refusing('later', () => 'not asked')])
+  asked.length = 0
+  assert.equal(await busy.lifecycle.refusal(P1), 'An agent is working in One.')
+  assert.deepEqual(asked, ['free', 'runs'], 'the first refusal is the answer')
+  const broken = hooksOf([refusing('runs', () => { throw new Error('the locks could not be read') })], errors)
+  assert.equal(await broken.lifecycle.refusal(P1), 'runs could not tell whether the project may go: the locks could not be read')
+  assert.deepEqual(errors.map(error => `${error.module} ${error.hook}`), ['runs app.lifecycle.refuseRemoval'])
+})

@@ -4,7 +4,12 @@ import { execFileSync } from 'node:child_process'
 import { mkdir, mkdtemp, readdir, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { cloneProject, cloneTarget, cloneTargetOf, type CloneRunner } from './clone-project.js'
+import { cloneProject, cloneTarget, cloneTargetOf, type CloneRunner } from './clone.js'
+
+/** An account's access as a module gives it (`account.access`): its git settings in git's environment, and who commits. */
+function accessOf(config: [string, string][]): { env: Record<string, string> } {
+  return { env: { GIT_CONFIG_COUNT: String(config.length), ...Object.fromEntries(config.flatMap(([key, value], i) => [[`GIT_CONFIG_KEY_${i}`, key], [`GIT_CONFIG_VALUE_${i}`, value]])), GIT_AUTHOR_NAME: 'octo-agent' } }
+}
 
 const HOME = '/home/ada'
 
@@ -97,13 +102,15 @@ test("a repository is cloned into the projects folder, over the web, with the pe
     assert.equal(git.calls.length, 1)
 
     // As one of OpenAgent's accounts: its settings after the person's helpers are dropped.
-    const account = { login: 'octo-agent', host: 'github.com', config: [['credential.https://github.com.helper', '!gh-as-octo'], ['url.https://github.com/.insteadOf', 'git@github.com:']] as [string, string][] }
-    await cloneProject('github.com/ada/tools', { home, run: git.run, env: {}, account })
+    const access = accessOf([['credential.https://github.com.helper', '!gh-as-octo'], ['url.https://github.com/.insteadOf', 'git@github.com:']])
+    await cloneProject('github.com/ada/tools', { home, run: git.run, env: {}, access })
     assert.deepEqual(git.calls[1]!.args.slice(0, 6), ['-c', 'credential.helper=', '-c', 'credential.https://github.com.helper=!gh-as-octo', '-c', 'url.https://github.com/.insteadOf=git@github.com:'])
+    // The rest of the account's environment goes with it: who commits.
+    assert.equal(git.calls[1]!.env['GIT_AUTHOR_NAME'], 'octo-agent')
     // An SSH address would use the person's own key: refused, unless the account takes it over the web.
     assert.deepEqual(await cloneProject('git@github.com:ada/keys.git', { home, run: git.run }), { ok: false, error: 'OpenAgent reads github.com/ada/keys over SSH only through one of its own accounts, never with your own key. Paste its https:// address, or add an account at github.com in Permissions.' })
     assert.equal(git.calls.length, 2)
-    assert.deepEqual(await cloneProject('git@github.com:ada/keys.git', { home, run: git.run, account }), { ok: true, path: join(home, 'projects', 'keys'), cloned: true })
+    assert.deepEqual(await cloneProject('git@github.com:ada/keys.git', { home, run: git.run, access }), { ok: true, path: join(home, 'projects', 'keys'), cloned: true })
   } finally {
     await rm(home, { recursive: true, force: true })
   }

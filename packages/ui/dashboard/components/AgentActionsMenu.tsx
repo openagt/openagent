@@ -20,7 +20,6 @@ import { cn } from '../lib/utils.js'
 import { describeSessionLink } from '../lib/session-link.js'
 import { PreferredEditorItems } from './PreferredEditorItems.js'
 import { ConfirmDialog } from './ui/confirm-dialog.js'
-import { RemoveProjectDialog } from './RemoveProjectDialog.js'
 import { useMenuActions } from './Places.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import {
@@ -56,7 +55,6 @@ export function AgentActionsMenu({
   naming = false,
   retainedWorktree = false,
   onDeleted,
-  onProjectRemoved,
   details,
   resumeCommand,
 }: {
@@ -71,8 +69,6 @@ export function AgentActionsMenu({
   naming?: boolean
   retainedWorktree?: boolean
   onDeleted?: (() => void) | undefined
-  /** Told once the project is off the list; given, the project's menu offers "Remove project". */
-  onProjectRemoved?: (() => void) | undefined
   /** The session's details strip under the bar (its coding agent, its spend): the session's menu shows and hides it. */
   details?: { open: boolean; onToggle: () => void } | undefined
   /** The command that picks the session's agent session back up in a terminal, as its coding agent says it (#1195); none where it has none. */
@@ -114,7 +110,6 @@ export function AgentActionsMenu({
   const [confirmCreate, setConfirmCreate] = useState(false)
   // Removing a project takes it off the dashboard's list and deletes nothing in its folder; it is
   // asked once more, and the question says what stays.
-  const [confirmRemove, setConfirmRemove] = useState(false)
 
   // Per session, as in the composer: the page keeps this menu from one session to the next, and an answer is the session's it was pressed in.
   const { busy, error, run } = useAction(agentId ?? '')
@@ -266,16 +261,6 @@ export function AgentActionsMenu({
             </DropdownMenuItem>
           )}
 
-          {/* Last, and apart: the one item of the project's menu that takes something away. */}
-          {onProjectRemoved && !session && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setConfirmRemove(true)} className="text-danger">
-                <Trash2 className="h-3.5 w-3.5 shrink-0" /> Remove project…
-              </DropdownMenuItem>
-            </>
-          )}
-
           {(error ?? stopError) && <p className="px-2 py-1.5 text-xs text-danger">{error ?? stopError}</p>}
         </DropdownMenuContent>
       </DropdownMenu>
@@ -299,9 +284,6 @@ export function AgentActionsMenu({
           onConfirm={() => sendCreateRepository(projectId)}
           onSuccess={() => setCreated(n => n + 1)}
         />
-      )}
-      {onProjectRemoved && !session && (
-        <RemoveProjectDialog projectId={projectId} open={confirmRemove} onOpenChange={setConfirmRemove} onRemoved={onProjectRemoved} />
       )}
       {onDeleted && agentId && (
         <ConfirmDialog

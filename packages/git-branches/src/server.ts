@@ -4,7 +4,8 @@ import { act, read, type RpcHost } from '@openagt/hooks/rpc'
 import type { RunFound } from '@openagt/hooks'
 import { isSafeAgentId } from './branch-names.js'
 import { bringBranch } from './bring.js'
-import { bringRefusalLine, checkoutDir, mergeRefusalLine, pushRefusalLine, reclaimCheckout, refusalLine } from './cli.js'
+import { checkoutDir, reclaimAgent, refusalLine } from './agent-checkout.js'
+import { bringRefusalLine, mergeRefusalLine, pushRefusalLine } from './cli.js'
 import { readFolderBehind, updateFolder } from './folder-behind.js'
 import { readHandoff, sessionCopies, workAt, type Handoff } from './handoff.js'
 import { mergeBranch } from './merge.js'
@@ -162,7 +163,7 @@ export const checkout = read(async (host: RpcHost, { agentId }: { agentId: strin
 export const removeCheckout = act(async (host: RpcHost, { agentId }: { agentId: string }): Promise<Pressed> => {
   const ended = await endedRun(host, agentId)
   if ('refused' in ended) return ended.refused
-  const removed = await reclaimCheckout(host.root, agentId, nodeGitRunner(), ended.run?.record?.baseCommit).catch((err: unknown) => ({ ok: false as const, reason: 'failed' as const, detail: errorMessage(err) }))
+  const removed = await reclaimAgent(host.root, agentId, nodeGitRunner(), ended.run?.record?.baseCommit).catch((err: unknown) => ({ ok: false as const, reason: 'failed' as const, detail: errorMessage(err) }))
   if (removed.ok) return { ok: true, said: 'Removed the worktree.' }
   return { ok: false, error: `Could not remove the worktree: ${'detail' in removed ? removed.detail : refusalLine(agentId, removed)}` }
 })

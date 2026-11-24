@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { ProvidedCommand } from '@openagt/agent-data'
-import { addProject } from '../registry.js'
+import { listTestProject } from '../test-projects.js'
 import { readProvider, remoteHost } from '../dashboard/git-hosts.js'
 import { loginsWiring, onGitHosts, type GitHostsView, sendForgetGitHostAccount, sendGitHostLogin, sendUseGitHostAccount } from './logins.js'
 import { provideTestContext } from './test-context.js'
@@ -39,7 +39,7 @@ async function withProjects(body: (dirs: { github: string; gitlab: string; local
     mkdirSync(path)
     execFileSync('git', ['init', '-q'], { cwd: path })
     if (remotes[path]) execFileSync('git', ['remote', 'add', 'origin', remotes[path]!], { cwd: path })
-    await addProject(path, '2026-10-22T00:00:00.000Z')
+    await listTestProject(path, '2026-10-22T00:00:00.000Z')
   }
   const asked: { root: string; args: string[] }[] = []
   const before = { ...loginsWiring }

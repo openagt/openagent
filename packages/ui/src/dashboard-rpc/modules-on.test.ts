@@ -5,8 +5,8 @@ import { mkdir, mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { projectId } from '@openagt/agent-data'
-import { addProject } from '../registry.js'
-import { distributionHooks, projectRefAt } from '../distribution-hooks.js'
+import { PROJECTS } from '@openagt/hooks'
+import { distributionHooks, distributionSettings, projectRefAt } from '../distribution-hooks.js'
 import { SESSIONS_ID } from '../project-address.js'
 import { handDownTestDistribution } from '../test-distribution.js'
 import { callModule } from './module-calls.js'
@@ -42,7 +42,7 @@ test("the modules on: with no project, the plugins that start on; in a project, 
     await mkdir(shop)
     execFileSync('git', ['init', '-q'], { cwd: shop })
     execFileSync('git', ['remote', 'add', 'origin', 'git@github.com:o/shop.git'], { cwd: shop })
-    await addProject(shop, '2026-09-19T00:00:00.000Z')
+    await (await distributionSettings()).set(PROJECTS, [{ id: projectId(shop), path: shop, addedAt: '2026-09-19T00:00:00.000Z' }])
     await (await distributionHooks()).setEnabled('tickets', true, await projectRefAt(projectId(shop), shop))
     assert.deepEqual(await choices(projectId(shop)), { core: ['github'], plugins: [{ name: 'ask', skills: ['ask'] }, { name: 'tickets', skills: ['tickets', 'plan', 'plan-tickets', 'triage', 'update-tickets', 'suggest-tickets-to-work-on'] }] })
   } finally {

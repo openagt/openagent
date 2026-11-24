@@ -307,3 +307,41 @@ function paceFrom(value: unknown): SchedulePace | undefined {
 function isMap(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
+
+/** One project on this computer's list, as the projects module keeps it. */
+export interface ProjectRecord {
+  /** Stable, URL-safe, made from its folder's path: what every address and read names it by. */
+  id: string
+  /** Its folder: an absolute path. */
+  path: string
+  /** When it was added, ISO. */
+  addedAt: string
+}
+
+/** The most projects a list keeps, so a hand-edited file cannot bloat. */
+const MOST_PROJECTS = 500
+
+/**
+ * projects' (#2394): the projects on this computer's list, in the order they were added. The shell
+ * reads it for its sidebar and its routes, and to find a project's folder by its id; the projects
+ * module alone writes it. A record that is not one is left out, and of two with one folder the
+ * first stays.
+ */
+export const PROJECTS = defineSetting<ProjectRecord[]>({
+  key: 'projects.list',
+  scope: 'computer',
+  default: [],
+  parse: value => {
+    if (!Array.isArray(value)) return undefined
+    const seen = new Set<string>()
+    return value
+      .flatMap((item): ProjectRecord[] => {
+        if (!isMap(item)) return []
+        const { id, path, addedAt } = item
+        if (typeof id !== 'string' || !id || typeof path !== 'string' || !path.startsWith('/') || typeof addedAt !== 'string' || seen.has(path)) return []
+        seen.add(path)
+        return [{ id, path, addedAt }]
+      })
+      .slice(0, MOST_PROJECTS)
+  },
+})

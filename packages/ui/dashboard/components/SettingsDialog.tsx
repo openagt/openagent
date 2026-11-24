@@ -7,9 +7,9 @@ import { DEFAULT_ORDER, useMountedModules, type MountedView } from '../lib/use-m
 import { useIsMobile } from '../lib/use-mobile.js'
 import { AppearanceSettings } from './AppearanceSettings.js'
 import { SHORTCUTS_ENTRY, ShortcutList } from './ShortcutList.js'
-import { REPO_SOURCES_ENTRY, RepoSourcesSettings } from './RepoSourcesSettings.js'
+import { REPO_OWNERS_ENTRY, RepoOwnersSettings } from './RepoOwnersSettings.js'
 import { PickProject } from './PickProject.js'
-import { ProjectDot } from './ProjectPicker.js'
+import { ProjectDot } from './SidebarProjectPicker.js'
 import { COMPUTER_PLUGINS_ENTRY, ComputerPluginsSettings, PLUGINS_ENTRY, ProjectPluginsSettings } from './PluginsSettings.js'
 import { ModuleSlot, projectsHaving } from './ModulePageView.js'
 import { buttonVariants } from './ui/button.js'
@@ -311,11 +311,11 @@ function useOwnEntries(): Entry[] {
       body: <ComputerPluginsSettings />,
     },
     {
-      id: REPO_SOURCES_ENTRY,
-      order: 60,
-      title: 'Repos',
+      id: REPO_OWNERS_ENTRY,
+      order: 61,
+      title: 'Repos on GitHub',
       icon: FolderSearch,
-      body: <RepoSourcesSettings />,
+      body: <RepoOwnersSettings />,
     },
     {
       id: SHORTCUTS_ENTRY,
