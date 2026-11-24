@@ -121,7 +121,7 @@ describe('the session\'s work panel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Merge' }))
     await waitFor(() => expect(sendBringBranch).toHaveBeenCalledWith('p1', 'run-1', 'oa-newuser', { merge: true }))
     expect(sendMergeBranch).not.toHaveBeenCalled()
-    expect(await screen.findByText('Merged into main in /me/app.')).toBeTruthy()
+    expect((await screen.findByText('Merged into your folder.')).getAttribute('title')).toBe('Merged into the main branch of /me/app')
     cleanup()
     forgetRemembered()
     sendBringBranch.mockClear()
@@ -130,7 +130,7 @@ describe('the session\'s work panel', () => {
     fireEvent.click(await screen.findByText('Only add the branch'))
     await waitFor(() => expect(sendBringBranch).toHaveBeenCalledWith('p1', 'run-1', 'oa-newuser', {}))
     // The folder has the branch now: the merge is the one step left.
-    expect(await screen.findByText('In /me/app, not in main yet.')).toBeTruthy()
+    expect((await screen.findByText('In your folder, not in main yet.')).getAttribute('title')).toBe('/me/app')
     expect(screen.getByRole('button', { name: 'Merge' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Other choices' })).toBeNull()
   })

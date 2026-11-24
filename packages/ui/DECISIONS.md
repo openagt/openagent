@@ -87,7 +87,8 @@ already made, and lists it in its pull request; for anything else it proposes an
   copy's branch goes to the folder it was copied from and is merged into that folder's
   main branch. The press's arrow holds "Only add the branch", which adds the branch to
   that folder and changes nothing else there, for a folder busy on another branch; once
-  the folder has the branch, "Merge" is the one step left. A copy's work is measured from
+  the folder has the branch, "Merge" is the one step left. The row says "your folder",
+  since it names the repo already, and its hover the folder's path. A copy's work is measured from
   the commit the copy was made at, so a merged copy still shows what it changed. Picked
   over "No remote: the work stays in this copy", which left it reachable from a terminal
   only, over "Merge" alone, and over adding the branch alone (his pick C, 11-24).
