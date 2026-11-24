@@ -246,7 +246,7 @@ function PickAgent({ in: box, options, onChange, busy, say }: UiComposerControlP
   const withAccounts = useMenuAgents(agents, box === 'launcher')
   const { picked, pick } = usePicked(host)
   const slice = sliceOf(options)
-  // The launcher's run names its own agent once one is picked for it; else it runs on the one picked for every next run.
+  // The launcher's run names its own agent once one is picked for it; else it runs on its profile's, or on the one picked for every next run.
   const shown = box === 'launcher' && slice.driver === undefined ? (picked ?? {}) : slice
   const agent = offered?.find(one => one.id === shown.driver) ?? offered?.[0]
   const levels = modelEfforts(agent, shown.model)

@@ -1,5 +1,5 @@
 import { act, read, type RpcComputerHost } from '@openagt/hooks/rpc'
-import { NAME_RUNS, PICKED_AGENT, type AgentPick } from '@openagt/hooks'
+import { NAME_RUNS, PICKED_AGENT, PICKED_PROFILE, PROFILES, profileOf, type AgentPick } from '@openagt/hooks'
 import { codingAgents } from './agents.js'
 import { addingAll, listing } from './accounts/reads.js'
 import { readUsage } from './accounts/usage.js'
@@ -41,8 +41,18 @@ export const agents = read(async (_host: RpcComputerHost, _input: object): Promi
   ),
 )
 
-/** The coding agent, model and effort picked for every next run on this computer: `picked`. */
-export const picked = read((host: RpcComputerHost, _input: object): Promise<AgentPick> => host.settings.get(PICKED_AGENT))
+/**
+ * The coding agent, model and effort a run started on this computer is on where its options name
+ * no agent, as its start reads them (`withPicks` in `engine/host.ts`): its profile's (`profile`,
+ * else the one picked for every next run) where that names an agent, else the one picked for every
+ * next run here: `picked`.
+ */
+export const picked = read(async (host: RpcComputerHost, input: { profile?: string }): Promise<AgentPick> => {
+  const id = typeof input?.profile === 'string' ? input.profile : await host.settings.get(PICKED_PROFILE)
+  const { driver, model, effort } = profileOf(await host.settings.get(PROFILES), id).options['agent-driver'] ?? {}
+  if (driver === undefined) return host.settings.get(PICKED_AGENT)
+  return { driver, ...(model !== undefined ? { model } : {}), ...(effort !== undefined ? { effort } : {}) }
+})
 
 /** Pick the coding agent, model and effort every next run on this computer is on: `pick`. */
 export const pick = act(async (host: RpcComputerHost, input: AgentPick): Promise<AgentPick> => {

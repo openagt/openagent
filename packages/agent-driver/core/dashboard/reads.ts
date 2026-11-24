@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { computerRpcClient, useAskOn, usePolled, type ModuleHost } from '@openagt/ui/module'
+import { computerRpcClient, nextRunAgain, useAskOn, usePolled, type ModuleHost } from '@openagt/ui/module'
 import type { AgentPick } from '@openagt/hooks'
 import type { AgentOffered, AgentState, QuotaView } from '../src/server.js'
 
@@ -20,9 +20,13 @@ export function useAgentsOffered(host: ModuleHost): AgentOffered[] | undefined {
   return usePolled<AgentOffered[] | undefined>(() => server(host).agents({}), undefined, 60 * 60_000, [], { remember: 'agent-driver:agents' }).value
 }
 
-/** The coding agent, model and effort picked for every next run on this computer, and how a new pick is saved. */
+/**
+ * The coding agent, model and effort the next run is on where the launcher picks none (its profile's,
+ * else the one picked for every next run on this computer), and how a new pick for every next run is
+ * saved. Read again at once when a profile is picked for every next run.
+ */
 export function usePicked(host: ModuleHost): { picked: AgentPick | undefined; pick: (next: AgentPick) => Promise<void> } {
-  const { value, reload } = usePolled<AgentPick | undefined>(() => server(host).picked({}), undefined, SELDOM_MS, [], { remember: 'agent-driver:picked', stored: true })
+  const { value, reload } = usePolled<AgentPick | undefined>(() => server(host).picked({}), undefined, SELDOM_MS, [], { remember: 'agent-driver:picked', stored: true }, nextRunAgain)
   return {
     picked: value,
     pick: async next => {
