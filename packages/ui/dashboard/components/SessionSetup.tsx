@@ -18,15 +18,15 @@ export interface SessionSetup {
 
 /**
  * The gear under the message box, first in its row (DECISIONS.md, his pick): the session's setup in
- * one menu, "This session". A line each for the profile, the skills, the git host account and, set
- * apart, what the agent does when it finishes; each says its value and opens its list. The menu
+ * one menu, "This session". First the modules' lines, then the caller's: the git host account and,
+ * set apart, what the agent does when it finishes; each says its value and opens its list. The menu
  * stands above the box on its left edge, and covers none of it: what is typed stays in view.
  */
-export function SessionSetupMenu({ setup, box, busy, controls }: { setup: SessionSetup; /** The message box, which the menu stands above. */ box: RefObject<HTMLElement | null>; busy: boolean; /** The box the modules' lines are drawn for (`composer.control` at `setup`), after the caller's. */ controls?: ControlBox | undefined }) {
+export function SessionSetupMenu({ setup, box, busy, controls }: { setup: SessionSetup; /** The message box, which the menu stands above. */ box: RefObject<HTMLElement | null>; busy: boolean; /** The box the modules' lines are drawn for (`composer.control` at `setup`), before the caller's. */ controls?: ControlBox | undefined }) {
   // The modules' lines stay mounted with the menu shut, saying what they pick for the gear's hover.
   const { said, onSaid } = useControlsSaid(`${controls?.in}:${controls?.projectId}:${controls?.agentId}`)
   const lines = Object.values(said)
-  const tip = [setup.said, ...lines.map(line => line.words)].filter(Boolean).join(' · ')
+  const tip = [...lines.map(line => line.words), setup.said].filter(Boolean).join(' · ')
   const warn = setup.warn || lines.some(line => line.warn)
   return (
     <DropdownMenu>
@@ -41,8 +41,8 @@ export function SessionSetupMenu({ setup, box, busy, controls }: { setup: Sessio
         <TooltipsPastBox value={null}>
           <DropdownMenuGroup>
             <DropdownMenuLabel className="font-normal">This session</DropdownMenuLabel>
-            {setup.lines}
             {controls && <ComposerControls at="setup" box={controls} onSaid={onSaid} />}
+            {setup.lines}
           </DropdownMenuGroup>
         </TooltipsPastBox>
       </DropdownMenuContent>

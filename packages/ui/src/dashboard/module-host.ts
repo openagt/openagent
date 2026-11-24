@@ -3,11 +3,11 @@ import { isRunId } from '../store/index.js'
 import { cachedPrsForBranch, type LinkedPr } from './pull-requests.js'
 import type { Cached } from './cache.js'
 import type { ProjectRef, RunFound, RunQuestion, Settings, InboxLine } from '@openagt/hooks'
-import { rpcKind, type MergeLookup, type RpcComputerHost, type RpcFunction, type RpcHost, type RpcKind } from '@openagt/hooks/rpc'
+import { rpcKind, type MergeLookup, type ModuleOn, type RpcComputerHost, type RpcFunction, type RpcHost, type RpcKind } from '@openagt/hooks/rpc'
 
 // The daemon's side of a module's server part (`@openagt/hooks/rpc`): the host a function is given
 // (the settings; for a project's module, the project's folder and the project, where its runs have
-// their work, the questions they wait on, and a line said to one) and the one way a function is
+// their work, the questions they wait on, a line said to one, and what the modules on give its runs) and the one way a function is
 // called. Where a run's work is, is its host's to say; what a module makes of it is its own.
 
 /** What {@link serverHost} reads and says through. */
@@ -20,6 +20,8 @@ export interface ServerHostDeps {
   questions: (agentId: string) => Promise<RunQuestion[]>
   /** Say one line to a run of the project through its host; throws why it is not said. */
   say: (agentId: string, line: InboxLine) => Promise<void>
+  /** The modules on in the project, with what each gives its runs. */
+  modulesOn: (opts?: { every?: boolean }) => Promise<ModuleOn[]>
   /** The project's pull requests from a branch, as the git host last said; the production reader when absent. */
   prs?: (root: string, branch: string) => Promise<Cached<LinkedPr[]>>
 }
@@ -35,6 +37,7 @@ export function serverHost(root: string, settings: Settings, deps: ServerHostDep
     settings,
     root,
     project: deps.project,
+    modulesOn: deps.modulesOn,
     async run(agentId: string): Promise<RunFound | undefined> {
       if (typeof agentId !== 'string' || !isRunId(agentId)) return undefined
       return deps.find(agentId)

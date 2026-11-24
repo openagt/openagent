@@ -2,11 +2,12 @@ import { resolveProjectPath, runHostOf } from './context.js'
 import { findComputerModule, findProjectModule } from '../project-modules.js'
 import { providedDataChanged } from '../store/provided.js'
 import { callModuleFunction, computerHost, functionKind, serverHost, type ModuleCallResult } from '../dashboard/module-host.js'
-import { distributionSettings, projectRefAt, runRefAt } from '../distribution-hooks.js'
+import { distributionHooks, distributionSettings, projectRefAt, runRefAt } from '../distribution-hooks.js'
 import { SESSIONS_ID } from '../project-address.js'
 
 import { pullProjectData } from '@openagt/agent-data'
 import type { ProjectRef, RunFound, RunQuestion, RunRef } from '@openagt/hooks'
+import type { ModuleOn } from '@openagt/hooks/rpc'
 import { loadAgentEvents } from '../store/index.js'
 import { pendingChoices } from '../open-choices.js'
 import { sayForModule } from '../dashboard/run-inbox.js'
@@ -32,11 +33,13 @@ export async function callModule(projectId: string | null, pkg: string, name: st
   if (!root) return { ok: false, error: 'unknown project' }
   if (!module) return { ok: false, error: `${pkg} is no module of this project` }
   if (!module.server) return { ok: false, error: `${pkg} has no server part` }
+  const project = projectOnce(projectId, root)
   const host = serverHost(root, await distributionSettings(), {
-    project: projectOnce(projectId, root),
+    project,
     find: runsFound(projectId, root),
     questions: agentId => runQuestions(root, agentId),
     say: (agentId, line) => sayForModule(projectId, root, agentId, line),
+    modulesOn: async opts => modulesOn(await project(), opts?.every === true),
   })
   const result = await callModuleFunction(module.server, name, host, input)
   if (kind === 'act') {
@@ -50,6 +53,22 @@ export async function callModule(projectId: string | null, pkg: string, name: st
 function projectOnce(projectId: string, root: string): () => Promise<ProjectRef | undefined> {
   let project: Promise<ProjectRef | undefined> | undefined
   return () => (project ??= projectId === SESSIONS_ID ? Promise.resolve(undefined) : projectRefAt(projectId, root))
+}
+
+/**
+ * The modules on in `project` (none: a session with no project), each with the skills it gives its
+ * runs and whether it has a step of them; with `every`, every module of the distribution's.
+ */
+async function modulesOn(project: ProjectRef | undefined, every: boolean): Promise<ModuleOn[]> {
+  const hooks = await distributionHooks()
+  const where = project ? { project } : {}
+  const [on, given, steps] = await Promise.all([every ? hooks.modules : hooks.on(project), hooks.skills(where, { every }), every ? [] : hooks.steps({ ...where, options: {} })])
+  return on.map(module => ({
+    name: module.name,
+    plugin: module.plugin !== undefined,
+    skills: given.filter(skill => skill.module === module.name).map(skill => skill.name),
+    steps: every ? module.hooks['run.step'] !== undefined : steps.some(step => step.module === module.name),
+  }))
 }
 
 /**

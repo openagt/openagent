@@ -217,6 +217,7 @@ export function rpcHost(given: Partial<RpcHost> = {}): RpcHost {
     say: async () => {
       throw new Error('no run of this test takes a line')
     },
+    modulesOn: async () => [],
     ...given,
   }
 }

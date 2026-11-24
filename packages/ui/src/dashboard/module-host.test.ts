@@ -16,6 +16,7 @@ const NO_RUNS: ServerHostDeps = {
   say: async () => {
     throw new Error('unknown session')
   },
+  modulesOn: async () => [],
 }
 
 test('a function is given the project it is called in, as its caller reads it, and none in a session with no project', async () => {

@@ -224,6 +224,8 @@ export interface ViewPlaces {
        * the ones it can name, by path.
        */
       names?(host: UiHost, projectId: string, paths: string[]): Promise<Record<string, UiFileName>>
+      /** Its row's place among the modules' pages, lower first; 50 when unsaid, ties in the order the modules are loaded. */
+      order?: number
     }
     props: UiPageProps
   }
@@ -458,6 +460,27 @@ export interface OptionPlaces {
     /** The repos it offers now; `loading` while some are still being read, `unreached` in words when an account could not be read. */
     repos(host: UiHost): Promise<{ repos: UiWhereRepo[]; loading?: boolean; unreached?: string }>
   }
+  /**
+   * The commands the message box offers in its `/` menu and its Commands menu: a module's, in the
+   * project the box is in, none for a session with no project. A pick puts `/<name> ` in the box.
+   */
+  'composer.commands': {
+    /** The commands it offers in the project `projectId` now, in the order the menus list them. */
+    list(host: UiHost, projectId: string): Promise<UiCommand[]>
+  }
+}
+
+/** A command the message box offers: typed after the slash, and what it asks the agent is the command's own. */
+export interface UiCommand {
+  /** What is typed after the slash. */
+  name: string
+  /** What it does, in a sentence: said beside its name. */
+  description?: string
+  /**
+   * The branch it has yet to reach, by name, when a run started now would not have it: the `/`
+   * menu leaves it out, and the Commands menu says it waits.
+   */
+  waiting?: string
 }
 
 /** A repository the project picker offers to add as a project. */

@@ -58,7 +58,7 @@ export interface MountedModules {
 
 const VIEW_PLACES: readonly ViewPlace[] = ['app.page', 'app.overlay', 'overview.card', 'overview.line', 'chat.pane', 'chat.summary', 'chat.notice', 'chat.labels', 'composer.control', 'composer.prompts', 'settings.section', 'permissions.section', 'usage.line', 'agent.connect']
 const ACTION_PLACES: readonly ActionPlace[] = ['link.menu', 'chat.handoff', 'chat.menu', 'project.menu', 'person.menu', 'attention.fix']
-const OPTION_PLACES: readonly OptionPlace[] = ['composer.auto', 'composer.where']
+const OPTION_PLACES: readonly OptionPlace[] = ['composer.auto', 'composer.where', 'composer.commands']
 
 /** Nothing mounted at any place. */
 function nothingAt(loaded: boolean): MountedModules {
@@ -243,6 +243,9 @@ function mount(loadedModules: { module: DashboardModule; definition: UiModuleDef
   }
   // Numbers, not a list the shell keeps: a third package sits between two others without the shell knowing it exists.
   for (const place of ['overview.card', 'overview.line', 'settings.section', 'permissions.section', 'chat.labels', 'composer.control'] as const) views[place].sort(byMountOrder)
+  // The pages by their own order alone: at the same order they stay in the order the modules are loaded.
+  const pages = views['app.page'] as MountedView<'app.page'>[]
+  pages.sort((a, b) => (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER))
   for (const place of ACTION_PLACES) actions[place].sort(byMountOrder)
   for (const place of OPTION_PLACES) options[place].sort(byMountOrder)
   return mounted

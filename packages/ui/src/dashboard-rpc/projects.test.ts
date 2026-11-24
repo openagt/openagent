@@ -87,51 +87,6 @@ test('onStartBranches lists what origin has now, by asking origin: not the main 
   }
 })
 
-test('a command is waiting for the branch the launcher\'s pick starts agents from: the main branch, the folder\'s own, or a branch of origin\'s', async () => {
-  const { dir, restore } = await registered()
-  const origin = await realpath(await mkdtemp(join(tmpdir(), 'openagent-waiting-')))
-  const git = (cwd: string, ...args: string[]) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { cwd, encoding: 'utf8' })
-  const skill = async (name: string) => {
-    await mkdir(join(dir, '.agents', 'skills', name), { recursive: true })
-    await writeFile(join(dir, '.agents', 'skills', name, 'SKILL.md'), `---\nname: ${name}\ndescription: ${name}\ndisable-model-invocation: true\n---\nIt.\n`)
-  }
-  try {
-    provideTestContext()
-    const id = (await listProjects())[0]!.id
-    git(origin, 'init', '-q', '--bare', '-b', 'main')
-    git(dir, 'init', '-q', '-b', 'main')
-    git(dir, 'commit', '-q', '--allow-empty', '-m', 'first')
-    git(dir, 'remote', 'add', 'origin', origin)
-    git(dir, 'push', '-q', 'origin', 'main')
-    git(dir, 'fetch', '-q', 'origin')
-    git(dir, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
-    // On a branch of origin's only.
-    git(dir, 'checkout', '-q', '-b', 'feature-x')
-    await skill('on-feature')
-    git(dir, 'add', '.agents')
-    git(dir, 'commit', '-q', '-m', 'on-feature')
-    git(dir, 'push', '-q', 'origin', 'feature-x')
-    git(dir, 'checkout', '-q', 'main')
-    git(dir, 'branch', '-D', 'feature-x')
-    // Committed in the folder only, and written in the folder only.
-    git(dir, 'checkout', '-q', '-b', 'mine')
-    await skill('on-mine')
-    git(dir, 'add', '.agents')
-    git(dir, 'commit', '-q', '-m', 'on-mine')
-    await skill('uncommitted')
-    await skill('on-feature')
-    const waits = async (from?: { kind: 'local' } | { kind: 'published'; branch: string }) => Object.fromEntries(((await onCommands(id, from))?.commands ?? []).map(command => [command.name, command.waiting]))
-
-    assert.deepEqual(await waits(), { 'on-feature': 'main', 'on-mine': 'main', uncommitted: 'main' })
-    assert.deepEqual(await waits({ kind: 'local' }), { 'on-feature': 'mine', 'on-mine': undefined, uncommitted: 'mine' })
-    assert.deepEqual(await waits({ kind: 'published', branch: 'feature-x' }), { 'on-feature': undefined, 'on-mine': 'feature-x', uncommitted: 'feature-x' })
-    assert.deepEqual(await waits({ kind: 'published', branch: '--upload-pack=x' }), { 'on-feature': 'main', 'on-mine': 'main', uncommitted: 'main' }, 'a word that is no branch name is no pick')
-  } finally {
-    await restore()
-    await rm(origin, { recursive: true, force: true })
-  }
-})
-
 // The launcher's branch menu is offered only where the pick would be obeyed: a real
 // repository, its branches changed one step at a time.
 test('onCommands names the two branches an agent can start from only when the repository has a remote and the folder is on a branch', async () => {
@@ -158,7 +113,7 @@ test('onCommands names the two branches an agent can start from only when the re
     assert.equal(await startFrom(), undefined, 'the folder is on no branch')
 
     git('checkout', '-q', 'main')
-    assert.deepEqual(await onCommands(id), { commands: [], gitHost: false, remote: true, address: 'example.com/x', startFrom: { main: 'main', local: 'main' } })
+    assert.deepEqual(await onCommands(id), { gitHost: false, remote: true, address: 'example.com/x', startFrom: { main: 'main', local: 'main' } })
     assert.equal(await onCommands('no-such-project'), null)
   } finally {
     await restore()

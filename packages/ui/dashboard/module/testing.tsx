@@ -1,5 +1,6 @@
-import { render, type RenderResult } from '@testing-library/react'
-import { useState, type ReactElement, type ReactNode } from 'react'
+import { fireEvent, render, screen, waitFor, type RenderResult } from '@testing-library/react'
+import { useRef, useState, type ReactElement, type ReactNode } from 'react'
+import { SessionSetupMenu } from '../components/SessionSetup.js'
 import { vi, type Mock } from 'vitest'
 import { PaneHeaderContext } from '../components/PaneHeader.js'
 import { SidebarProvider, useSidebar } from '../components/ui/sidebar.js'
@@ -135,4 +136,80 @@ function PaneCard({ children }: { children: ReactNode }) {
       <PaneHeaderContext.Provider value={{ title, actions }}>{children}</PaneHeaderContext.Provider>
     </section>
   )
+}
+
+/**
+ * Hover a tooltip trigger and hand back the tooltip it opens (#1149).
+ *
+ * Every hint in the dashboard is the custom tooltip now, so a test that used to read a `title`
+ * attribute off an element has to hover like a user instead: Base UI opens on `mouseenter` +
+ * a move, and portals the popup out of the trigger's subtree.
+ */
+export async function hoverTooltip(trigger: Element): Promise<HTMLElement> {
+  // Re-fire the hover pair on every retry rather than once up front (#1398): a pair dispatched
+  // before the trigger's listeners are attached opens nothing, and a single findByRole then
+  // waits out its timeout on a tooltip that will never come ("Unable to find role=tooltip" on a
+  // loaded CI runner, fine locally). Repeating the events is idempotent for a hover.
+  return await waitFor(
+    () => {
+      fireEvent.mouseEnter(trigger)
+      fireEvent.mouseMove(trigger)
+      return screen.getByRole('tooltip')
+    },
+    { timeout: 5000 },
+  )
+}
+
+/**
+ * Open a dropdown menu by its trigger and wait until the trigger reports it open (#1699).
+ *
+ * Clicked until it opens rather than once and hoped: these are Base UI menus, and a click landing
+ * before the trigger's own handlers are live is silently a no-op — the trigger stays at
+ * `aria-expanded="false"` and the search that follows then hunts for an item that was never
+ * rendered. Rare enough to pass locally every time and still fail on a loaded CI runner. Retrying
+ * is safe because the guard only ever clicks a shut menu, so it cannot toggle one back closed; a
+ * menu that genuinely will not open still fails here, on the timeout.
+ */
+export async function openMenu(trigger: Element): Promise<void> {
+  await waitFor(() => {
+    if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger)
+    if (trigger.getAttribute('aria-expanded') !== 'true') throw new Error('the menu did not open')
+  })
+}
+
+/**
+ * The gear under a message box around `lines` of its menu (SessionSetup.tsx): a line is a part of
+ * that menu and is drawn only inside it. `said` is what the gear's hover says.
+ */
+export function GearMenu({ lines, said = '', warn, busy = false }: { lines: ReactNode; said?: string; warn?: boolean; busy?: boolean }) {
+  const box = useRef<HTMLDivElement>(null)
+  return (
+    <>
+      <div ref={box} />
+      <SessionSetupMenu setup={{ lines, said, warn }} box={box} busy={busy} />
+    </>
+  )
+}
+
+/** The gear's button. */
+export const gear = (): HTMLElement => screen.getByRole('button', { name: 'Session setup' })
+
+/**
+ * Open the gear's menu and hand back its line named `label` ("Profile", "When it finishes"): the
+ * line's own words are its label, then its value ("Profile: Default").
+ */
+export async function setupLine(label: string): Promise<HTMLElement> {
+  await openMenu(gear())
+  return await waitFor(() => {
+    const line = screen.getAllByRole('menuitem').find(item => item.textContent?.startsWith(`${label}: `))
+    if (!line) throw new Error(`the gear's menu has no "${label}" line`)
+    return line
+  })
+}
+
+/** Open the list of the gear's line named `label`, and hand the line back. */
+export async function openSetupLine(label: string): Promise<HTMLElement> {
+  const line = await setupLine(label)
+  await openMenu(line)
+  return line
 }

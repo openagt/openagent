@@ -26,7 +26,7 @@ import { keepDraft, keptDraft, takePendingDraft } from '../lib/draft-handoff.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
 import { useIsMobile } from '../lib/use-mobile.js'
 import { driverOptions, modelEfforts, useModels } from '../lib/models.js'
-import { readyCommands, useProjectLauncher } from '../lib/use-project-launcher.js'
+import { readyCommands, useCommands } from '../lib/use-commands.js'
 import { AgentAccountItems, firstAccount, useAccountsOn } from './AgentAccounts.js'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipsPastBox } from './ui/tooltip.js'
 import { BoxOfRow, RowAboveBox, rowClass, rowItemClass, rowLeftClass } from './ui/row-item.js'
@@ -196,8 +196,8 @@ export const Composer = forwardRef<ComposerHandle, {
   // The saved prompts the modules offer the box (#2394).
   const prompts = usePrompts(activeProjectId)
   const savePrompt = prompts.saver ? () => setSavingPrompt(true) : undefined
-  const launcher = useProjectLauncher(activeProjectId)
-  const commands = launcher?.commands ?? []
+  // The commands the modules offer the box (#2394).
+  const commands = useCommands(activeProjectId)
   // A session with no project runs in a folder of its own.
   const noProject = activeProjectId === SESSIONS_ID
   // The hosts beside this computer the project's modules bring, and the one picked: none for a session with no project.

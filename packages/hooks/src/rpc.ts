@@ -39,6 +39,25 @@ export interface RpcHost extends RpcComputerHost {
    * person, where it cannot be said: a run another computer started, say.
    */
   say(agentId: string, line: InboxLine): Promise<void>
+  /**
+   * The modules on in the project, in the distribution's order, each with what it gives the
+   * project's runs; for a session with no project, the ones it has as the distribution starts them.
+   * With `every`, every module of the distribution, the plugins that are off too: what a profile,
+   * made for any project, can leave out.
+   */
+  modulesOn(opts?: { every?: boolean }): Promise<ModuleOn[]>
+}
+
+/** A module on in a project, and what it gives the project's runs. */
+export interface ModuleOn {
+  /** The module, by its name. */
+  name: string
+  /** It is a plugin: a run can go without it (`RunOptions.plugins`). */
+  plugin: boolean
+  /** The skills it gives the runs, by name. */
+  skills: string[]
+  /** It has a step of the runs' pipeline. */
+  steps: boolean
 }
 
 /** Whether a function only reads, or changes something. */

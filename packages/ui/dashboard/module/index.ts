@@ -18,10 +18,18 @@ import { callModule, runComputerCommand, runModuleCommand } from '../rpc/modules
 import type { ModuleCallResult, ModuleCommandResult } from '../rpc/modules.js'
 import type { ComputerRpcClient, RpcClient } from '@openagt/hooks/rpc'
 import { DaemonDown } from '../lib/use-daemon-health.js'
+import { SESSIONS_ID } from '../../src/project-address.js'
 
 export type { ModuleCallResult, ModuleCommandResult, ActivityItem, AgentStatus, ModuleAgent, ModuleAgentsWanted, ProjectionRead, WaitingItem }
 export type * from '@openagt/hooks/ui'
 export { defineUiModule } from '@openagt/hooks/ui'
+
+/**
+ * The project a module's server part is called in where its box has no project of its own: a
+ * session with no project, and a profile's editor, which is for any project. Its host's project is
+ * none there, and its folder is no project's.
+ */
+export const NO_PROJECT = SESSIONS_ID
 
 /** What starting a run answered: the run's id, or in words why there is none. */
 export type StartRunResult = { ok: true; agentId: string } | { ok: false; error: string }
@@ -274,7 +282,11 @@ export { rowButtonClass, rowItemClass, RowChevron, RowSaid, RowItem, BoxOfRow } 
 // A line of the gear's menu under the message box (`composer.control` at `setup`).
 export { SetupLine, SetupPress, SetupSaid } from '../components/SessionSetup.js'
 // The places a module draws itself: a profile's editor draws every control of the message box, the usage card the usage bar's line.
-export { ComposerControls, ViewsAt, useViewsAt, type ControlBox, type ControlsSaid } from '../components/Places.js'
+export { ComposerControls, ViewsAt, useViewsAt, useControlsSaid, type ControlBox, type ControlsSaid } from '../components/Places.js'
+/** For a read of what a pick for every next run decides (the profile picked under the box): read again the moment one is saved, which its control tells. */
+export { nextRunAgain, tellNextRunPicked } from '../lib/next-run-picked.js'
+/** Keep the page's entry while something typed would be lost by leaving it: Back asks first, and so does the browser on a reload. */
+export { holdEntry } from '../lib/use-route.js'
 export { inWords } from '../lib/in-words.js'
 /** For a read of what the plugins give: read again the moment a plugin is switched in Settings. */
 export { pluginsAgain } from '../lib/plugins-switched.js'
