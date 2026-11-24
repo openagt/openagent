@@ -105,7 +105,7 @@ let queuedIds = 0
 const edited: string[] = []
 const givenBack: string[] = []
 vi.mock('./AgentComposer.js', () => ({
-  AgentComposer: ({ live, asked, model, context, onSending, onQueued, editInBox, giveBack, row, publish, prBase, profile, gitAccount, projectSkills }: { publish?: string; prBase?: string; live: boolean; asked?: boolean; model?: { driver?: string; name?: string; effort?: string }; context?: ReactNode; onSending?: (text: string | null) => void; onQueued?: (message: { id: string; text: string; later: boolean }) => void; editInBox?: { current: ((text: string) => void) | null }; giveBack?: { current: ((text: string) => void) | null }; row?: ReactNode; profile?: string; gitAccount?: string; projectSkills?: 'all' | 'none' | string[] }) => {
+  AgentComposer: ({ live, asked, model, context, onSending, onQueued, editInBox, giveBack, row, publish, prBase, gitAccount, options }: { publish?: string; prBase?: string; live: boolean; asked?: boolean; model?: { driver?: string; name?: string; effort?: string }; context?: ReactNode; onSending?: (text: string | null) => void; onQueued?: (message: { id: string; text: string; later: boolean }) => void; editInBox?: { current: ((text: string) => void) | null }; giveBack?: { current: ((text: string) => void) | null }; row?: ReactNode; gitAccount?: string; options?: { skills?: { project?: 'all' | 'none' | string[] } } }) => {
     if (editInBox) editInBox.current = text => void edited.push(text)
     if (giveBack) giveBack.current = text => void givenBack.push(text)
     return (
@@ -115,9 +115,8 @@ vi.mock('./AgentComposer.js', () => ({
         <button type="button" onClick={() => onSending?.('add a logout button')}>continue-it</button>
         <span data-testid="composer-model" data-driver={model?.driver ?? ''} data-effort={model?.effort ?? ''}>{model?.name ?? ''}</span>
         <span data-testid="composer-auto" data-publish={publish ?? ''} data-pr-base={prBase ?? ''} />
-        <span data-testid="composer-profile" data-value={profile ?? ''} />
         <span data-testid="composer-account" data-value={gitAccount ?? ''} />
-        <span data-testid="composer-project-skills" data-value={projectSkills === undefined || projectSkills === 'all' ? 'all' : projectSkills === 'none' ? 'none' : projectSkills.join('+')} />
+        <span data-testid="composer-project-skills" data-value={options?.skills?.project === undefined || options.skills.project === 'all' ? 'all' : options.skills.project === 'none' ? 'none' : options.skills.project.join('+')} />
         <span data-testid="composer-context">{context}</span>
         <span data-testid="composer-live">{String(live)}</span>
         <span data-testid="composer-asked">{String(asked)}</span>
@@ -1050,14 +1049,13 @@ describe('the page\'s two bars', () => {
 })
 
 describe('a run the launcher just started, before its record is there', () => {
-  const picks = { branch: 'gh-pages', gitAccount: 'octo', publish: 'pr', prBase: 'gh-pages', effort: 'high', profile: 'reviewer', projectSkills: 'none' as const }
+  const picks = { branch: 'gh-pages', gitAccount: 'octo', publish: 'pr', prBase: 'gh-pages', effort: 'high', options: { skills: { project: 'none' as const } } }
   const row = (id: string, name: string) => screen.getByTestId(id).dataset[name]
 
   test('its page says what the launcher said at once; the record says it from then on', () => {
     const { rerender } = render(view({ live: true, events: [], picks }))
     expect(row('row-started-from', 'value')).toBe('gh-pages')
     expect(row('composer-account', 'value')).toBe('octo')
-    expect(row('composer-profile', 'value')).toBe('reviewer')
     expect(row('composer-project-skills', 'value')).toBe('none')
     expect(row('composer-auto', 'publish')).toBe('pr')
     expect(row('composer-auto', 'prBase')).toBe('gh-pages')

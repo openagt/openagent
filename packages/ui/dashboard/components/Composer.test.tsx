@@ -19,8 +19,7 @@ vi.mock('../lib/preferences.js', () => ({
 }))
 // The editor picker (#727) detects installed editors over an RPC; stub it to none in the test.
 vi.mock('../lib/editors.js', () => ({ useDetectedEditors: () => [] }))
-// Composer loads its own projects for the `@` picker (#743) and the project's commands for the
-// `/` list; stub the reads.
+// Composer loads its own projects for the `@` picker (#743); stub the reads.
 const onCommands = vi.hoisted(() => vi.fn())
 // The hosts beside this computer the project's modules bring: none unless a test says.
 const onRunHosts = vi.hoisted(() => vi.fn(async () => [] as { id: string; label: string }[]))
@@ -70,7 +69,7 @@ vi.mock('./PromptEditor.js', async () => {
     }, [ready, props.initialText])
     return (
       <div>
-        <input aria-label="prompt" value={held} onChange={e => put(e.target.value)} disabled={props.disabled} data-seed-focus={String(props.initialFocus ?? true)} data-replaced={props.replacedText} data-label={props.label} />
+        <input aria-label="prompt" value={held} onChange={e => put(e.target.value)} disabled={props.disabled} data-seed-focus={String(props.initialFocus ?? true)} data-replaced={props.replacedText} data-label={props.label} data-commands={(props.commands ?? []).map((c: { name: string }) => c.name).join(' ')} />
         <button type="button" onClick={() => props.onSubmit()}>
           editor-submit
         </button>
@@ -82,6 +81,9 @@ vi.mock('./PromptEditor.js', async () => {
   })
   return { PromptEditor }
 })
+
+/** The commands the `/` menu offers, as the editor was handed them. */
+const editorCommands = (): string[] => ((screen.getByLabelText('prompt') as HTMLInputElement).dataset.commands ?? '').split(' ').filter(Boolean)
 
 /** What the editor is actually holding, as opposed to what Start would submit. */
 const editorText = (): string => (screen.getByLabelText('prompt') as HTMLInputElement).value
@@ -112,7 +114,7 @@ beforeEach(async () => {
   resetRunHostsForTest()
   onRunHosts.mockResolvedValue([])
   onCommands.mockReset()
-  onCommands.mockResolvedValue({ commands: [{ name: 'work-queue', description: 'Work the agent queue' }], gitHost: true, remote: true, address: 'github.com/acme/shop' })
+  onCommands.mockResolvedValue({ gitHost: true, remote: true, address: 'github.com/acme/shop' })
 })
 afterEach(cleanup)
 
@@ -218,11 +220,27 @@ describe('Composer (#721)', () => {
     expect(onPromptChange).toHaveBeenLastCalledWith('hi')
   })
 
-  test('a command picked from the menu loads as its slash line, and what is sent is that line plus the argument typed after it', async () => {
+  /** A module offering the project's commands (`composer.commands`): one ready, one waiting to reach the branch runs start from. */
+  function commandsModule() {
+    const list = vi.fn(async () => [{ name: 'work-queue', description: 'Work the agent queue' }, { name: 'ship', waiting: 'main' }])
+    const entry = { place: 'composer.commands' as const, id: 'commands', list, package: '@acme/skills', module: 'skills', projects: ['p1'] }
+    return { list, modules: mountedOf({ options: { 'composer.commands': [entry] } }) }
+  }
+
+  test("a command a module offers, picked from the menu, loads as its slash line, and what is sent is that line plus the argument typed after it; one still waiting is said so, and the `/` menu leaves it out", async () => {
+    forgetRemembered()
     const onLoaded = vi.fn()
-    const { onSubmit } = renderComposer({ onLoaded })
-    await waitFor(() => expect(onCommands).toHaveBeenCalledWith('p1'))
+    const onSubmit = vi.fn()
+    const { list, modules } = commandsModule()
+    render(
+      <ModulesContext.Provider value={modules}>
+        <Composer files={[]} onSubmit={onSubmit} onLoaded={onLoaded} busy={false} submitLabel="Send" submitBusyLabel="Sending…" />
+      </ModulesContext.Provider>,
+    )
+    await waitFor(() => expect(list).toHaveBeenCalledWith(expect.objectContaining({ package: '@acme/skills' }), 'p1'))
+    await waitFor(() => expect(editorCommands()).toEqual(['work-queue']))
     fireEvent.click(screen.getByRole('button', { name: 'Commands' }))
+    expect(await screen.findByText('waiting to reach main')).toBeTruthy()
     fireEvent.click(await screen.findByText('/work-queue'))
     expect(editorText()).toBe('/work-queue ')
     expect(onLoaded).toHaveBeenCalledWith('/work-queue', false)
@@ -286,10 +304,21 @@ describe('Composer (#721)', () => {
 
   test('with no module offering saved prompts, the Commands menu has none and no way to save one (#2394)', async () => {
     forgetRemembered()
-    render(<Composer files={[]} onSubmit={vi.fn()} busy={false} submitLabel="Send" submitBusyLabel="Sending…" />)
+    render(
+      <ModulesContext.Provider value={commandsModule().modules}>
+        <Composer files={[]} onSubmit={vi.fn()} busy={false} submitLabel="Send" submitBusyLabel="Sending…" />
+      </ModulesContext.Provider>,
+    )
     await openMenu(screen.getByRole('button', { name: 'Commands' }))
     expect(await screen.findByText('/work-queue')).toBeTruthy()
     expect(screen.queryByRole('menuitem', { name: /Save prompt/ })).toBeNull()
+  })
+
+  test('with no module offering commands, the Commands menu says the project has none', async () => {
+    forgetRemembered()
+    renderComposer()
+    await openMenu(screen.getByRole('button', { name: 'Commands' }))
+    expect(await screen.findByText('This project has no commands.')).toBeTruthy()
   })
 
   // #1139: a draft carried across a navigation lands in sessionStorage; the launcher seeds it into

@@ -1,8 +1,4 @@
-import { skillsOn, startBranch, type StartBranch } from '@openagt/skills'
 import { originGit } from '../dashboard-rpc/send-as.js'
-import { publishedBase } from '@openagt/agent-data/names'
-import type { StartFromPick } from '../registry.js'
-import { currentBranch } from './git-status.js'
 
 /** How long a read of origin's branches waits: past this, origin counts as not reached. */
 const ORIGIN_WAIT_MS = 10_000
@@ -23,49 +19,4 @@ export async function branchesOnOrigin(cwd: string): Promise<string[] | undefine
   clearTimeout(timer)
   if (out === undefined) return undefined
   return out.split('\n').flatMap(line => line.match(/\trefs\/heads\/(.+)$/)?.[1] ?? [])
-}
-
-/** What a pick of the launcher's menu starts from, as skills' `startBranch` says it. */
-function pickedBranch(pick: StartFromPick, local: string | undefined): StartBranch | undefined {
-  if (pick.kind === 'published') return { ref: publishedBase(pick.branch), name: pick.branch }
-  return local !== undefined && local !== 'HEAD' ? { ref: 'HEAD', name: local } : undefined
-}
-
-/** A skill that is in the folder and not on the branch agents start from. */
-export interface Waiting {
-  /** The branch it has yet to reach, by name. */
-  branch: string
-  /** Whether the branch the folder is on has it: an agent started from that branch does. */
-  here: boolean
-}
-
-/** How long this clone's copy of a remote branch counts as fresh, per project and branch. */
-const FRESH_MS = 60_000
-/** How long a read waits for the fetch that freshens it; the fetch itself goes on. */
-const FETCH_WAIT_MS = 5_000
-const fetched = new Map<string, number>()
-
-/**
- * Which of the skills `names`, all in the project's folder, are waiting to reach the branch agents
- * start from: the one the launcher's menu has picked, given a `pick`, else the main branch. A skill
- * is said to be waiting only when that is known: an agent's checkout fetches the remote before it
- * starts, so before a skill is called waiting against a remote branch, this clone's copy of that
- * branch is fetched too (at most once a minute per project and branch), or a pull request merged a
- * moment ago would keep its skill waiting here.
- */
-export async function waitingSkills(cwd: string, names: readonly string[], pick?: StartFromPick): Promise<{ start?: StartBranch; waiting: Map<string, Waiting> }> {
-  const start = pick ? pickedBranch(pick, await currentBranch(cwd).catch(() => undefined)) : await startBranch(cwd)
-  if (!start || names.length === 0) return { ...(start ? { start } : {}), waiting: new Map() }
-  let on = await skillsOn(cwd, start.ref)
-  let missing = names.filter(name => !on.has(name))
-  if (missing.length > 0 && start.ref !== 'HEAD' && Date.now() - (fetched.get(`${cwd}\0${start.name}`) ?? 0) > FRESH_MS) {
-    fetched.set(`${cwd}\0${start.name}`, Date.now())
-    const fetch = originGit(cwd).then(git => git(['fetch', '--quiet', 'origin', `+refs/heads/${start.name}:${publishedBase(start.name)}`], cwd)).catch(() => undefined)
-    await Promise.race([fetch, new Promise(resolve => setTimeout(resolve, FETCH_WAIT_MS))])
-    on = await skillsOn(cwd, start.ref)
-    missing = names.filter(name => !on.has(name))
-  }
-  if (missing.length === 0) return { start, waiting: new Map() }
-  const here = start.ref === 'HEAD' ? { has: () => false } : await skillsOn(cwd, 'HEAD')
-  return { start, waiting: new Map(missing.map(name => [name, { branch: start.name, here: here.has(name) }])) }
 }

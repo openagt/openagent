@@ -462,7 +462,7 @@ export function AgentView({
             gitHost={gitHostHome}
             gitAccount={card?.gitAccount ?? picks?.gitAccount}
             // The options as the record keeps them; the launcher's until it is there.
-            options={card?.options ?? picks?.options}
+            options={card ? card.options : picks?.options}
           />
           )}
         </>

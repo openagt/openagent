@@ -8,7 +8,6 @@ import type { ListedPage } from '../lib/use-modules.js'
 // agents at work are handed in as the shell reads them, and the preferences are a plain object a write changes.
 vi.mock('./Quota.js', () => ({ Quota: () => <div>usage</div> }))
 vi.mock('./OnboardingChecklist.js', () => ({ OnboardingChecklist: () => <div>onboarding</div> }))
-vi.mock('./YourProfilesPart.js', () => ({ YourProfilesPart: () => <span>your profiles</span> }))
 const modules = vi.hoisted(() => ({ loaded: true, gone: false, line: [] as { id: string; order: number; node: unknown }[] }))
 vi.mock('./ModuleCards.js', async () => {
   const { Section } = await import('./ui/section.js')
@@ -430,34 +429,34 @@ describe('the Overview', () => {
     listed = [{ id: 'queue', label: 'Queue', projects: ['p2'] }]
     const { rerender } = show()
     const line = (await screen.findByText('no agent working')).closest('p')!
-    expect(line.textContent).toBe('·nothing needs you·no agent working·Loading…·your profiles')
+    expect(line.textContent).toBe('·nothing needs you·no agent working·Loading…')
     // A phone shows it too, beside Customize.
     expect(line.className).not.toContain('sr-only')
     modules.line = [{ id: '@x/queue/queued', order: 3, node: <span>nothing queued</span> }]
     rerender(overview())
-    expect(line.textContent).toBe('·nothing needs you·no agent working·nothing queued·your profiles')
+    expect(line.textContent).toBe('·nothing needs you·no agent working·nothing queued')
     // Every package in, none with a part: the line is its own parts only.
     modules.loaded = true
     modules.line = []
     rerender(overview())
-    expect(line.textContent).toBe('·nothing needs you·no agent working·your profiles')
+    expect(line.textContent).toBe('·nothing needs you·no agent working')
   })
 
-  test("before the packages' code is in, no place waits for the queue's part where the sidebar's pages say no shown project has the Queue; while they say nothing yet, the parts after its place wait", async () => {
+  test("before the packages' code is in, no place waits for the queue's part where the sidebar's pages say no shown project has the Queue, nor while they say nothing yet", async () => {
     modules.loaded = false
     listed = [{ id: 'queue', label: 'Queue', projects: ['p2'] }, { id: 'logs', label: 'Logs', projects: ['p1'] }]
     show('p1')
     const line = (await screen.findByText('no agent working')).closest('p')!
-    expect(line.textContent).toBe('·nothing needs you·no agent working·your profiles')
+    expect(line.textContent).toBe('·nothing needs you·no agent working')
     cleanup()
-    // A browser's first visit: no page known, no place held, and what stands after it waits until a part or the pages come.
+    // A browser's first visit: no page known, no place held.
     listed = null
     const { rerender } = show()
     const firstVisit = (await screen.findByText('no agent working')).closest('p')!
     expect(firstVisit.textContent).toBe('·nothing needs you·no agent working')
     modules.line = [{ id: '@x/queue/queued', order: 3, node: <span>nothing queued</span> }]
     rerender(overview())
-    expect(firstVisit.textContent).toBe('·nothing needs you·no agent working·nothing queued·your profiles')
+    expect(firstVisit.textContent).toBe('·nothing needs you·no agent working·nothing queued')
   })
 
   test("the line's first part: how many things wait, and how many of each mark on its hover; it takes the page to the card of what needs the person", async () => {

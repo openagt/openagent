@@ -19,8 +19,6 @@ vi.mock('../lib/use-project-launcher.js', async importOriginal => ({ ...(await i
 vi.mock('./AutoMenu.js', () => ({ AutoMenu: () => null, autoSaid: () => '', autoCovers: () => undefined }))
 vi.mock('./ContextMenu.js', () => ({ SessionContextMenu: ({ context }: { context: Set<string> }) => <span data-testid="context">{[...context].join(', ')}</span> }))
 vi.mock('./ProfileMenu.js', () => ({ ProfileOff: () => null }))
-vi.mock('./SkillsMenu.js', () => ({ SkillsOff: () => null, useRecordedSkillCount: () => undefined }))
-vi.mock('./ProfilesPage.js', () => ({ useProfileName: () => undefined }))
 vi.mock('./GitHosts.js', () => ({ GitHostOff: () => null }))
 import { keptDraft } from '../lib/draft-handoff.js'
 

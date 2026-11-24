@@ -71,21 +71,18 @@ Auto menu says main. Otherwise the pull request goes to main.
 A session with no project may have repos as context, ticked in **Context** under the box:
 `agent-driver` copies each into the session's folder.
 
-The session's profile and its GitHub account (the **Profile** and **GitHub account** lines of the
-gear's menu under the box) go with the Start: `agent-driver` hands them to the run's process in its environment,
-`OPENAGENT_PROFILE` and `OPENAGENT_GIT_ACCOUNT`. A profile is a name and a saved set of run options
-(its accounts, the plugins its runs go without, and the project skills they get), kept with the
-person and edited on the Profiles page; the run reads it as it starts, and again when it
-resumes.
-
-The **Skills** line of the gear's menu picks, for this session alone, which skills the run gets: the
-plugins on in the project, each ticked, tickable off, and which of the project's own skills stay
-in its checkout, both as the profile has them until the session picks. The picks go the same way,
-in `OPENAGENT_PLUGINS_WITHOUT` (names, comma-separated; set to nothing, none of them) and
-`OPENAGENT_PROJECT_SKILLS` (`all`, `none` or names), the profile's where one is unset: the run
-gets none of the skills or steps of a plugin it goes without, and the project skills not picked
-are left out of its checkout with git's sparse checkout, nothing committed. The record keeps the
-picks, and a resume goes on with them.
+The gear's menu under the box starts with the modules' lines. **Profile** (`@openagt/profiles`)
+picks the profile of every next run on this computer: a name and a saved set of run options, kept with
+the person and edited on the Profiles page, whose editor draws every module's control of the box.
+`agent-driver` puts the run on it where the run's options name none, and the record keeps it.
+**Skills** (`@openagt/skills`) picks, for this run alone, which skills it gets: the plugins on in the
+project, each ticked, tickable off, and which of the project's own skills stay in its checkout, both
+as the profile has them until a pick there. The picks are the run's options (`plugins.without`,
+`skills.project`): the run gets none of the skills or steps of a plugin it goes without, and the
+project skills not picked are left out of its checkout with git's sparse checkout, nothing
+committed. The record keeps them, and a resume goes on with them. The session's GitHub account (the
+**GitHub account** line) goes with the Start: `agent-driver` hands it to the run's process in
+`OPENAGENT_GIT_ACCOUNT`.
 
 Before a Start, the launcher asks the host's check, for the picked coding agent: its
 `problems` (a coding agent not installed or logged out) are said in red and its `warnings` in
