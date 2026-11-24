@@ -23,11 +23,11 @@ test("the person's name and picture: saved with the person, each part read stric
   assert.equal(isPersonName('x'.repeat(61)), false)
 })
 
-test('the profiles: saved with the person, Default first and built in until changed, each read strictly; a profile not there is Default', async () => {
+test('the profiles: saved with the person, Default first and built in until changed, each module slice kept, the ones the engine takes read strictly; a profile not there is Default', async () => {
   const store = chainStore([memoryStore()])
   const settings = settingsIn(store)
   assert.deepEqual(profilesIn(await settings.get(PROFILES)), [{ id: DEFAULT_PROFILE, name: 'Default', options: {} }])
-  const reviewer = { id: 'reviewer', name: 'Reviewer', options: { github: { account: 'ada-agent' }, 'agent-driver': { claude: ['Work'] }, skills: { project: 'none' as const }, plugins: { without: ['logs', 'tickets'] } } }
+  const reviewer = { id: 'reviewer', name: 'Reviewer', options: { github: { account: 'ada-agent', prBase: 'develop' }, 'agent-driver': { claude: ['Work'], model: 'claude-opus-5-5', effort: 'high' }, skills: { project: 'none' as const }, plugins: { without: ['logs', 'tickets'] } } }
   const writer = { id: 'writer', name: 'Writer', options: {} }
   await settings.set(PROFILES, [writer, reviewer, { id: DEFAULT_PROFILE, name: 'Default', options: { 'agent-driver': { codex: ['Home'] } } }])
   const all = profilesIn(await settings.get(PROFILES))

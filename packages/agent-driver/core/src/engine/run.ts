@@ -283,20 +283,26 @@ function recordedFacts(card: RunCard, mark: RunnerMark): RunFacts {
 
 /**
  * The run's options, one slice per module, as the run was asked them and its record keeps them,
- * over its profile's: the plugins it goes without and the project's skills it gets, where the
- * session picked none. (Its accounts were the profile's already, where the session picked none:
- * the driver is made on them, and the account at the git host is the record's.)
+ * over its profile's, slice by slice: within a module's slice, what the run was asked wins, and the
+ * profile gives the rest (the plugins it goes without, the project's skills it gets, its accounts).
  */
 function optionsOf(mark: RunnerMark, branch: string | undefined, profile: ModuleOptions = {}): ModuleOptions {
-  const asked = markOptions(mark)
-  const without = asked.plugins?.without ?? profile.plugins?.without
-  const project = asked.skills?.project ?? profile.skills?.project
-  return {
-    ...asked,
-    ...(branch !== undefined ? { 'git-branches': { ...asked['git-branches'], branch } } : {}),
-    ...(project !== undefined ? { skills: { project } } : {}),
-    ...(without !== undefined ? { plugins: { without } } : {}),
+  const options = overProfile(markOptions(mark), profile)
+  return branch !== undefined ? { ...options, 'git-branches': { ...options['git-branches'], branch } } : options
+}
+
+/** `asked` over `profile`, one level deep: a slice both have is the profile's with the asked fields over it. */
+function overProfile(asked: ModuleOptions, profile: ModuleOptions): ModuleOptions {
+  const merged: Record<string, unknown> = { ...profile, ...asked }
+  for (const [module, slice] of Object.entries(profile)) {
+    const own: unknown = (asked as Record<string, unknown>)[module]
+    if (isSlice(slice) && isSlice(own)) merged[module] = { ...slice, ...own }
   }
+  return merged as ModuleOptions
+}
+
+function isSlice(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 /** The project a run in `dir` is in, as the hooks name it; none for a run in the sessions home, which has no project. */

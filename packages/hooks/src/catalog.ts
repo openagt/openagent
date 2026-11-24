@@ -124,34 +124,47 @@ export function profileOf(saved: readonly Profile[], id: string | undefined): Pr
   return (id !== undefined ? all.find(profile => profile.id === id) : undefined) ?? all[0]!
 }
 
-/** A saved profile, read strictly: the options a profile holds, each as it should be; anything else there is left out. */
+/**
+ * A saved profile, read: each module's slice as it was saved, so a profile keeps whatever the
+ * modules' controls put in it. The fields the run engine takes from a profile as they are, the
+ * accounts and the skills and plugins picks, are read strictly: one that is not as it should be is
+ * left out, and so is a slice left with nothing.
+ */
 function profileFrom(value: unknown): Profile | undefined {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
-  const { id, name, options } = value as Record<string, unknown>
+  if (!isMap(value)) return undefined
+  const { id, name, options } = value
   if (!isProfileId(id) || typeof name !== 'string' || !name.trim()) return undefined
-  const given = typeof options === 'object' && options !== null ? (options as Record<string, unknown>) : {}
-  const slice = (key: string): Record<string, unknown> => {
-    const part = given[key]
-    return typeof part === 'object' && part !== null && !Array.isArray(part) ? (part as Record<string, unknown>) : {}
-  }
-  const text = (value: unknown): string | undefined => (typeof value === 'string' && value.trim() ? value.trim() : undefined)
+  const slices = Object.entries(isMap(options) ? options : {}).flatMap(([module, slice]): [string, Record<string, unknown>][] => {
+    if (module === 'profiles' || !MODULE_NAME.test(module) || !isMap(slice)) return []
+    const kept = checkedSlice(module, slice)
+    return Object.keys(kept).length > 0 ? [[module, kept]] : []
+  })
+  return { id, name: name.trim(), options: Object.fromEntries(slices) as RunOptions }
+}
+
+/** A module's slice of a saved profile: the fields {@link profileFrom} reads strictly, each kept only as it should be, and the others as saved. */
+function checkedSlice(module: string, slice: Record<string, unknown>): Record<string, unknown> {
+  const kept: Record<string, unknown> = { ...slice }
   const names = (value: unknown): string[] | undefined => (Array.isArray(value) && value.length > 0 && value.every(one => typeof one === 'string' && one.trim()) ? [...(value as string[])] : undefined)
-  const account = text(slice('github')['account'])
-  const claude = names(slice('agent-driver')['claude'])
-  const codex = names(slice('agent-driver')['codex'])
-  const project = slice('skills')['project']
-  const skills = project === 'none' ? 'none' : names(project)
-  const without = names(slice('plugins')['without'])?.filter(one => MODULE_NAME.test(one))
-  return {
-    id,
-    name: name.trim(),
-    options: {
-      ...(account !== undefined ? { github: { account } } : {}),
-      ...(claude || codex ? { 'agent-driver': { ...(claude ? { claude } : {}), ...(codex ? { codex } : {}) } } : {}),
-      ...(skills !== undefined ? { skills: { project: skills } } : {}),
-      ...(without !== undefined && without.length > 0 ? { plugins: { without } } : {}),
-    },
+  const keep = (field: string, read: (value: unknown) => unknown): void => {
+    if (!(field in kept)) return
+    const value = read(kept[field])
+    if (value === undefined) delete kept[field]
+    else kept[field] = value
   }
+  if (module === 'github') keep('account', value => (typeof value === 'string' && value.trim() ? value.trim() : undefined))
+  if (module === 'agent-driver') {
+    keep('claude', names)
+    keep('codex', names)
+  }
+  if (module === 'skills') keep('project', value => (value === 'all' || value === 'none' ? value : names(value)))
+  if (module === 'plugins') {
+    keep('without', value => {
+      const plugins = names(value)?.filter(one => MODULE_NAME.test(one))
+      return plugins !== undefined && plugins.length > 0 ? plugins : undefined
+    })
+  }
+  return kept
 }
 
 /**
