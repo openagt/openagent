@@ -1,4 +1,4 @@
-import type { OpenAgentEvent } from '../../src/index.js'
+import type { RunEvent } from '@openagt/hooks'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 
@@ -18,7 +18,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-const panel = (props: { events?: OpenAgentEvent[]; live?: boolean; agentId?: string }) => (
+const panel = (props: { events?: RunEvent[]; live?: boolean; agentId?: string }) => (
   <SubagentsPanel projectId="p1" agentId={props.agentId ?? 'main'} events={props.events ?? []} live={props.live ?? true} />
 )
 
@@ -26,13 +26,13 @@ const panel = (props: { events?: OpenAgentEvent[]; live?: boolean; agentId?: str
  * A subagent the coding agent started inside its session, at 10:00 plus `at` minutes, that ended as
  * `end` says (none: still working) `ran` minutes later, on `model` (`null`: no model known).
  */
-function call(id: string, name: string, at: number, end?: 'ended' | 'failed', ran = 2, model: string | null = 'claude-haiku-5-5'): OpenAgentEvent[] {
+function call(id: string, name: string, at: number, end?: 'ended' | 'failed', ran = 2, model: string | null = 'claude-haiku-5-5'): RunEvent[] {
   const time = (minutes: number) => `2026-10-01T10:${String(minutes).padStart(2, '0')}:00.000Z`
   // Each of its events says it whole, as its coding agent writes them: the newest is what it is.
   const said = { name, ...(model !== null ? { model } : {}) }
   return [
     { kind: 'driver', event: { type: 'subagent', id, status: 'working', ...said }, at: time(at) },
-    ...(end ? [{ kind: 'driver', event: { type: 'subagent', id, status: end, ...said }, at: time(at + ran) } satisfies OpenAgentEvent] : []),
+    ...(end ? [{ kind: 'driver', event: { type: 'subagent', id, status: end, ...said }, at: time(at + ran) } satisfies RunEvent] : []),
   ]
 }
 
@@ -62,7 +62,7 @@ describe('the list of a run\'s subagents', () => {
   })
 
   test('those that failed first, then those at work, then those that ended, each in the order it started: its name, its state and how long it worked', () => {
-    const events: OpenAgentEvent[] = [
+    const events: RunEvent[] = [
       ...call('toolu_c', 'Read the theme tokens', 1, 'ended', 3),
       ...call('toolu_b', 'Map the order table', 2, 'failed'),
       ...call('toolu_d', 'Account page tests', 24),
@@ -154,7 +154,7 @@ describe('the list of a run\'s subagents', () => {
     const list = render(panel({ events: working }))
     const under = screen.getByRole('button', { name: /^Account page tests/ })
     pointTo(under)
-    const ended: OpenAgentEvent = { kind: 'driver', event: { type: 'subagent', id: 'toolu_a', status: 'ended', name: 'Find the old tokens' }, at: '2026-10-01T10:25:00.000Z' }
+    const ended: RunEvent = { kind: 'driver', event: { type: 'subagent', id: 'toolu_a', status: 'ended', name: 'Find the old tokens' }, at: '2026-10-01T10:25:00.000Z' }
     list.rerender(panel({ events: [...working, ended, ...call('toolu_d', 'Theme switch in the header', 26)] }))
     expect(rowButtons()[1]).toBe(under)
     expect(rowNames()).toEqual(['Find the old tokens · done', 'Account page tests · working', 'Print styles · working'])
@@ -248,7 +248,7 @@ describe('the list of a run\'s subagents', () => {
 
 describe('the subagent a row opened', () => {
   test("its whole prompt, its model, then what it said and did, out of the main agent's log", () => {
-    const events: OpenAgentEvent[] = [
+    const events: RunEvent[] = [
       { kind: 'driver', event: { type: 'action', label: 'Agent', detail: 'Map the pages', id: 'toolu_a' }, at: '2026-10-01T10:00:10.000Z' },
       { kind: 'driver', event: { type: 'subagent', id: 'toolu_a', status: 'working', name: 'Map the pages', role: 'Explore', model: 'claude-haiku-5-5', prompt: 'Read how the pages are served.\nStart at server.ts.' }, at: '2026-10-01T10:00:10.000Z' },
       { kind: 'driver', event: { type: 'action', label: 'Read', detail: 'src/server.ts', id: 'toolu_b', subagent: 'toolu_a' }, at: '2026-10-01T10:00:12.000Z' },
@@ -269,12 +269,12 @@ describe('the subagent a row opened', () => {
   })
 
   test('one that ended says what it came to under what it said, and one that left nothing says so', () => {
-    const own: OpenAgentEvent[] = [
+    const own: RunEvent[] = [
       { kind: 'driver', event: { type: 'action', label: 'Read', detail: 'src/server.ts', id: 'toolu_b', subagent: 'toolu_a' }, at: '2026-10-01T10:00:12.000Z' },
       { kind: 'driver', event: { type: 'text', text: 'Found it.', subagent: 'toolu_a' }, at: '2026-10-01T10:00:20.000Z' },
     ]
-    const ended: OpenAgentEvent = { kind: 'driver', event: { type: 'subagent', id: 'toolu_a', status: 'ended', name: 'Map the pages', tokens: 50_700, toolUses: 2 }, at: '2026-10-01T10:00:30.000Z' }
-    const started: OpenAgentEvent = { kind: 'driver', event: { type: 'subagent', id: 'toolu_a', status: 'working', name: 'Map the pages' }, at: '2026-10-01T10:00:10.000Z' }
+    const ended: RunEvent = { kind: 'driver', event: { type: 'subagent', id: 'toolu_a', status: 'ended', name: 'Map the pages', tokens: 50_700, toolUses: 2 }, at: '2026-10-01T10:00:30.000Z' }
+    const started: RunEvent = { kind: 'driver', event: { type: 'subagent', id: 'toolu_a', status: 'working', name: 'Map the pages' }, at: '2026-10-01T10:00:10.000Z' }
     render(panel({ events: [started, ...own, ended] }))
     act(() => revealSubagent('p1/main', 'call:toolu_a'))
     const part = screen.getByRole('region', { name: 'Map the pages' })

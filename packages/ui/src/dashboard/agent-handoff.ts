@@ -5,7 +5,7 @@ import type { Cached } from './cache.js'
 import type { AgentMeta } from '../store/index.js'
 import { projectBranches, type BranchesFor } from '../store/branches.js'
 import { projectGitHost, type GitHostFor } from '../store/git-host.js'
-import { projectRuns, type RunsFor } from '../store/runs.js'
+import { patchRun } from '@openagt/agent-driver'
 // What a finished session produced, and what is left to do with it (#799).
 //
 // Everything up to "the agent is done" was covered; the handoff back to the human was not. A
@@ -436,7 +436,7 @@ export async function pushAgentBranch(cwd: string, agent: Pick<AgentMeta, 'id' |
  * merges and deletes the branch; the session's record then keeps the branch's last commit and the
  * commit its work began at, so what it changed is still read once the branch is gone.
  */
-export async function mergeAgentBranch(cwd: string, agent: Pick<AgentMeta, 'id' | 'branch'>, deps: { branches?: BranchesFor; runs?: RunsFor } = {}): Promise<HandoffResult> {
+export async function mergeAgentBranch(cwd: string, agent: Pick<AgentMeta, 'id' | 'branch'>, deps: { branches?: BranchesFor; patch?: typeof patchRun } = {}): Promise<HandoffResult> {
   const branch = agent.branch
   if (branch === undefined) return { ok: false, error: 'this session recorded no branch to merge' }
   const source = await (deps.branches ?? projectBranches)(cwd).catch(() => undefined)
@@ -444,10 +444,9 @@ export async function mergeAgentBranch(cwd: string, agent: Pick<AgentMeta, 'id' 
   const merged = await source.merge(branch)
   if (!merged.ok) return { ok: false, error: merged.error }
   if (!merged.deleted) return { ok: true }
-  const runs = await (deps.runs ?? projectRuns)(cwd).catch(() => undefined)
-  const recorded = await runs?.patch(agent.id, { landed: { commit: merged.commit, from: merged.from } })
+  const recorded = await (deps.patch ?? patchRun)(cwd, agent.id, { landed: { commit: merged.commit, from: merged.from } }).catch(() => false)
   // The merge is in whatever the record says; a record that could not be written is said, since the page reads the record.
-  if (recorded && !recorded.ok) return { ok: false, error: `merged into ${merged.into}, but the record was not updated: ${recorded.error}` }
+  if (!recorded) return { ok: false, error: `merged into ${merged.into}, but the record was not updated` }
   return { ok: true }
 }
 

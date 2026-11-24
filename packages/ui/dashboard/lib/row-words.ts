@@ -1,4 +1,4 @@
-import type { OpenAgentEvent } from '../../src/index.js'
+import type { RunEvent } from '@openagt/hooks'
 import type { DriverEvent } from '@openagt/hooks'
 
 /**
@@ -27,7 +27,7 @@ export interface RowWords {
 }
 
 /** The chat's words for one event, or nothing when the terminal's line is what it says. */
-export function rowWords(e: OpenAgentEvent): RowWords | undefined {
+export function rowWords(e: RunEvent): RowWords | undefined {
   switch (e.kind) {
     case 'end':
       // A clean end, an end waiting on an answer and a stopped one are no rows at all: the chat

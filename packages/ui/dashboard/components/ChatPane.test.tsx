@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
-import type { OpenAgentEvent } from '../../src/index.js'
+import type { RunEvent } from '@openagt/hooks'
 import { ChatNote, ChatPane } from './ChatPane.js'
 import { EventList } from './EventList.js'
 
@@ -116,7 +116,7 @@ describe('ChatPane', () => {
 
 describe('the chat\'s rows and the message box over their end', () => {
   const said = (text: string) => ({ kind: 'driver', event: { type: 'text', text } })
-  const ended = [{ kind: 'driver', event: { type: 'start', prompt: 'Say hi' } }, ...Array.from({ length: 12 }, (_, at) => said(`reply ${at}`)), { kind: 'end', ok: true }] as OpenAgentEvent[]
+  const ended = [{ kind: 'driver', event: { type: 'start', prompt: 'Say hi' } }, ...Array.from({ length: 12 }, (_, at) => said(`reply ${at}`)), { kind: 'end', ok: true }] as RunEvent[]
   const viewport = () => document.querySelector<HTMLElement>('[data-slot="message-scroller-viewport"]')!
   const content = () => document.querySelector<HTMLElement>('[data-slot="message-scroller-content"]')!
   const spacer = () => content().querySelector<HTMLElement>('[data-message-scroller-spacer]')!
@@ -194,7 +194,7 @@ describe('the chat\'s rows and the message box over their end', () => {
       said(text),
       { kind: 'choice', id: 'question', title: 'Go ahead?', options: [{ id: 'opt:0', label: 'Yes' }, { id: 'opt:1', label: 'No' }] },
       { kind: 'end', ok: false, waiting: true },
-    ] as OpenAgentEvent[]
+    ] as RunEvent[]
     const reply = (text: string) => screen.getByText(text).closest<HTMLElement>('[data-message-id]')!
     // As the layout above, but the plan's row is as tall as `tall` says.
     const layOutTall = (tall: string, height: number) => {

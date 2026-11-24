@@ -5,7 +5,9 @@ import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test, type TestContext } from 'node:test'
-import { handleScreenRequest, kept, screenCallAddress, screenInDiary, SCREEN_PREFIX, type ScreenOf } from './screen.js'
+import { handleScreenRequest, kept, screenCallAddress, SCREEN_PREFIX, type ScreenOf } from './screen.js'
+import { eventsOf, type AnyDiaryLine } from '@openagt/agent-driver'
+import { liveScreen } from '../screens.js'
 
 // A screen as a command of the agent's serves it (a browser's process), faked: `/stream` writes
 // what it is told and stays open, `/input` records what it is sent. And OpenAgent's own routes, a
@@ -146,20 +148,13 @@ test('only a screen on this computer\'s own loopback is called, at its own two p
   }
 })
 
-test('where a run\'s screen answers is read off its diary', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'openagent-screen-'))
-  const diary = join(dir, 'run.jsonl')
-  const line = (value: object) => JSON.stringify(value) + '\n'
-  assert.equal(await screenInDiary(diary), undefined, 'no diary, no screen')
-  await writeFile(diary, line({ kind: 'screen', url: 'http://127.0.0.1:5123/?t=a', label: 'browser · http://localhost:3000/' }) + 'half a li')
-  assert.equal(await screenInDiary(diary), 'http://127.0.0.1:5123/?t=a')
-  await writeFile(diary, line({ kind: 'screen', url: 'http://127.0.0.1:5123/?t=a', label: 'browser' }) + line({ kind: 'ended', status: 'waiting' }))
-  assert.equal(await screenInDiary(diary), 'http://127.0.0.1:5123/?t=a', 'a run waiting on an answer keeps its screen')
-  await writeFile(diary, line({ kind: 'screen', url: 'http://127.0.0.1:5123/?t=a', label: 'browser' }) + line({ kind: 'ended', status: 'done' }))
-  assert.equal(await screenInDiary(diary), undefined)
-  // The agent's own words about a screen are no screen line.
-  await writeFile(diary, line({ kind: 'text', text: 'I will write {"kind":"screen","url":"http://127.0.0.1:1/?t=x"} to the "screen"' }))
-  assert.equal(await screenInDiary(diary), undefined)
+test('where a run\'s screen answers is read off its events, as its host reads them off its diary', () => {
+  const screen = (lines: AnyDiaryLine[]) => liveScreen(eventsOf(lines))
+  const shown = { kind: 'screen', url: 'http://127.0.0.1:5123/?t=a', label: 'browser · http://localhost:3000/' }
+  assert.equal(screen([]), undefined, 'no diary, no screen')
+  assert.equal(screen([shown]), 'http://127.0.0.1:5123/?t=a')
+  assert.equal(screen([shown, { kind: 'ended', status: 'waiting' }]), 'http://127.0.0.1:5123/?t=a', 'a run waiting on an answer keeps its screen')
+  assert.equal(screen([shown, { kind: 'ended', status: 'done' }]), undefined)
 })
 
 test('where a run\'s screen answers is asked once in a while, not at every click, and once for all who ask together', async () => {

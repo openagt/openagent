@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
-import type { OpenAgentEvent } from '../../src/index.js'
+import type { RunEvent } from '@openagt/hooks'
 import { onEvents, type EventChannel } from '../rpc/events.js'
 import { rememberUnder, rememberedUnder } from './use-async.js'
 
 // The live agent feed (#405), shared. The dashboard is a projection of the selected run's diary,
 // the file the run's own tool writes as the agent works, streamed over Server-Sent Events that
-// push one `OpenAgentEvent` per new line. Both the main event view and the choice
+// push one `RunEvent` per new line. Both the main event view and the choice
 // gates (#440) read this same stream, so the subscription lives here and each consumer owns one
 // channel rather than opening a second.
 //
@@ -21,7 +21,7 @@ import { rememberUnder, rememberedUnder } from './use-async.js'
 
 /** The live feed plus whether its channel is currently down (#948). */
 export interface LiveEvents {
-  events: OpenAgentEvent[]
+  events: RunEvent[]
   /** True while the stream is lost and being retried — the feed may be behind reality. */
   lost: boolean
   /** The message the agent is writing, as far as it has got; empty when it is writing none. Never in `events`. */
@@ -52,15 +52,15 @@ function feedKey(projectId: string | null, agentId: string | null | undefined): 
   return projectId && agentId ? `live-feed:${projectId}:${agentId}` : null
 }
 
-function lastFeed(key: string | null): OpenAgentEvent[] {
-  return (key !== null && rememberedUnder<OpenAgentEvent[]>(key)) || []
+function lastFeed(key: string | null): RunEvent[] {
+  return (key !== null && rememberedUnder<RunEvent[]>(key)) || []
 }
 
 export function useLiveEvents(projectId: string | null, agentId?: string | null): LiveEvents {
   const key = feedKey(projectId, agentId)
   // The events with the run they are of: the page swaps runs without a remount, and for the frame
   // before the effect below runs, one run's events must not show as the next one's.
-  const [feed, setFeed] = useState<{ key: string | null; events: OpenAgentEvent[] }>(() => ({ key, events: lastFeed(key) }))
+  const [feed, setFeed] = useState<{ key: string | null; events: RunEvent[] }>(() => ({ key, events: lastFeed(key) }))
   const [lost, setLost] = useState(false)
   const [writing, setWriting] = useState('')
   const [replayedFor, setReplayedFor] = useState<string | null>(null)
@@ -74,7 +74,7 @@ export function useLiveEvents(projectId: string | null, agentId?: string | null)
   useEffect(() => {
     const key = feedKey(projectId, agentId)
     const kept = lastFeed(key)
-    const setEvents = (next: OpenAgentEvent[] | ((prev: OpenAgentEvent[]) => OpenAgentEvent[])) =>
+    const setEvents = (next: RunEvent[] | ((prev: RunEvent[]) => RunEvent[])) =>
       setFeed(prev => ({ key, events: typeof next === 'function' ? next(prev.events) : next }))
     setEvents(kept)
     setLost(false)
@@ -124,7 +124,7 @@ export function useLiveEvents(projectId: string | null, agentId?: string | null)
         channel = ch
         attempt = 0
         setLost(false)
-        let buffer: OpenAgentEvent[] | undefined = reconnect ? [] : undefined
+        let buffer: RunEvent[] | undefined = reconnect ? [] : undefined
         // The whole message just arrived: its pieces, read a beat late, would show it twice.
         let finished = ''
         // A message comes in blocks, each written from its start, and a block's whole line may come a

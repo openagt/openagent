@@ -3,7 +3,7 @@ import { join, relative, resolve, sep } from 'node:path'
 import { callPackageCommand, listSessionFolders, runPackageCommand, sessionFolder, sessionsHomeOf, type ProvidedCommand } from '@openagt/agent-data'
 import { gitHostEnv } from '@openagt/agent-driver'
 import { providedCommand } from '../distribution-packages.js'
-import { isRunId } from './runs.js'
+import { isRunId } from '../agent-id.js'
 
 /**
  * The checkouts and the branches, as OpenAgent reads and acts on them (#1774). OpenAgent

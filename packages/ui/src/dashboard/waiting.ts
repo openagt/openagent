@@ -1,7 +1,8 @@
 import type { Attention, Hooks, WaitingRun } from '@openagt/hooks'
-import { checkoutsFirst, listAgents, loadAgentEvents, readLiveMetas, type LiveAgent, type AgentMeta } from '../store/index.js'
+import { readRunEvents, type AgentMeta } from '../store/index.js'
+import { contextRuns, runHostOf } from '../dashboard-rpc/context.js'
 import { pendingChoices } from '../open-choices.js'
-import type { OpenAgentEvent } from '../events.js'
+import type { RunEvent } from '@openagt/hooks'
 import type { ProjectSummary, ProjectionRead } from './projects.js'
 import { projectBranches, type BranchesFor } from '../store/branches.js'
 import { unpublishedRuns, type Unpublished } from './unpublished.js'
@@ -39,12 +40,10 @@ export interface Waiting extends Attention {
 /** Injectable seam so {@link buildWaiting} is unit-testable off disk. */
 export interface WaitingDeps {
   prs?: PrLister
-  /** The reader of the runs that have a checkout (default {@link readLiveMetas}): a waiting run keeps its own; the runs the modules are asked about (#636). */
-  liveAgents?: (cwd: string) => Promise<LiveAgent[]>
-  /** One run's events, by the project's path and the run's id (default {@link loadAgentEvents}): where a waiting run's questions are read. */
-  events?: (cwd: string, agentId: string) => Promise<OpenAgentEvent[] | undefined>
-  /** The finished-agent reader (default {@link listAgents}); drives the work never published (#860). */
-  agents?: (cwd: string) => Promise<AgentMeta[]>
+  /** A project's runs, or with none the sessions with no project's, as their hosts say them (default {@link contextRuns}): the runs the modules are asked about (#636), and the work never published (#860). */
+  agents?: (project: ProjectSummary | undefined) => Promise<AgentMeta[]>
+  /** One run's events, as its host says them (default {@link readRunEvents}): where a waiting run's questions are read. */
+  events?: (project: ProjectSummary | undefined, agentId: string) => Promise<RunEvent[] | undefined>
   /** The project's checkouts and branches (default the project's provider, {@link projectBranches}): where a branch's state is read (#860). */
   branches?: BranchesFor
   /** The modules whose `app.attention` is asked (default the distribution's). */
@@ -106,8 +105,7 @@ function oneStepPerRun(items: Waiting[]): Waiting[] {
 /** One project's items, and whether every one of its sources answered. */
 async function projectWaiting(project: ProjectSummary, deps: WaitingDeps, hooks: Hooks): Promise<{ id: string; items: Waiting[]; whole: boolean }> {
   const prs = deps.prs ?? cachedOpenPrs
-  const liveAgents = deps.liveAgents ?? readLiveMetas
-  const events = deps.events ?? loadAgentEvents
+  const events = deps.events ?? hostEvents
   // A project is read whole only when every one of its sources answered. Each `unread()` below is
   // a source that did not, and contributed nothing for a reason other than nothing being there.
   let sawEverything = true
@@ -116,18 +114,13 @@ async function projectWaiting(project: ProjectSummary, deps: WaitingDeps, hooks:
     return []
   }
   const inProject = { projectId: project.id, projectName: project.name }
-  // The project's runs, recorded and live, read once for every source that asks; a just-started run by the sidebar's name.
-  const liveRead = liveAgents(project.path)
+  // The project's runs, read once for every source that asks; a just-started run by the sidebar's name.
+  const runsRead = (deps.agents ?? contextRuns)(project)
     .then(agents => withStartedNames(agents))
     .catch(() => undefined)
-  const [open, recorded, live, modules] = await Promise.all([
-    prs(project.path).catch(() => undefined),
-    (deps.agents ?? listAgents)(project.path).then(agents => withStartedNames(agents)).catch(() => undefined),
-    liveRead,
-    modulesWaiting(project, hooks, () => waitingRuns(project, liveRead, events)),
-  ])
+  const [open, recorded, modules] = await Promise.all([prs(project.path).catch(() => undefined), runsRead, modulesWaiting(project, hooks, () => waitingRuns(project, runsRead, events))])
   // Newest first: a branch name reused by a later run, or a run continued on it, is that run's now.
-  const runs = [...(live ?? []), ...(recorded ?? [])].sort((a, b) => b.startedAt.localeCompare(a.startedAt))
+  const runs = [...(recorded ?? [])].sort((a, b) => b.startedAt.localeCompare(a.startedAt))
   if (open === undefined) unread()
   if (!modules.whole) unread()
   const items: Waiting[] = modules.items.map(item => ({ ...item, ...inProject }))
@@ -156,7 +149,6 @@ async function projectWaiting(project: ProjectSummary, deps: WaitingDeps, hooks:
       ...inProject,
     })
   }
-  if (live === undefined) unread()
   // A finished run whose work never left the machine is a "needs you" too (#860). Until then the
   // list only knew about a PR that is *already on the git host* and an agent parked on a gate, so an agent
   // that committed real code and stopped produced neither, and nothing told anyone: the overview
@@ -167,8 +159,7 @@ async function projectWaiting(project: ProjectSummary, deps: WaitingDeps, hooks:
   // publishes it, or the agent does on their ask.
   if (recorded === undefined) unread()
   const requested = project.gitHost && open ? new Set(open.map(pr => pr.headRefName)) : undefined
-  // A run continued in its checkout works again, whatever its record says of its first leg (#768).
-  items.push(...(await unpushedFor(project, checkoutsFirst(live ?? [], recorded ?? []), deps.branches ?? projectBranches, unread, requested)))
+  items.push(...(await unpushedFor(project, recorded ?? [], deps.branches ?? projectBranches, unread, requested)))
   return { id: project.id, items, whole: sawEverything }
 }
 
@@ -179,11 +170,11 @@ async function projectWaiting(project: ProjectSummary, deps: WaitingDeps, hooks:
  * branch of the project's and no pull request the shell finds, so the modules are all that is asked.
  */
 async function sessionsWaiting(home: string, deps: WaitingDeps, hooks: Hooks): Promise<{ id: string; items: Waiting[]; whole: boolean }> {
-  const live = (deps.liveAgents ?? readLiveMetas)(home)
+  const live = (deps.agents ?? contextRuns)(undefined)
     .then(agents => withStartedNames(agents))
     .catch(() => undefined)
   const sessions = { id: SESSIONS_ID, name: 'the sessions with no project', path: home }
-  const modules = await modulesWaiting(undefined, hooks, () => waitingRuns(sessions, live, deps.events ?? loadAgentEvents))
+  const modules = await modulesWaiting(undefined, hooks, () => waitingRuns(undefined, live, deps.events ?? hostEvents, sessions.name))
   return { id: SESSIONS_ID, items: modules.items.map(item => ({ ...item, projectId: SESSIONS_ID, projectName: '' })), whole: modules.whole && (await live) !== undefined }
 }
 
@@ -198,19 +189,24 @@ async function modulesWaiting(project: ProjectSummary | undefined, hooks: Hooks,
   }
 }
 
+/** One run's events, as its host streams them up to what it already has. */
+async function hostEvents(project: ProjectSummary | undefined, agentId: string): Promise<RunEvent[] | undefined> {
+  const run = { id: agentId, ...(project ? { project: { id: project.id, name: project.name, dir: project.path } } : {}) }
+  return readRunEvents(await runHostOf(run), run)
+}
+
 /**
  * The project's runs that ended waiting, newest first, each with the questions it still waits on,
- * read off its own diary by the rule the run page uses (#636): a waiting run keeps its checkout
- * for the answer (#1774), so the runs that have one are the ones read. A run whose diary cannot be
- * read waits on no question it can be asked. Throws when the runs could not be read at all.
+ * read off its events by the rule the run page uses (#636). A run whose events cannot be read waits
+ * on no question it can be asked. Throws when the runs could not be read at all.
  */
-async function waitingRuns(project: Pick<ProjectSummary, 'name' | 'path'>, live: Promise<LiveAgent[] | undefined>, events: NonNullable<WaitingDeps['events']>): Promise<WaitingRun[]> {
-  const runs = await live
-  if (runs === undefined) throw new Error(`the runs of ${project.name} could not be read`)
+async function waitingRuns(project: ProjectSummary | undefined, read: Promise<AgentMeta[] | undefined>, events: NonNullable<WaitingDeps['events']>, name: string = project?.name ?? ''): Promise<WaitingRun[]> {
+  const runs = await read
+  if (runs === undefined) throw new Error(`the runs of ${name} could not be read`)
   const waiting = runs.filter(meta => meta.status === 'waiting').sort((a, b) => b.startedAt.localeCompare(a.startedAt))
   return Promise.all(
     waiting.map(async (meta): Promise<WaitingRun> => {
-      const questions = pendingChoices((await events(project.path, meta.id).catch(() => undefined)) ?? [])
+      const questions = pendingChoices((await events(project, meta.id).catch(() => undefined)) ?? [])
       const name = runName(meta)
       const endedAt = meta.endedAt ?? meta.updatedAt
       return { id: meta.id, ...(name !== undefined ? { name } : {}), ...(endedAt ? { endedAt } : {}), questions: questions.map(question => ({ ...question, options: [...question.options] })) }

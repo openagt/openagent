@@ -9,7 +9,7 @@ import { SESSIONS_ID } from '../project-address.js'
 import { pullProjectData } from '@openagt/agent-data'
 import type { ProjectRef, RunFound, RunQuestion, RunRef } from '@openagt/hooks'
 import type { ModuleOn } from '@openagt/hooks/rpc'
-import { loadAgentEvents } from '../store/index.js'
+import { readRunEvents } from '../store/index.js'
 import { pendingChoices } from '../open-choices.js'
 import { sayForModule } from '../dashboard/run-inbox.js'
 
@@ -39,7 +39,7 @@ export async function callModule(projectId: string | null, pkg: string, name: st
     ...COMPUTER,
     project,
     find: runsFound(projectId, root),
-    questions: agentId => runQuestions(root, agentId),
+    questions: agentId => runQuestions(projectId, root, agentId),
     say: (agentId, line) => sayForModule(projectId, root, agentId, line),
     modulesOn: async opts => modulesOn(await project(), opts?.every === true),
   })
@@ -93,9 +93,11 @@ function runsFound(projectId: string, root: string): (agentId: string) => Promis
   }
 }
 
-/** The questions run `agentId` of the project at `root` still waits on, read off its events by the rule every surface reads them by. */
-async function runQuestions(root: string, agentId: string): Promise<RunQuestion[]> {
-  return pendingChoices((await loadAgentEvents(root, agentId).catch(() => undefined)) ?? []).map(question => ({ ...question, options: [...question.options] }))
+/** The questions run `agentId` of the project at `root` still waits on, read off its events (as its host says them) by the rule every surface reads them by. */
+async function runQuestions(projectId: string, root: string, agentId: string): Promise<RunQuestion[]> {
+  const run = await runRefAt(projectId, root, agentId)
+  const events = await readRunEvents(await runHostOf(run), run).catch(() => undefined)
+  return pendingChoices(events ?? []).map(question => ({ ...question, options: [...question.options] }))
 }
 
 /**

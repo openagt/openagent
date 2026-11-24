@@ -1,6 +1,7 @@
 import { SESSIONS_ID } from '../../src/project-address.js'
 import { useContext, useEffect, useRef, useState } from 'react'
-import type { GitHostHome, OpenAgentEvent, RepositoryOffer } from '../../src/index.js'
+import type { GitHostHome, RepositoryOffer } from '../../src/index.js'
+import type { RunEvent } from '@openagt/hooks'
 import { sessionInfo } from '../../src/client.js'
 import { RevealedTitle } from './RevealedTitle.js'
 import { MoreVertical, ChevronDown, FolderOpen, Code, Check, ExternalLink, Square, FolderX, Trash2, Copy, CloudUpload, Info } from 'lucide-react'
@@ -18,7 +19,6 @@ import { useStop } from '../lib/use-stop.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
 import { cn } from '../lib/utils.js'
 import { describeSessionLink } from '../lib/session-link.js'
-import { buildResumeCommand } from '../lib/resume-command.js'
 import { PreferredEditorItems } from './PreferredEditorItems.js'
 import { ConfirmDialog } from './ui/confirm-dialog.js'
 import { RemoveProjectDialog } from './RemoveProjectDialog.js'
@@ -61,10 +61,11 @@ export function AgentActionsMenu({
   onProjectRemoved,
   details,
   size,
+  resumeCommand,
 }: {
   projectId: string
   agentId?: string | null | undefined
-  events: OpenAgentEvent[]
+  events: RunEvent[]
   /** The run works, as its page knows it: before its feed shows the leg a message continued it with, too. */
   live?: boolean
   /** The session's name: what the session's menu reads. Not known yet, a grey bar holds its place. */
@@ -80,6 +81,8 @@ export function AgentActionsMenu({
   details?: { open: boolean; onToggle: () => void } | undefined
   /** The size on disk of the session's worktree, said beside "Remove worktree". */
   size?: string | undefined
+  /** The command that picks the session's agent session back up in a terminal, as its coding agent says it (#1195); none where it has none. */
+  resumeCommand?: string | undefined
 }) {
   // Given an agent, this is its page's menu, under the session's name; with none, the ⋮ of a page with no session.
   const session = !!agentId
@@ -93,11 +96,6 @@ export function AgentActionsMenu({
   // there once the worktree is gone.
   const hasOwnFolder = live || retainedWorktree
 
-  // What to put on the clipboard to pick this session back up in a terminal (#1195). `mkdir -p`
-  // leads because the directory is usually gone by the time you want it: the CLI finds a session
-  // by the cwd it ran in, so the path has to exist again before `--resume` can see it. Recreating
-  // it empty is enough to read the conversation back.
-  const resumeCommand = buildResumeCommand(info)
   // Flash a confirmation for a beat, the same feedback the CopyButton gives, since a click that
   // only fills the clipboard has nothing else to show for itself.
   const [copied, setCopied] = useState(false)
@@ -257,7 +255,7 @@ export function AgentActionsMenu({
                 <Copy className="h-3.5 w-3.5 shrink-0" />
               )}
               <span className="flex-1">
-                {copied ? 'Copied' : info.workspace ? 'Copy resume command' : 'Copy session id'}
+                {copied ? 'Copied' : 'Copy resume command'}
               </span>
               <span className="ml-auto pl-3 font-mono text-xs text-muted-foreground">
                 {info.sessionId.slice(0, 8)}

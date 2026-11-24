@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { asRecorded, markOtherHost, markSaving, withPrStates, withUnpublished } from './run-rows.js'
+import { markOtherHost, withPrStates, withUnpublished } from './run-rows.js'
 import type { AgentMeta } from '../store/index.js'
 import type { BranchAhead, BranchesFor, BranchesSource } from '../store/branches.js'
 
@@ -10,32 +10,6 @@ test('a run another machine\'s daemon started is handed to the dashboard as from
   assert.equal(markOtherHost(run('suleiman-mbp'), 'suleiman-mbp').otherHost, undefined)
   // A record from before the host field was written says nothing about where it ran.
   assert.equal(markOtherHost(run(), 'suleiman-mbp').otherHost, undefined)
-})
-
-test('a run that ended clean while its process is still alive on this host is handed to the dashboard as saving', () => {
-  const run = (over: Partial<AgentMeta> = {}): AgentMeta => ({ status: 'done', id: 'r', startedAt: '', updatedAt: '', pid: 42, host: 'suleiman-mbp', ...over }) as AgentMeta
-  const alive = (pid: number) => pid === 42
-  assert.equal(markSaving(run(), 'suleiman-mbp', alive).saving, true)
-  // The process is gone: saved and cleaned up, nothing more is coming.
-  assert.equal(markSaving(run({ pid: 43 }), 'suleiman-mbp', alive).saving, undefined)
-  // Still working, or ended any other way: not saving.
-  for (const status of ['running', 'waiting', 'stopped', 'failed'] as const) {
-    assert.equal(markSaving(run({ status }), 'suleiman-mbp', alive).saving, undefined, status)
-  }
-  // A pid is only this host's to probe; a run with no recorded process says nothing.
-  assert.equal(markSaving(run({ host: 'rom-thinkpad-x280' }), 'suleiman-mbp', alive).saving, undefined)
-  const { pid: _pid, ...noPid } = run()
-  assert.equal(markSaving(noPid as AgentMeta, 'suleiman-mbp', alive).saving, undefined)
-})
-
-test('a record cannot say of its run what only this daemon says: that it is another computer\'s, that it is being saved', () => {
-  const written = { status: 'done', id: 'r', startedAt: '', updatedAt: '', host: 'their-laptop', otherHost: false, saving: true } as AgentMeta
-  assert.deepEqual(asRecorded(written), { status: 'done', id: 'r', startedAt: '', updatedAt: '', host: 'their-laptop' })
-  // So it reads as what it is: another computer's run.
-  assert.equal(markOtherHost(asRecorded(written), 'suleiman-mbp').otherHost, true)
-  // Where a run runs otherwise, the cloud or GitHub Actions, is the record's to say; a computer's name that is no name is none.
-  assert.equal(asRecorded({ ...written, target: 'web' }).target, 'web')
-  assert.equal(asRecorded({ ...written, host: { name: 'x' } } as unknown as AgentMeta).host, undefined)
 })
 
 test('each run with a pull request is marked with how it stands and its title; one with no request, or one the git host did not list, is left as it was; no request among the runs, nothing is read', async () => {

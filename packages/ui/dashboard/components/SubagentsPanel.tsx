@@ -1,7 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type Ref, type RefObject } from 'react'
 import { ChevronRight, X } from 'lucide-react'
 import { useIsMobile } from '../lib/use-mobile.js'
-import type { OpenAgentEvent } from '../../src/index.js'
+import type { RunEvent } from '@openagt/hooks'
 import { panesPage } from '../lib/panes.js'
 import { revealSubagent, useRevealedSubagent } from '../lib/reveal-change.js'
 import { arrange, subagentRows, subagentTranscript, type SubagentRow } from '../lib/subagents.js'
@@ -45,7 +45,7 @@ export function SubagentsPanel({
   /** The main agent. */
   agentId: string
   /** The main agent's log. */
-  events: readonly OpenAgentEvent[]
+  events: readonly RunEvent[]
   /** Whether the main agent's process is working. */
   live: boolean
 }) {
@@ -254,7 +254,7 @@ function SubagentItem({ row, open, onPick }: { row: SubagentRow; open: boolean; 
 }
 
 /** The subagent a row opened, under the list: its name over its prompt and what it said and did. */
-function Shown({ row, events, onClose }: { row: SubagentRow; events: readonly OpenAgentEvent[]; onClose: () => void }) {
+function Shown({ row, events, onClose }: { row: SubagentRow; events: readonly RunEvent[]; onClose: () => void }) {
   const phone = useIsMobile()
   // Its transcript is the main agent's events that are its own, shown as plain steps here.
   const callId = row.call.id
@@ -344,8 +344,8 @@ function PaneFoot({ row, calls }: { row: SubagentRow; calls: number }) {
 }
 
 /** One of a call's own events without the mark that makes the main agent's chat pass it over. */
-function untagged(e: OpenAgentEvent): OpenAgentEvent {
+function untagged(e: RunEvent): RunEvent {
   if (e.kind !== 'driver' || !('subagent' in e.event)) return e
   const { subagent: _subagent, ...event } = e.event
-  return { ...e, event } as OpenAgentEvent
+  return { ...e, event } as RunEvent
 }

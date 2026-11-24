@@ -1,9 +1,9 @@
 // Browser-safe entry for the dashboard client (#431). Only pure event projections live
-// here — `formatOpenAgentEvent` and the run-view derivations — with no Node imports, so
+// here — `formatRunEvent` and the run-view derivations — with no Node imports, so
 // the client can import these at runtime without dragging the server barrel (sandbox,
 // node:fs/http, …) into the browser bundle. Types come from the root entry.
 export { PUBLISH_LABELS, isPublishPick, offeredPublishPicks, publishPickIn, type PublishPick } from './publish-levels.js'
-export { formatOpenAgentEvent } from './terminal.js'
+export { formatRunEvent } from './terminal.js'
 export { ACCENTS, DEFAULT_ACCENT_LABELS, accentOf, CODE_FONTS, DOCUMENT_FONTS, FONTS, fontFace, PALETTES, PALETTE_LABELS, type Accent, type CodeFont, type DocumentFont, type Font, type Palette } from './appearance.js'
 // What every list calls a run, so the same run never goes by two names.
 export { runName } from './run-name.js'

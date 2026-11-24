@@ -3,7 +3,7 @@ import { stat } from 'node:fs/promises'
 import { originDefaultBranch } from '@openagt/agent-data'
 import { moduleAgents, type ModuleAgent, type ModuleAgentsWanted } from '../dashboard/module-agents.js'
 import { join } from 'node:path'
-import { findAgent, findCheckout, readLiveMetas, readDoing, loadAgentEvents, type AgentDoing, startedAtFromAgentId, type AgentMeta, isRunId, projectBranches } from '../store/index.js'
+import { doingOf, readRunEvents, readRuns, type AgentDoing, startedAtFromAgentId, type AgentMeta, isRunId, projectBranches } from '../store/index.js'
 import { listProjectWorktrees } from '../worktrees.js'
 import { projectGitHost, type GitHostHome } from '../store/git-host.js'
 import { repositoryOffer, type RepositoryOffer } from '../store/repository.js'
@@ -18,10 +18,11 @@ import { readRunHandoff, resolveAgentPr, type AgentHandoff } from '../dashboard/
 import { copyTarget, sessionCopies } from '../dashboard/session-copies.js'
 import type { AgentWorktree } from '../dashboard/types.js'
 import { crawlRepoFiles } from '../project.js'
-import { contextProjects, resolveProjectPath, resolveAgentPath } from './context.js'
-import type { OpenAgentEvent } from '../events.js'
+import { contextHosts, contextProject, contextProjects, contextRun, resolveProjectPath, resolveAgentPath, runHostOf } from './context.js'
+import type { RunEvent } from '@openagt/hooks'
 import { startedName, withStartedNames } from '@openagt/agent-driver'
-import { forDashboard, recordedRuns, withRowMarks } from '../dashboard/run-rows.js'
+import { markOtherHost, withRowMarks } from '../dashboard/run-rows.js'
+import type { ProjectRef, RunRef } from '@openagt/hooks'
 
 // The read model behind the dashboard (#405): the agent history, an agent's replay, and the
 // surfaced PLAN/TODO docs — each keyed by project id and backed by
@@ -36,22 +37,14 @@ async function withProjects<T>(build: (projects: ProjectSummary[]) => Promise<T>
 }
 
 /**
- * The project's runs, most-recent first (or `[]`). The archived (finished) runs
- * from `agents/`, plus every live agent prepended — so the sidebar shows an in-progress
- * run with a `running` status the moment it starts, not only after it closes.
- *
- * Since #736 a project has any number of live agents, each in its own worktree, so this reads
- * them all (#738) instead of the single one that used to sit at the project path. They come
- * back as {@link LiveAgent}s, carrying the `cwd` of the checkout that agent is editing.
- *
- * One row per id, and where both a live and an archived copy exist the live one wins (#768): a
- * continued run (#762) has an archive from its first leg while being live again, and the archive
- * would otherwise show a running agent as finished. The status is not filtered on: `readLiveMeta`
- * may have just self-healed a dead agent to `stopped` (#716), and that freshly-archived row can
- * lag `listAgents` by a poll — keeping it regardless leaves the row visible with no flicker.
+ * The project's runs, most-recent first (or `[]`), as its hosts say them (`run.host`): a working
+ * run as it stands now, the moment it starts, and every recorded one, with what the modules read
+ * of each marked on it. The sessions with no project are a project of their own here.
  */
 export async function onAgents(projectId: string): Promise<AgentMeta[]> {
-  return runRows(await resolveProjectPath(projectId))
+  const at = await contextProject(projectId)
+  const cwd = await resolveProjectPath(projectId)
+  return at && cwd ? runRows(at.project, cwd) : []
 }
 
 /**
@@ -63,10 +56,17 @@ export async function onStartedName(agentId: string): Promise<string | undefined
   return startedName(agentId)
 }
 
-/** A project's runs as its list shows them, off its folder here (`cwd`): none for a project with no folder here. */
-async function runRows(cwd: string | undefined): Promise<AgentMeta[]> {
-  return cwd ? withStartedNames(await withRowMarks(cwd, (await recordedRuns(cwd)).map(forDashboard))) : []
+/** A project's runs as its list shows them: its hosts' runs, marked with what the modules read of them off its folder here (`cwd`). */
+async function runRows(project: ProjectRef | undefined, cwd: string): Promise<AgentMeta[]> {
+  return withStartedNames(await withRowMarks(cwd, (await readRuns(contextHosts(), project)).map(agent => markOtherHost(agent))))
 }
+
+/** A run of the project `projectId`, as its host is asked about it; none for a project that is not on the list. */
+async function runRefOf(projectId: string, agentId: string): Promise<RunRef | undefined> {
+  const at = await contextProject(projectId)
+  return at ? { id: agentId, ...(at.project ? { project: at.project } : {}) } : undefined
+}
+
 
 /**
  * A project's runs as a module sees them ({@link ModuleAgent}), only the ones it asks for: a card
@@ -85,7 +85,9 @@ export async function onModuleAgents(projectId: string, wanted: ModuleAgentsWant
 export async function onRetainedWorktrees(projectId: string): Promise<string[]> {
   const cwd = await resolveProjectPath(projectId)
   if (!cwd) return []
-  const rows = await listProjectWorktrees(cwd, { sizes: false }).catch((): never[] => [])
+  const at = await contextProject(projectId)
+  const runs = at ? await readRuns(contextHosts(), at.project).catch((): AgentMeta[] => []) : []
+  const rows = await listProjectWorktrees(cwd, runs, { sizes: false }).catch((): never[] => [])
   return rows.filter(row => !row.live).map(row => row.agentId)
 }
 
@@ -105,24 +107,21 @@ export async function onRetainedWorktrees(projectId: string): Promise<string[]> 
 export async function onAgentWorktree(projectId: string, agentId: string): Promise<AgentWorktree | null> {
   const root = await resolveProjectPath(projectId)
   if (!root || !isRunId(agentId)) return null
-  const checkout = await findCheckout(root, agentId, projectBranches)
+  const run = await runRefOf(projectId, agentId)
+  const found = run ? await (await runHostOf(run)).find(run).catch(() => undefined) : undefined
+  const checkout = found?.checkout !== undefined ? { path: found.checkout } : undefined
   // Since-filtered like every run-scoped PR read (#1255): the checkout's branch is the agent's,
   // but a reused pinned branch has a predecessor's PR history.
   const since = startedAtFromAgentId(agentId)
   // Read only while the checkout's own `.git` is there: without it git reads the project's
   // checkout the run's folder sits in, and answered with the person's branch as the run's.
   const linked = checkout ? await stat(join(checkout.path, '.git')).then(() => true, () => false) : false
-  const [status, live] = checkout && linked
-    ? await Promise.all([
-        readGitStatus(checkout.path, { prRoot: root, ...(since !== undefined ? { since } : {}) }).catch(() => undefined),
-        readLiveMetas(root).catch(() => []),
-      ])
-    : [undefined, []]
+  const status = checkout && linked ? await readGitStatus(checkout.path, { prRoot: root, ...(since !== undefined ? { since } : {}) }).catch(() => undefined) : undefined
   if (!checkout || !status) {
     // The checkout's branch was the agent's; with no checkout the record is the only witness. So
     // it is for a checkout git cannot read: the run's clean-up is removing it, and an answer
     // without its branch put the bar above the message box away until the next read.
-    const agent = await findAgent(root, agentId).catch(() => undefined)
+    const agent = await contextRun(projectId, agentId).catch(() => undefined)
     if (!agent) return null
     const pr = await resolveAgentPr(root, agent).catch(() => ({ value: undefined, pending: false }))
     return {
@@ -134,7 +133,7 @@ export async function onAgentWorktree(projectId: string, agentId: string): Promi
   // Size is only read for a checkout nothing is writing to: a live agent's tree changes under the
   // poll, and a size over a build directory mid-build is a cost with no answer worth having. The
   // provider's sized listing is where a checkout's size comes from (#1774).
-  const running = live.some(agent => agent.id === agentId && agent.status === 'running')
+  const running = found?.record?.status === 'running'
   const size = running ? undefined : (await (await projectBranches(root).catch(() => undefined))?.list({ sizes: true }).catch(() => []))?.find(row => row.id === agentId)?.sizeBytes
   return {
     checkout: { path: checkout.path, dirty: status.dirty, ...(size !== undefined ? { sizeBytes: size } : {}) },
@@ -147,18 +146,26 @@ export async function onAgentWorktree(projectId: string, agentId: string): Promi
   }
 }
 
-/** One archived agent's event log for replay (or `[]` when the agent or project is gone). */
-export async function onAgent(projectId: string, agentId: string): Promise<OpenAgentEvent[]> {
-  const cwd = await resolveProjectPath(projectId)
-  if (!cwd) return []
-  return (await loadAgentEvents(cwd, agentId).catch(() => undefined)) ?? []
+/** One run's events for replay, as its host says them (or `[]` when the run or project is gone). */
+export async function onAgent(projectId: string, agentId: string): Promise<RunEvent[]> {
+  const run = isRunId(agentId) ? await runRefOf(projectId, agentId) : undefined
+  if (!run) return []
+  return (await readRunEvents(await runHostOf(run), run).catch(() => undefined)) ?? []
 }
 
-/** What each of the named runs of a project is doing now, by id; a run that is not working has no entry. */
+/** What each of the named runs of a project is doing now, by id, as its events say; a run that is not working has no entry. */
 export async function onAgentsDoing(projectId: string, agentIds: string[]): Promise<Record<string, AgentDoing>> {
-  const cwd = await resolveProjectPath(projectId)
-  if (!cwd) return {}
-  return readDoing(cwd, agentIds).catch(() => ({}))
+  const at = await contextProject(projectId)
+  if (!at) return {}
+  const working = (await readRuns(contextHosts(), at.project, { ids: agentIds }).catch((): AgentMeta[] => [])).filter(agent => agent.status === 'running')
+  const doing = await Promise.all(
+    working.map(async agent => {
+      const run: RunRef = { id: agent.id, ...(at.project ? { project: at.project } : {}) }
+      const events = await readRunEvents(await runHostOf(run), run).catch(() => undefined)
+      return [agent.id, events && doingOf(events)] as const
+    }),
+  )
+  return Object.fromEntries(doing.filter((entry): entry is readonly [string, AgentDoing] => entry[1] !== undefined))
 }
 
 /** The surfaced PLAN/TODO docs at the workspace root, in sidebar order (or `[]`). */
@@ -192,8 +199,11 @@ async function pooledRuns(limit?: number): Promise<RecentAgent[]> {
     buildRecentAgents(
       projects,
       {
-        agents: project => runRows(project.path),
-        sessions: async () => runRows(await resolveProjectPath(SESSIONS_ID)),
+        agents: project => runRows({ id: project.id, name: project.name, dir: project.path }, project.path),
+        sessions: async () => {
+          const home = await resolveProjectPath(SESSIONS_ID)
+          return home ? runRows(undefined, home) : []
+        },
       },
       limit,
     ),
@@ -220,7 +230,7 @@ export async function onWaiting(): Promise<ProjectionRead<Waiting>> {
  * first, with the projects that were read whole beside them (#1625) — see {@link onWaiting}.
  */
 export async function onActivity(): Promise<ProjectionRead<Activity>> {
-  return withProjects(projects => buildActivity(projects, { readAgents: project => recordedRuns(project.path) }))
+  return withProjects(projects => buildActivity(projects, { readAgents: project => readRuns(contextHosts(), { id: project.id, name: project.name, dir: project.path }) }))
 }
 
 /** The Overview dashboard page (#471): the {@link onOverview} rollup, and how many projects there are. */
@@ -298,7 +308,7 @@ export async function onRepositoryOffer(projectId: string): Promise<RepositoryOf
 export async function onAgentHandoff(projectId: string, agentId: string, repo?: string): Promise<AgentHandoff | null> {
   const cwd = await resolveProjectPath(projectId)
   if (!cwd || !isRunId(agentId)) return null
-  const agent = await findAgent(cwd, agentId).catch(() => undefined)
+  const agent = await contextRun(projectId, agentId).catch(() => undefined)
   if (!agent) return null
   // One of the session's copies of repos: the same read, of the copy's own folder and branch.
   if (repo !== undefined) {

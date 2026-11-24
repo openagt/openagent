@@ -1,5 +1,5 @@
 import { TriangleAlert } from 'lucide-react'
-import type { OpenAgentEvent } from '../../src/index.js'
+import type { RunEvent } from '@openagt/hooks'
 import { agentErrors, type AgentError } from '../../src/client.js'
 import { agentOutcome } from '../lib/live-state.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
@@ -7,7 +7,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 // How many errors the agent reported, said in the session's header (#1500): the run page's action
 // bar, which stays put while the log scrolls. The errors themselves stay in the log, at the point in
 // the run where they happened; this is only the count, and its hover says every headline.
-export function AgentErrorCount({ events }: { events: OpenAgentEvent[] }) {
+export function AgentErrorCount({ events }: { events: RunEvent[] }) {
   const errors = errorsToCount(events)
   if (errors.length === 0) return null
   return (
@@ -36,7 +36,7 @@ export function AgentErrorCount({ events }: { events: OpenAgentEvent[] }) {
  * again as "1 error" was the same fact twice. An error the run went on from, or that its failure
  * does not name, still counts.
  */
-function errorsToCount(events: readonly OpenAgentEvent[]): AgentError[] {
+function errorsToCount(events: readonly RunEvent[]): AgentError[] {
   const errors = agentErrors(events)
   const outcome = agentOutcome(events)
   const failure = outcome && !outcome.ok && !outcome.stopped && !outcome.waiting ? outcome.detail : undefined

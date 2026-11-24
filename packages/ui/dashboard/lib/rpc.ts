@@ -1,4 +1,4 @@
-import type { LiveFeedEvent } from '../../src/dashboard-rpc/index.js'
+import type { RunFeedEvent } from '@openagt/hooks'
 
 // The dashboard's whole transport (F3): `POST /_rpc/<name>` for calls, `GET /_rpc/events` for the
 // live feed. Same-origin, so there is nothing to configure.
@@ -56,7 +56,7 @@ export function rpc<F extends (...args: never[]) => unknown>(
  * reason the feed can say "the daemon is not answering" instead of looking like a quiet agent.
  */
 export interface EventChannel {
-  listen(onEvent: (event: LiveFeedEvent) => void): void
+  listen(onEvent: (event: RunFeedEvent) => void): void
   onClose(onClosed: (err?: Error) => void): void
   close(): void
 }
@@ -75,10 +75,10 @@ export async function openEvents(projectId: string, agentId?: string): Promise<E
   const res = await fetch(`${RPC_PREFIX}/events?${params.toString()}`, { signal: controller.signal })
   if (!res.ok || !res.body) throw new Error(`could not subscribe to events (${res.status})`)
 
-  let onEvent: ((event: LiveFeedEvent) => void) | undefined
+  let onEvent: ((event: RunFeedEvent) => void) | undefined
   // What comes before anyone listens: the stream is read from the moment it opens, and a server
   // that has the run's first lines already sends them at once. Dropped, the prompt went missing.
-  const held: LiveFeedEvent[] = []
+  const held: RunFeedEvent[] = []
   let onClosed: ((err?: Error) => void) | undefined
   let closed = false
   const finish = (err?: Error): void => {
@@ -108,7 +108,7 @@ export async function openEvents(projectId: string, agentId?: string): Promise<E
             .join('')
           if (!data) continue
           try {
-            const event = JSON.parse(data) as LiveFeedEvent
+            const event = JSON.parse(data) as RunFeedEvent
             if (onEvent) onEvent(event)
             else held.push(event)
           } catch {

@@ -118,7 +118,7 @@ test('an unknown session is refused, in the provider\'s words, before any git ru
   }
 })
 
-test("a run started from another run's branch: the commit on its card is named to the rule, so a branch with nothing past it goes", async () => {
+test("a run started from another run's branch: the commit its record names is named to the rule, so a branch with nothing past it goes", async () => {
   // Without the commit the branch would be measured from the default branch, and what it started
   // on would read as its own: pushed and kept.
   const { repo, path, branch } = await repoWithDirtyWorktree()
@@ -129,11 +129,7 @@ test("a run started from another run's branch: the commit on its card is named t
     await git(['push', '-q', 'origin', branch], path)
     const sub = await addWorktree(repo, { agentId: 'run2', branch: agentBranchName('run2'), base: branch }, git)
     const baseCommit = (await git(['rev-parse', 'HEAD'], sub.path)).trim()
-    await mkdir(join(repo, '.git', 'info'), { recursive: true })
-    await writeFile(join(repo, '.git', 'info', 'exclude'), '.openagent/\n')
-    await mkdir(join(sub.path, '.openagent'), { recursive: true })
-    await writeFile(join(sub.path, '.openagent', 'run2.json'), JSON.stringify({ id: 'run2', startedAt: '2026-01-01T00:00:00.000Z', status: 'done', caller: { baseCommit } }))
-    assert.deepEqual(await removeProjectWorktree(repo, 'run2'), { ok: true, branchesDeleted: [sub.branch] })
+    assert.deepEqual(await removeProjectWorktree(repo, 'run2', { status: 'done', baseCommit }), { ok: true, branchesDeleted: [sub.branch] })
     await assert.rejects(() => git(['rev-parse', '--verify', `refs/remotes/origin/${sub.branch}`], repo), 'nothing reached origin')
   } finally {
     await rm(repo, { recursive: true, force: true })

@@ -1,5 +1,6 @@
 import { errorMessage } from './error-message.js'
-import { isRunId, listAgents, projectBranches, projectRuns, readLiveMetas, type AgentStatus, type BranchesFor, type RunsFor } from './store/index.js'
+import { deleteRun, findRun } from '@openagt/agent-driver'
+import { isRunId, projectBranches, type AgentMeta, type AgentStatus, type BranchesFor } from './store/index.js'
 
 /** A retained worktree and the agent that left it behind (#752). */
 export interface WorktreeRow {
@@ -30,26 +31,22 @@ export type RemoveResult =
 
 /**
  * The worktrees a project still has on disk (#752), newest first — the same view the dashboard's
- * retained-worktrees list is built from, through the same store reads, so the CLI is a second
- * surface rather than a second behaviour. The checkouts are what the project's branches provider
- * lists (#1774); a project with no provider has none.
+ * retained-worktrees list is built from, so the CLI is a second surface rather than a second
+ * behaviour. The checkouts are what the project's branches provider lists (#1774), each with its
+ * run as the run's host says it (`runs`); a project with no provider has none.
  *
  * A live agent's checkout is included and flagged rather than hidden: "what is this directory and
  * why can I not remove it" is exactly the question the list has to answer.
  */
-export async function listProjectWorktrees(cwd: string, opts: { sizes?: boolean } = {}, branches: BranchesFor = projectBranches): Promise<WorktreeRow[]> {
+export async function listProjectWorktrees(cwd: string, runs: readonly AgentMeta[], opts: { sizes?: boolean } = {}, branches: BranchesFor = projectBranches): Promise<WorktreeRow[]> {
   const source = await branches(cwd).catch(() => undefined)
   if (!source) return []
-  const [checkouts, live, archived] = await Promise.all([
-    // Sizing a tree an agent is writing to gives a number that is wrong by the time it prints;
-    // a caller that only wants the rows (the dashboard's retained list) skips the du entirely.
-    source.list(opts.sizes === false ? {} : { sizes: true }).catch(() => []),
-    readLiveMetas(cwd, undefined, branches).catch(() => []),
-    listAgents(cwd).catch(() => []),
-  ])
+  // Sizing a tree an agent is writing to gives a number that is wrong by the time it prints;
+  // a caller that only wants the rows (the dashboard's retained list) skips the du entirely.
+  const checkouts = await source.list(opts.sizes === false ? {} : { sizes: true }).catch(() => [])
   const rows: WorktreeRow[] = []
   for (const checkout of checkouts) {
-    const meta = live.find(agent => agent.id === checkout.id) ?? archived.find(agent => agent.id === checkout.id)
+    const meta = runs.find(agent => agent.id === checkout.id)
     const isLive = meta?.status === 'running'
     rows.push({
       agentId: checkout.id,
@@ -71,13 +68,11 @@ export async function listProjectWorktrees(cwd: string, opts: { sizes?: boolean 
  * `remove` takes a clean checkout and leaves its branch on this machine, pushing nothing
  * (#1774); its refusal is answered in its own words.
  *
- * Refuses while the agent is still going — an agent's checkout is where its agent is working, and Stop
- * is how you end an agent, not pulling the floor out from under it.
+ * Refuses while the agent is still going, as its host says the run (`agent`) — an agent's checkout
+ * is where its agent is working, and Stop is how you end an agent, not pulling the floor out from under it.
  */
-export async function removeProjectWorktree(cwd: string, agentId: string, branches: BranchesFor = projectBranches): Promise<RemoveResult> {
+export async function removeProjectWorktree(cwd: string, agentId: string, agent?: Pick<AgentMeta, 'status' | 'baseCommit'>, branches: BranchesFor = projectBranches): Promise<RemoveResult> {
   if (!isRunId(agentId)) return { ok: false, error: `invalid session id: ${agentId}` }
-  const live = await readLiveMetas(cwd, undefined, branches).catch(() => [])
-  const agent = live.find(agent => agent.id === agentId)
   if (agent?.status === 'running') {
     return { ok: false, error: 'that session is still going; stop it before removing its worktree' }
   }
@@ -97,8 +92,6 @@ export type DeleteAgentResult = { ok: true } | { ok: false; error: string }
 
 /** Where {@link deleteProjectAgent} reads: the project's providers by default. */
 export interface DeleteAgentOptions {
-  /** Where the project's finished runs are read and removed; the project's runs provider by default. */
-  runs?: RunsFor
   /** Where the project's checkouts are read and removed; the project's branches provider by default. */
   branches?: BranchesFor
 }
@@ -125,11 +118,10 @@ export interface DeleteAgentOptions {
  * unlike remove-worktree, which refuses a checkout holding uncommitted work: the branches
  * provider's `remove --discard` (#1774).
  */
-export async function deleteProjectAgent(cwd: string, agentId: string, opts: DeleteAgentOptions = {}): Promise<DeleteAgentResult> {
+export async function deleteProjectAgent(cwd: string, agentId: string, agent?: Pick<AgentMeta, 'status'>, opts: DeleteAgentOptions = {}): Promise<DeleteAgentResult> {
   if (!isRunId(agentId)) return { ok: false, error: `invalid session id: ${agentId}` }
   const branches = opts.branches ?? projectBranches
-  const live = await readLiveMetas(cwd, undefined, branches).catch(() => [])
-  if (live.some(agent => agent.id === agentId && agent.status === 'running')) {
+  if (agent?.status === 'running') {
     return { ok: false, error: 'that session is still going; stop it before deleting it' }
   }
   try {
@@ -140,12 +132,11 @@ export async function deleteProjectAgent(cwd: string, agentId: string, opts: Del
       const removed = await source.remove(agentId, { discard: true })
       if (!removed.ok) return removed
     }
-    // Then the record that put the row in the list: the finished run, removed through the
-    // project's runs provider (#1582/#1769). Tolerant of an absent record, and of a project with
-    // no provider, so a half-deleted session (its worktree already gone) still finishes cleanly.
-    const runs = await (opts.runs ?? projectRuns)(cwd).catch(() => undefined)
-    if (runs && (await runs.list()).some(card => card.id === agentId)) {
-      const removed = await runs.remove(agentId)
+    // Then the record that put the row in the list: the finished run, removed from the project's
+    // records (#1582/#1769). Tolerant of an absent record, so a half-deleted session (its worktree
+    // already gone) still finishes cleanly.
+    if (await findRun(cwd, agentId).catch(() => undefined)) {
+      const removed = await deleteRun(cwd, agentId)
       if (!removed.ok) return { ok: false, error: removed.error }
     }
     return { ok: true }

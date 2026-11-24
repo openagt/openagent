@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
-import type { OpenAgentEvent } from '../../src/index.js'
-import { formatOpenAgentEvent } from '../../src/client.js'
+import type { RunEvent } from '@openagt/hooks'
+import { formatRunEvent } from '../../src/client.js'
 import { rowWords } from './row-words.js'
 
 // The chat's words for the rows the terminal writes with glyphs. Each is said as a chat says
@@ -41,7 +41,7 @@ describe('the chat says a row in its own words', () => {
 
   test("the quota reads in words, and comes back on the reader's own clock", () => {
     const at = Date.UTC(2026, 9, 16, 18, 30)
-    const quota = (status: string): OpenAgentEvent => ({ kind: 'driver', event: { type: 'rate-limit', limit: { status, window: 'five_hour', resetsAt: at } } }) as OpenAgentEvent
+    const quota = (status: string): RunEvent => ({ kind: 'driver', event: { type: 'rate-limit', limit: { status, window: 'five_hour', resetsAt: at } } }) as RunEvent
     expect(rowWords(quota('rejected'))).toEqual({ said: 'The five-hour quota is used up', thing: `resets ${new Date(at).toLocaleString()}` })
     expect(rowWords(quota('allowed_warning'))?.said).toBe('The five-hour quota is running low')
     // A quota that is fine is no row, as it is no line in the terminal either.
@@ -49,7 +49,7 @@ describe('the chat says a row in its own words', () => {
   })
 
   test('nothing the chat names keeps a glyph or an indent of the terminal', () => {
-    const rows: OpenAgentEvent[] = [
+    const rows: RunEvent[] = [
       { kind: 'end', ok: false, stopped: true },
       { kind: 'end', ok: false, detail: 'boom' },
       { kind: 'error', headline: 'no' },
@@ -66,7 +66,7 @@ describe('the chat says a row in its own words', () => {
       expect(whole, e.kind).not.toMatch(/[◆■✗▶?✓›‹·💭~!]/)
       expect(words!.said.startsWith(' '), e.kind).toBe(false)
       // The terminal still has its own line for every one of them.
-      expect(formatOpenAgentEvent(e), e.kind).toBeTruthy()
+      expect(formatRunEvent(e), e.kind).toBeTruthy()
     }
   })
 

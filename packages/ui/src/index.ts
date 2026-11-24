@@ -14,10 +14,9 @@
  */
 
 export type { AgentError, SessionInfo } from './agent-view.js'
-export type { ChoiceRequest, OpenAgentEvent } from './events.js'
 export type { Preferences, StartFromPick } from './registry.js'
 export type { PublishPick } from './publish-levels.js'
-export type { AgentDoing, AgentMeta, AgentStatus } from './store/agent-store.js'
+export type { AgentDoing, AgentMeta, AgentStatus } from './store/runs.js'
 export type { Activity } from './dashboard/activity.js'
 export type { AgentHandoff } from './dashboard/agent-handoff.js'
 export type { GitHostHome } from './store/git-host.js'

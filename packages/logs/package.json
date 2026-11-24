@@ -23,9 +23,6 @@
   "bin": {
     "logs": "bin/logs"
   },
-  "openagent": {
-    "runs": "logs"
-  },
   "exports": {
     "./package.json": "./package.json",
     ".": {

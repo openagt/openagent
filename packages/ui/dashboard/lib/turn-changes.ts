@@ -1,4 +1,4 @@
-import type { OpenAgentEvent } from '../../src/index.js'
+import type { RunEvent } from '@openagt/hooks'
 
 // The files an agent's edits changed, turn by turn, off the log: each edit's own account of what
 // it did to its file (the `changed` of a tool call's output), summed for each file of a turn.
@@ -39,11 +39,11 @@ export function inProject(path: string, workspace: string | undefined): boolean 
 }
 
 /** What an event says its tool call changed, if it is the output of one that changed a file. */
-function changedBy(e: OpenAgentEvent): readonly FileEdit[] {
+function changedBy(e: RunEvent): readonly FileEdit[] {
   return e.kind === 'driver' && e.event.type === 'output' ? (e.event.changed ?? []) : []
 }
 
-function isPrompt(e: OpenAgentEvent): boolean {
+function isPrompt(e: RunEvent): boolean {
   return e.kind === 'driver' && e.event.type === 'start'
 }
 
@@ -77,8 +77,8 @@ export function sumEdits(edits: readonly FileEdit[], workspace?: string | undefi
  * The files each turn's edits changed (see {@link sumEdits}): `ended` under the prompt that ended
  * the turn, `last` for the turn no prompt has ended yet. A turn that changed no file has no entry.
  */
-export function turnChanges(events: readonly OpenAgentEvent[], workspace: string | undefined): { ended: Map<OpenAgentEvent, ChangedFile[]>; last: ChangedFile[] } {
-  const ended = new Map<OpenAgentEvent, ChangedFile[]>()
+export function turnChanges(events: readonly RunEvent[], workspace: string | undefined): { ended: Map<RunEvent, ChangedFile[]>; last: ChangedFile[] } {
+  const ended = new Map<RunEvent, ChangedFile[]>()
   let turn: FileEdit[] = []
   for (const e of events) {
     if (isPrompt(e)) {

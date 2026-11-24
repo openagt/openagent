@@ -1,13 +1,14 @@
-import { readAllAgents, readLiveMetas, type LiveAgent, type AgentMeta, type AgentStatus } from '../store/index.js'
+import type { AgentMeta, AgentStatus } from '../store/index.js'
+import { contextRuns } from '../dashboard-rpc/context.js'
 import type { ProjectSummary } from './projects.js'
 import { hostname } from 'node:os'
 import { SESSIONS_ID } from '../project-address.js'
 
 // The first-sidebar Overview (#437, part of #314): a cross-project glance at what the agent
-// is working on right now, and the recently active projects. It rolls up two existing file
-// projections across the whole registry — the card a run's tool keeps in the run's own checkout,
-// and each project's last activity (ProjectSummary.lastActivityAt from its runs). The queue's size
-// is the queue's own part of the Overview's line.
+// is working on right now, and the recently active projects. It rolls up across the whole
+// registry what each project's hosts say of its runs (`run.host`), and each project's last
+// activity (ProjectSummary.lastActivityAt from its runs). The queue's size is the queue's own part
+// of the Overview's line.
 
 /** One project's in-flight run, surfaced in the Overview's "working now" list. */
 export interface ActiveAgent {
@@ -15,8 +16,6 @@ export interface ActiveAgent {
   projectName: string
   /** Which run this is (#738): a project can have several in flight, one per worktree. */
   agentId: string
-  /** The agent's own checkout, so its git/file status is read from the worktree it edits (#738). */
-  cwd: string
   status: AgentStatus
   /** What the user asked to build (the agent's `scope` event). */
   intent?: string
@@ -89,7 +88,7 @@ export interface RecentAgentsDeps {
  * whose agents cannot be read simply contributes nothing.
  */
 export async function buildRecentAgents(projects: ProjectSummary[], deps: RecentAgentsDeps = {}, limit = RECENT_RUNS_LIMIT): Promise<RecentAgent[]> {
-  const readAgents = deps.agents ?? (project => readAllAgents(project.path))
+  const readAgents = deps.agents ?? contextRuns
   // Every project at once: each one's read is a git read of its branches too (the rows' marks), and
   // one after the other the list waited for all of them in turn. Kept in the projects' order, so
   // the first project to list a run still keeps it below.
@@ -107,32 +106,30 @@ export async function buildRecentAgents(projects: ProjectSummary[], deps: Recent
 
 /** Injectable readers so {@link buildOverview} is unit-testable off disk. */
 export interface OverviewDeps {
-  liveAgents?: (cwd: string) => Promise<LiveAgent[]>
-  /** Every run of a project, archived included (default {@link readAllAgents}): where the runs on other hosts are. */
-  agents?: (cwd: string) => Promise<AgentMeta[]>
+  /** Every run of a project, as its hosts say them (default {@link contextRuns}). */
+  agents?: (project: ProjectSummary) => Promise<AgentMeta[]>
   /** This machine's hostname; `node:os` in production. */
   host?: string
 }
 
 /**
- * Build the cross-project Overview: the running agents (every live agent of each project, one per
- * worktree since #736), and the most recently active projects (by {@link ProjectSummary.lastActivityAt}). Forgiving — a project with
- * no live run, or none running, simply contributes nothing to `active`.
+ * Build the cross-project Overview: the runs at work (every one of each project's, one per
+ * worktree since #736, and the ones on a host beside this computer's), and the most recently
+ * active projects (by {@link ProjectSummary.lastActivityAt}). Forgiving — a project with no run
+ * at work simply contributes nothing to `active`.
  */
 export async function buildOverview(projects: ProjectSummary[], deps: OverviewDeps = {}): Promise<Overview> {
-  const liveAgents = deps.liveAgents ?? readLiveMetas
-  const agents = deps.agents ?? readAllAgents
+  const agents = deps.agents ?? contextRuns
   const thisHost = deps.host ?? hostname()
 
   const active: ActiveAgent[] = []
-  // One entry per run on another host across projects: two checkouts of one repository share their
-  // records, so the same run is in both projects' lists; the first project to list it keeps it.
-  const elsewhere = new Set<string>()
-  const entry = (project: ProjectSummary, meta: AgentMeta, cwd: string): ActiveAgent => ({
+  // One entry per run across projects: two checkouts of one repository share their records, so
+  // the same run is in both projects' lists; the first project to list it keeps it.
+  const seen = new Set<string>()
+  const entry = (project: ProjectSummary, meta: AgentMeta): ActiveAgent => ({
     projectId: project.id,
     projectName: project.name,
     agentId: meta.id,
-    cwd,
     status: meta.status,
     ...(meta.intent ? { intent: meta.intent } : {}),
     ...(meta.title ? { title: meta.title } : {}),
@@ -142,20 +139,15 @@ export async function buildOverview(projects: ProjectSummary[], deps: OverviewDe
     ...(meta.updatedAt ? { updatedAt: meta.updatedAt } : {}),
     // Another computer's daemon started it (#1648): the shared data branch shows its runs here too.
     ...(meta.host !== undefined && meta.host !== thisHost ? { computer: { name: meta.host } } : {}),
+    // A host beside this computer's (`run.host`): "no agents working" over a cloud session at work was a lie (#1668).
+    ...(meta.target !== undefined ? { host: meta.target } : {}),
   })
   for (const project of projects) {
-    // Every live agent of the project (#738), not just the one that used to sit at its path.
-    for (const meta of await liveAgents(project.path).catch(() => [])) {
-      if (meta.status !== 'running') continue
-      active.push(entry(project, meta, meta.cwd))
-    }
-    // The runs on a host beside this computer's still at work (`run.host`): no checkout here backs
-    // them, so they are read from their records and keyed to the project's own path.
-    for (const meta of await agents(project.path).catch((): AgentMeta[] => [])) {
-      const host = meta.target
-      if (host === undefined || host === 'local' || meta.status !== 'running' || elsewhere.has(meta.id)) continue
-      elsewhere.add(meta.id)
-      active.push({ ...entry(project, meta, project.path), host })
+    for (const meta of await agents(project).catch((): AgentMeta[] => [])) {
+      // At work here, or on a host beside this computer's; another computer's run is that computer's to show.
+      if (meta.status !== 'running' || seen.has(meta.id) || (meta.target === undefined && meta.host !== undefined && meta.host !== thisHost)) continue
+      seen.add(meta.id)
+      active.push(entry(project, meta))
     }
   }
   active.sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))

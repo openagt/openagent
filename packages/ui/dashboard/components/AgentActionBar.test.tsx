@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
-import type { AgentWorktree, OpenAgentEvent } from '../../src/index.js'
+import type { AgentWorktree } from '../../src/index.js'
+import type { RunEvent } from '@openagt/hooks'
 
 // The menu reads the daemon and has tests of its own: here it is a stand-in that says what it was
 // handed, so what the bar lays out, and what it leaves out, is checked on what is really on screen.
@@ -29,7 +30,7 @@ const AGENTS = {
   failed: [session, said, { kind: 'end', ok: false, detail: reason }],
   stopped: [session, said, { kind: 'end', ok: false, stopped: true }],
   'waiting for an answer': [session, said, { kind: 'end', ok: false, waiting: true }],
-} as unknown as Record<string, OpenAgentEvent[]>
+} as unknown as Record<string, RunEvent[]>
 const DIRTY: AgentWorktree = { checkout: { path: '/w', dirty: true, sizeBytes: 5 * 1024 * 1024 }, branch: 'agent-dark-mode', pr: { number: 7, url: 'https://github.com/o/r/pull/7', state: 'OPEN', title: 'Dark mode' } }
 
 const lastSession = () => menus.filter(menu => menu['agentId'] !== undefined).at(-1)!
@@ -53,7 +54,7 @@ describe('AgentActionBar', () => {
   test('the project\'s ⋮ stands where the "New agent session" page has it: past the spacer, just before the panes\' icons, acting on the project', () => {
     const removed = () => {}
     const error = { kind: 'error', message: 'The push was rejected' }
-    const { container } = render(<AgentActionBar projectId="p1" agentId="run-1" events={[...AGENTS.running!, error] as OpenAgentEvent[]} label="Dark mode" checkout={DIRTY} onProjectRemoved={removed} />)
+    const { container } = render(<AgentActionBar projectId="p1" agentId="run-1" events={[...AGENTS.running!, error] as RunEvent[]} label="Dark mode" checkout={DIRTY} onProjectRemoved={removed} />)
     const project = menus.at(-1)!
     expect(project['agentId']).toBeUndefined()
     expect(project['projectId']).toBe('p1')
@@ -72,7 +73,7 @@ describe('AgentActionBar', () => {
   test('the count of errors is still said, for a running agent and for one that ended, at the bar\'s end', () => {
     const error = { kind: 'error', message: 'The push was rejected' }
     for (const kind of ['running', 'finished', 'stopped']) {
-      const { container } = render(<AgentActionBar projectId="p1" agentId="run-1" events={[...AGENTS[kind]!.slice(0, 2), error, ...AGENTS[kind]!.slice(2)] as OpenAgentEvent[]} label="Dark mode" checkout={DIRTY} />)
+      const { container } = render(<AgentActionBar projectId="p1" agentId="run-1" events={[...AGENTS[kind]!.slice(0, 2), error, ...AGENTS[kind]!.slice(2)] as RunEvent[]} label="Dark mode" checkout={DIRTY} />)
       expect(screen.getByRole('alert').textContent).toBe('1 error')
       expect(container.textContent).toBe('[Dark mode ⌄]1 error[⋮]')
       cleanup()
@@ -80,7 +81,7 @@ describe('AgentActionBar', () => {
   })
 
   test('the worktree\'s size is handed to the session\'s menu, not said in the bar; before the agent\'s own reads have answered there is none, and no count', () => {
-    const withError = [...AGENTS.failed!.slice(0, 2), { kind: 'error', message: 'The push was rejected' }, ...AGENTS.failed!.slice(2)] as OpenAgentEvent[]
+    const withError = [...AGENTS.failed!.slice(0, 2), { kind: 'error', message: 'The push was rejected' }, ...AGENTS.failed!.slice(2)] as RunEvent[]
     const { container, rerender } = render(<AgentActionBar projectId="p1" agentId="run-1" events={withError} label="Dark mode" checkout={DIRTY} ready={false} />)
     expect(container.textContent).toBe('[Dark mode ⌄][⋮]')
     expect(lastSession()['size']).toBe('')

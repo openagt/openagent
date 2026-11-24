@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MutableRefObject } from 'react'
-import type { AgentMeta, AgentWorktree, OpenAgentEvent } from '../../src/index.js'
+import type { AgentMeta, AgentWorktree } from '../../src/index.js'
+import type { RunEvent } from '@openagt/hooks'
 import { onAgentMainBranch, onGitHostHome, onRetainedWorktrees } from '../rpc/reads.js'
 import { useLoaded } from '../lib/use-async.js'
 import { handoffSays, useAgentHandoff } from '../lib/use-agent-handoff.js'
@@ -76,11 +77,11 @@ export function AgentView({
   /** Which run this is (#749). */
   agentId: string
   /** The live channel's events for this agent — all there is while it runs. */
-  events: OpenAgentEvent[]
+  events: RunEvent[]
   /** Whether the agent is still running; `null` while the daemon's list of agents has not been read, so it is not known yet. */
   live: boolean | null
   /** What the run's card says, off the runs poll: what the feed cannot carry (the details strip's facts, how the agent was set up, whether its record is being saved). Absent until the card is listed. */
-  card?: (AgentDetailsCard & Pick<AgentMeta, 'status' | 'intent' | 'saving' | 'workspace' | 'branch' | 'base' | 'baseCommit' | 'host' | 'otherHost' | 'publish' | 'prBase' | 'gitAccount' | 'earlierPrs' | 'pr' | 'prState' | 'repos' | 'options'> & Partial<Pick<AgentMeta, 'endedAt' | 'updatedAt'>>) | undefined
+  card?: (AgentDetailsCard & Pick<AgentMeta, 'status' | 'intent' | 'saving' | 'workspace' | 'resumeCommand' | 'branch' | 'base' | 'baseCommit' | 'host' | 'otherHost' | 'publish' | 'prBase' | 'gitAccount' | 'earlierPrs' | 'pr' | 'prState' | 'repos' | 'options'> & Partial<Pick<AgentMeta, 'endedAt' | 'updatedAt'>>) | undefined
   /** What the launcher said about this run as it started it: shown until the run's record says it. */
   picks?: StartPicks | undefined
   /** The session's own name — the same label the rail shows (#1030). It leads the action bar as
@@ -178,7 +179,7 @@ export function AgentView({
   const standIn = card?.intent ?? startedWith
   const standsIn = standIn !== undefined && !replaying && !(live !== false && startedWith !== undefined) && !shown.some(e => e.kind === 'driver' && e.event.type === 'start')
   const startedAt = card?.startedAt
-  const chat = useMemo<OpenAgentEvent[]>(
+  const chat = useMemo<RunEvent[]>(
     () => (standsIn ? [{ kind: 'driver', event: { type: 'start', prompt: standIn }, ...(startedAt !== undefined ? { at: startedAt } : {}) }, ...shown] : shown),
     [standsIn, standIn, startedAt, shown],
   )
@@ -367,6 +368,7 @@ export function AgentView({
             ready={ready}
             checkout={checkout}
             status={status}
+            resumeCommand={card?.resumeCommand}
           />
           {/* The always-available session-details strip: agent + spend (#322). What the run changed is
               in the Changes pane, not here. */}
@@ -521,7 +523,7 @@ function onVisibilityChange(changed: () => void): () => void {
 function useMessagesOnTheirWay(
   projectId: string,
   agentId: string,
-  shown: readonly OpenAgentEvent[],
+  shown: readonly RunEvent[],
   /** The run is known to have ended: the list of runs says so and its feed is in. */
   ended: boolean,
   /** Its record says it was stopped: what it had not read, it never will. A failed leg's process still sends its inbox as the next turn. */

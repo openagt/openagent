@@ -2,7 +2,8 @@ import { basename } from 'node:path'
 import { listProjects, type ProjectRecord } from '../registry.js'
 import { nodeFs } from '../node-fs.js'
 import { isActivated } from '../project.js'
-import { readAllAgents, type AgentMeta } from '../store/index.js'
+import { readRuns, type AgentMeta } from '../store/index.js'
+import { contextHosts } from '../dashboard-rpc/context.js'
 import type { ProjectError, StaysLocal } from '../project-state.js'
 import { projectGitHost, type GitHostFor } from '../store/git-host.js'
 import { projectNameOf, repositoryAddress, sessionsHome } from '@openagt/agent-data'
@@ -63,8 +64,8 @@ export interface ProjectionRead<T> {
 /** Injectable readers so {@link summarizeProject} is unit-testable off disk. */
 export interface SummarizeDeps {
   isActivated?: (path: string) => Promise<boolean>
-  /** The project's runs (live + archived), newest-first. Defaults to {@link readAllAgents}. */
-  readAgents?: (path: string) => Promise<AgentMeta[]>
+  /** The project's runs, newest-first: its hosts' by default. */
+  readAgents?: (record: ProjectRecord) => Promise<AgentMeta[]>
   /** The project's git host. Defaults to {@link projectGitHost}. */
   gitHost?: GitHostFor
   /** The project's name. Defaults to {@link projectNameOf}: its repository's. */
@@ -84,9 +85,9 @@ export interface SummarizeDeps {
  */
 export async function summarizeProject(record: ProjectRecord, deps: SummarizeDeps = {}): Promise<ProjectSummary> {
   const checkActivated = deps.isActivated ?? isActivated
-  const loadAgents = deps.readAgents ?? readAllAgents
+  const loadAgents = deps.readAgents ?? (project => readRuns(contextHosts(), { id: project.id, name: basename(project.path), dir: project.path }))
   const activated = await checkActivated(record.path).catch(() => false)
-  const agents = await loadAgents(record.path).catch(() => [] as AgentMeta[])
+  const agents = await loadAgents(record).catch(() => [] as AgentMeta[])
   // ISO timestamps sort chronologically.
   const agentActivity = agents.map(r => r.updatedAt || r.startedAt).filter(Boolean)
   const lastActivityAt = agentActivity.filter((a): a is string => !!a).sort().at(-1)

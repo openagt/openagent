@@ -1,10 +1,11 @@
-import { resolveAgentCheckout } from '../store/index.js'
+import { readRun, readRuns, type AgentMeta, type RunHosts } from '../store/index.js'
+import { SESSIONS_ID } from '../project-address.js'
 import { defaultProjectsProvider, type ProjectsProvider } from '../dashboard/projects.js'
 import type { PreferencesStore } from '../registry.js'
 import type { OpenAgentUpdates } from '../dashboard/openagent-update.js'
 import type { ProjectStateReader } from '../project-state.js'
 import type { AddProjectResult, RemoveProjectResult, StartAgentOptions, StartAgentResult, StartedInResult } from '../dashboard/types.js'
-import type { ProjectRef, RunHost, RunRef } from '@openagt/hooks'
+import { LOCAL_HOST, type ProjectRef, type RunHost, type RunRef } from '@openagt/hooks'
 
 /** Wired by the daemon so `sendStart` can reach the daemon's own `startAgent` closure. */
 export type StartAgentHandler = (
@@ -92,16 +93,43 @@ export function resolveProjectPath(projectId: string): Promise<string | undefine
 }
 
 /**
- * The checkout a call should act on: a live agent's own worktree when `agentId` names one (#738/#749),
- * else the project root. Since #736 an agent reads and writes inside its worktree — its event log,
- * its control log, its working tree — so anything addressed at a *run* has to resolve here, not
- * at the project path, or it reads an empty log and steers an agent that is not listening. The
- * resolution itself (and its #766 first-seconds subtlety) lives in the store's
- * {@link resolveAgentCheckout}, shared with the daemon; this adds only the project-id lookup.
+ * A project as a host is asked about it, by its id: its name and folder off the list, the sessions
+ * with no project none. Undefined for an id no project has.
+ */
+export async function contextProject(projectId: string): Promise<{ project: ProjectRef | undefined } | undefined> {
+  if (projectId === SESSIONS_ID) return { project: undefined }
+  const listed = (await contextProjects().list().catch(() => [])).find(project => project.id === projectId)
+  return listed ? { project: { id: listed.id, name: listed.name, dir: listed.path } } : undefined
+}
+
+/**
+ * The checkout a call should act on: a run's own while its host says it has one (#738/#749), else
+ * the project's folder. A run reads and writes inside its checkout, so anything addressed at a
+ * run resolves here; once the checkout is gone, the project's own state is the sane thing to act on.
  */
 export async function resolveAgentPath(projectId: string, agentId?: string): Promise<string | undefined> {
   const cwd = await resolveProjectPath(projectId)
-  return cwd ? resolveAgentCheckout(cwd, agentId) : undefined
+  if (!cwd || !agentId) return cwd
+  const at = await contextProject(projectId)
+  if (!at) return cwd
+  const run: RunRef = { id: agentId, ...(at.project ? { project: at.project } : {}) }
+  return (await (await runHostOf(run)).find(run).catch(() => undefined))?.checkout ?? cwd
+}
+
+/** Where the shell asks about runs: this computer's host and those beside it in a project. */
+export function contextHosts(): RunHosts {
+  return { local: LOCAL_HOST, of: async project => [contextHost(), ...(await contextOtherHosts(project).catch((): RunHost[] => []))] }
+}
+
+/** A listed project's runs, or with none the sessions with no project, as their hosts say them. */
+export function contextRuns(project: { id: string; name: string; path: string } | undefined): Promise<AgentMeta[]> {
+  return readRuns(contextHosts(), project ? { id: project.id, name: project.name, dir: project.path } : undefined)
+}
+
+/** One run of a project by their ids, as its hosts say it; none for a project not on the list, or a run no host has. */
+export async function contextRun(projectId: string, agentId: string): Promise<AgentMeta | undefined> {
+  const at = await contextProject(projectId)
+  return at ? readRun(contextHosts(), at.project, agentId) : undefined
 }
 
 /** This computer's host (`run.host`, #2394): where a run starts when no other host is picked. */

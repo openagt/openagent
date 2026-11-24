@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import type { AgentMeta } from '../store/agent-store.js'
+import type { AgentMeta } from '../store/index.js'
 import { moduleAgents } from './module-agents.js'
 
 const run = (id: string, startedAt: string, more: Partial<AgentMeta> = {}): AgentMeta => ({ id, status: 'done', startedAt, updatedAt: startedAt, cwd: `/work/${id}`, ...more }) as AgentMeta

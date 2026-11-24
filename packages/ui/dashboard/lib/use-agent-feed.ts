@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { OpenAgentEvent } from '../../src/index.js'
+import type { RunEvent } from '@openagt/hooks'
 import { onAgent } from '../rpc/reads.js'
 import { agentLogKey } from './agent-log.js'
 import { agentOutcome, isAgentActive } from './live-state.js'
@@ -18,13 +18,13 @@ export function useAgentFeed(
   projectId: string,
   agentId: string,
   live: boolean | null,
-  events: OpenAgentEvent[],
+  events: RunEvent[],
   replayed: boolean,
 ): {
   /** The archived log, once read: `null` while the agent works, and until the read has answered. */
-  archived: OpenAgentEvent[] | null
+  archived: RunEvent[] | null
   /** The events the page shows. */
-  shown: OpenAgentEvent[]
+  shown: RunEvent[]
   /** The shown log's current leg has not ended. */
   active: boolean
   /** Live as the feed knows it, which can be before the list of agents does. */
@@ -37,7 +37,7 @@ export function useAgentFeed(
   // line written as a clean run is recorded only ever lands in the archive — its worktree journal is
   // torn down with the worktree — so without this the PR line waited for a manual refresh.
   const [archiveBehind, setArchiveBehind] = useState(0)
-  const archived = useLoaded<OpenAgentEvent[] | null>(
+  const archived = useLoaded<RunEvent[] | null>(
     live === false ? () => onAgent(projectId, agentId) : null,
     null,
     [projectId, agentId, live, archiveBehind],
