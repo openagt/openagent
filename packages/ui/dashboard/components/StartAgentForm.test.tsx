@@ -112,9 +112,9 @@ const ON_CODEX = { 'agent-driver': { driver: 'codex', model: 'gpt-5' } }
 /** Where the agent starts, as the row above the box says it. */
 const startsAt = (): string => screen.getByTestId('starts-at').textContent ?? ''
 
-/** The repos on this computer as the projects module offers them (`composer.where`). */
+/** The repos on this computer as the projects module offers them (`composer.where`), beside the Auto levels every test has. */
 const reposHere = (repos: { folder: string; label: string; detail: string }[]) =>
-  mountedOf({ options: { 'composer.where': [{ place: 'composer.where', id: 'this-computer', label: 'Repos', order: 0, repos: async () => ({ repos, loading: false }), package: '@openagt/projects', projects: [], computer: true }] } })
+  mountedOf({ options: { 'composer.auto': AUTO.options['composer.auto'], 'composer.where': [{ place: 'composer.where', id: 'this-computer', label: 'Repos', order: 0, repos: async () => ({ repos, loading: false }), package: '@openagt/projects', projects: [], computer: true }] } })
 
 const { StartAgentForm } = await import('./StartAgentForm.js')
 
