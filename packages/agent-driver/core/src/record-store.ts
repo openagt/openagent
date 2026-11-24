@@ -1,3 +1,4 @@
+import { execFile } from 'node:child_process'
 import { dirname, join } from 'node:path'
 import { nodeBranchFileFs, nodeGitRunner, projectDataDir, withProjectData, type BranchFileFs, type CommitMessage, type FileBranchWrite, type GitRunner } from '@openagt/agent-data'
 import {
@@ -118,16 +119,27 @@ export async function readDiary(root: string, id: string, deps: RecordDeps = {})
 }
 
 /**
- * Record a run: its card and its diary, as one commit, under the directory of the person the
- * repository commits as — or where the run already sits, when it does, so a run recorded again
+ * git's `user.email` in `root` by the person's own settings alone, without the ones the process's
+ * environment adds (`GIT_CONFIG_*`). A run that works as an account of OpenAgent's has that
+ * account's name put on the commits made in its project through them: whom the commits are by,
+ * not who started the run. Empty where the person's own settings name nobody, or git cannot say.
+ */
+function ownEmail(root: string): Promise<string> {
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^GIT_CONFIG_(COUNT$|KEY_|VALUE_)/.test(key)))
+  return new Promise(resolve => execFile('git', ['config', 'user.email'], { cwd: root, env, timeout: 10_000 }, (err, stdout) => resolve(err ? '' : String(stdout).trim())))
+}
+
+/**
+ * Record a run: its card and its diary, as one commit, under the directory of the person who
+ * started it, the one the repository commits as by the person's own settings (an account the run
+ * works as is not that person; where those settings name nobody, whoever git commits as there) — or where the run already sits, when it does, so a run recorded again
  * (its ending, written by a later process) stays in one place. Never throws; the funnel's outcome
  * says whether the commit landed and whether it was pushed.
  */
 export async function writeRun(root: string, card: RunCard, diary: readonly AnyDiaryLine[], deps: RecordDeps = {}): Promise<FileBranchWrite> {
   const r = resolveRecordDeps(deps)
   if (!isRunId(card.id)) return { ok: false, committed: false, error: `not a run id: ${card.id}` }
-  const email = await r.git(['config', 'user.email'], root).catch(() => '')
-  const person = personDir(email)
+  const person = personDir((await ownEmail(root)) || (await r.git(['config', 'user.email'], root).catch(() => '')))
   return r.funnel(root, `logs: record run ${card.id}`, async checkout => {
     const existing = await locate(checkout, card.id, r)
     const files = existing ?? {

@@ -77,6 +77,29 @@ test('a run is recorded under the person the repo commits as, one pushed commit;
   }
 })
 
+test("a run that works as an account is recorded under the person who started it, not under the account its environment signs the project's commits as", async () => {
+  const { root, cleanup } = await repo('Ada@Example.com')
+  const identity = join(await realpath(await mkdtemp(join(tmpdir(), 'logs-store-account-'))), 'commits.gitconfig')
+  await writeFile(identity, '[user]\n\tname = "octo-agent"\n\temail = "1+octo-agent@users.noreply.github.com"\n')
+  const common = await realpath((await git(['rev-parse', '--path-format=absolute', '--git-common-dir'], root)).trim())
+  // What a run's environment holds once it works as an account (`runEnv`, @openagt/github).
+  const account = { GIT_CONFIG_COUNT: '2', GIT_CONFIG_KEY_0: `includeIf.gitdir:${common}.path`, GIT_CONFIG_VALUE_0: identity, GIT_CONFIG_KEY_1: `includeIf.gitdir:${common}/**.path`, GIT_CONFIG_VALUE_1: identity }
+  const before = Object.fromEntries(Object.keys(account).map(key => [key, process.env[key]]))
+  Object.assign(process.env, account)
+  try {
+    assert.equal((await git(['config', 'user.email'], root)).trim(), '1+octo-agent@users.noreply.github.com', 'the commits made there are the account\'s')
+    assert.equal((await writeRun(root, card(R1), [])).ok, true)
+    assert.deepEqual((await listRuns(root)).map(c => [c.id, c.person]), [[R1, 'ada@example.com']])
+  } finally {
+    for (const [key, value] of Object.entries(before)) {
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
+    }
+    await rm(join(identity, '..'), RETRIED_RM)
+    await cleanup()
+  }
+})
+
 test('a run recorded again stays where it sits, even under another person; a card that does not parse is skipped', async () => {
   const { root, cleanup } = await repo('me@example.com')
   try {

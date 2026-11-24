@@ -395,3 +395,10 @@ already made, and lists it in its pull request; for anything else it proposes an
   A press that stands alone opens no dialog on a sign-in found under way; the card does, so one
   sign-in never opens two on a page. Picked (Suleiman, 2026-11-24) over an empty field, and over
   the step logging the computer's own CLI in.
+- A run is recorded under the person who started it: the email git commits as in the project by
+  the person's own settings, read without the settings a run's environment adds. A run that
+  works as one of OpenAgent's accounts has that account's name put on its project's commits
+  through its environment, and its record took the account's address with it: the same person
+  was two, by who started a session, by their picture and by what counts as theirs. Where the
+  person's own settings name nobody (a server never given an email), whoever git commits as
+  there stands. Picked (Suleiman, 2026-11-24) over the record following the commits' author.
