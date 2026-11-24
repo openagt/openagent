@@ -578,8 +578,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   need none. "When it finishes" is still a project's alone: a session with no project has no
   repository of its own to publish. A project's Context is the same menu as with no project,
   repos that are no project among its rows, and the files picked for it over them: before, it
-  listed the projects alone. What a tick does there is unchanged, and the menu's heading says
-  it: the agent is pointed at the repo where it is, and nothing is copied. The menu stands over
+  listed the projects alone. The menu stands over
   the box where the page has the room, under its own button otherwise. A session's own page says its Context in the launcher's
   button and a menu as the launcher's, its repos ticked and not offered: a session keeps them.
   Picked over words with a hover, which read as another control.
@@ -590,10 +589,15 @@ already made, and lists it in its pull request; for anything else it proposes an
   per repo, and the row under the box had no Context: two controls for one question, what the
   agent works with. Picked over the chips kept above the box with Context only adding, and over
   the names on the button, both of which run off a phone's width; it costs the names at rest and
-  a second press to take one out. What a tick does differs, and the menu says so: with a project
-  it narrows the agent's focus, with none the repo is copied. Each is a copy in the session's folder, cloned from the repo's folder on a
-  new branch, its origin the repo's own; none is made a project. The agent starts in the
-  session's folder and finds the repos as folders there; the prompt says nothing of them.
+  a second press to take one out. A tick does the same with a project and with none, and the
+  menu's heading says it: the repo is copied. Before, a tick with a project pointed the agent at
+  the repo's folder, and it worked in the person's own checkout there; picked over keeping both,
+  as one menu that does two things reads as a fault. A session in a project says its repos on its
+  own page as one with none does, ticked and not offered, with the files picked for the next
+  message over them: a repo is not added after the start. Each is a copy in the session's folder, cloned from the repo's folder on a
+  new branch, its origin the repo's own; none is made a project. With no project the agent starts in the
+  session's folder and finds the repos as folders there; the prompt says nothing of them. In a
+  project it starts in its checkout, and is told where the copies are.
   The session's record names them, and a resumed session goes on with the same copies.
   Picked over a worktree of each repo, which leaves branches and checkouts in a folder that
   is no project, and over a clone from the repo's address, which needs a login and the

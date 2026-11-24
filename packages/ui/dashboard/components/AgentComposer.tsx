@@ -12,7 +12,7 @@ import { keepDraft, keepDraftImages, keptDraft, keptDraftImages } from '../lib/d
 import { DaemonDown } from '../lib/use-daemon-health.js'
 import { Button } from './ui/button.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
-import { ProjectContextMenu } from './ContextMenu.js'
+import { SessionContextMenu } from './ContextMenu.js'
 import { SessionReposSaid } from './SessionRepos.js'
 import { AutoMenu, autoSaid } from './AutoMenu.js'
 import { ProfileOff } from './ProfileMenu.js'
@@ -111,7 +111,7 @@ export function AgentComposer({
   prBase?: string | undefined
   /** The row above the box: where the session started. */
   row?: ReactNode
-  /** The repos a session with no project has, as its record says. */
+  /** The repos the session has as copies, as its record says. */
   repos?: readonly { name: string; from: string }[] | undefined
   /** The profile the session is on, by its id, as its record says; Default when absent. */
   profile?: string | undefined
@@ -331,7 +331,7 @@ export function AgentComposer({
         // The launcher's gear, line for line in its places: the profile, said and not offered, since a
         // session keeps the one it started on; "Skills", the picks it started with in its hover; the
         // account the run worked as; then, set apart and still a pick, "When it finishes". After the
-        // gear, the Context picker; for a session with no project, the repos it started with, said, and
+        // gear, Context: the repos the session started with, said, and in a project the files picked for the next message; for a session with no project,
         // no git to take its work further with.
         setup={{
           said: setupSaid,
@@ -344,7 +344,7 @@ export function AgentComposer({
             </>
           ),
         }}
-        controls={noProject ? <SessionReposSaid repos={repos ?? []} /> : contextSet && <ProjectContextMenu projectId={projectId} context={contextSet.context} busy={busy} onToggle={contextSet.toggle} />}
+        controls={noProject ? <SessionReposSaid repos={repos ?? []} /> : contextSet && <SessionContextMenu repos={repos ?? []} context={contextSet.context} busy={busy} onToggle={contextSet.toggle} />}
         idleControl={idleControl}
         notes={
           <>

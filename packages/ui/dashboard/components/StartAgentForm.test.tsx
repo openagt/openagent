@@ -934,11 +934,11 @@ describe('StartAgentForm (#1774)', () => {
     expect(startsAt()).toBe('gemstackmy/work (local)')
   })
 
-  test('the picked Context rides the prompt as one line at its end, after the command\'s own words', async () => {
+  test('the picked files ride the prompt as one line at its end, after the command\'s own words; the picked repos go with the Start, to be copied', async () => {
     onCommands.mockResolvedValue({ commands: [], gitHost: true })
     start.mockResolvedValue({ agentId: 'r1' })
     render(<StartAgentForm {...props} context={new Set(['/repos/other', 'src/app.ts'])} />)
     fireEvent.click(screen.getByText('submit-typed'))
-    await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing\n\nContext: /repos/other, src/app.ts', {}))
+    await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing\n\nContext: src/app.ts', { repos: ['/repos/other'] }))
   })
 })

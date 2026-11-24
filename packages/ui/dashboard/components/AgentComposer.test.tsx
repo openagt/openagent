@@ -18,7 +18,9 @@ vi.mock('./AutoMenu.js', () => ({
 }))
 vi.mock('../lib/use-project-launcher.js', () => ({ useProjectLauncher: () => ({ gitHost: true, remote: true }) }))
 // The Context picker reads the projects; here it is a stand-in that says what it was given.
-vi.mock('./ContextMenu.js', () => ({ ProjectContextMenu: ({ context }: { context: Set<string> }) => <span>Context · {[...context].join(', ')}</span> }))
+vi.mock('./ContextMenu.js', () => ({
+  SessionContextMenu: ({ context, repos }: { context: Set<string>; repos: readonly { name: string }[] }) => <span>Context · {[...repos.map(repo => repo.name), ...context].join(', ')}</span>,
+}))
 // The launcher's other items, each tested on its own: stand-ins that say what they were given.
 vi.mock('./ProfileMenu.js', () => ({ ProfileOff: ({ profile }: { profile?: string }) => <span>Profile · {profile ?? 'default'}</span> }))
 // How many skills the session got, for the gear's hover: a test sets it.
@@ -108,6 +110,12 @@ describe('AgentComposer row under the box', () => {
     renderComposer({ profile: 'reviewer', gitHost: { url: 'https://github.com/o/r', name: 'GitHub' }, gitAccount: 'octo-agent', publish: 'pr', contextSet, pluginsWithout: ['tickets'], projectSkills: ['deploy'] })
     expect(screen.getByTestId('composer-setup').textContent).toBe('Profile · reviewerSkills · tickets/deployAccount · octo-agentAuto: prpick Open PRpick Commit')
     expect(screen.getByTestId('composer-controls').textContent).toBe('Context · src/app.ts')
+  })
+
+  test('a session in a project says the repos it started with, its copies, beside the files picked for the next message', () => {
+    const contextSet = { context: new Set(['src/app.ts']), add: vi.fn(), remove: vi.fn(), toggle: vi.fn(), reset: vi.fn() }
+    renderComposer({ contextSet, repos: [{ name: 'api', from: '/w/api' }] })
+    expect(screen.getByTestId('composer-controls').textContent).toBe('Context · api, src/app.ts')
   })
 
   test("a session with no project: the profile and its skills in the gear, no Auto; after it Context is the launcher's button, saying how many repos it started with", () => {
