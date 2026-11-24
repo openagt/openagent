@@ -1,14 +1,16 @@
 {
   "id": "2026-11-24T13-04-37-924Z",
   "startedAt": "2026-11-24T13:04:38.203Z",
-  "status": "running",
+  "endedAt": "2026-11-24T13:05:32.369Z",
+  "status": "waiting",
   "intent": "ask me simple question with options",
   "title": "Simple question with options",
   "driver": "claude-code",
   "model": "claude-opus-5-5",
   "effort": "high",
-  "cost": 0.14686,
-  "contextTokens": 21509,
+  "branch": "agent-2026-11-24T13-04-37-924Z",
+  "cost": 0.23134919999999998,
+  "contextTokens": 21584,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",

@@ -17,3 +17,10 @@
 {"kind":"result","text":"You picked coffee. Want to try another question?","sessionId":"52a08fdd-bcb4-46ca-a242-d728a566680e","at":"2026-11-24T13:05:06.705Z"}
 {"kind":"cost","usd":0.0773408,"at":"2026-11-24T13:05:06.705Z"}
 {"kind":"ended","status":"done","at":"2026-11-24T13:05:06.706Z"}
+{"kind":"start","prompt":"ask me other question","at":"2026-11-24T13:05:31.832Z"}
+{"kind":"session","sessionId":"52a08fdd-bcb4-46ca-a242-d728a566680e","at":"2026-11-24T13:05:31.833Z"}
+{"kind":"tokens","tokens":21584,"at":"2026-11-24T13:05:31.833Z"}
+{"kind":"result","text":"","sessionId":"52a08fdd-bcb4-46ca-a242-d728a566680e","at":"2026-11-24T13:05:32.369Z"}
+{"kind":"cost","usd":0.0844892,"at":"2026-11-24T13:05:32.369Z"}
+{"kind":"question","title":"How do you take your coffee?","header":"Coffee","options":[{"id":"opt:0","label":"Black","detail":"Nothing added."},{"id":"opt:1","label":"With milk","detail":"A splash of milk or cream."},{"id":"opt:2","label":"Sweet","detail":"Sugar or syrup."},{"id":"opt:3","label":"Milk and sugar","detail":"Both."}],"at":"2026-11-24T13:05:32.369Z"}
+{"kind":"ended","status":"waiting","at":"2026-11-24T13:05:32.369Z"}
