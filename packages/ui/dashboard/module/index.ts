@@ -278,6 +278,7 @@ export { runName } from '../../src/client.js'
 export { SettingsFoot, SettingsItem, SettingsItems, SettingsSection, SettingsRow, SettingsRowShapes, SettingsSelectRow, ToggleRow, type SettingsOption } from '../components/SettingsRows.js'
 export { Avatar } from '../components/PersonMenu.js'
 export { usePerson, personChanged } from '../lib/use-person.js'
+export { AgentFix, useAgentState } from '../components/Logins.js'
 
 export { Dialog } from '../components/ui/dialog.js'
 export { useCodingAgents, type CodingAgent } from '../lib/models.js'

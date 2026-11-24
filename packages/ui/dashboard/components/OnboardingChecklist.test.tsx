@@ -19,6 +19,21 @@ vi.mock('../lib/preferences.js', () => ({
 }))
 const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), onAgentState: vi.fn(), sendAgentFix: vi.fn(), sendGitHostInstall: vi.fn(), sendGitHostLogin: vi.fn(), sendStopGitHostLogin: vi.fn(), sendUseGitHostAccount: vi.fn() }))
 vi.mock('../rpc/logins.js', () => logins)
+const onAgentAccounts = vi.hoisted(() => vi.fn())
+vi.mock('../rpc/accounts.js', () => ({ onAgentAccounts, sendUseAgentAccountFirst: vi.fn() }))
+// The press that connects an agent is its package's: here a stand-in that says which agent it is for, and whether it is the primary.
+vi.mock('../lib/use-modules.js', async () => {
+  const actual = await vi.importActual<typeof import('../lib/use-modules.js')>('../lib/use-modules.js')
+  const { createElement } = await import('react')
+  const View = ({ agent, primary, onConnected }: { agent: string; primary: boolean; onConnected: () => void }) => createElement('button', { type: 'button', 'data-primary': primary, onClick: onConnected }, `Connect ${agent}`)
+  return {
+    ...actual,
+    useMountedModules: () => {
+      const mounted = actual.useMountedModules()
+      return { ...mounted, views: { ...mounted.views, 'agent.connect': [{ place: 'agent.connect', id: 'connect', package: '@openagt/agent-driver', projects: [], View }] } }
+    },
+  }
+})
 // One stable object, so a test can steer the start and its error without a re-mock.
 const startAgent = vi.hoisted(() => ({ start: vi.fn(), busy: false, error: null as string | null }))
 vi.mock('../lib/use-start-agent.js', async () => ({
@@ -26,7 +41,7 @@ vi.mock('../lib/use-start-agent.js', async () => ({
   useStartAgent: () => startAgent,
 }))
 
-const { OnboardingChecklist, greeting } = await import('./OnboardingChecklist.js')
+const { OnboardingChecklist } = await import('./OnboardingChecklist.js')
 const { takePendingDraft } = await import('../lib/draft-handoff.js')
 
 const github = (accounts: { login: string; runs: boolean; ok: boolean }[]) => ({
@@ -37,6 +52,7 @@ const CONNECTED = github([{ login: 'octo', runs: true, ok: true }])
 beforeEach(() => {
   logins.onAgentState.mockResolvedValue({ driver: 'claude-code', ready: true })
   logins.onGitHosts.mockResolvedValue(CONNECTED)
+  onAgentAccounts.mockResolvedValue({ accounts: [] })
 })
 
 afterEach(() => {
@@ -68,8 +84,8 @@ const WITH_PROJECT: DashboardData = {
 
 const SHOP: ProjectSummary = { id: 'p1', path: '/home/ada/shop', name: 'shop', activated: true, gitHost: true }
 
-const steps = ({ projects = [] as ProjectSummary[], onAgentStarted = vi.fn(), onSelectProject = vi.fn(), onRead = vi.fn(), listedPages = [] as readonly ListedPage[] | null } = {}) =>
-  render(<OnboardingChecklist projects={projects} onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} onProjectAdded={vi.fn()} onRead={onRead} listedPages={listedPages} />)
+const steps = ({ projects = [] as ProjectSummary[], onAgentStarted = vi.fn(), onSelectProject = vi.fn(), listedPages = [] as readonly ListedPage[] | null } = {}) =>
+  render(<OnboardingChecklist projects={projects} onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} onProjectAdded={vi.fn()} listedPages={listedPages} />)
 
 /** A step's row, by its title. */
 const row = (label: string) => screen.getByRole('listitem', { name: label })
@@ -84,36 +100,28 @@ const clickImport = async () => {
   await waitFor(() => expect(startAgent.start).toHaveBeenCalled())
 }
 
-describe('the greeting', () => {
-  test('by the time of day: morning until noon, afternoon until six, then evening', () => {
-    expect(greeting(8)).toBe('Good morning')
-    expect(greeting(13)).toBe('Good afternoon')
-    expect(greeting(20)).toBe('Good evening')
-    expect(greeting(2)).toBe('Good evening')
-  })
-})
-
 describe('the first steps on the Overview', () => {
-  test('greets the person, and a dash a step says where they stand', async () => {
+  test('is named "Discover OpenAgent", and a count says where the steps stand', async () => {
     onDashboard.mockResolvedValue(EMPTY)
     logins.onGitHosts.mockResolvedValue(github([]))
     steps()
     // A part's heading like every other, the count beside it as every part's count stands.
-    const heading = await screen.findByRole('heading', { level: 2, name: /^Good (morning|afternoon|evening), Ada 0 of 2$/ })
+    const heading = await screen.findByRole('heading', { level: 2, name: 'Discover OpenAgent 1 of 3' })
     expect(heading.className).toContain('text-sm')
-    expect(within(heading).getByText('0 of 2').className).toContain('font-normal')
-    expect(await screen.findByRole('list', { name: '0 of 2 done' })).toBeTruthy()
+    expect(within(heading).getByText('1 of 3').className).toContain('font-normal')
+    expect(await screen.findByRole('list', { name: '1 of 3 done' })).toBeTruthy()
   })
 
-  test.each(['dashboard', 'agent', 'hosts'])('says "Loading…" and no step until the projects, the coding agent and the git hosts are read, and tells the page only then: %s answers last', async last => {
-    const answers: Record<string, (value: unknown) => void> = {}
-    const held = (name: string) => () => new Promise(resolve => (answers[name] = resolve))
+  test.each(['dashboard', 'agent', 'hosts'])('says "Loading…" and no step until the projects, the coding agents and the git hosts are read: %s answers last', async last => {
+    // Each read is asked once or more (each coding agent is): an answer goes to every asker.
+    const askers: Record<string, ((value: unknown) => void)[]> = {}
+    const answers: Record<string, (value: unknown) => void> = { dashboard: value => askers['dashboard']!.forEach(to => to(value)), agent: value => askers['agent']!.forEach(to => to(value)), hosts: value => askers['hosts']!.forEach(to => to(value)) }
+    const held = (name: string) => () => new Promise(resolve => (askers[name] ??= []).push(resolve))
     onDashboard.mockImplementation(held('dashboard'))
     logins.onAgentState.mockImplementation(held('agent'))
     logins.onGitHosts.mockImplementation(held('hosts'))
     const values: Record<string, unknown> = { dashboard: WITH_PROJECT, agent: { driver: 'claude-code', ready: true }, hosts: CONNECTED }
-    const onRead = vi.fn()
-    steps({ onRead })
+    steps()
     expect(await screen.findByText('Loading…')).toBeTruthy()
     expect(screen.queryAllByRole('listitem')).toEqual([])
     await act(async () => {
@@ -121,17 +129,16 @@ describe('the first steps on the Overview', () => {
     })
     expect(screen.getByText('Loading…')).toBeTruthy()
     expect(screen.queryAllByRole('listitem')).toEqual([])
-    expect(onRead).not.toHaveBeenCalled()
     await act(async () => answers[last]!(values[last]))
     expect(within(row('Add your first project')).getByLabelText('Done')).toBeTruthy()
-    expect(onRead).toHaveBeenCalled()
     expect(screen.queryByText('Loading…')).toBeNull()
   })
 
-  test('while it reads, the card draws a row per step it knows of once the coding agent and the git hosts are read, so no row is pushed by a step they add', async () => {
+  test('while it reads, the card draws a row per step it knows of once the coding agents and the git hosts are read, so no row is pushed by a step they add', async () => {
     onDashboard.mockImplementation(() => new Promise(() => {}))
-    let agent: (value: unknown) => void = () => {}
-    logins.onAgentState.mockImplementation(() => new Promise(resolve => (agent = resolve)))
+    const asked: ((value: unknown) => void)[] = []
+    const agent = (value: unknown): void => asked.forEach(to => to(value))
+    logins.onAgentState.mockImplementation(() => new Promise(resolve => asked.push(resolve)))
     steps()
     await screen.findByText('Loading…')
     expect(document.querySelector('ol')).toBeNull()
@@ -139,7 +146,7 @@ describe('the first steps on the Overview', () => {
     await screen.findByText('Loading…')
     const frame = document.querySelector('ol[aria-hidden="true"]')
     const rows = [...(frame?.children ?? [])].map(item => item.querySelector('span.text-sm')?.textContent)
-    expect(rows[0]).toBe('Set up Claude Code')
+    expect(rows[0]).toBe('Connect a coding agent')
     expect(rows).toContain('Add your first project')
   })
 
@@ -204,7 +211,7 @@ describe('the first steps on the Overview', () => {
     expect(within(row('Connect GitHub')).getByText(/an account of its own, never your own login/)).toBeTruthy()
     expect(within(row('Connect GitHub')).getByRole('button', { name: 'Add a GitHub account' })).toBeTruthy()
     // Numbers, not boxes: a box invites a click that can tick nothing.
-    expect(within(row('Add your first project')).getByText('2')).toBeTruthy()
+    expect(within(row('Add your first project')).getByText('3')).toBeTruthy()
     expect(within(row('Add your first project')).queryByRole('combobox', { name: 'Add a project' })).toBeNull()
 
     await openStep('Add your first project')
@@ -221,13 +228,37 @@ describe('the first steps on the Overview', () => {
     expect(within(row('Add your first project')).getByText('shop')).toBeTruthy()
   })
 
-  test('the coding agent, while it is missing, is a step of its own with its press', async () => {
+  test('the first step connects a coding agent, a press an agent, Claude the primary; one whose program is missing is installed first', async () => {
     onDashboard.mockResolvedValue(WITH_PROJECT)
-    logins.onAgentState.mockResolvedValue({ driver: 'claude-code', ready: false, problem: '`claude` not found', fix: { kind: 'install', command: 'curl -fsSL https://claude.ai/install.sh | bash' } })
+    logins.onAgentState.mockImplementation(async (driver: string) =>
+      driver === 'codex'
+        ? { driver: 'codex', ready: false, problem: '`codex` not found', fix: { kind: 'install', command: 'curl -fsSL https://chatgpt.com/codex/install.sh | sh' } }
+        : { driver: 'claude-code', ready: false, problem: '`claude` is not logged in.', fix: { kind: 'log-in', command: 'claude auth login' } },
+    )
     steps({ projects: [SHOP] })
-    await waitFor(() => expect(row('Set up Claude Code').getAttribute('aria-current')).toBe('step'))
-    expect(within(row('Set up Claude Code')).getByText('Claude Code is not installed.')).toBeTruthy()
-    expect(within(row('Set up Claude Code')).getByRole('button', { name: 'Install Claude Code' })).toBeTruthy()
+    await waitFor(() => expect(row('Connect a coding agent').getAttribute('aria-current')).toBe('step'))
+    const step = within(row('Connect a coding agent'))
+    expect(step.getByText(/Sessions run on Claude Code or Codex/)).toBeTruthy()
+    expect(step.getByRole('button', { name: 'Connect claude' }).getAttribute('data-primary')).toBe('true')
+    // No "Log this computer in": the press is the window an account is added in.
+    expect(step.queryByRole('button', { name: /Log this computer in/ })).toBeNull()
+    expect(step.getByRole('button', { name: 'Install Codex' })).toBeTruthy()
+    expect(step.queryByRole('button', { name: 'Connect codex' })).toBeNull()
+  })
+
+  test('it is done once either agent has an account, and says which and whose; the agents are read again after a sign-in', async () => {
+    onDashboard.mockResolvedValue(EMPTY)
+    logins.onGitHosts.mockResolvedValue(github([]))
+    let connected = false
+    logins.onAgentState.mockImplementation(async (driver: string) => ({ driver, ready: connected && driver === 'claude-code' }))
+    onAgentAccounts.mockImplementation(async (agent: string) => ({ accounts: agent === 'claude' ? [{ id: 'ada', name: 'Ada', own: false, windows: [] }] : [] }))
+    steps()
+    const press = await screen.findByRole('button', { name: 'Connect claude' })
+    connected = true
+    fireEvent.click(press)
+    await waitFor(() => expect(within(row('Connect a coding agent')).getByLabelText('Done')).toBeTruthy())
+    expect(within(row('Connect a coding agent')).getByText('Claude · Ada')).toBeTruthy()
+    expect(row('Connect GitHub').getAttribute('aria-current')).toBe('step')
   })
 
   test('the steps nothing breaks without are marked optional, and the essentials are not', async () => {
@@ -243,7 +274,7 @@ describe('the first steps on the Overview', () => {
     const openPage = vi.fn()
     render(
       <HostServicesContext.Provider value={{ ...INERT_HOST_SERVICES, openPage }}>
-        <OnboardingChecklist projects={[SHOP]} onAgentStarted={vi.fn()} onSelectProject={vi.fn()} onProjectAdded={vi.fn()} onRead={vi.fn()} listedPages={null} />
+        <OnboardingChecklist projects={[SHOP]} onAgentStarted={vi.fn()} onSelectProject={vi.fn()} onProjectAdded={vi.fn()} listedPages={null} />
       </HostServicesContext.Provider>,
     )
     await openStep('Populate the queue of AI tasks')
@@ -258,20 +289,26 @@ describe('the first steps on the Overview', () => {
 
   test('the queue step is there only while some project has a queue at all, the tickets step only while some project provides tickets (#1774)', async () => {
     onDashboard.mockResolvedValue({ ...WITH_PROJECT, projects: [{ projectId: 'p1', hasTickets: false, providesTickets: false }] } as DashboardData)
+    // A step still open, so the card is there.
+    logins.onGitHosts.mockResolvedValue(github([]))
     steps({ projects: [SHOP] })
     await waitFor(() => expect(row('Add your first project')).toBeTruthy())
     expect(screen.queryByRole('listitem', { name: 'Populate the queue of AI tasks' })).toBeNull()
     expect(screen.queryByRole('listitem', { name: 'Populate the tickets' })).toBeNull()
   })
 
-  test('every step a session needs done: it says so, and its press starts the first session, the steps put away', async () => {
+  test('with every step done it is gone: the box under it is how a session starts', async () => {
     onDashboard.mockResolvedValue({ ...WITH_PROJECT, projects: [{ projectId: 'p1', hasTickets: false, providesTickets: false }] } as DashboardData)
-    const onSelectProject = vi.fn()
-    steps({ projects: [SHOP], onSelectProject })
-    expect(await screen.findByRole('region', { name: "You're all set, Ada" })).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Start your first session' }))
-    expect(onSelectProject).toHaveBeenCalledWith('p1')
-    expect(updatePreferences).toHaveBeenCalledWith({ onboardingDismissed: true })
+    const { container } = steps({ projects: [SHOP] })
+    await waitFor(() => expect(onDashboard).toHaveBeenCalled())
+    await waitFor(() => expect(container.textContent).toBe(''))
+    expect(screen.queryByRole('button', { name: 'Start your first session' })).toBeNull()
+  })
+
+  test('an optional step still open keeps it: only every step done takes it away', async () => {
+    onDashboard.mockResolvedValue(WITH_PROJECT)
+    steps({ projects: [SHOP] })
+    expect(await screen.findByRole('heading', { level: 2, name: 'Discover OpenAgent 3 of 4' })).toBeTruthy()
   })
 
   test('with no project yet, there is no import to offer: no project provides tickets', async () => {

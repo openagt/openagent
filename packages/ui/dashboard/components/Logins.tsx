@@ -1,17 +1,20 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { DRIVER_LABELS, type DriverName } from '../../src/client.js'
-import { onAgentState, onGitHosts, sendAgentFix, sendStopAgentFix, type AgentState, type GitHostRow, type GitHostsView } from '../rpc/logins.js'
+import { onAgentState, onGitHosts, sendAgentFix, type AgentState, type GitHostRow, type GitHostsView } from '../rpc/logins.js'
 import { useAskOn, usePolled, type ReadState } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
 import { CopyButton } from './ui/copy-button.js'
+import { useMountedModules } from '../lib/use-modules.js'
+import { ModuleSlot } from './ModulePageView.js'
 
 // What runs log in with, and what is missing for them to (#2194's accounts, a step further): the
 // coding agent's CLI, installed and logged in, and the tool of each git host the projects are on.
 // Each is drawn from its own package's answers; a press runs the command that package declared.
+// A coding agent with no account gets one in its package's own window (`agent.connect`).
 // An account at a git host is added in a dialog of its own (`AddGitAccount.tsx`).
-// Four places show it: the cards of the Permissions page, the Overview's "Get ready" step, the
-// start form's red line, and the dot on the person's picture.
+// Four places show it: the cards of the Permissions page, the Overview's "Discover OpenAgent"
+// steps, the start form's red line, and the dot on the person's picture.
 
 
 /** How often a page asks again: often while something is under way (an install, the browser's yes), less while something is missing, seldom once all is there. */
@@ -103,51 +106,23 @@ export function hostWords(row: GitHostRow): string {
 /** How a fix's press is drawn: the page's primary by default, or a quieter press beside another's. */
 export type FixVariant = 'secondary' | undefined
 
-/** A press that fixes one thing: its button, what it is doing while it does, the command it runs, why it failed. With `words`, what is missing stands on the press's line, the press at its right edge. While it is busy, `url` is the page it said to open, and `onCancel` stops it. */
-export function FixAction({ label, busy, busyWords, command, failed, onPress, words, url, onCancel, size = 'default', variant }: { label: string; busy: boolean; busyWords: string; command?: string; failed?: string; onPress: () => void; words?: ReactNode; url?: string | undefined; onCancel?: (() => void) | undefined; size?: 'default' | 'sm' | undefined; variant?: FixVariant }) {
-  // Busy, the press stays with the focus it was pressed with, and says it is waiting under it. On a phone the
-  // page's press is a finger's 44, as a form's foot is.
-  const press = (
-    <Button size={size} variant={variant} loading={busy} onClick={onPress} className={cn(size === 'default' && 'max-md:h-11')}>
-      {label}
-    </Button>
-  )
+/** A press that fixes one thing: its button, what it is doing while it does, the command it runs, why it failed. */
+export function FixAction({ label, busy, busyWords, command, failed, onPress, size = 'default', variant }: { label: string; busy: boolean; busyWords: string; command?: string; failed?: string; onPress: () => void; size?: 'default' | 'sm' | undefined; variant?: FixVariant }) {
   return (
     <div className="min-w-0 space-y-2">
-      {words === undefined ? (
-        // The command beside its press where both fit, so the two take one line.
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          {press}
-          {command && <CommandLine command={command} />}
-        </div>
-      ) : (
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-          <p className="min-w-0 grow basis-60 text-sm text-muted-foreground">{words}</p>
-          {press}
-        </div>
-      )}
+      {/* The command beside its press where both fit, so the two take one line. Busy, the press stays with the focus it
+          was pressed with, and says it is waiting under it. On a phone the page's press is a finger's 44, as a form's foot is. */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <Button size={size} variant={variant} loading={busy} onClick={onPress} className={cn(size === 'default' && 'max-md:h-11')}>
+          {label}
+        </Button>
+        {command && <CommandLine command={command} />}
+      </div>
       {busy && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <p role="status" className="min-w-0 grow basis-60 text-sm text-muted-foreground">
-            {busyWords}
-            {url !== undefined && (
-              <>
-                {' No page? '}
-                <a href={url} target="_blank" rel="noreferrer" className="focus-ring rounded-sm text-primary underline-offset-2 hover:underline">
-                  Open the sign-in page
-                </a>
-                .
-              </>
-            )}
-          </p>
-          {onCancel && (
-            <Button variant="ghost" size="sm" onClick={onCancel}>
-              Cancel
-            </Button>
-          )}
-        </div>
+        <p role="status" className="text-sm text-muted-foreground">
+          {busyWords}
+        </p>
       )}
-      {command && words !== undefined && <CommandLine command={command} />}
       {failed && (
         <p role="alert" className="whitespace-pre-line text-xs text-danger">
           <Linked text={failed} />
@@ -170,24 +145,24 @@ export function Linked({ text }: { text: string }) {
   )
 }
 
-/** What the agent's fix says while it goes on. */
-function agentBusyWords(state: AgentState): string {
-  const name = DRIVER_LABELS[state.driver]
-  return state.fixing === 'install' ? `Installing ${name}…` : `Say yes in the page this computer's browser opened to log ${name} in.`
-}
+/** The list a coding agent's accounts are kept in, by its CLI. */
+const ACCOUNTS_OF = { 'claude-code': 'claude', codex: 'codex' } as const
 
-/** The agent's fix as one press: [Install Claude Code] or [Log this computer in to Claude Code], with the command; the command alone where it is typed; nothing when nothing fixes it. */
-export function AgentFix({ state, onChanged, words, size, variant }: { state: AgentState; onChanged: () => void; words?: ReactNode; size?: 'default' | 'sm' | undefined; variant?: FixVariant }) {
+/**
+ * What a press does about a coding agent that cannot run: [Install Claude Code], with its command,
+ * where its program is missing; else [Add account], the window its package adds one in. Nothing
+ * when nothing fixes it.
+ */
+export function AgentFix({ state, onChanged, size, variant }: { state: AgentState; onChanged: () => void; size?: 'default' | 'sm' | undefined; variant?: FixVariant }) {
   const [error, setError] = useState<string | undefined>()
+  const connect = useMountedModules().views['agent.connect'][0]
   if (state.ready || !state.fix) return null
-  if (state.typed)
-    return (
-      <div className="min-w-0 space-y-2">
-        {words !== undefined && <p className="text-sm text-muted-foreground">{words}</p>}
-        <p className="text-sm text-muted-foreground">This computer has no browser to log in with a press: type this in a terminal on it.</p>
-        <CommandLine command={state.fix.command} />
-      </div>
-    )
+  if (state.fix.kind !== 'install')
+    return connect ? (
+      <ModuleSlot package={connect.package} label="add account">
+        <connect.View agent={ACCOUNTS_OF[state.driver]} primary={variant === undefined} label="Add account" small={size === 'sm'} onConnected={onChanged} />
+      </ModuleSlot>
+    ) : null
   const name = DRIVER_LABELS[state.driver]
   const press = async () => {
     setError(undefined)
@@ -199,13 +174,9 @@ export function AgentFix({ state, onChanged, words, size, variant }: { state: Ag
     <FixAction
       size={size}
       variant={variant}
-      words={words}
-      url={state.url}
-      // A login waits on the person's yes, up to ten minutes: they can stop waiting. An install runs to its end.
-      onCancel={state.fixing === 'log-in' ? () => void sendStopAgentFix(state.driver).then(onChanged) : undefined}
-      label={state.fix.kind === 'install' ? `Install ${name}` : `Log this computer in to ${name}`}
+      label={`Install ${name}`}
       busy={state.fixing !== undefined}
-      busyWords={agentBusyWords(state)}
+      busyWords={`Installing ${name}…`}
       command={state.fix.command}
       {...((error ?? state.failed) !== undefined ? { failed: (error ?? state.failed)! } : {})}
       onPress={() => void press()}
@@ -240,7 +211,7 @@ export function useMissing(): { missing: Missing[]; loaded: boolean; reload: () 
       key: 'agent',
       name,
       words: agentWords(state),
-      action: agentLoginState(state) === 'not-installed' ? `Install ${name}…` : loggedOut(state) ? `Log ${name} in…` : `Set up ${name}…`,
+      action: agentLoginState(state) === 'not-installed' ? `Install ${name}…` : loggedOut(state) ? `Add a ${name} account…` : `Set up ${name}…`,
       fix: <AgentFix state={state} onChanged={() => void reloadAgent()} />,
     })
   }

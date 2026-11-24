@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { forgetRemembered, type ModuleCommandResult } from '@openagt/ui/module'
 import { fakeHost, renderWithHost } from '@openagt/ui/module/testing'
-import { AccountsCard } from './AccountsCard.js'
+import { AccountsCard, ConnectAgent, OverviewAccounts } from './AccountsCard.js'
 
 const HOUR = 3_600_000
 
@@ -134,26 +134,46 @@ describe('AccountsCard', () => {
     expect(screen.queryByText('in use')).toBeNull()
   })
 
-  test('an agent with no login has no row, and still its press: "Add", at the card\u2019s title, lists both agents', async () => {
+  test('an agent with no account keeps its place on the card, as a row that adds one; "Add", at the card\u2019s title, lists both agents', async () => {
     renderCard(listed([{ name: 'This computer', who: 'Ada', own: true }], [{ name: 'This computer', signedOut: true, own: true }]))
     expect(await screen.findByText('Ada')).toBeTruthy()
-    expect(screen.queryByRole('region', { name: 'Codex', hidden: true })).toBeNull()
-    // One account is there: the press is the one at the title, and the card says nothing of none.
-    expect(screen.queryByText(/No account yet/)).toBeNull()
+    const codex = screen.getByRole('region', { name: 'Codex' })
+    expect(codex.textContent).toContain('No account')
+    // An agent has an account already: this press is not the page's primary.
+    expect(within(codex).getByRole('button', { name: 'Add a Codex account' }).textContent).toBe('Add account')
+    expect(within(codex).queryByRole('button', { name: /^Details of/ })).toBeNull()
     expect(await add('Codex')).toBeTruthy()
   })
 
-  test('no account at all, a fresh server: the card says so, with a press for each agent that opens its dialog', async () => {
+  test('no account at all, a fresh server: a row an agent, each with its press that opens its dialog, and "Add" at the title as with accounts there', async () => {
     renderCard(listed([{ name: 'This computer', signedOut: true, own: true }], []))
-    expect(await screen.findByText('No account yet. Runs need one to start.')).toBeTruthy()
-    // One press an agent, in the card: not a second one at its title.
-    expect(screen.queryByRole('button', { name: 'Add an account' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Add a Codex account' }))
+    const claude = await screen.findByRole('region', { name: 'Claude Code' })
+    const codex = screen.getByRole('region', { name: 'Codex' })
+    expect([claude.textContent, codex.textContent]).toEqual(['Claude CodeNo accountAdd account', 'CodexNo accountAdd account'])
+    expect(screen.getByRole('button', { name: 'Add an account' })).toBeTruthy()
+    fireEvent.click(within(codex).getByRole('button', { name: 'Add a Codex account' }))
     const dialog = await screen.findByRole('dialog', { name: 'Add a Codex account' })
     expect(within(dialog).getByRole('textbox', { name: 'Whose account' })).toBeTruthy()
+    // The other way is said in the window, not on the page.
+    expect(dialog.textContent).toContain('Or in a terminal: codex login')
+    expect(codex.textContent).not.toContain('codex login')
   })
 
-  test('an agent whose program is not installed is offered no Add: with none installed, the card says to install one first', async () => {
+  test("with no account at all the first agent's press is the page's primary on the Permissions page, and no press is on the Overview, where the page has its own", async () => {
+    renderCard(listed([], []))
+    const claude = await screen.findByRole('button', { name: 'Add a Claude account' })
+    const codex = screen.getByRole('button', { name: 'Add a Codex account' })
+    expect(claude.className).not.toBe(codex.className)
+    cleanup()
+    forgetRemembered()
+    localStorage.clear()
+    const { host } = hostFor(async args => ({ ok: true, output: args[0] === 'adding' ? {} : { claude: [], codex: [] } }))
+    renderWithHost(<OverviewAccounts />, host)
+    const quietClaude = await screen.findByRole('button', { name: 'Add a Claude account' })
+    expect(quietClaude.className).toBe(screen.getByRole('button', { name: 'Add a Codex account' }).className)
+  })
+
+  test('an agent whose program is not installed is offered no Add: its row says so, and with none installed there is no "Add" at the title', async () => {
     renderCard(() => ({ ok: true, output: { claude: [{ name: 'This computer', who: 'Ada', own: true }], codex: [{ name: 'This computer', signedOut: true, own: true }], notInstalled: ['codex'] } }))
     const trigger = await screen.findByRole('button', { name: 'Add an account' })
     await waitFor(() => {
@@ -162,11 +182,12 @@ describe('AccountsCard', () => {
     })
     expect(await screen.findByRole('menuitem', { name: 'Add a Claude account' })).toBeTruthy()
     expect(screen.queryByRole('menuitem', { name: 'Add a Codex account' })).toBeNull()
+    expect(screen.getByRole('region', { name: 'Codex', hidden: true }).textContent).toContain('Not installed')
     cleanup()
     forgetRemembered()
     localStorage.clear()
     renderCard(() => ({ ok: true, output: { claude: [{ name: 'This computer', signedOut: true, own: true }], codex: [{ name: 'This computer', signedOut: true, own: true }], notInstalled: ['claude', 'codex'] } }))
-    expect(await screen.findByText('No account yet: install Claude Code or Codex first, then add one here.')).toBeTruthy()
+    expect((await screen.findByRole('region', { name: 'Claude Code' })).textContent).toContain('Not installed')
     expect(screen.queryByRole('button', { name: /^Add a/ })).toBeNull()
   })
 
@@ -448,5 +469,88 @@ describe('AccountsCard', () => {
     renderAdding(() => ({ claude: { adding: { name: 'Dani', url: 'https://claude.example/secret-sign-in', paste: true } }, codex: {} }))
     await screen.findByRole('link', { name: /Open Claude/ })
     expect(JSON.stringify({ ...localStorage })).not.toContain('secret-sign-in')
+  })
+})
+
+describe('ConnectAgent', () => {
+  afterEach(() => {
+    cleanup()
+    forgetRemembered()
+    localStorage.clear()
+    vi.unstubAllGlobals()
+  })
+
+  /** The dashboard's own read of the person answers `name`. */
+  const personIs = (name: string): void => {
+    vi.stubGlobal('fetch', async (url: string) => new Response(JSON.stringify(url.endsWith('/onPerson') ? { ret: { name } } : { error: 'not here' }), { status: url.endsWith('/onPerson') ? 200 : 404 }))
+  }
+
+  test("the press is named for its agent and opens the window an account is added in, the person's own name in its field: one press starts the sign-in", async () => {
+    personIs('Ada Lovelace')
+    const calls: string[][] = []
+    const { host } = hostFor(async args => {
+      calls.push(args)
+      return { ok: true, output: {} }
+    })
+    const onConnected = vi.fn()
+    renderWithHost(<ConnectAgent agent="claude" primary onConnected={onConnected} />, host)
+    const press = await screen.findByRole('button', { name: 'Connect Claude Code' })
+    expect(press.textContent).toBe('Claude')
+    // The person is read before the window opens: the field opens with their name.
+    await new Promise(resolve => setTimeout(resolve, 0))
+    fireEvent.click(press)
+    const dialog = await screen.findByRole('dialog', { name: 'Add a Claude account' })
+    expect((within(dialog).getByRole('textbox', { name: 'Whose account' }) as HTMLInputElement).value).toBe('Ada')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Log in to Claude' }))
+    await waitFor(() => expect(calls).toContainEqual(['add', 'claude', 'Ada']))
+  })
+
+  test("the card's own window leaves the field empty where an account of the agent already goes by the person's name", async () => {
+    personIs('Ada Lovelace')
+    renderCard(listed([{ name: 'This computer', who: 'Ada', own: true }]))
+    await new Promise(resolve => setTimeout(resolve, 0))
+    const dialog = await add('Claude Code')
+    expect((within(dialog).getByRole('textbox', { name: 'Whose account' }) as HTMLInputElement).value).toBe('')
+    cleanup()
+    const codex = await (async () => {
+      renderCard(listed([{ name: 'This computer', who: 'Ada', own: true }]))
+      await new Promise(resolve => setTimeout(resolve, 0))
+      return add('Codex')
+    })()
+    expect((within(codex).getByRole('textbox', { name: 'Whose account' }) as HTMLInputElement).value).toBe('Ada')
+  })
+
+  test('a sign-in started from the press, beside the card on one page, is followed in its own window: the card opens no second one', async () => {
+    let underWay = false
+    const { host } = hostFor(async args => {
+      if (args[0] === 'list') return { ok: true, output: { claude: [], codex: [] } }
+      if (args[0] === 'usage') return { ok: true, output: { claude: [], codex: [] } }
+      if (args[0] === 'adding') return { ok: true, output: underWay ? { claude: { adding: { name: 'Ada' } } } : {} }
+      if (args[0] === 'add') underWay = true
+      return { ok: true, output: {} }
+    })
+    renderWithHost(
+      <>
+        <ConnectAgent agent="claude" primary onConnected={() => {}} />
+        <AccountsCard />
+      </>,
+      host,
+    )
+    await screen.findByRole('region', { name: 'Claude Code' })
+    fireEvent.click(screen.getByRole('button', { name: 'Connect Claude Code' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Add a Claude account' })
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Whose account' }), { target: { value: 'Ada' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Log in to Claude' }))
+    await screen.findByText(/Adding Ada's account/)
+    await new Promise(resolve => setTimeout(resolve, 100))
+    expect(screen.getAllByRole('dialog')).toHaveLength(1)
+  })
+
+  test('a sign-in found under way opens no window here: the card does, so one sign-in never opens two', async () => {
+    const { host } = hostFor(async args => ({ ok: true, output: args[0] === 'adding' ? { codex: { adding: { name: 'Dani' } } } : {} }))
+    renderWithHost(<ConnectAgent agent="codex" primary={false} onConnected={() => {}} />, host)
+    await screen.findByRole('button', { name: 'Connect Codex' })
+    await new Promise(resolve => setTimeout(resolve, 50))
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 })

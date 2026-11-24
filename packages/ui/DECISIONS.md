@@ -365,11 +365,15 @@ already made, and lists it in its pull request; for anything else it proposes an
 - The onboarding is numbered steps, one open at a time: the next to do, its words and its
   press at the row's end; a step done is one line with a ✓ and what was done; the later ones
   their titles only, each a press from open. A step stays once shown, so the count never moves.
-  It greets the person by name and the time of day, and once every step a session needs is
-  done its press starts the first session. Adding a project is the project picker of the
+  Adding a project is the project picker of the
   sidebar and the box. Picked over every step open at once with its press under its words,
   boxes to tick that no click ticks, and buttons for the folder the dashboard happened to
   start in.
+- The steps are named "Discover OpenAgent" and are the Overview's first part, above the box
+  that starts a session, while a step is open; with every step done they are gone. Picked
+  (Suleiman, 2026-11-24) over first only while no coding agent is connected, over the steps
+  under what needs the person with the box saying what is missing, and over a greeting by
+  name with a "Start your first session" press once all is done: the box is on the page.
 - The Overview starts a session: the launcher's box is its first part, under the title and
   its line and before the Human Queue, as wide as the cards. It starts in the project picked
   in the sidebar, else in none, and a project picked in the box is the Overview's too. The
@@ -494,12 +498,23 @@ already made, and lists it in its pull request; for anything else it proposes an
   account, the one runs use too, after a yes that says runs then have none until one is added.
   Picked over a ⋯ seen only on a hover and the account in use kept until another was picked,
   which left a person with one account no way to take it off.
-  A card is green when there is nothing to do, amber for a step, grey for a tool not here.
-- What runs need and do not have is a first step of the Overview's onboarding: the coding
-  agent's only once it is missing (install the tool, then log in), each git host's always,
-  as OpenAgent needs an account of its own there on every new install; the same press on the
-  start form's red line, and a dot on the person's picture whose menu says what. Picked over
-  a login step for the coding agent every new install walks through: most have it already.
+- The Permissions page is two plain cards, each with "Add" at its title and its accounts as
+  rows: no part of its own for a coding agent that cannot run, no sentence over the git
+  hosts' accounts, and with one host no line that names it and what uses it (with more, each
+  host's accounts stand under its name). A host with no account is a row with its name, "No
+  account" and an "Add account" press, as an agent with none is in its card. The dashboard
+  logs no coding agent's own CLI in: a press installs a missing program, and an agent with no
+  account gets one in its package's window, on this page, the Overview's first step and the
+  start form's red line alike. Picked (Suleiman, 2026-11-24, from his own picture of the
+  page) over a "Claude Code" and a "Codex" part with "Log this computer in" above the
+  accounts' own presses, which were two ways to add each agent.
+- What runs need and do not have is a first step of the Overview's onboarding: "Connect a
+  coding agent" always, with a press for Claude and one for Codex (the agents' package's,
+  `agent.connect`: the window an account is added in), done once either has an account; each
+  git host's always, as OpenAgent needs an account of its own there on every new install; a
+  press on the start form's red line, and a dot on the person's picture whose menu says what.
+  Picked (Suleiman, 2026-11-24) over a step for the one agent picked in Settings, shown only
+  once it was missing, with "Log this computer in" and its command.
 - The accounts a run takes are picked beside the message box: a coding agent's in the agent
   picker, under its models, the pick this computer's runs take from then on, as on the
   Permissions page; the git host's in the gear's menu,

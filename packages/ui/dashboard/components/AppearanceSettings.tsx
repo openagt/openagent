@@ -74,8 +74,8 @@ export function AppearanceSettings() {
           />
           {/* The Overview's checklist hides with its own ✕, and comes back here. */}
           <ToggleRow
-            label="Onboarding on the Overview"
-            description="The checklist of what a new install needs, on the Overview, under what needs you."
+            label="Discover OpenAgent on the Overview"
+            description="What a new install can set up, first on the Overview until every step is done."
             checked={!(preferences.onboardingDismissed ?? false)}
             onChange={next => updatePreferences({ onboardingDismissed: !next })}
           />

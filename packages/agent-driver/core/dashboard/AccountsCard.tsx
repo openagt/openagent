@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type RefObject } from 'react'
-import { Check, ChevronDown, Copy, Info, MoreHorizontal, Plus } from 'lucide-react'
-import { Button, useAskOn, ClaudeLogo, CodexLogo, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, GaugeFace, Input, Panel, PanelGroup, Skeleton, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, computerRpcClient, useModuleHost, useOpenAgentDown, usePolled, WordsShape, type ModuleHost } from '@openagt/ui/module'
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { Check, Copy, Info, MoreHorizontal, Plus } from 'lucide-react'
+import { AgentFix, Button, useAgentState, useAskOn, ClaudeLogo, CodexLogo, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, GaugeFace, Input, Panel, PanelGroup, Skeleton, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, computerRpcClient, useModuleHost, useOpenAgentDown, usePerson, usePolled, type ModuleHost, type UiConnectAgentProps } from '@openagt/ui/module'
 
 // The accounts each coding agent's runs try, in order: how full each one is, whether it is at a
 // limit, adding one: the command's own sign-in, which goes on by itself while the card follows it,
@@ -19,11 +19,15 @@ const ADDING_EVERY_MS = 2_000
 const AGENTS = [
   {
     id: 'claude',
+    /** Its CLI, as the dashboard knows the agent. */
+    driver: 'claude-code',
     name: 'Claude Code',
     /** What the account is, by its service: an account at claude.ai. */
     account: 'Claude',
     Logo: ClaudeLogo,
     logIn: 'Log in to Claude',
+    /** What logs the computer's own CLI in, typed in a terminal: its login shows here by itself. */
+    terminal: 'claude auth login',
     help: "Opens this computer's browser, where you say yes once, signed in to that account. The login is kept on this computer alone and lasts a year.",
     helpNoBrowser: "Gives you a page to open on your own device: press Authorize there, signed in to that account, and paste the code it shows back here. The login is kept on this computer alone and lasts a year.",
     remove: 'Runs no longer use it. Its login is not ended: take it back on claude.ai to end it.',
@@ -31,19 +35,18 @@ const AGENTS = [
   },
   {
     id: 'codex',
+    driver: 'codex',
     name: 'Codex',
     account: 'Codex',
     Logo: CodexLogo,
     logIn: 'Log in to Codex',
+    terminal: 'codex login',
     help: "Opens this computer's browser, where you sign in once to that account. If the browser is signed in to another account, copy the link into a private window. The login is kept on this computer alone.",
     helpNoBrowser: "Gives you a code to type at ChatGPT's page on your own device, signed in to that account: in a private window if the browser is signed in to another. If it asks, first allow device code sign-in in ChatGPT's security settings. The login is kept on this computer alone.",
     remove: 'Runs no longer use it, and its login is taken off this computer.',
     adding: (name: string) => `Adding ${name}'s account: sign in to ${name}'s ChatGPT account in the page this computer's browser opened.`,
   },
 ] as const
-
-/** The card with no account and no agent installed to add one from: its emptiest answer. */
-const NO_ACCOUNT_TO_ADD = `No account yet: install ${AGENTS.map(agent => agent.name).join(' or ')} first, then add one here.`
 
 type AgentId = (typeof AGENTS)[number]['id']
 
@@ -216,9 +219,9 @@ function SigningIn({ agent, adding, noBrowser, onChanged }: { agent: (typeof AGE
  * and why the last one did not go through. `onClose` closes the dialog, which gives up a sign-in
  * under way.
  */
-function AddAccount({ agent, now, failed, field, onChanged, onClose }: { agent: (typeof AGENTS)[number]; now: AddingNow; failed: string | undefined; /** The dialog's `initialFocus`. */ field: RefObject<HTMLInputElement | null>; onChanged: () => void; onClose: () => void }) {
+function AddAccount({ agent, now, failed, suggested, field, onChanged, onClose }: { agent: (typeof AGENTS)[number]; now: AddingNow; failed: string | undefined; /** The name the field opens with: the person's own, where no account of the agent has it. */ suggested: string; /** The dialog's `initialFocus`. */ field: RefObject<HTMLInputElement | null>; onChanged: () => void; onClose: () => void }) {
   const host = useModuleHost()
-  const [name, setName] = useState('')
+  const [name, setName] = useState(suggested)
   // The dialog focuses the field it opens on; one shown later, after a sign-in that did not go through, takes the focus itself.
   const [opened, setOpened] = useState(false)
   useEffect(() => setOpened(true), [])
@@ -265,6 +268,10 @@ function AddAccount({ agent, now, failed, field, onChanged, onClose }: { agent: 
             </Button>
           </form>
           <p className="text-xs text-muted-foreground">{now.noBrowser ? agent.helpNoBrowser : agent.help}</p>
+          {/* The other way, for a person who wants their own terminal's agent logged in too. */}
+          <p className="text-xs text-muted-foreground">
+            Or in a terminal: <code className="rounded-sm bg-muted px-1 font-mono">{agent.terminal}</code>
+          </p>
         </>
       )}
       {shownError !== undefined && (
@@ -284,7 +291,7 @@ function AddAccount({ agent, now, failed, field, onChanged, onClose }: { agent: 
 /** An open row, and the press that waits for a yes in it: taking an account off is a sign-in to undo. */
 type Opened = { asking?: 'remove' | 'logout' }
 
-function AgentAccounts({ agent, accounts, usage, reading, onPress, busy }: { agent: (typeof AGENTS)[number]; accounts: Account[]; usage: Usage[]; reading: boolean; onPress: (args: string[]) => void; busy: boolean }) {
+function AgentAccounts({ agent, accounts, usage, reading, onPress, busy, missing }: { agent: (typeof AGENTS)[number]; accounts: Account[]; usage: Usage[]; reading: boolean; onPress: (args: string[]) => void; busy: boolean; /** What stands in the agent's place while it has no account. */ missing: ReactNode }) {
   // One row is open at a time.
   const [open, setOpen] = useState<{ name: string } & Opened>()
   const now = Date.now()
@@ -293,12 +300,12 @@ function AgentAccounts({ agent, accounts, usage, reading, onPress, busy }: { age
     setOpen(undefined)
     onPress(args)
   }
-  // An agent with no login has no rows, and no place on the card.
-  if (accounts.length === 0) return null
   return (
     // One item of the card per agent, its accounts the card's rows; a hairline from inset to inset after the first agent's.
     <li className="relative before:absolute before:top-0 before:right-4 before:left-4 before:h-px not-first:before:bg-hairline">
       <section aria-label={agent.name}>
+        {/* An agent with no account keeps its place on the card, as a row that adds one. */}
+        {accounts.length === 0 && missing}
         <ul>
           {accounts.map((account, index) => (
             <AccountRow
@@ -455,10 +462,31 @@ function AccountRow({
   )
 }
 
-export function AccountsCard() {
+/** The person's first name, as an account of theirs is called until they say otherwise. */
+const firstName = (name: string): string => name.trim().split(/\s+/)[0] ?? ''
+
+/** The windows open on this page now: a sign-in started in one is followed there, and opens no second one. */
+let windowsOpen = 0
+
+/**
+ * Adding an account: the sign-ins as this computer says they go, and the window one is made in.
+ * `adopt` opens the window on a sign-in found under way, started before this page was opened: the
+ * card does, unless the sign-in has its window on this page already; a press that stands alone does
+ * not. So one sign-in never opens two windows on a page.
+ */
+function useAddAccount({ adopt, onEnded, taken }: { adopt: boolean; /** A sign-in ended: the accounts may have changed. */ onEnded: () => void; /** The names an agent's accounts go by. */ taken?: (agent: AgentId) => string[] }): {
+  adding: Partial<Record<AgentId, AddingNow>> | undefined
+  /** The agent the window is open on. */
+  naming: AgentId | undefined
+  /** Why the last sign-in did not go through, once the person closed the window on it. */
+  dismissed: string | undefined
+  /** Open the window for an agent; `from` is the press it was opened with, where that is not the one at the card's title. */
+  open: (agent: AgentId, from?: HTMLElement) => void
+  /** The window, which gives the keyboard back to the press it was opened with as it closes, else to `finalFocus`. */
+  dialog: (finalFocus: RefObject<HTMLElement | null>) => ReactNode
+} {
   const host = useModuleHost()
-  const { value: list, state, reload } = usePolled<Read<Account, Listed> | undefined>(() => read<Account, Listed>(host, 'list'), undefined, LIST_EVERY_MS, [], { remember: 'account-rotation:list', stored: true })
-  const { value: usage, reload: reloadUsage } = usePolled<Read<Usage> | undefined>(() => read<Usage>(host, 'usage'), undefined, USAGE_EVERY_MS, [], { remember: 'account-rotation:usage', stored: true })
+  const { person } = usePerson()
   // Followed closely from a press until the sign-in has ended, which the person may take minutes over.
   const [following, setFollowing] = useState(false)
   const { value: adding, reload: reloadAdding, refresh: refreshAdding } = usePolled<Partial<Record<AgentId, AddingNow>> | undefined>(
@@ -471,7 +499,7 @@ export function AccountsCard() {
   // The agent an account is being added for: the dialog is open on it, from the press until the account is there or the dialog is closed.
   const [naming, setNaming] = useState<AgentId>()
   const nameField = useRef<HTMLInputElement>(null)
-  const addPress = useRef<HTMLButtonElement>(null)
+  const opener = useRef<HTMLElement | null>(null)
   // Why the last sign-in did not go through, once the person closed the dialog on it: not said again when it opens next.
   const [dismissed, setDismissed] = useState<string>()
   const signingIn = AGENTS.find(agent => adding?.[agent.id]?.adding !== undefined)?.id
@@ -481,7 +509,9 @@ export function AccountsCard() {
   if (underWay !== wasUnderWay) {
     setWasUnderWay(underWay)
     // A sign-in found under way, started before this page was opened, is shown as it is.
-    if (underWay) setNaming(now => now ?? signingIn)
+    if (underWay) {
+      if (adopt && windowsOpen === 0) setNaming(now => now ?? signingIn)
+    }
     // The account is there: the dialog closes on it. One that did not go through stays, with why.
     else setNaming(now => (now !== undefined && adding?.[now]?.failed === undefined ? undefined : now))
   }
@@ -489,16 +519,136 @@ export function AccountsCard() {
     if (underWay) setFollowing(true)
     else if (following) {
       setFollowing(false)
-      void reload()
-      void reloadUsage()
+      onEnded()
     }
     // Only when a sign-in starts or ends: the reads are the same from render to render in what they do.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [underWay])
+  const windowOpen = naming !== undefined
+  useEffect(() => {
+    if (!windowOpen) return
+    windowsOpen++
+    return () => void windowsOpen--
+  }, [windowOpen])
   const changed = (): void => {
     setFollowing(true)
     void reloadAdding()
   }
+  /** Closing the dialog gives up the sign-in under way, as its Cancel does, and forgets why the last one did not go through: the dialog said it. */
+  const close = (): void => {
+    const agent = naming
+    setNaming(undefined)
+    if (agent === undefined) return
+    setDismissed(adding?.[agent]?.failed)
+    if (adding?.[agent]?.adding || adding?.[agent]?.failed !== undefined) void host.runComputerCommand(['add-cancel', agent], COMMAND).then(changed)
+  }
+  const namingAgent = AGENTS.find(agent => agent.id === naming)
+  const namingNow = (naming !== undefined ? adding?.[naming] : undefined) ?? {}
+  const own = person ? firstName(person.name) : ''
+  return {
+    adding,
+    naming,
+    dismissed,
+    open: (agent, from) => {
+      opener.current = from ?? null
+      setNaming(agent)
+    },
+    dialog: finalFocus => (
+      <Dialog open={namingAgent !== undefined} onOpenChange={open => !open && close()} title={namingAgent ? `Add a ${namingAgent.account} account` : ''} initialFocus={nameField} finalFocus={opener.current ? opener : finalFocus}>
+        {namingAgent && (
+          <AddAccount
+            key={namingAgent.id}
+            agent={namingAgent}
+            now={namingNow}
+            failed={namingNow.failed !== dismissed ? namingNow.failed : undefined}
+            suggested={taken?.(namingAgent.id).includes(own) ? '' : own}
+            field={nameField}
+            onChanged={changed}
+            onClose={close}
+          />
+        )}
+      </Dialog>
+    ),
+  }
+}
+
+/**
+ * The press that connects one coding agent (`agent.connect`), where a new install is asked for
+ * one: the agent's name on it, and the same window the card's "Add" opens.
+ */
+export function ConnectAgent({ agent: id, primary, label, small, onConnected }: UiConnectAgentProps) {
+  const agent = AGENTS.find(each => each.id === id)!
+  const press = useRef<HTMLButtonElement>(null)
+  const add = useAddAccount({ adopt: false, onEnded: onConnected })
+  const down = useOpenAgentDown()
+  return (
+    <>
+      {/* On a phone a finger's 44, as the page's other presses. */}
+      <Button ref={press} {...(primary ? {} : { variant: 'secondary' as const })} {...(small ? { size: 'sm' as const } : {})} disabled={down} aria-label={label === undefined ? `Connect ${agent.name}` : `Add a ${agent.account} account`} onClick={() => add.open(agent.id)} className={cn(!small && 'max-md:h-11')}>
+        {label ?? (
+          <>
+            <agent.Logo className="size-3.5" />
+            {agent.account}
+          </>
+        )}
+      </Button>
+      {add.dialog(press)}
+    </>
+  )
+}
+
+/**
+ * An agent with no account, as a row of the card: its name, that it has none, and the press that
+ * adds one. Where this computer does not have the agent's program, the press installs it first.
+ */
+function NoAccount({ agent, installed, primary, disabled, onAdd }: { agent: (typeof AGENTS)[number]; installed: boolean; /** Whether its press is the page's primary: the first agent's, while no agent has an account. */ primary: boolean; disabled: boolean; /** Told the press, which takes the keyboard back as the window closes. */ onAdd: (press: HTMLElement) => void }) {
+  const { state, reload } = useAgentState(agent.driver, !installed)
+  return (
+    <div className="space-y-2 px-4 py-3 text-sm">
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="flex h-5 w-4 shrink-0 items-center self-start">
+          <agent.Logo className="size-4 text-muted-foreground" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-medium">{agent.name}</span>
+          <span className="mt-1 block text-xs text-muted-foreground">{installed ? 'No account' : 'Not installed'}</span>
+        </span>
+        {installed && (
+          <Button {...(primary ? {} : { variant: 'secondary' as const })} disabled={disabled} aria-label={`Add a ${agent.account} account`} onClick={event => onAdd(event.currentTarget)} className="shrink-0 max-md:h-11">
+            Add account
+          </Button>
+        )}
+      </div>
+      {/* Its install, with the command it runs, under its name: the two take the row's width. */}
+      {!installed && state && (
+        <div className="pl-7">
+          <AgentFix state={state} onChanged={() => void reload()} variant="secondary" />
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** The card on the Overview: no press of it is the page's primary, which is the box's, or the first step's. */
+export function OverviewAccounts() {
+  return <AccountsCard quiet />
+}
+
+export function AccountsCard({ quiet = false }: { /** No press of the card is the page's primary. */ quiet?: boolean }) {
+  const host = useModuleHost()
+  const { value: list, state, reload } = usePolled<Read<Account, Listed> | undefined>(() => read<Account, Listed>(host, 'list'), undefined, LIST_EVERY_MS, [], { remember: 'account-rotation:list', stored: true })
+  const { value: usage, reload: reloadUsage } = usePolled<Read<Usage> | undefined>(() => read<Usage>(host, 'usage'), undefined, USAGE_EVERY_MS, [], { remember: 'account-rotation:usage', stored: true })
+  const addPress = useRef<HTMLButtonElement>(null)
+  // The person's own name is offered for an account, unless one of the agent's has it already.
+  const add = useAddAccount({
+    adopt: true,
+    onEnded: () => {
+      void reload()
+      void reloadUsage()
+    },
+    taken: agent => (list?.ok ? (list.accounts[agent] ?? []).map(account => account.who ?? account.name) : []),
+  })
+  const { adding, naming, dismissed } = add
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState<string>()
   const down = useOpenAgentDown()
@@ -515,24 +665,13 @@ export function AccountsCard() {
       .finally(() => setBusy(false))
   }
 
-  /** Closing the dialog gives up the sign-in under way, as its Cancel does, and forgets why the last one did not go through: the dialog said it. */
-  const close = (): void => {
-    const agent = naming
-    setNaming(undefined)
-    if (agent === undefined) return
-    setDismissed(adding?.[agent]?.failed)
-    if (adding?.[agent]?.adding || adding?.[agent]?.failed !== undefined) void host.runComputerCommand(['add-cancel', agent], COMMAND).then(changed)
-  }
-
   // Rotation does something only for an agent with two accounts or more.
   const shown = (agent: AgentId): Account[] => (list?.ok ? (list.accounts[agent] ?? []).filter(account => !account.signedOut) : [])
   const rotates = AGENTS.some(agent => shown(agent.id).length > 1)
   // An account is added with its agent's program: one not installed is offered no Add.
-  const addable = AGENTS.filter(agent => !(list?.ok && list.accounts.notInstalled?.includes(agent.id)))
+  const installed = (agent: AgentId): boolean => !(list?.ok && list.accounts.notInstalled?.includes(agent))
+  const addable = AGENTS.filter(agent => installed(agent.id))
   const none = list?.ok === true && AGENTS.every(agent => shown(agent.id).length === 0)
-  const namingAgent = AGENTS.find(agent => agent.id === naming)
-  const namingNow = (naming !== undefined ? adding?.[naming] : undefined) ?? {}
-
   return (
     <PanelGroup
       bare
@@ -548,18 +687,17 @@ export function AccountsCard() {
               <TooltipContent className="max-w-xs">When an account hits its limit, the next free one of the same agent takes the run over where it stopped.</TooltipContent>
             </Tooltip>
           )}
-          {/* Another account, at the heading: whose agent it is for, then its sign-in in a dialog. With none yet, the presses are under it. */}
-          {list?.ok && !none && addable.length > 0 && (
+          {/* An account, at the heading: whose agent it is for, then its sign-in in a dialog. */}
+          {list?.ok && addable.length > 0 && (
             <DropdownMenu>
               {/* Unpainted, as a part's heading's presses are, pulled out by its own padding so its last mark ends on the card's edge. */}
               <DropdownMenuTrigger ref={addPress} render={<Button variant="ghost" className="-mr-3" aria-label="Add an account" />}>
                 <Plus className="size-4" aria-hidden />
                 Add
-                <ChevronDown className="size-4 text-muted-foreground" aria-hidden />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-[10rem]">
                 {addable.map(agent => (
-                  <DropdownMenuItem key={agent.id} aria-label={`Add a ${agent.account} account`} onClick={() => setNaming(agent.id)}>
+                  <DropdownMenuItem key={agent.id} aria-label={`Add a ${agent.account} account`} onClick={() => add.open(agent.id)}>
                     <agent.Logo className="size-3.5" />
                     {`${agent.account} account`}
                   </DropdownMenuItem>
@@ -570,47 +708,23 @@ export function AccountsCard() {
         </>
       }
     >
-      {/* Waits in the room of its emptiest answer, the sentence that says there is no account yet. */}
-      <Slot of={{ value: list, state }} shape={
-          <p className="text-sm">
-            <WordsShape words={NO_ACCOUNT_TO_ADD} />
-          </p>
-        }
-      >
+      {/* Waits in the room of its emptiest answer: a row an agent. */}
+      <Slot of={{ value: list, state }} shape={<Skeleton className="h-31 w-full rounded-lg" />}>
         {list =>
           !list!.ok ? (
             <p className="text-sm text-danger">{list!.error}</p>
-          ) : none ? (
-            // No account at all: one sentence on the column's edge, no card around it, and the press said beside it,
-            // where a newcomer looks, not only at the heading. The presses go beside the sentence together, else under it.
-            // `grow`, not `flex-1`: another module's stylesheet loaded later has a `.flex-1` that undoes `basis-48`.
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-              <p className="min-w-0 grow basis-48 text-sm text-muted-foreground">
-                {addable.length > 0 ? 'No account yet. Runs need one to start.' : NO_ACCOUNT_TO_ADD}
-              </p>
-              {addable.length > 0 && (
-                <span className="flex flex-wrap gap-2">
-                  {addable.map(agent => (
-                    <Button key={agent.id} variant="secondary" onClick={() => setNaming(agent.id)}>
-                      <agent.Logo className="size-3.5" />
-                      Add a {agent.account} account
-                    </Button>
-                  ))}
-                </span>
-              )}
-            </div>
           ) : (
             <Panel>
               {AGENTS.map(agent => (
                 <AgentAccounts
                   key={agent.id}
                   agent={agent}
-                  // A login that is not there has no row. With none at all the part says so in place of the card, with the press to add one.
                   accounts={shown(agent.id)}
                   usage={usage?.ok ? (usage.accounts[agent.id] ?? []) : []}
                   reading={usage === undefined}
                   busy={busy || down}
                   onPress={press}
+                  missing={<NoAccount agent={agent} installed={installed(agent.id)} primary={!quiet && none && addable[0] === agent} disabled={down} onAdd={press => add.open(agent.id, press)} />}
                 />
               ))}
             </Panel>
@@ -627,19 +741,7 @@ export function AccountsCard() {
           </p>
         ) : null
       })}
-      <Dialog open={namingAgent !== undefined} onOpenChange={open => !open && close()} title={namingAgent ? `Add a ${namingAgent.account} account` : ''} initialFocus={nameField} finalFocus={addPress}>
-        {namingAgent && (
-          <AddAccount
-            key={namingAgent.id}
-            agent={namingAgent}
-            now={namingNow}
-            failed={namingNow.failed !== dismissed ? namingNow.failed : undefined}
-            field={nameField}
-            onChanged={changed}
-            onClose={close}
-          />
-        )}
-      </Dialog>
+      {add.dialog(addPress)}
     </PanelGroup>
   )
 }

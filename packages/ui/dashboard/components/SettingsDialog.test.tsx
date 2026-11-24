@@ -238,11 +238,11 @@ describe('Settings on and off rows', () => {
 })
 
 describe('Settings › Appearance', () => {
-  test("the Overview's onboarding checklist shows again from here, once its ✕ hid it", async () => {
+  test("the Overview's Discover OpenAgent steps show again from here, once its ✕ hid it", async () => {
     prefsRead.mockResolvedValueOnce({ onboardingDismissed: true })
     refreshPreferences()
     open('appearance')
-    const onboarding = screen.getByRole('switch', { name: 'Onboarding on the Overview' })
+    const onboarding = screen.getByRole('switch', { name: 'Discover OpenAgent on the Overview' })
     await waitFor(() => expect(checked(onboarding)).toBe(false))
     fireEvent.click(onboarding)
     expect(saves()).toEqual([{ onboardingDismissed: false }])
@@ -429,7 +429,7 @@ describe('the Settings list', () => {
     expect(screen.queryByRole('switch')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Appearance' }))
     expect(screen.queryByRole('navigation', { name: 'Settings' })).toBeNull()
-    expect(screen.getByRole('switch', { name: 'Onboarding on the Overview' })).toBeTruthy()
+    expect(screen.getByRole('switch', { name: 'Discover OpenAgent on the Overview' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'All settings' }))
     expect(screen.getByRole('navigation', { name: 'Settings' })).toBeTruthy()
   })

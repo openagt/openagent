@@ -52,7 +52,7 @@ export interface MountedModules {
   loaded: boolean
 }
 
-const VIEW_PLACES: readonly ViewPlace[] = ['app.page', 'app.overlay', 'overview.card', 'overview.line', 'chat.pane', 'chat.summary', 'chat.notice', 'composer.prompts', 'settings.section', 'permissions.section', 'usage.line']
+const VIEW_PLACES: readonly ViewPlace[] = ['app.page', 'app.overlay', 'overview.card', 'overview.line', 'chat.pane', 'chat.summary', 'chat.notice', 'composer.prompts', 'settings.section', 'permissions.section', 'usage.line', 'agent.connect']
 const ACTION_PLACES: readonly ActionPlace[] = ['link.menu']
 const OPTION_PLACES: readonly OptionPlace[] = ['composer.auto', 'composer.where']
 
@@ -221,6 +221,8 @@ function mount(loadedModules: { module: DashboardModule; definition: UiModuleDef
       if (view.place === 'app.overlay' && !of.computer) continue
       // The bar has one line: the first module's.
       if (view.place === 'usage.line' && at.length > 0) continue
+      // One press connects an agent: the first module's.
+      if (view.place === 'agent.connect' && at.length > 0) continue
       at.push({ ...view, ...of })
     }
     for (const action of definition.hooks['ui.action'] ?? []) actions[action.place]?.push({ ...action, ...of })
