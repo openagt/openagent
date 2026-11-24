@@ -127,7 +127,8 @@ export interface WaitingRun {
 /**
  * What needs the person, as one module sees it, handed what its life in the app is (`app`): the
  * projects it is on in among them. Asked with no project, about this computer: a plugin kept per
- * project is asked then where it is on in one of the projects, and says what it says of them all.
+ * project is asked as the distribution starts it, and also where it is on in one of the projects,
+ * and says what it says of them all.
  */
 export type AppAttention = (args: AttentionArgs, app: AppContext) => AttentionItem[] | Promise<AttentionItem[]>
 

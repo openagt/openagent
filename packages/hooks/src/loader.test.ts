@@ -213,6 +213,11 @@ test('asked about this computer, a plugin kept per project is asked where it is 
   assert.deepEqual(told, [['p2']])
 })
 
+test('asked about this computer, a plugin kept per project that the distribution starts on is asked, as on in no project yet', async () => {
+  const hooks = hooksOf([{ module: defineModule({ name: 'ask', plugin: { scope: 'project' }, hooks: { 'app.attention': () => [{ kind: 'waiting', scope: 'run', run: 's1', words: 'Needs answer' }] } }), on: true }])
+  assert.deepEqual(await hooks.attention({}), { items: [{ kind: 'waiting', scope: 'run', run: 's1', words: 'Needs answer', module: 'ask' }], whole: true })
+})
+
 test('a second skill, coding agent or host of one name is left out and told; a handler that throws is told, and the others are still asked', async () => {
   const errors: HandlerError[] = []
   const hooks = hooksOf(
