@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { mkdtemp, realpath, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { nodeGitRunner } from '@openagt/agent-data'
@@ -179,6 +179,33 @@ test('a run in a project with repos: its checkout of the project, a copy of each
     await rm(join(second, 'other', 'scratch.txt'))
     await reclaim.run(untouched)
     assert.deepEqual([await exists(join(second, 'other')), await exists(second)], [false, false], 'an untouched copy goes, and the session folder once it is empty')
+  } finally {
+    if (before === undefined) delete process.env.XDG_CONFIG_HOME
+    else process.env.XDG_CONFIG_HOME = before
+    await rm(p.dir, { recursive: true, force: true })
+    await rm(other.dir, { recursive: true, force: true })
+    await rm(home, { recursive: true, force: true })
+  }
+})
+
+test('the repos a run is given are checked before anything is made: a name that is no folder name, two alike, or a folder that is no repository top refuses it', async () => {
+  const p = await project()
+  const other = await project()
+  const home = await realpath(await mkdtemp(join(tmpdir(), 'git-branches-home-')))
+  const before = process.env.XDG_CONFIG_HOME
+  process.env.XDG_CONFIG_HOME = home
+  try {
+    await mkdir(join(other.dir, 'src'))
+    const { checkout } = steps()
+    const refused = async (repos: { name: string; from: string }[], reason: RegExp) => {
+      const ctx = fakeRun({ id: 'run9', options: { 'git-branches': { repos } } })
+      await assert.rejects(async () => checkout.run(ctx), reason)
+      assert.equal(ctx.workspace, undefined, 'no folder was made')
+    }
+    await refused([{ name: '../escape', from: other.dir }], /not a name for a copy of a repo: \.\.\/escape/)
+    await refused([{ name: 'a', from: other.dir }, { name: 'a', from: p.dir }], /not a name for a copy of a repo: a/)
+    await refused([{ name: 'src', from: join(other.dir, 'src') }], /is not a git repository/)
+    await refused([{ name: 'home', from: home }], /is not a git repository/)
   } finally {
     if (before === undefined) delete process.env.XDG_CONFIG_HOME
     else process.env.XDG_CONFIG_HOME = before

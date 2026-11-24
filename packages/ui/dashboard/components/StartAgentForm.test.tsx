@@ -112,9 +112,6 @@ const ON_CODEX = { 'agent-driver': { driver: 'codex', model: 'gpt-5' } }
 /** Where the agent starts, as the row above the box says it. */
 const startsAt = (): string => screen.getByTestId('starts-at').textContent ?? ''
 
-/** The repos on this computer as the projects module offers them (`composer.where`). */
-const reposHere = (repos: { folder: string; label: string; detail: string }[]) =>
-  mountedOf({ options: { 'composer.where': [{ place: 'composer.where', id: 'this-computer', label: 'Repos', order: 0, repos: async () => ({ repos, loading: false }), package: '@openagt/projects', projects: [], computer: true }] } })
 
 const { StartAgentForm } = await import('./StartAgentForm.js')
 
@@ -182,7 +179,7 @@ const level = (id: string, label: string, description: string, offered?: (projec
 const AUTO = mountedOf({ options: { 'composer.auto': [level('commit', 'Commit', 'It commits its work on its branch.'), level('branch', 'Publish branch', 'It commits and pushes its branch.', project => project === undefined || project.remote !== undefined)] } })
 /** The form, with the levels git-branches brings mounted. */
 const render = (page: ReactElement) => renderPage(page, { wrapper: ({ children }) => <ModulesContext.Provider value={AUTO}>{children}</ModulesContext.Provider> })
-const props = { projectId: 'p1', files: [], context: new Set<string>(), addContext: noop, removeContext: noop, toggleContext: noop, projects: [], onPickProject: noop }
+const props = { projectId: 'p1', files: [], context: new Set<string>(), addContext: noop, removeContext: noop, toggleContext: noop, onPickProject: noop }
 
 describe('StartAgentForm (#1774)', () => {
   test('the project\'s commands are no buttons: they are in the box\'s `/` list, and nothing starts', async () => {
@@ -333,7 +330,7 @@ describe('StartAgentForm (#1774)', () => {
     expect(auto.textContent).toBe('When it finishes: Commit')
     expect(auto.previousElementSibling?.getAttribute('role')).toBe('separator')
     expect(screen.getByText('pick-octo-agent').compareDocumentPosition(auto) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(within(screen.getByTestId('controls')).getAllByRole('combobox').map(button => button.textContent)).toEqual(['Context'])
+    expect(within(screen.getByTestId('controls')).getAllByRole('button').map(button => button.textContent)).toEqual(['Context'])
   })
 
   test("the gear's hover says its picks with the menu shut: the account and the level", async () => {
@@ -364,22 +361,23 @@ describe('StartAgentForm (#1774)', () => {
     expect(screen.getByText('gear').dataset.warn).toBe('false')
   })
 
-  test('a session with no project: the gear has the account, which goes with the Start, and no "When it finishes"; after it, Context is the repos it works with', async () => {
+  test('a session with no project: the gear has the account and "When it finishes", which go with the Start; no file Context after it', async () => {
     onCommands.mockResolvedValue(null)
     runsAccount.login = 'octo'
     start.mockResolvedValue({ agentId: 'r1' })
     const onAgentStarted = vi.fn()
     render(<StartAgentForm {...props} projectId="session" onAgentStarted={onAgentStarted} />)
-    await waitFor(() => expect(gearSaid()).toBe('@octo'))
+    await waitFor(() => expect(gearSaid()).toBe('@octo · Commit'))
     expect(within(gearMenu()).getAllByRole('button').map(button => button.textContent)).toEqual(['pick-octo-agent'])
-    expect(screen.queryAllByRole('menuitem')).toEqual([])
-    expect(within(screen.getByTestId('controls')).getByRole('combobox', { name: 'Context' })).toBeTruthy()
+    expect(autoMenu().textContent).toBe('When it finishes: Commit')
+    expect(screen.getByTestId('controls').textContent).toBe('')
     // One picked for the session goes with it, and to the run's page.
     fireEvent.click(screen.getByText('pick-octo-agent'))
-    expect(gearSaid()).toBe('@octo-agent')
+    expect(gearSaid()).toBe('@octo-agent · Commit')
     fireEvent.click(screen.getByText('submit-typed'))
-    await waitFor(() => expect(start).toHaveBeenCalledWith('session', 'do the thing', { account: 'octo-agent' }))
-    await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r1', undefined, { gitAccount: 'octo-agent' }))
+    // The level goes for the repos a module's control picks; with none, the host drops it.
+    await waitFor(() => expect(start).toHaveBeenCalledWith('session', 'do the thing', { publish: 'commit', account: 'octo-agent' }))
+    await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r1', undefined, { gitAccount: 'octo-agent', publish: 'commit' }))
   })
 
   test('a session with no project and no account is not held by it: the gear has no warning, since such a session may need none', async () => {
@@ -387,10 +385,10 @@ describe('StartAgentForm (#1774)', () => {
     runsAccount.login = undefined
     start.mockResolvedValue({ agentId: 'r1' })
     render(<StartAgentForm {...props} projectId="session" />)
-    await waitFor(() => expect(gearSaid()).toBe('no GitHub account'))
+    await waitFor(() => expect(gearSaid()).toBe('no GitHub account · Commit'))
     expect(screen.getByText('gear').dataset.warn).toBe('false')
     fireEvent.click(screen.getByText('submit-typed'))
-    await waitFor(() => expect(start).toHaveBeenCalledWith('session', 'do the thing', {}))
+    await waitFor(() => expect(start).toHaveBeenCalledWith('session', 'do the thing', { publish: 'commit' }))
   })
 
   test("the dialog that adds an account stands beside the box, outside the gear's menu, which a press closes", () => {
@@ -597,54 +595,6 @@ describe('StartAgentForm (#1774)', () => {
     expect(screen.queryByText('Start an agent')).toBeNull()
   })
 
-  test("with no project, Context ticks repos on and off, a project's or one that is none, as many as wanted; its button says how many, and the Start sends their folders; nothing is made a project", async () => {
-    onCommands.mockResolvedValue({ commands: [], gitHost: true })
-    start.mockResolvedValue({ agentId: 'r1' })
-    const onAgentStarted = vi.fn()
-    const onPickProject = vi.fn()
-    const alpha = { id: 'alpha-1', path: '/home/me/alpha', name: 'alpha', activated: true, gitHost: true }
-    render(<ModulesContext.Provider value={reposHere([{ folder: '/home/me/oss/vike', label: 'vike', detail: 'github.com/vikejs/vike' }])}><StartAgentForm {...props} projectId="session" projects={[alpha]} onPickProject={onPickProject} onAgentStarted={onAgentStarted} /></ModulesContext.Provider>)
-    const context = () => within(screen.getByTestId('controls')).getByRole('combobox', { name: /^Context/ })
-    // The row above the box says nothing of its repos.
-    expect(startsAt()).toBe('')
-    expect(context().textContent).toBe('Context')
-    await openMenu(context())
-    // The menu stays open while its rows are ticked.
-    fireEvent.click(await screen.findByRole('option', { name: /vike/ }))
-    fireEvent.click(await screen.findByRole('option', { name: /alpha/ }))
-    expect(context().getAttribute('aria-label')).toBe('Context: 2 repos')
-    expect(context().textContent).toBe('Context · 2 repos')
-    // A ticked repo stays in the list, marked, and a press on it takes it out.
-    expect(screen.getByRole('option', { name: /alpha/ }).getAttribute('aria-selected')).toBe('true')
-    fireEvent.click(screen.getByRole('option', { name: /alpha/ }))
-    expect(context().textContent).toBe('Context · 1 repo')
-    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
-    expect(onPickProject).not.toHaveBeenCalled()
-    expect(startsAt()).toBe('')
-
-    fireEvent.click(screen.getByText('submit-typed'))
-    // The level in force goes with the repos it is for: Commit until the person picks.
-    await waitFor(() => expect(start).toHaveBeenCalledWith('session', 'do the thing', { repos: ['/home/me/oss/vike'], publish: 'commit' }))
-    await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r1', undefined, { publish: 'commit', repos: [{ name: 'vike', from: '/home/me/oss/vike' }] }))
-    // Started: the next session starts with none.
-    await waitFor(() => expect(context().textContent).toBe('Context'))
-  })
-
-  test("a project's Context is the same menu, and a repo ticked there is pointed at, not copied: it is told to the Context, and the Start sends no repos", async () => {
-    onCommands.mockResolvedValue({ commands: [], gitHost: true })
-    start.mockResolvedValue({ agentId: 'r1' })
-    const toggleContext = vi.fn()
-    render(<ModulesContext.Provider value={reposHere([{ folder: '/home/me/oss/vike', label: 'vike', detail: '/home/me/oss/vike' }])}><StartAgentForm {...props} projectName="gemstack" toggleContext={toggleContext} /></ModulesContext.Provider>)
-    const context = within(screen.getByTestId('controls')).getByRole('combobox', { name: 'Context' })
-    await openMenu(context)
-    fireEvent.click(await screen.findByRole('option', { name: /vike/ }))
-    expect(toggleContext).toHaveBeenCalledWith('/home/me/oss/vike')
-    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
-    fireEvent.click(screen.getByText('submit-typed'))
-    await waitFor(() => expect(start).toHaveBeenCalled())
-    expect(start.mock.calls[0]![2]).not.toHaveProperty('repos')
-  })
-
   test('typing after a failed start drops the red line', () => {
     onCommands.mockResolvedValue({ commands: [], gitHost: true })
     startReset.mockClear()
@@ -655,11 +605,11 @@ describe('StartAgentForm (#1774)', () => {
     startSays.error = null
   })
 
-  test('the picked files ride the prompt as one line at its end, after the command\'s own words; the picked repos go with the Start, to be copied', async () => {
+  test("the picked files ride the prompt as one line at its end, after the command's own words", async () => {
     onCommands.mockResolvedValue({ commands: [], gitHost: true })
     start.mockResolvedValue({ agentId: 'r1' })
-    render(<StartAgentForm {...props} context={new Set(['/repos/other', 'src/app.ts'])} />)
+    render(<StartAgentForm {...props} context={new Set(['src/app.ts'])} />)
     fireEvent.click(screen.getByText('submit-typed'))
-    await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing\n\nContext: src/app.ts', { repos: ['/repos/other'] }))
+    await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing\n\nContext: src/app.ts', {}))
   })
 })

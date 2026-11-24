@@ -52,11 +52,6 @@ export interface StartAgentOptions {
    */
   host?: string
   /**
-   * The repos a session with no project has as context, by their folders on this computer: each is
-   * copied into the session's folder. Refused for a project, which works in its own checkout.
-   */
-  repos?: string[]
-  /**
    * The account at the git host this session works as, by its login: one of the accounts this
    * computer has there. Absent, the one its runs use. The run's record keeps it, and a resume goes
    * on as it.

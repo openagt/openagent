@@ -22,6 +22,10 @@ What it brings:
   `start`): in the launcher a menu of the project's main branch, the folder's own branch and what
   origin has now, its pick kept for every next run of the project on this computer (the
   `git-branches.startFrom` setting); in a session, the branch it started from.
+- **The repos a session works with**, under the message box (`composer.control` at `context`): in
+  the launcher, a menu of the projects and of every module's repos on this computer
+  (`composer.where`), each ticked into the run's options under the name its copy will have in the
+  session's folder; in a session, the repos it started with.
 - **Commit and Publish branch** in the "When it finishes" menu (`composer.auto`), Publish branch only
   where the work can be pushed.
 - **What a project needs** (`app.attention`): its folder behind its remote's main branch, with

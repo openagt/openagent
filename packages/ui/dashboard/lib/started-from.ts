@@ -10,7 +10,6 @@ export interface StartPicks {
   gitAccount?: string
   publish?: string
   prBase?: string
-  repos?: { name: string; from: string }[]
   /** The images the prompt went with, by the names the dashboard kept them under. */
   images?: string[]
 }

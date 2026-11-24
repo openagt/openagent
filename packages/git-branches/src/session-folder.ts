@@ -1,36 +1,41 @@
-import { mkdir, rm, rmdir, stat } from 'node:fs/promises'
-import { basename, join } from 'node:path'
+import { mkdir, realpath, rm, rmdir, stat } from 'node:fs/promises'
+import { isAbsolute, join } from 'node:path'
 import { checkoutRoot, nodeGitRunner, originDefaultBranch, originUrl, sessionFolder, type GitRunner } from '@openagt/agent-data'
 import { agentBranchName } from './branch-names.js'
+import { isCopyName, nameRepos, type SessionRepo } from './repo-names.js'
+
+export type { SessionRepo } from './repo-names.js'
 
 /**
- * A repo a session has as context, beside the project it is in or with none: the folder it was
- * copied from, and the name of its copy in the session's folder.
+ * The repos given to a session, each by a folder in it: the repo's own top folder, named as
+ * {@link nameRepos} names them. Rejects a folder that is no git repository, saying which.
  */
-export interface SessionRepo {
-  name: string
-  from: string
+export async function sessionRepos(folders: readonly string[], git: GitRunner = nodeGitRunner()): Promise<SessionRepo[]> {
+  const tops: string[] = []
+  for (const folder of folders) {
+    tops.push(
+      await checkoutRoot(folder, git).catch(() => {
+        throw new Error(`${folder} is not a git repository`)
+      }),
+    )
+  }
+  return nameRepos(tops)
 }
 
 /**
- * The repos given to a session, each by a folder in it: the repo's own top folder, named by that
- * folder's name, a name two of them share told apart by a number (`app`, `app-2`). The same
- * folders in the same order answer the same repos, so a run's own process names them as the start
- * did. Rejects a folder that is no git repository, saying which; a repo given twice counts once.
+ * The repos a run's options name, as its steps may take them: each named by one folder's name,
+ * no two alike, and copied from a repository's own top folder on this computer. Whoever wrote the
+ * options named them; a name that would climb out of the session's folder, or a folder that is no
+ * repository's top, refuses the run, saying which.
  */
-export async function sessionRepos(folders: readonly string[], git: GitRunner = nodeGitRunner()): Promise<SessionRepo[]> {
-  const repos: SessionRepo[] = []
-  for (const folder of folders) {
-    const from = await checkoutRoot(folder, git).catch(() => {
-      throw new Error(`${folder} is not a git repository`)
-    })
-    if (repos.some(repo => repo.from === from)) continue
-    const name = basename(from)
-    let shown = name
-    for (let n = 2; repos.some(repo => repo.name === shown); n++) shown = `${name}-${n}`
-    repos.push({ name: shown, from })
+export async function checkedRepos(repos: readonly SessionRepo[], git: GitRunner = nodeGitRunner()): Promise<SessionRepo[]> {
+  for (const [i, repo] of repos.entries()) {
+    if (!isCopyName(repo.name) || repos.findIndex(other => other.name === repo.name) !== i) throw new Error(`not a name for a copy of a repo: ${repo.name}`)
+    // git names a repository's top by its real path: the folder is compared as it really is.
+    const [top, real] = isAbsolute(repo.from) ? await Promise.all([checkoutRoot(repo.from, git).catch(() => undefined), realpath(repo.from).catch(() => undefined)]) : []
+    if (top === undefined || top !== real) throw new Error(`${repo.from} is not a git repository`)
   }
-  return repos
+  return [...repos]
 }
 
 /** How long a new copy waits for its origin: a host that does not answer must not hold the run's start. */

@@ -17,7 +17,7 @@ vi.mock('../lib/editors.js', () => ({ useDetectedEditors: () => [] }))
 vi.mock('../rpc/projects.js', () => ({ onProjects: () => Promise.resolve([]), onCommands: vi.fn(async () => ({ commands: [] })) }))
 vi.mock('../lib/use-project-launcher.js', async importOriginal => ({ ...(await importOriginal<object>()), useProjectLauncher: () => ({ gitHost: true, remote: true }) }))
 vi.mock('./AutoMenu.js', () => ({ AutoMenu: () => null, autoSaid: () => '', autoCovers: () => undefined, useAutoLevels: () => [] }))
-vi.mock('./ContextMenu.js', () => ({ SessionContextMenu: ({ context }: { context: Set<string> }) => <span data-testid="context">{[...context].join(', ')}</span> }))
+vi.mock('./ContextMenu.js', () => ({ ContextMenu: ({ files }: { files: readonly string[] }) => <span data-testid="context">{files.join(', ')}</span> }))
 vi.mock('./ProfileMenu.js', () => ({ ProfileOff: () => null }))
 vi.mock('./GitHosts.js', () => ({ GitHostOff: () => null }))
 import { keptDraft } from '../lib/draft-handoff.js'

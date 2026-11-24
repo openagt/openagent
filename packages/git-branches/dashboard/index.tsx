@@ -4,7 +4,8 @@
 // Commit, Publish branch, Merge on this machine, a copy's work brought back to its folder, and
 // uncommitted work discarded; a row per copy of a repo the session holds work in (`chat.work`);
 // Remove worktree in the session's menu (`chat.menu`); the branch a run starts from, in the row
-// above the box (`composer.control` at `start`); the Auto menu's Commit and Publish branch
+// above the box (`composer.control` at `start`); the repos a session works with, each copied into
+// its folder, under the box (`composer.control` at `context`); the Auto menu's Commit and Publish branch
 // (`composer.auto`); and the press that brings a project's folder up to its remote
 // (`attention.fix`), for the item its Node part says. What it reads and does is its own server
 // part's (`../src/server.ts`).
@@ -15,6 +16,7 @@ import { Committing } from './Committing.js'
 import { CopyRows } from './CopyRows.js'
 import { handoffActions } from './handoff.js'
 import { RunSummary } from './HandoffSummary.js'
+import { ReposControl } from './ReposControl.js'
 import { StartControl } from './StartControl.js'
 
 /** The sentence a level adds to the prompt, every level starting with the commit. */
@@ -57,6 +59,7 @@ export default defineUiModule({
       { place: 'chat.summary', id: 'branch', ended: true, View: RunSummary },
       { place: 'chat.work', id: 'copies', View: CopyRows },
       { place: 'composer.control', id: 'start-from', at: 'start', order: 10, View: StartControl },
+      { place: 'composer.control', id: 'repos', at: 'context', order: 10, View: ReposControl },
     ],
     'ui.action': [...handoffActions, removeWorktree, updateFolder],
     'ui.option': [

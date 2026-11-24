@@ -107,7 +107,6 @@ export function ProjectHome({
             addContext={addContext}
             removeContext={removeContext}
             toggleContext={toggleContext}
-            projects={projects}
             onPickProject={onPickProject}
           />
         </div>

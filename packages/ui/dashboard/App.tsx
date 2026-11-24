@@ -525,7 +525,6 @@ export function App() {
               addContext={addContext}
               removeContext={removeContext}
               toggleContext={toggleContext}
-              projects={projects}
               onPickProject={id => selectScope(id === SESSIONS_ID ? null : id)}
             />
           }

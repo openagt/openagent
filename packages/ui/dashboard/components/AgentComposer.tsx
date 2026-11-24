@@ -12,8 +12,7 @@ import { keepDraft, keepDraftImages, keptDraft, keptDraftImages } from '../lib/d
 import { DaemonDown } from '../lib/use-daemon-health.js'
 import { Button } from './ui/button.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
-import { SessionContextMenu } from './ContextMenu.js'
-import { SessionReposSaid } from './SessionRepos.js'
+import { ContextMenu } from './ContextMenu.js'
 import { AutoMenu, autoCovers, autoSaid, useAutoLevels } from './AutoMenu.js'
 import { GitHostOff } from './GitHosts.js'
 import { isPublishPick, type PublishPick } from '../../src/client.js'
@@ -68,7 +67,6 @@ export function AgentComposer({
   publish,
   prBase,
   row,
-  repos,
   gitHost,
   gitAccount,
   options,
@@ -104,8 +102,6 @@ export function AgentComposer({
   prBase?: string | undefined
   /** The row above the box: where the session started. */
   row?: ReactNode
-  /** The repos the session has as copies, as its record says. */
-  repos?: readonly { name: string; from: string }[] | undefined
   /** The project's page on its git host, when it has one. */
   gitHost?: GitHostHome | null | undefined
   /** The account the run worked as there, as its record says. */
@@ -290,12 +286,10 @@ export function AgentComposer({
 
   // What the gear's hover says of the session's setup with its menu shut.
   const noProject = projectId === SESSIONS_ID
-  // What a level acts on: the project, or with none the session's copies of repos.
-  const publishes = !noProject || (repos?.length ?? 0) > 0
   const autoTarget = prBase !== undefined ? { into: prBase } : undefined
   const setupSaid = [
     gitAccount !== undefined && `@${gitAccount}`,
-    publishes && autoSaid(picked ?? recorded, levels, autoTarget),
+    autoSaid(picked ?? recorded, levels, autoTarget),
   ]
     .filter(Boolean)
     .join(' · ')
@@ -322,19 +316,18 @@ export function AgentComposer({
         {...(contextSet ? { addContext: contextSet.add, removeContext: contextSet.remove } : {})}
         // The launcher's gear, line for line in its places: the modules' lines, as the session's record
         // keeps its options; the account the run worked as; then, set apart and still a pick, "When it finishes". After the
-        // gear, Context: the repos the session started with, said, and in a project the files picked for the next message; for a session with no project,
-        // no git to take its work further with.
+        // gear, in a project, Context: the files picked for the next message; then the modules' controls there.
         controlBox={controlBox}
         setup={{
           said: setupSaid,
           lines: (
             <>
               <GitHostOff home={gitHost ?? null} account={gitAccount} />
-              {publishes && <AutoMenu publish={picked ?? recorded} levels={levels} onPublish={pick => setPicked(pick === recorded ? null : pick)} covers={autoCovers(noProject ? null : 'the project', repos?.length ?? 0)} target={autoTarget} />}
+              <AutoMenu publish={picked ?? recorded} levels={levels} onPublish={pick => setPicked(pick === recorded ? null : pick)} covers={autoCovers(noProject)} target={autoTarget} />
             </>
           ),
         }}
-        controls={noProject ? <SessionReposSaid repos={repos ?? []} /> : contextSet && <SessionContextMenu repos={repos ?? []} context={contextSet.context} busy={busy} onToggle={contextSet.toggle} />}
+        controls={!noProject && contextSet && <ContextMenu files={[...contextSet.context]} busy={busy} onRemove={contextSet.toggle} />}
         idleControl={idleControl}
         notes={
           <>

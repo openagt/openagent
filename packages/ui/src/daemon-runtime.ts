@@ -1,9 +1,8 @@
-import { basename, isAbsolute, resolve } from 'node:path'
+import { basename, resolve } from 'node:path'
 import { stat } from 'node:fs/promises'
 import { hasImage, isImageName } from '@openagt/agent-driver'
 import { IMAGES_PER_MESSAGE } from './images.js'
 import { MODULE_NAME, isBranchName, type Hooks, type ProjectRef, type RunHost, type RunOptions } from '@openagt/hooks'
-import { sessionRepos } from '@openagt/git-branches'
 import { projectBranches, readRunEvents } from './store/index.js'
 import type { StartAgentOptions, StartAgentResult, StartedInResult } from './dashboard/types.js'
 import { ownRunsWatch } from './dashboard/runs-watch.js'
@@ -31,20 +30,14 @@ import { readySessionsHome } from './sessions-home.js'
  */
 function refusedPicks(options: StartAgentOptions, noProject: boolean): string | undefined {
   if (options.options !== undefined && !isRunOptions(options.options)) return 'The run options are one object per module.'
-  // A session with no project: with no branch; the repos it has are copied into its folder, and are
-  // what it publishes. Its git host account goes with it: it may reach the host all the same.
+  // A session with no project: with no branch. Its git host account goes with it: it may reach the host all the same.
   if (noProject && options.prBase !== undefined) return 'A session with no project runs with no branch.'
-  if (noProject && options.publish !== undefined && !(Array.isArray(options.repos) && options.repos.length > 0)) return 'A session with no project and no repo has nothing to publish.'
   if (options.images !== undefined && !(Array.isArray(options.images) && options.images.length <= IMAGES_PER_MESSAGE && options.images.every(isImageName))) return 'Images are named by the names the dashboard kept them under.'
   // Another host runs a project's run, on a machine of its own.
   if (options.host !== undefined && (typeof options.host !== 'string' || !MODULE_NAME.test(options.host))) return 'A host is named by its id.'
   if (noProject && options.host !== undefined) return 'A session with no project runs on this computer.'
   // A login is one word.
   if (options.account !== undefined && !(typeof options.account === 'string' && /^\S+$/.test(options.account))) return 'An account is named by its login.'
-  // A repo is a whole path, and the run's process is handed them one per line.
-  if (options.repos !== undefined && !(Array.isArray(options.repos) && options.repos.every(folder => typeof folder === 'string' && isAbsolute(folder) && !folder.includes('\n')))) {
-    return 'A repo is named by the path of its folder on this computer.'
-  }
   return undefined
 }
 
@@ -108,13 +101,10 @@ export function createProjectRuntime({ cwd, env, host, otherHosts = async () => 
     // with none saved the run commits and pushes nothing, and with one the project is not offered
     // it goes as far as the project does with no pull request: its branch pushed, or its work
     // committed where there is no remote.
-    // With no project the level is for the session's copies of repos, whatever host each is on: the pick as sent, and none with no repo.
+    // With no project the level is for the session's copies of repos, whatever host each is on: the pick as sent.
     const publish = noProject
       ? options.publish !== undefined && isPublishPick(options.publish) ? publishLevelOf(options.publish) : undefined
       : publishLevelOf(publishPickIn(options.publish, (await projectGitHost(projectCwd).catch(() => undefined)) !== undefined, await hasRemote(projectCwd)))
-    // A session's repos, each under the name it has in the session's folder: one that is no repository refuses the Start.
-    const repos = options.repos !== undefined ? await sessionRepos(options.repos).then(given => ({ given }), (err: unknown) => ({ error: errorMessage(err) })) : undefined
-    if (repos && 'error' in repos) return { ok: false, error: repos.error }
     const project = noProject ? undefined : await projectRefAt(targetProjectId ?? homeId, projectCwd)
     // The host picked to run it, among the project's: one no module on in the project has refuses the Start.
     const runsOn = options.host === undefined || options.host === host.id ? host : (await otherHosts(project)).find(other => other.id === options.host)
@@ -129,7 +119,7 @@ export function createProjectRuntime({ cwd, env, host, otherHosts = async () => 
         prompt,
         ...(images.length > 0 ? { images } : {}),
         // A run of another host's says which: its options and its record name it.
-        options: { ...(runsOn !== host ? { host: runsOn.id } : {}), ...runOptionsOf(options, publish, repos?.given) },
+        options: { ...(runsOn !== host ? { host: runsOn.id } : {}), ...runOptionsOf(options, publish) },
       })
       .then(({ id }) => ({ ok: true as const, id }), (err: unknown) => ({ ok: false as const, error: errorMessage(err) }))
     // The host made a checkout (or is about to): the project's checkouts are read again on the
@@ -196,16 +186,14 @@ function withPicked(flat: RunOptions, picked: RunOptions | undefined): RunOption
   return merged as RunOptions
 }
 
-function runOptionsOf(options: StartAgentOptions, publish: RunOptions['publish'], repos: { name: string; from: string }[] | undefined): RunOptions {
-  return withPicked(flatOptionsOf(options, publish, repos), options.options)
+function runOptionsOf(options: StartAgentOptions, publish: RunOptions['publish']): RunOptions {
+  return withPicked(flatOptionsOf(options, publish), options.options)
 }
 
-function flatOptionsOf(options: StartAgentOptions, publish: RunOptions['publish'], repos: { name: string; from: string }[] | undefined): RunOptions {
-  const branches = repos !== undefined && repos.length > 0 ? { repos } : {}
+function flatOptionsOf(options: StartAgentOptions, publish: RunOptions['publish']): RunOptions {
   const github = { ...(options.prBase !== undefined ? { prBase: options.prBase } : {}), ...(options.account !== undefined ? { account: options.account } : {}) }
   return {
     ...(publish !== undefined ? { publish } : {}),
-    ...(Object.keys(branches).length > 0 ? { 'git-branches': branches } : {}),
     ...(Object.keys(github).length > 0 ? { github } : {}),
   }
 }
