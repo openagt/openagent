@@ -4,7 +4,7 @@ import { defineModule, RunOrder, type ModuleDefinition, type RunContext } from '
 import { agentBranchName } from './branch-names.js'
 import { attachCheckout, createCheckout } from './checkout.js'
 import { reclaimWorktree } from './reclaim.js'
-import { copiesLine, openSessionFolder, SESSION_FOLDER_STAYS } from './session-folder.js'
+import { copiesLine, dropUntouchedCopies, openSessionFolder, SESSION_FOLDER_STAYS } from './session-folder.js'
 import { worktreeBranch, worktreePath, type AddedWorktree } from './worktree.js'
 
 /**
@@ -103,7 +103,8 @@ async function readBranch(ctx: RunContext, git: GitRunner): Promise<void> {
  * stays on this machine: nothing is pushed here, publishing is the agent's when it was asked, the
  * person's otherwise. A dirty tree keeps the checkout, and the sweep tries again later. A waiting
  * run keeps it on purpose: the answer resumes the run there. A session's folder is its work, kept
- * for the person and for the run going on later.
+ * for the person and for the run going on later. A run in a project keeps, of its copies of repos,
+ * the ones that hold work.
  */
 async function reclaim(ctx: RunContext, git: GitRunner): Promise<void> {
   const facts = (ctx.facts['git-branches'] ??= {})
@@ -116,5 +117,8 @@ async function reclaim(ctx: RunContext, git: GitRunner): Promise<void> {
       (err: unknown) => ({ ok: false, reason: errorMessage(err) }) as const,
     )
     facts.reclaimed = reclaimed.ok ? { reclaimed: true, ...(reclaimed.branchesDeleted ? { deleted: reclaimed.branchesDeleted } : {}) } : { reclaimed: false, reason: reclaimed.reason }
+    // Its copies of repos: the ones it never touched go with the run, the rest stay with their work.
+    const repos = ctx.options['git-branches']?.repos ?? []
+    if (repos.length > 0) await dropUntouchedCopies(sessionsHome(), ctx.id, repos, git).catch(() => {})
   }
 }

@@ -140,7 +140,10 @@ test('a run in a project with repos: its checkout of the project, a copy of each
   const before = process.env.XDG_CONFIG_HOME
   process.env.XDG_CONFIG_HOME = home
   try {
-    const { checkout } = steps()
+    // The repo has an origin, as a repo on a git host has: what its copy started with is what the origin's branches say.
+    await git(['init', '-q', '--bare', join(home, 'other-origin.git')], home)
+    await git(['remote', 'add', 'origin', join(home, 'other-origin.git')], other.dir)
+    const { checkout, reclaim } = steps()
     const repos = [{ name: 'other', from: other.dir }]
     const ctx: RunContext = fakeRun({ id: 'run1', project: p, options: { 'git-branches': { repos } } })
     await checkout.run(ctx)
@@ -157,6 +160,24 @@ test('a run in a project with repos: its checkout of the project, a copy of each
     const resumed: RunContext = fakeRun({ id: 'run1', project: p, options: { 'git-branches': { repos } }, resume: { text: 'go on' }, facts: ctx.facts })
     await checkout.run(resumed)
     assert.deepEqual(resumed.context, [])
+
+    // The run ends with work in its copy: the copy stays. One it never touched goes, and the empty folder with it.
+    await writeFile(join(folder, 'other', 'work.txt'), 'x\n')
+    await git(['add', '-A'], join(folder, 'other'))
+    await git(['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'work'], join(folder, 'other'))
+    resumed.outcome = { status: 'done' }
+    await reclaim.run(resumed)
+    assert.equal(await exists(join(folder, 'other')), true, 'a copy with a commit of its own stays')
+    const untouched: RunContext = fakeRun({ id: 'run2', project: p, options: { 'git-branches': { repos } } })
+    await checkout.run(untouched)
+    const second = join(home, 'openagent-sessions', 'run2')
+    await writeFile(join(second, 'other', 'scratch.txt'), 'x\n')
+    untouched.outcome = { status: 'done' }
+    await reclaim.run(untouched)
+    assert.equal(await exists(join(second, 'other')), true, 'a copy with a file not committed stays')
+    await rm(join(second, 'other', 'scratch.txt'))
+    await reclaim.run(untouched)
+    assert.deepEqual([await exists(join(second, 'other')), await exists(second)], [false, false], 'an untouched copy goes, and the session folder once it is empty')
   } finally {
     if (before === undefined) delete process.env.XDG_CONFIG_HOME
     else process.env.XDG_CONFIG_HOME = before

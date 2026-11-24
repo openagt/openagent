@@ -1,4 +1,4 @@
-import { mkdir, stat } from 'node:fs/promises'
+import { mkdir, rm, rmdir, stat } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { checkoutRoot, nodeGitRunner, originUrl, sessionFolder, type GitRunner } from '@openagt/agent-data'
 import { agentBranchName } from './branch-names.js'
@@ -72,4 +72,32 @@ export async function openSessionFolder(home: string, id: string, repos: readonl
 export function copiesLine(folder: string, id: string, made: readonly SessionRepo[]): string {
   const copies = made.map(repo => `${join(folder, repo.name)} (copied from ${repo.from})`).join(', ')
   return `Context: this session has its own ${made.length === 1 ? 'copy of a repo' : 'copies of repos'}, on the branch ${agentBranchName(id)}: ${copies}. Read and change ${made.length === 1 ? 'it' : 'them'} there, not in the folder${made.length === 1 ? '' : 's'} copied from.`
+}
+
+/**
+ * A run in a project is over: the copies it never touched go, and its session folder with them
+ * once it is empty. A copy is untouched when its tree is clean and no branch of it holds a commit
+ * the repo it was cloned from did not have. One with work stays, pushed or not: a resumed run goes
+ * on in it, and its branch is where the session's work bar reads it. A copy that went is made again
+ * by a resume ({@link openSessionFolder}). A copy of a repo with no origin lost its remote as it
+ * was made, so nothing says what it started with: it stays. Answers the names that went.
+ */
+export async function dropUntouchedCopies(home: string, id: string, repos: readonly SessionRepo[], git: GitRunner = nodeGitRunner()): Promise<string[]> {
+  const path = sessionFolder(home, id)
+  const gone: string[] = []
+  for (const repo of repos) {
+    const copy = join(path, repo.name)
+    if (!(await stat(join(copy, '.git')).then(() => true, () => false))) continue
+    const untouched = await Promise.all([
+      git(['status', '--porcelain'], copy),
+      git(['for-each-ref', '--count=1', 'refs/remotes'], copy),
+      git(['rev-list', '--max-count=1', '--branches', '--not', '--remotes'], copy),
+    ]).then(([dirty, remotes, own]) => dirty.trim() === '' && remotes.trim() !== '' && own.trim() === '', () => false)
+    if (!untouched) continue
+    await rm(copy, { recursive: true, force: true })
+    gone.push(repo.name)
+  }
+  // Only an empty folder goes: `rmdir` refuses one that still holds a copy.
+  await rmdir(path).catch(() => {})
+  return gone
 }

@@ -78,6 +78,12 @@ already made, and lists it in its pull request; for anything else it proposes an
   files, and over a worktree in the repo, which leaves a folder and a branch in a repo
   that is not the session's project. The copy holds what is committed in the repo's
   folder, as with no project.
+- When a run in a project ends, the copies it never touched go, and its session folder
+  with them once it is empty: a copy is untouched when its tree is clean and no branch
+  of it holds a commit the repo it was cloned from did not have. A copy with work stays,
+  pushed or not: a resumed run goes on in it, and its branch is where the session's work
+  is read. Picked over removing a copy once its work is pushed, which a resume would make
+  again without that work. A session with no project keeps its whole folder, as before.
 - Everything after the worktree is best-effort: a checkout missing any of it is a worse
   run, not a failed one.
 
