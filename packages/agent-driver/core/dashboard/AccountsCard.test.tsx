@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { forgetRemembered, type ModuleCommandResult } from '@openagt/ui/module'
 import { fakeHost, renderWithHost } from '@openagt/ui/module/testing'
-import { AccountsCard } from './AccountsCard.js'
+import { AccountsCard, ConnectAgent } from './AccountsCard.js'
 
 const HOUR = 3_600_000
 
@@ -448,5 +448,62 @@ describe('AccountsCard', () => {
     renderAdding(() => ({ claude: { adding: { name: 'Dani', url: 'https://claude.example/secret-sign-in', paste: true } }, codex: {} }))
     await screen.findByRole('link', { name: /Open Claude/ })
     expect(JSON.stringify({ ...localStorage })).not.toContain('secret-sign-in')
+  })
+})
+
+describe('ConnectAgent', () => {
+  afterEach(() => {
+    cleanup()
+    forgetRemembered()
+    localStorage.clear()
+    vi.unstubAllGlobals()
+  })
+
+  /** The dashboard's own read of the person answers `name`. */
+  const personIs = (name: string): void => {
+    vi.stubGlobal('fetch', async (url: string) => new Response(JSON.stringify(url.endsWith('/onPerson') ? { ret: { name } } : { error: 'not here' }), { status: url.endsWith('/onPerson') ? 200 : 404 }))
+  }
+
+  test("the press is named for its agent and opens the window an account is added in, the person's own name in its field: one press starts the sign-in", async () => {
+    personIs('Ada Lovelace')
+    const calls: string[][] = []
+    const { host } = hostFor(async args => {
+      calls.push(args)
+      return { ok: true, output: {} }
+    })
+    const onConnected = vi.fn()
+    renderWithHost(<ConnectAgent agent="claude" primary onConnected={onConnected} />, host)
+    const press = await screen.findByRole('button', { name: 'Connect Claude Code' })
+    expect(press.textContent).toBe('Claude')
+    // The person is read before the window opens: the field opens with their name.
+    await new Promise(resolve => setTimeout(resolve, 0))
+    fireEvent.click(press)
+    const dialog = await screen.findByRole('dialog', { name: 'Add a Claude account' })
+    expect((within(dialog).getByRole('textbox', { name: 'Whose account' }) as HTMLInputElement).value).toBe('Ada')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Log in to Claude' }))
+    await waitFor(() => expect(calls).toContainEqual(['add', 'claude', 'Ada']))
+  })
+
+  test("the card's own window leaves the field empty where an account of the agent already goes by the person's name", async () => {
+    personIs('Ada Lovelace')
+    renderCard(listed([{ name: 'This computer', who: 'Ada', own: true }]))
+    await new Promise(resolve => setTimeout(resolve, 0))
+    const dialog = await add('Claude Code')
+    expect((within(dialog).getByRole('textbox', { name: 'Whose account' }) as HTMLInputElement).value).toBe('')
+    cleanup()
+    const codex = await (async () => {
+      renderCard(listed([{ name: 'This computer', who: 'Ada', own: true }]))
+      await new Promise(resolve => setTimeout(resolve, 0))
+      return add('Codex')
+    })()
+    expect((within(codex).getByRole('textbox', { name: 'Whose account' }) as HTMLInputElement).value).toBe('Ada')
+  })
+
+  test('a sign-in found under way opens no window here: the card does, so one sign-in never opens two', async () => {
+    const { host } = hostFor(async args => ({ ok: true, output: args[0] === 'adding' ? { codex: { adding: { name: 'Dani' } } } : {} }))
+    renderWithHost(<ConnectAgent agent="codex" primary={false} onConnected={() => {}} />, host)
+    await screen.findByRole('button', { name: 'Connect Codex' })
+    await new Promise(resolve => setTimeout(resolve, 50))
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 })

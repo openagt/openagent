@@ -381,3 +381,10 @@ already made, and lists it in its pull request; for anything else it proposes an
   list, which closes it; closing it stops the sign-in. A card with no account at all also says so
   in its body, with a press for each agent. Picked over the sign-in unfolding inside the card
   under a row of agent names that read as a label.
+- The dialog that adds an account is also a press of its own, one per agent (`agent.connect`),
+  which the Overview's "Connect a coding agent" step draws: one sign-in to learn, wherever an
+  account is asked for. Its field opens with the person's own first name, unless an account of
+  that agent already goes by it, so the first account is one press and a yes in the browser.
+  A press that stands alone opens no dialog on a sign-in found under way; the card does, so one
+  sign-in never opens two on a page. Picked (Suleiman, 2026-11-24) over an empty field, and over
+  the step logging the computer's own CLI in.

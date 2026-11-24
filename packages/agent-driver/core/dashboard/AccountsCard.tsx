@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type RefObject } from 'react'
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { Check, ChevronDown, Copy, Info, MoreHorizontal, Plus } from 'lucide-react'
-import { Button, useAskOn, ClaudeLogo, CodexLogo, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, GaugeFace, Input, Panel, PanelGroup, Skeleton, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, computerRpcClient, useModuleHost, useOpenAgentDown, usePolled, WordsShape, type ModuleHost } from '@openagt/ui/module'
+import { Button, useAskOn, ClaudeLogo, CodexLogo, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, GaugeFace, Input, Panel, PanelGroup, Skeleton, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, computerRpcClient, useModuleHost, useOpenAgentDown, usePerson, usePolled, WordsShape, type ModuleHost, type UiConnectAgentProps } from '@openagt/ui/module'
 
 // The accounts each coding agent's runs try, in order: how full each one is, whether it is at a
 // limit, adding one: the command's own sign-in, which goes on by itself while the card follows it,
@@ -216,9 +216,9 @@ function SigningIn({ agent, adding, noBrowser, onChanged }: { agent: (typeof AGE
  * and why the last one did not go through. `onClose` closes the dialog, which gives up a sign-in
  * under way.
  */
-function AddAccount({ agent, now, failed, field, onChanged, onClose }: { agent: (typeof AGENTS)[number]; now: AddingNow; failed: string | undefined; /** The dialog's `initialFocus`. */ field: RefObject<HTMLInputElement | null>; onChanged: () => void; onClose: () => void }) {
+function AddAccount({ agent, now, failed, suggested, field, onChanged, onClose }: { agent: (typeof AGENTS)[number]; now: AddingNow; failed: string | undefined; /** The name the field opens with: the person's own, where no account of the agent has it. */ suggested: string; /** The dialog's `initialFocus`. */ field: RefObject<HTMLInputElement | null>; onChanged: () => void; onClose: () => void }) {
   const host = useModuleHost()
-  const [name, setName] = useState('')
+  const [name, setName] = useState(suggested)
   // The dialog focuses the field it opens on; one shown later, after a sign-in that did not go through, takes the focus itself.
   const [opened, setOpened] = useState(false)
   useEffect(() => setOpened(true), [])
@@ -455,10 +455,26 @@ function AccountRow({
   )
 }
 
-export function AccountsCard() {
+/** The person's first name, as an account of theirs is called until they say otherwise. */
+const firstName = (name: string): string => name.trim().split(/\s+/)[0] ?? ''
+
+/**
+ * Adding an account: the sign-ins as this computer says they go, and the window one is made in.
+ * `adopt` opens the window on a sign-in found under way, started before this page was opened: the
+ * card does, a press that stands alone does not, so one sign-in never opens two windows on a page.
+ */
+function useAddAccount({ adopt, onEnded, taken }: { adopt: boolean; /** A sign-in ended: the accounts may have changed. */ onEnded: () => void; /** The names an agent's accounts go by. */ taken?: (agent: AgentId) => string[] }): {
+  adding: Partial<Record<AgentId, AddingNow>> | undefined
+  /** The agent the window is open on. */
+  naming: AgentId | undefined
+  /** Why the last sign-in did not go through, once the person closed the window on it. */
+  dismissed: string | undefined
+  open: (agent: AgentId) => void
+  /** The window, which gives the keyboard back to `finalFocus` as it closes. */
+  dialog: (finalFocus: RefObject<HTMLElement | null>) => ReactNode
+} {
   const host = useModuleHost()
-  const { value: list, state, reload } = usePolled<Read<Account, Listed> | undefined>(() => read<Account, Listed>(host, 'list'), undefined, LIST_EVERY_MS, [], { remember: 'account-rotation:list', stored: true })
-  const { value: usage, reload: reloadUsage } = usePolled<Read<Usage> | undefined>(() => read<Usage>(host, 'usage'), undefined, USAGE_EVERY_MS, [], { remember: 'account-rotation:usage', stored: true })
+  const { person } = usePerson()
   // Followed closely from a press until the sign-in has ended, which the person may take minutes over.
   const [following, setFollowing] = useState(false)
   const { value: adding, reload: reloadAdding, refresh: refreshAdding } = usePolled<Partial<Record<AgentId, AddingNow>> | undefined>(
@@ -471,7 +487,6 @@ export function AccountsCard() {
   // The agent an account is being added for: the dialog is open on it, from the press until the account is there or the dialog is closed.
   const [naming, setNaming] = useState<AgentId>()
   const nameField = useRef<HTMLInputElement>(null)
-  const addPress = useRef<HTMLButtonElement>(null)
   // Why the last sign-in did not go through, once the person closed the dialog on it: not said again when it opens next.
   const [dismissed, setDismissed] = useState<string>()
   const signingIn = AGENTS.find(agent => adding?.[agent.id]?.adding !== undefined)?.id
@@ -481,7 +496,9 @@ export function AccountsCard() {
   if (underWay !== wasUnderWay) {
     setWasUnderWay(underWay)
     // A sign-in found under way, started before this page was opened, is shown as it is.
-    if (underWay) setNaming(now => now ?? signingIn)
+    if (underWay) {
+      if (adopt) setNaming(now => now ?? signingIn)
+    }
     // The account is there: the dialog closes on it. One that did not go through stays, with why.
     else setNaming(now => (now !== undefined && adding?.[now]?.failed === undefined ? undefined : now))
   }
@@ -489,8 +506,7 @@ export function AccountsCard() {
     if (underWay) setFollowing(true)
     else if (following) {
       setFollowing(false)
-      void reload()
-      void reloadUsage()
+      onEnded()
     }
     // Only when a sign-in starts or ends: the reads are the same from render to render in what they do.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -499,6 +515,77 @@ export function AccountsCard() {
     setFollowing(true)
     void reloadAdding()
   }
+  /** Closing the dialog gives up the sign-in under way, as its Cancel does, and forgets why the last one did not go through: the dialog said it. */
+  const close = (): void => {
+    const agent = naming
+    setNaming(undefined)
+    if (agent === undefined) return
+    setDismissed(adding?.[agent]?.failed)
+    if (adding?.[agent]?.adding || adding?.[agent]?.failed !== undefined) void host.runComputerCommand(['add-cancel', agent], COMMAND).then(changed)
+  }
+  const namingAgent = AGENTS.find(agent => agent.id === naming)
+  const namingNow = (naming !== undefined ? adding?.[naming] : undefined) ?? {}
+  const own = person ? firstName(person.name) : ''
+  return {
+    adding,
+    naming,
+    dismissed,
+    open: setNaming,
+    dialog: finalFocus => (
+      <Dialog open={namingAgent !== undefined} onOpenChange={open => !open && close()} title={namingAgent ? `Add a ${namingAgent.account} account` : ''} initialFocus={nameField} finalFocus={finalFocus}>
+        {namingAgent && (
+          <AddAccount
+            key={namingAgent.id}
+            agent={namingAgent}
+            now={namingNow}
+            failed={namingNow.failed !== dismissed ? namingNow.failed : undefined}
+            suggested={taken?.(namingAgent.id).includes(own) ? '' : own}
+            field={nameField}
+            onChanged={changed}
+            onClose={close}
+          />
+        )}
+      </Dialog>
+    ),
+  }
+}
+
+/**
+ * The press that connects one coding agent (`agent.connect`), where a new install is asked for
+ * one: the agent's name on it, and the same window the card's "Add" opens.
+ */
+export function ConnectAgent({ agent: id, primary, onConnected }: UiConnectAgentProps) {
+  const agent = AGENTS.find(each => each.id === id)!
+  const press = useRef<HTMLButtonElement>(null)
+  const add = useAddAccount({ adopt: false, onEnded: onConnected })
+  const down = useOpenAgentDown()
+  return (
+    <>
+      {/* On a phone a finger's 44, as the page's other presses. */}
+      <Button ref={press} {...(primary ? {} : { variant: 'secondary' as const })} disabled={down} aria-label={`Connect ${agent.name}`} onClick={() => add.open(agent.id)} className="max-md:h-11">
+        <agent.Logo className="size-3.5" />
+        {agent.account}
+      </Button>
+      {add.dialog(press)}
+    </>
+  )
+}
+
+export function AccountsCard() {
+  const host = useModuleHost()
+  const { value: list, state, reload } = usePolled<Read<Account, Listed> | undefined>(() => read<Account, Listed>(host, 'list'), undefined, LIST_EVERY_MS, [], { remember: 'account-rotation:list', stored: true })
+  const { value: usage, reload: reloadUsage } = usePolled<Read<Usage> | undefined>(() => read<Usage>(host, 'usage'), undefined, USAGE_EVERY_MS, [], { remember: 'account-rotation:usage', stored: true })
+  const addPress = useRef<HTMLButtonElement>(null)
+  // The person's own name is offered for an account, unless one of the agent's has it already.
+  const add = useAddAccount({
+    adopt: true,
+    onEnded: () => {
+      void reload()
+      void reloadUsage()
+    },
+    taken: agent => (list?.ok ? (list.accounts[agent] ?? []).map(account => account.who ?? account.name) : []),
+  })
+  const { adding, naming, dismissed } = add
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState<string>()
   const down = useOpenAgentDown()
@@ -515,24 +602,12 @@ export function AccountsCard() {
       .finally(() => setBusy(false))
   }
 
-  /** Closing the dialog gives up the sign-in under way, as its Cancel does, and forgets why the last one did not go through: the dialog said it. */
-  const close = (): void => {
-    const agent = naming
-    setNaming(undefined)
-    if (agent === undefined) return
-    setDismissed(adding?.[agent]?.failed)
-    if (adding?.[agent]?.adding || adding?.[agent]?.failed !== undefined) void host.runComputerCommand(['add-cancel', agent], COMMAND).then(changed)
-  }
-
   // Rotation does something only for an agent with two accounts or more.
   const shown = (agent: AgentId): Account[] => (list?.ok ? (list.accounts[agent] ?? []).filter(account => !account.signedOut) : [])
   const rotates = AGENTS.some(agent => shown(agent.id).length > 1)
   // An account is added with its agent's program: one not installed is offered no Add.
   const addable = AGENTS.filter(agent => !(list?.ok && list.accounts.notInstalled?.includes(agent.id)))
   const none = list?.ok === true && AGENTS.every(agent => shown(agent.id).length === 0)
-  const namingAgent = AGENTS.find(agent => agent.id === naming)
-  const namingNow = (naming !== undefined ? adding?.[naming] : undefined) ?? {}
-
   return (
     <PanelGroup
       bare
@@ -559,7 +634,7 @@ export function AccountsCard() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-[10rem]">
                 {addable.map(agent => (
-                  <DropdownMenuItem key={agent.id} aria-label={`Add a ${agent.account} account`} onClick={() => setNaming(agent.id)}>
+                  <DropdownMenuItem key={agent.id} aria-label={`Add a ${agent.account} account`} onClick={() => add.open(agent.id)}>
                     <agent.Logo className="size-3.5" />
                     {`${agent.account} account`}
                   </DropdownMenuItem>
@@ -591,7 +666,7 @@ export function AccountsCard() {
               {addable.length > 0 && (
                 <span className="flex flex-wrap gap-2">
                   {addable.map(agent => (
-                    <Button key={agent.id} variant="secondary" onClick={() => setNaming(agent.id)}>
+                    <Button key={agent.id} variant="secondary" onClick={() => add.open(agent.id)}>
                       <agent.Logo className="size-3.5" />
                       Add a {agent.account} account
                     </Button>
@@ -627,19 +702,7 @@ export function AccountsCard() {
           </p>
         ) : null
       })}
-      <Dialog open={namingAgent !== undefined} onOpenChange={open => !open && close()} title={namingAgent ? `Add a ${namingAgent.account} account` : ''} initialFocus={nameField} finalFocus={addPress}>
-        {namingAgent && (
-          <AddAccount
-            key={namingAgent.id}
-            agent={namingAgent}
-            now={namingNow}
-            failed={namingNow.failed !== dismissed ? namingNow.failed : undefined}
-            field={nameField}
-            onChanged={changed}
-            onClose={close}
-          />
-        )}
-      </Dialog>
+      {add.dialog(addPress)}
     </PanelGroup>
   )
 }
