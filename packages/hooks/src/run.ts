@@ -150,6 +150,8 @@ export interface RunInput {
   publish?: Publish | 'nothing'
   /** With a message: the images it goes with, by the names this computer keeps them under ({@link DriverPromptOptions.images}). */
   images?: string[]
+  /** With a message: the repos it gives the session, by their folders, each copied into the session's folder before the run goes on. */
+  repos?: string[]
 }
 
 /**

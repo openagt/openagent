@@ -138,6 +138,7 @@ export function localHost(deps: LocalHostDeps = {}): RunHost {
         ...(input.images !== undefined && input.images.length > 0 ? { images: input.images } : {}),
         ...(input.answer !== undefined ? { answer: input.answer } : {}),
         ...(input.publish !== undefined ? { publish: input.publish } : {}),
+        ...(input.repos !== undefined && input.repos.length > 0 ? { repos: input.repos } : {}),
       },
       deps.spawnResume ? { spawn: deps.spawnResume } : {},
     )
@@ -429,7 +430,12 @@ function picks(options: RunOptions): Record<string, string> {
 function inputOf(line: PromptLine): RunInput {
   if (line.kind === 'answer') return { answer: line.answer }
   const publish = line.publish
-  return { text: line.text, ...(publish !== undefined && (isPublish(publish) || publish === NO_PUBLISH) ? { publish } : {}), ...imagesOf(line) }
+  return {
+    text: line.text,
+    ...(publish !== undefined && (isPublish(publish) || publish === NO_PUBLISH) ? { publish } : {}),
+    ...imagesOf(line),
+    ...(line.repos !== undefined && line.repos.length > 0 ? { repos: line.repos } : {}),
+  }
 }
 
 /** The naming sessions this process keeps waiting for the runs it starts, made at the first that is named. */

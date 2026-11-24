@@ -137,11 +137,19 @@ export async function addSessionRepos(
   folders: readonly string[],
   git: GitRunner = nodeGitRunner(),
 ): Promise<{ repos: SessionRepo[]; made: SessionRepo[]; path: string }> {
-  const path = sessionFolder(home, id)
-  const taken = (await readdir(path).catch(() => [] as string[])).filter(name => !have.some(repo => repo.name === name))
-  const fresh = await sessionRepos(folders, git, have, taken)
-  const { made } = await openSessionFolder(home, id, fresh, git)
+  const fresh = await moreRepos(home, id, have, folders, git)
+  const { path, made } = await openSessionFolder(home, id, fresh, git)
   return { repos: [...have, ...fresh], made, path }
+}
+
+/**
+ * The repos in `folders` a session that has `have` is given beside them, each named beside its
+ * repos and beside whatever else its folder holds ({@link sessionRepos}): the new ones alone, not
+ * copied yet. A resume names them so, and its run's start copies them ({@link openSessionFolder}).
+ */
+export async function moreRepos(home: string, id: string, have: readonly SessionRepo[], folders: readonly string[], git: GitRunner = nodeGitRunner()): Promise<SessionRepo[]> {
+  const taken = (await readdir(sessionFolder(home, id)).catch(() => [] as string[])).filter(name => !have.some(repo => repo.name === name))
+  return sessionRepos(folders, git, have, taken)
 }
 
 /**

@@ -1,7 +1,10 @@
 import { AgentExitError } from '../cli-session.js'
 import { ConversationGoneError } from '../gone.js'
 import { imagesOf, promptLines, promptOf, takeInbox } from '../inbox.js'
-import { errorMessage } from '@openagt/git-branches'
+import { join } from 'node:path'
+import { sessionsHome } from '@openagt/hooks'
+import { addSessionRepos, agentBranchName, errorMessage, foundCopies, sessionFolder, type SessionRepo } from '@openagt/git-branches'
+import { copiesLine } from '@openagt/projects/module'
 import type { RunAsking, RunOutcome, DriverPromptOptions, DriverSession, DriverTurn, LogEndStatus, PromptLine, Question } from '@openagt/hooks'
 import type { Leg } from './leg.js'
 import { inboxPath } from './live-card.js'
@@ -55,7 +58,8 @@ const OPENS_REQUEST = 'open its pull request'
  * has to publish, as in a session with no project, or stand beside its checkout of a project.
  */
 export interface Copies {
-  folders: readonly string[]
+  /** Each copy's folder; more are added while the run goes on ({@link runRepos}). */
+  folders: string[]
   alone: boolean
 }
 
@@ -93,13 +97,20 @@ export function effortOf(effort: string | undefined): { effort?: string } {
 interface Queued {
   prompt: string
   publish?: string
+  /** The repos its message gives the session, by their folders: each copied before it is sent. */
+  repos?: string[]
   /** The images it goes with, by their names in the image store. */
   images?: string[]
 }
 
 /** An inbox line as the prompt it becomes, with the level its message carries. */
 function queued(line: PromptLine): Queued {
-  return { prompt: promptOf(line), ...(line.kind === 'message' && line.publish !== undefined ? { publish: line.publish } : {}), ...imagesOf(line) }
+  return {
+    prompt: promptOf(line),
+    ...(line.kind === 'message' && line.publish !== undefined ? { publish: line.publish } : {}),
+    ...(line.kind === 'message' && line.repos !== undefined && line.repos.length > 0 ? { repos: line.repos } : {}),
+    ...imagesOf(line),
+  }
 }
 
 /**
@@ -134,7 +145,8 @@ export async function sessionTurns(leg: Leg, workspace: string, dir: string, sto
   }
   if (driverSession?.log) leg.live = driverSession.log
   const naming = nameSession(leg, driverSession, stopped)
-  const level = publishLevel(leg, driverSession, copies)
+  const repos = runRepos(leg, driverSession, copies)
+  const level = publishLevel(leg, driverSession, copies, repos)
   try {
     // The prompts this process owes the agent: the run's own, then the lines that reached the
     // inbox after the last turn took it but while the card still said running. Whoever wrote
@@ -151,13 +163,15 @@ export async function sessionTurns(leg: Leg, workspace: string, dir: string, sto
       let lastText = ''
       let asked: Question | undefined
       try {
-        for (const [i, { prompt, publish, images }] of queue.entries()) {
+        for (const [i, { prompt, publish, images, repos: given }] of queue.entries()) {
           // Stopped between two prompts: the rest are not sent.
           if (stopped.aborted) break
           await level.take(publish)
+          // The repos its message gives the session are copied first, and it goes with the line saying where.
+          const told = given !== undefined ? await repos.add(given) : undefined
           // Only the last one drains the inbox: a line written meanwhile comes after these.
           const last = i === queue.length - 1
-          const handed = attached
+          const handed = [attached, told].filter(part => part !== undefined).join('\n\n') || undefined
           attached = undefined
           const sent = {
             ...(last ? { inbox, onInboxLine: level.onInboxLine } : {}),
@@ -183,6 +197,8 @@ export async function sessionTurns(leg: Leg, workspace: string, dir: string, sto
         end = { status: 'failed', error: errorMessage(err) }
         failure = err
       }
+      // The copies its agent added on its own meanwhile (`add`) are the session's from here on.
+      await repos.found()
       if (stopped.aborted) end = { status: 'stopped' }
       else if (end.status === 'done' && asking) {
         // The last turn asked and nothing waited in the inbox: the run ends here, waiting, and
@@ -260,26 +276,76 @@ function nameSession(leg: Leg, session: DriverSession | undefined, stopped: Abor
  * the level from there on (`publish` on its inbox line, or on a line queued after the run's last
  * turn), and the record says so then.
  */
-function publishLevel(leg: Leg, session: DriverSession | undefined, copies: Copies | undefined): { added(): { added?: string }; take(word: string | undefined): Promise<void>; onInboxLine(line: PromptLine, sent: DriverPromptOptions): Promise<DriverPromptOptions> } {
-  let added = addedLine(leg.mark.publish, leg.mark.prBase, copies)
+function publishLevel(
+  leg: Leg,
+  session: DriverSession | undefined,
+  copies: Copies | undefined,
+  repos: RunRepos,
+): { added(): { added?: string }; take(word: string | undefined): Promise<void>; onInboxLine(line: PromptLine, sent: DriverPromptOptions): Promise<DriverPromptOptions> } {
+  // Said as things stand when it is sent: a message may have changed the level, or given the session more copies.
+  const added = (): { added?: string } => {
+    const line = addedLine(leg.mark.publish, leg.mark.prBase, copies)
+    return line !== undefined ? { added: line } : {}
+  }
   const take = async (word: string | undefined): Promise<void> => {
     const level = publishChange(word)
     if (level === undefined) return
     const { publish: _was, ...rest } = leg.mark
     leg.mark = { ...rest, ...(level !== null ? { publish: level } : {}) }
-    added = addedLine(leg.mark.publish, leg.mark.prBase, copies)
     await session?.log?.patch({ caller: { runner: leg.mark, publish: leg.mark.publish } })
   }
   return {
-    added: () => (added !== undefined ? { added } : {}),
+    added,
     take,
     // A line the driver takes from the inbox is handed here first: a message may say how far the run
-    // takes its work from it on, and every line goes with the sentence in force now, which a line
-    // handed over in a later turn may have changed.
+    // takes its work from it on, and give the session more repos, copied before it goes, with the line
+    // saying where; every line goes with the sentence in force now, which a line handed over in a
+    // later turn may have changed.
     onInboxLine: async (line, sent) => {
       if (line.kind === 'message') await take(line.publish)
-      const { added: _was, ...rest } = sent
-      return added !== undefined ? { ...rest, added } : rest
+      const told = line.kind === 'message' && line.repos !== undefined && line.repos.length > 0 ? await repos.add(line.repos) : undefined
+      const { added: _was, attached: _attached, ...rest } = sent
+      return { ...rest, ...added(), ...(told !== undefined ? { attached: told } : {}) }
+    },
+  }
+}
+
+/** The session's repos as its process goes on ({@link runRepos}). */
+interface RunRepos {
+  /** Copy the repos in these folders into the session: the line telling the agent where they are, or why they are not. */
+  add(folders: readonly string[]): Promise<string | undefined>
+  /** Take in the copies the agent added itself since. */
+  found(): Promise<void>
+}
+
+/**
+ * The session's repos while its process runs: the ones its mark names, more given with a message
+ * (a tick in Context), and the copies its agent added with `add`. Each one comes into the mark, and
+ * the record says so at once; its folder joins the copies the publish sentence names, and a resume
+ * starts with it.
+ */
+function runRepos(leg: Leg, session: DriverSession | undefined, copies: Copies | undefined): RunRepos {
+  const home = sessionsHome()
+  const keep = async (repos: SessionRepo[]): Promise<void> => {
+    leg.mark = { ...leg.mark, repos }
+    if (copies) copies.folders = repos.map(repo => join(sessionFolder(home, leg.id), repo.name))
+    await session?.log?.patch({ caller: { runner: leg.mark, repos } })
+  }
+  return {
+    async add(folders) {
+      try {
+        const have = leg.mark.repos ?? []
+        const given = await addSessionRepos(home, leg.id, have, folders, leg.here.git)
+        if (given.repos.length > have.length) await keep(given.repos)
+        return given.made.length > 0 ? copiesLine(given.path, agentBranchName(leg.id), given.made) : undefined
+      } catch (err) {
+        return `Context: ${folders.join(', ')} could not be copied into this session: ${errorMessage(err)}`
+      }
+    },
+    async found() {
+      const have = leg.mark.repos ?? []
+      const more = await foundCopies(home, leg.id, have, leg.here.git).catch(() => [])
+      if (more.length > 0) await keep([...have, ...more])
     },
   }
 }
