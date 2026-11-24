@@ -4,7 +4,6 @@ import { createHooks, defineModule, type AttentionItem, type Hooks, type Waiting
 import { memoryStore } from '@openagt/hooks/testing'
 import ask from '@openagt/ask/module'
 import { buildWaiting, waitingKey, type Waiting, type WaitingDeps } from './waiting.js'
-import { forgetStartedNames, nameStarted } from '@openagt/agent-driver'
 import { pendingChoices } from '../open-choices.js'
 import { eventsOf, type AnyDiaryLine } from '@openagt/agent-driver'
 import type { OpenPr } from './pull-requests.js'
@@ -206,18 +205,6 @@ test('runs that cannot be read are no runs that wait: the module asking about th
   const { items, whole } = await build([project('a', '/a')], { prs: noPrs, liveAgents, hooks: withAsk })
   assert.deepEqual(items, [])
   assert.deepEqual(whole, [])
-})
-
-test('a run just started goes by the name asked for it, as the sidebar names it, until its record has one', async () => {
-  nameStarted('r1', Promise.resolve('Auth store caching'))
-  await new Promise(resolve => setImmediate(resolve))
-  try {
-    const liveAgents = async (): Promise<AgentMeta[]> => [live(runningAgentMeta({ status: 'waiting', intent: 'please look at how the auth store caches its reads and decide' }))]
-    const { items } = await build([project('a', '/a')], { prs: noPrs, liveAgents, events: async () => waitingOn('gate-1', 'q?'), hooks: withAsk })
-    assert.equal(items[0]?.title, 'Auth store caching')
-  } finally {
-    forgetStartedNames()
-  }
 })
 
 test('build adds no awaiting item for a run that is not waiting, or whose diary shows no open question', async () => {

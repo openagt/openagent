@@ -10,7 +10,6 @@ import { cachedOpenPrs, type PrLister } from './pull-requests.js'
 import { waitingKey } from './keys.js'
 import { needsWord } from './waiting-words.js'
 import { runName } from '../run-name.js'
-import { withStartedNames } from '@openagt/agent-driver'
 import { distributionHooks, projectRefAt } from '../distribution-hooks.js'
 import { SESSIONS_ID } from '../project-address.js'
 
@@ -114,10 +113,8 @@ async function projectWaiting(project: ProjectSummary, deps: WaitingDeps, hooks:
     return []
   }
   const inProject = { projectId: project.id, projectName: project.name }
-  // The project's runs, read once for every source that asks; a just-started run by the sidebar's name.
-  const runsRead = (deps.agents ?? contextRuns)(project)
-    .then(agents => withStartedNames(agents))
-    .catch(() => undefined)
+  // The project's runs, read once for every source that asks.
+  const runsRead = (deps.agents ?? contextRuns)(project).catch(() => undefined)
   const [open, recorded, modules] = await Promise.all([prs(project.path).catch(() => undefined), runsRead, modulesWaiting(project, hooks, () => waitingRuns(project, runsRead, events))])
   // Newest first: a branch name reused by a later run, or a run continued on it, is that run's now.
   const runs = [...(recorded ?? [])].sort((a, b) => b.startedAt.localeCompare(a.startedAt))
@@ -170,9 +167,7 @@ async function projectWaiting(project: ProjectSummary, deps: WaitingDeps, hooks:
  * branch of the project's and no pull request the shell finds, so the modules are all that is asked.
  */
 async function sessionsWaiting(home: string, deps: WaitingDeps, hooks: Hooks): Promise<{ id: string; items: Waiting[]; whole: boolean }> {
-  const live = (deps.agents ?? contextRuns)(undefined)
-    .then(agents => withStartedNames(agents))
-    .catch(() => undefined)
+  const live = (deps.agents ?? contextRuns)(undefined).catch(() => undefined)
   const sessions = { id: SESSIONS_ID, name: 'the sessions with no project', path: home }
   const modules = await modulesWaiting(undefined, hooks, () => waitingRuns(undefined, live, deps.events ?? hostEvents, sessions.name))
   return { id: SESSIONS_ID, items: modules.items.map(item => ({ ...item, projectId: SESSIONS_ID, projectName: '' })), whole: modules.whole && (await live) !== undefined }

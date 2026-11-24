@@ -15,7 +15,7 @@ import { profileLoginFor, detachResume, detachRun, GIT_ACCOUNT_ENV, readyToRun, 
 import type { RunRequest as AskedRun } from './run.js'
 import { nameHandOver } from './title.js'
 import { ReadyNaming } from './ready-naming.js'
-import { nameStarted } from './started-names.js'
+import { nameStarted, withStartedNames } from './started-names.js'
 import { codingAgents } from '../agents.js'
 
 /**
@@ -68,7 +68,7 @@ export function localHost(deps: LocalHostDeps = {}): RunHost {
   /**
    * A run's name, asked as the run is started rather than once its process is up: of a naming
    * session waiting for the project's runs, it is in about a second after Start. The run is handed
-   * a file to find it in, and a page asks for it here meanwhile (`started-names.ts`). Asked only
+   * a file to find it in, and this host lists the run with it meanwhile (`started-names.ts`). Asked only
    * where the Start brings none of its own and the person names runs: read here, so a run a
    * schedule starts is named exactly as one a person starts is.
    */
@@ -208,8 +208,9 @@ export function localHost(deps: LocalHostDeps = {}): RunHost {
       if (!(await patchRun(placeOf(run.project), run.id, patch).catch(() => false))) throw new Error('the record was not updated')
     },
 
-    list(project, wanted = {}) {
-      return listedRuns(placeOf(project), project?.id, wanted, reads)
+    // A run just started goes by the name asked for it as it started, until its record has one.
+    async list(project, wanted = {}) {
+      return withStartedNames(await listedRuns(placeOf(project), project?.id, wanted, reads))
     },
 
     async find(run) {

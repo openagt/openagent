@@ -1,7 +1,7 @@
 import { PermissionsPage } from './components/Accounts.js'
 import { useEffect, useMemo, useReducer, useRef, useState, type CSSProperties } from 'react'
 import type { ProjectionRead, ProjectSummary, Waiting } from '../src/index.js'
-import { onProjectFiles, onWaiting, onStartedName } from './rpc/reads.js'
+import { onProjectFiles, onWaiting } from './rpc/reads.js'
 import { sendStart } from './rpc/control.js'
 import { onProjects } from './rpc/projects.js'
 import { AgentHistory } from './components/AgentHistory.js'
@@ -91,8 +91,6 @@ interface StartedRun {
   runsOn?: string
   /** What the launcher said about the run as it started it. */
   picks?: StartPicks
-  /** Its name, the moment the daemon has it, before the run's record has one. */
-  title?: string
   /** A read list has had it: from then on, a list without it says it is gone. */
   listed?: true
 }
@@ -313,15 +311,6 @@ export function App() {
     // The new agent just appends to the rail; reload so its real row shows up quickly.
     reload()
     reloadRecent()
-    // Its name, the moment the daemon has it: about a second on, before the run's row is in any
-    // list (`started-names.ts`). Answered once, when it is in; nothing for a continued run.
-    if (!continued && namesRuns && inProject !== null)
-      void onStartedName(startedId).then(
-        title => {
-          if (title !== undefined) setAgentStart(prev => (prev.id === startedId ? { ...prev, title } : prev))
-        },
-        () => {},
-      )
   }
 
   /** The same, for the surfaces that start an agent inside the selected project. */
@@ -466,10 +455,8 @@ export function App() {
   // Whether the selected run's coding agent started subagents: they get a pane beside the chat.
   const hasSubagents = useMemo(() => callSubagents(events).length > 0, [events])
   const justStarted = agentId === agentStart.id
-  // The name the daemon had for the run just started, before the run's record has one.
-  const startedTitle = justStarted ? agentStart.title : undefined
-  // What a listed session's page is called, in its heading and its tab.
-  const sessionLabel = selectedAgent ? (awaitingName(selectedAgent, namesRuns) ? startedTitle : agentLabel(selectedAgent)) : undefined
+  // What a listed session's page is called, in its heading and its tab: nothing while its name is on its way.
+  const sessionLabel = selectedAgent && !awaitingName(selectedAgent, namesRuns) ? agentLabel(selectedAgent) : undefined
   // Before the projects are read, a project's address reads as a page's word. A word no page this
   // browser listed may be a project's: its page waits as its shape, the launcher's, or with a run's
   // id after it a session's. Any other page word waits as its page's frame until its code is in.
@@ -584,7 +571,7 @@ export function App() {
       // list we have not read yet, where whether the agent runs is not known. Only a session that
       // is genuinely absent from a list we did read is gone.
       if (!sessionGone)
-        return <AgentView {...agentPage} live={justStarted ? true : null} label={namesRuns ? startedTitle : (justStarted && agentStart.intent) || undefined} naming={justStarted && namesRuns && startedTitle === undefined} startedOn={justStarted ? agentStart.runsOn : undefined} />
+        return <AgentView {...agentPage} live={justStarted ? true : null} label={namesRuns ? undefined : (justStarted && agentStart.intent) || undefined} naming={justStarted && namesRuns} startedOn={justStarted ? agentStart.runsOn : undefined} />
       return (
         <NotFound
           title="No such session"
@@ -603,7 +590,7 @@ export function App() {
         live={selectedAgent.status === 'running'}
         card={selectedAgent}
         label={sessionLabel}
-        naming={awaitingName(selectedAgent, namesRuns) && startedTitle === undefined}
+        naming={awaitingName(selectedAgent, namesRuns)}
         target={selectedAgent.target}
         onDeleted={() => {
           // Its view is about to point at a session that no longer exists; go home and refresh
@@ -645,7 +632,7 @@ export function App() {
               ? 'Overview'
               : agentId === null
                 ? 'New agent session'
-                : (sessionLabel ?? startedTitle)
+                : sessionLabel
   useDocumentTitle(waiting.length, projectName ?? (scope ? (labels.get(scope) ?? null) : null), pageName)
   // The phone bar's place for the page's count, once the bar is drawn.
   const [phoneCount, setPhoneCount] = useState<HTMLElement | null>(null)
@@ -723,7 +710,6 @@ export function App() {
           onNewAgentInProject={newAgentInProject}
           startTick={agentStart.tick}
           startIntent={agentStart.intent}
-          startTitle={agentStart.title}
           startId={agentStart.id}
           startProjectName={agentStart.projectId !== null ? labels.get(agentStart.projectId) : undefined}
           working={working}
