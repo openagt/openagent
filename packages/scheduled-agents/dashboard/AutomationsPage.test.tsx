@@ -8,12 +8,12 @@ import { ANY_AGENT, ON_CLAUDE, STATUS, hostAnswering } from './fixtures.js'
 import { openMenu, phoneScreen } from '../../ui/dashboard/test-utils.js'
 import { checked, choices, offered, openList, pick, queryRadio, radio, radioNames, showing } from '../../ui/dashboard/test-controls.js'
 
-// The coding agents' own lists, as the dashboard asked them: what a row's agent and model are picked from, and named by.
-vi.mock('../../ui/dashboard/rpc/models.js', () => ({
-  onModels: vi.fn(async () => ({
-    'claude-code': { models: [{ id: 'opus', name: 'Opus 5.5' }, { id: 'haiku', name: 'Haiku 5.5' }] },
-    codex: { models: [{ id: 'gpt-5.5', name: 'GPT-5.5' }] },
-  })),
+// The coding agents as each says itself, with its own list: what a row's agent and model are picked from, and named by.
+vi.mock('../../ui/dashboard/rpc/agents.js', () => ({
+  onCodingAgents: vi.fn(async () => [
+    { id: 'claude-code', label: 'Claude Code', models: { models: [{ id: 'opus', name: 'Opus 5.5' }, { id: 'haiku', name: 'Haiku 5.5' }] } },
+    { id: 'codex', label: 'Codex', models: { models: [{ id: 'gpt-5.5', name: 'GPT-5.5' }] } },
+  ]),
 }))
 
 const GEMSTACK = { id: 'p1', name: 'gemstack', remote: 'github.com/me/project' }
@@ -1832,8 +1832,11 @@ describe('what a row runs on', () => {
   })
 
   test("why an agent lists no model is said in its own words, what it puts in backticks set as code", async () => {
-    const { onModels } = await import('../../ui/dashboard/rpc/models.js')
-    vi.mocked(onModels).mockResolvedValueOnce({ 'claude-code': { models: [], error: '`claude` could not start: spawn claude ENOENT' }, codex: { models: [] } })
+    const { onCodingAgents } = await import('../../ui/dashboard/rpc/agents.js')
+    vi.mocked(onCodingAgents).mockResolvedValueOnce([
+      { id: 'claude-code', label: 'Claude Code', models: { models: [], error: '`claude` could not start: spawn claude ENOENT' } },
+      { id: 'codex', label: 'Codex', models: { models: [] } },
+    ])
     show(runs().host)
     await screen.findByRole('region', { name: 'gemstack' })
     const panel = await edit('/update-tickets')

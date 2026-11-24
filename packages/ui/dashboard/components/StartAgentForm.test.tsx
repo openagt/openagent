@@ -25,8 +25,11 @@ const updatePreferences = vi.hoisted(() => vi.fn())
 const prefsLoaded = vi.hoisted(() => ({ current: true }))
 vi.mock('../lib/preferences.js', () => ({ usePreferences: () => prefs.current, usePreferencesLoaded: () => prefsLoaded.current, updatePreferences }))
 
-const logins = vi.hoisted(() => ({ onAgentState: vi.fn(), sendAgentFix: vi.fn(), onGitHosts: vi.fn(), sendGitHostInstall: vi.fn(), sendGitHostLogin: vi.fn(), sendUseGitHostAccount: vi.fn() }))
+const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendGitHostInstall: vi.fn(), sendGitHostLogin: vi.fn(), sendUseGitHostAccount: vi.fn() }))
 vi.mock('../rpc/logins.js', () => logins)
+// What the modules say needs the person: nothing unless a test says.
+const onAttention = vi.hoisted(() => vi.fn(async (_projectId: string | null, _options?: object) => ({ items: [] as object[], whole: true })))
+vi.mock('../rpc/attention.js', () => ({ onAttention }))
 
 // The computer's account, and a press that picks another for this session.
 const runsAccount = vi.hoisted(() => ({ login: undefined as string | undefined }))
@@ -102,6 +105,11 @@ vi.mock('./Composer.js', async () => {
   return { Composer }
 })
 
+/** What a module's control under the box picks for the next run, as a person's pick there would. */
+const pickOptions = (options: object) => act(() => (composerProps.current.controlBox as { onChange: (options: object) => void }).onChange(options))
+/** Codex and its model, as agent-driver's control picks them. */
+const ON_CODEX = { 'agent-driver': { driver: 'codex', model: 'gpt-5' } }
+
 /** Where the agent starts, as the row above the box says it. */
 const startsAt = (): string => screen.getByTestId('starts-at').textContent ?? ''
 
@@ -133,6 +141,7 @@ afterEach(() => {
 
   onRunHosts.mockReset()
   onRunHosts.mockResolvedValue([])
+  onAttention.mockResolvedValue({ items: [], whole: true })
   resetRunHostsForTest()
 })
 
@@ -167,15 +176,15 @@ describe('StartAgentForm (#1774)', () => {
     expect(start).not.toHaveBeenCalled()
   })
 
-  test('Start hands the picked coding agent and model to the run, and selects the run it answers', async () => {
+  test("Start hands what the modules' controls picked to the run, and selects the run it answers", async () => {
     onCommands.mockResolvedValue({ commands: [], gitHost: true })
-    prefs.current = { driver: 'codex', model: 'gpt-5' }
     start.mockResolvedValue({ agentId: 'r1' })
     const onAgentStarted = vi.fn()
     render(<StartAgentForm {...props} onAgentStarted={onAgentStarted} />)
+    pickOptions(ON_CODEX)
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r1', undefined, expect.anything()))
-    expect(start).toHaveBeenCalledWith('p1', 'do the thing', { driver: 'codex', model: 'gpt-5' })
+    expect(start).toHaveBeenCalledWith('p1', 'do the thing', { options: ON_CODEX })
   })
 
   test('the images go with the Start and to the run\'s page, and the draft lets them go with the words once the run is started', async () => {
@@ -494,17 +503,18 @@ describe('StartAgentForm (#1774)', () => {
     })
   })
 
-  test('what this page says goes with the Start, for the run\'s page until its record says it: the branch, the account, the level, the target, the model', async () => {
+  test('what this page says goes with the Start, for the run\'s page until its record says it: the branch, the account, the level, the target, the controls\' picks', async () => {
     onCommands.mockResolvedValue(WITH_BRANCHES)
     runsAccount.login = 'octo'
-    prefs.current = { publish: 'pr', driver: 'codex', model: 'gpt-5', effort: 'high', startFrom: { p1: { kind: 'published', branch: 'feature-x' } } }
+    prefs.current = { publish: 'pr', startFrom: { p1: { kind: 'published', branch: 'feature-x' } } }
     start.mockResolvedValue({ agentId: 'r1' })
     const onAgentStarted = vi.fn()
     render(<StartAgentForm {...props} projectName="gemstack" onAgentStarted={onAgentStarted} />)
     await waitFor(() => expect(autoMenu().textContent).toBe('When it finishes: Open PR → feature-x'))
+    pickOptions(ON_CODEX)
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(onAgentStarted).toHaveBeenCalled())
-    expect(onAgentStarted.mock.lastCall![3]).toEqual({ branch: 'feature-x', gitAccount: 'octo', publish: 'pr', prBase: 'feature-x', driver: 'codex', model: 'gpt-5', effort: 'high' })
+    expect(onAgentStarted.mock.lastCall![3]).toEqual({ branch: 'feature-x', gitAccount: 'octo', publish: 'pr', prBase: 'feature-x', options: ON_CODEX })
     expect((start.mock.lastCall![2] as { account?: string }).account).toBe('octo')
     runsAccount.login = undefined
   })
@@ -544,12 +554,14 @@ describe('StartAgentForm (#1774)', () => {
     onCommands.mockResolvedValue({ commands: [], gitHost: true, remote: true, address: 'github.com/acme/shop' })
     onRunHosts.mockResolvedValue([{ id: 'actions', label: 'GitHub Actions' }])
     // This computer's check finds nothing; the host's what would stop a run there.
-    onStartCheck.mockImplementation(async (_projectId: string, _driver: unknown, on?: string) => (on === 'actions' ? { problems: ['Its repository has no workflow openagent-agent.yml yet.'], warnings: [] } : null))
+    onStartCheck.mockImplementation(async (_projectId: string, _options: unknown, on?: string) => (on === 'actions' ? { problems: ['Its repository has no workflow openagent-agent.yml yet.'], warnings: [] } : null))
     selectHost('actions')
     start.mockResolvedValue({ agentId: 'r4' })
     const onAgentStarted = vi.fn()
     render(<StartAgentForm {...props} onAgentStarted={onAgentStarted} />)
-    await waitFor(() => expect(onStartCheck).toHaveBeenCalledWith('p1', undefined, 'actions'))
+    await waitFor(() => expect(onStartCheck).toHaveBeenCalledWith('p1', {}, 'actions'))
+    // What stops a run there is the host's check to say: the modules are asked of this project alone, not of a run here.
+    await waitFor(() => expect(onAttention).toHaveBeenLastCalledWith('p1', undefined))
     expect((await screen.findByRole('alert')).textContent).toContain('Its repository has no workflow openagent-agent.yml yet.')
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r4', 'GitHub Actions', expect.anything()))
@@ -561,23 +573,23 @@ describe('StartAgentForm (#1774)', () => {
     selectHost('actions')
     start.mockResolvedValue({ agentId: 'r5' })
     render(<StartAgentForm {...props} />)
-    await waitFor(() => expect(onStartCheck).toHaveBeenCalledWith('p1', undefined))
+    await waitFor(() => expect(onStartCheck).toHaveBeenCalledWith('p1', {}))
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(start).toHaveBeenCalled())
     expect(start.mock.calls[0]![2]).not.toHaveProperty('host')
   })
 
-  test('what would stop the run is said before the Start, for the coding agent picked; a warning is said too, and neither turns Start off', async () => {
+  test("what would stop the run is said before the Start, for the controls' picks; a warning is said too, and neither turns Start off", async () => {
     onCommands.mockResolvedValue({ commands: [], gitHost: true })
-    prefs.current = { driver: 'codex' }
     onStartCheck.mockResolvedValue({ problems: ['`codex` is not logged in. Run `codex login`, then start again.'], warnings: ['`gh` is not logged in.'] })
     render(
       <ModulesContext.Provider value={mountedOf({ renders: [MARKDOWN_RENDER] })}>
         <StartAgentForm {...props} />
       </ModulesContext.Provider>,
     )
+    pickOptions(ON_CODEX)
+    await waitFor(() => expect(onStartCheck).toHaveBeenCalledWith('p1', ON_CODEX))
     await waitFor(() => expect(screen.getAllByRole('alert')).toHaveLength(2))
-    expect(onStartCheck).toHaveBeenCalledWith('p1', 'codex')
     const [problem, warning] = screen.getAllByRole('alert')
     // Its sentences are lines of markdown, as the chat draws a line: what they put in backticks is code, not the backticks themselves.
     const lines = (alert: HTMLElement) => [...alert.querySelectorAll('[data-markdown-look="inline"]')].map(line => line.textContent)
@@ -590,46 +602,23 @@ describe('StartAgentForm (#1774)', () => {
     expect(problem!.parentElement!.dataset.testid).toBe('notes')
   })
 
-  test('a problem a press fixes has its button on the red line: an agent with no account gets one from there; once fixed, the check is asked again and the line goes', async () => {
+  test("a problem a module's item about the run says is said once, by the item with its press; with no such item, by the check's line", async () => {
     onCommands.mockResolvedValue({ commands: [], gitHost: true })
     const line = '`claude` is not logged in. Run `claude auth login`, then start again.'
     onStartCheck.mockResolvedValue({ problems: [line], warnings: [], fix: { kind: 'log-in', command: 'claude auth login', problem: line } })
-    let ready = false
-    logins.onAgentState.mockImplementation(async () => (ready ? { driver: 'claude-code', ready: true } : { driver: 'claude-code', ready: false, problem: line, fix: { kind: 'log-in', command: 'claude auth login' } }))
-    // The agents' package's press: here it adds the account at once.
-    const connect = {
-      place: 'agent.connect' as const,
-      id: 'connect',
-      package: 'an-agents-module',
-      projects: [],
-      computer: true as const,
-      View: ({ label, onConnected }: { label?: string; onConnected: () => void }) => (
-        <button
-          type="button"
-          onClick={() => {
-            ready = true
-            onConnected()
-          }}
-        >
-          {label}
-        </button>
-      ),
-    }
-    render(
-      <ModulesContext.Provider value={mountedOf({ views: { 'agent.connect': [connect] } })}>
-        <StartAgentForm {...props} />
-      </ModulesContext.Provider>,
-    )
+    const item = { module: '@openagt/agent-driver', kind: 'setup', scope: 'run', id: 'agent:claude-code', words: 'Claude Code is not logged in', fix: { label: 'Add account', href: '/permissions' } }
+    onAttention.mockResolvedValue({ items: [item], whole: true })
+    render(<StartAgentForm {...props} />)
     const press = await screen.findByRole('button', { name: 'Add account' })
-    // The press is inside the red line, which says it in the agent's own words.
-    const refusal = screen.getByRole('alert')
-    expect(refusal.contains(press)).toBe(true)
-    expect(within(refusal).getByText('Claude Code is not logged in.')).toBeTruthy()
-    expect(refusal.textContent).not.toContain('Run `claude auth login`')
-    onStartCheck.mockResolvedValue({ problems: [], warnings: [] })
-    fireEvent.click(press)
-    expect(logins.sendAgentFix).not.toHaveBeenCalled()
-    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull(), { timeout: 3000 })
+    await waitFor(() => expect(screen.getAllByRole('alert')).toHaveLength(1))
+    const [said] = screen.getAllByRole('alert')
+    expect(said!.contains(press)).toBe(true)
+    expect(said!.textContent).not.toContain('then start again')
+    cleanup()
+    forgetRemembered()
+    onAttention.mockResolvedValue({ items: [], whole: true })
+    render(<StartAgentForm {...props} />)
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('then start again'))
   })
 
   test('the row above the box starts with where the session works: the project\'s name, on the button of the picker', () => {

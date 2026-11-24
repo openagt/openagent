@@ -56,7 +56,7 @@ export interface MountedModules {
   loaded: boolean
 }
 
-const VIEW_PLACES: readonly ViewPlace[] = ['app.page', 'app.overlay', 'overview.card', 'overview.line', 'chat.pane', 'chat.summary', 'chat.notice', 'chat.labels', 'composer.control', 'composer.prompts', 'settings.section', 'permissions.section', 'usage.line', 'agent.connect']
+const VIEW_PLACES: readonly ViewPlace[] = ['app.page', 'app.overlay', 'overview.card', 'overview.line', 'chat.pane', 'chat.summary', 'chat.notice', 'chat.labels', 'composer.control', 'composer.prompts', 'settings.section', 'permissions.section', 'usage.line', 'overview.notice']
 const ACTION_PLACES: readonly ActionPlace[] = ['link.menu', 'chat.handoff', 'chat.menu', 'project.menu', 'person.menu', 'attention.fix']
 const OPTION_PLACES: readonly OptionPlace[] = ['composer.auto', 'composer.where', 'composer.commands']
 
@@ -233,8 +233,6 @@ function mount(loadedModules: { module: DashboardModule; definition: UiModuleDef
       if (view.place === 'app.overlay' && !of.computer) continue
       // The bar has one line: the first module's.
       if (view.place === 'usage.line' && at.length > 0) continue
-      // One press connects an agent: the first module's.
-      if (view.place === 'agent.connect' && at.length > 0) continue
       at.push({ ...view, ...of })
     }
     for (const action of definition.hooks['ui.action'] ?? []) actions[action.place]?.push({ ...action, ...of })
@@ -242,7 +240,7 @@ function mount(loadedModules: { module: DashboardModule; definition: UiModuleDef
     for (const render of definition.hooks['ui.render'] ?? []) if (!mounted.renders.some(each => each.kind === render.kind)) mounted.renders.push({ ...render, ...of })
   }
   // Numbers, not a list the shell keeps: a third package sits between two others without the shell knowing it exists.
-  for (const place of ['overview.card', 'overview.line', 'settings.section', 'permissions.section', 'chat.labels', 'composer.control'] as const) views[place].sort(byMountOrder)
+  for (const place of ['overview.card', 'overview.line', 'overview.notice', 'settings.section', 'permissions.section', 'chat.labels', 'composer.control'] as const) views[place].sort(byMountOrder)
   // The pages by their own order alone: at the same order they stay in the order the modules are loaded.
   const pages = views['app.page'] as MountedView<'app.page'>[]
   pages.sort((a, b) => (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER))

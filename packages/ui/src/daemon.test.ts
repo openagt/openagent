@@ -50,11 +50,11 @@ async function callRpc(url: string, name: string, args: unknown[]): Promise<unkn
   const text = await res.text()
   return text ? (JSON.parse(text) as { ret?: unknown }).ret : undefined
 }
-type StartResult = { ok: true; agentId: string; driver?: string } | { ok: false; error: string }
+type StartResult = { ok: true; agentId: string } | { ok: false; error: string }
 // The home project's id: what the browser sends for the daemon's own workspace, which the
 // daemon resolves back to `cwd` (see `resolveProject`).
 const homeId = (cwd: string): string => projectId(resolve(cwd))
-const sendStart = (url: string, cwd: string, prompt: string, options: Record<string, string> = {}): Promise<StartResult> =>
+const sendStart = (url: string, cwd: string, prompt: string, options: Record<string, unknown> = {}): Promise<StartResult> =>
   callRpc(url, 'sendStart', [homeId(cwd), prompt, options]) as Promise<StartResult>
 
 const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms))
@@ -158,7 +158,7 @@ test("a Start goes to this computer's host, of the modules the daemon runs, with
   const ac = new AbortController()
   try {
     const { done, state } = await startDaemon(cwd, { port: 0, signal: ac.signal, env, hooks })
-    assert.deepEqual(await sendStart(state.url, cwd, '/work-queue now', { driver: 'codex' }), { ok: true, agentId: 'run-1', driver: 'codex' })
+    assert.deepEqual(await sendStart(state.url, cwd, '/work-queue now', { options: { 'agent-driver': { driver: 'codex' } } }), { ok: true, agentId: 'run-1' })
     assert.deepEqual(host.requests.map(request => [request.project?.dir, request.prompt, request.options['agent-driver']]), [[cwd, '/work-queue now', { driver: 'codex' }]])
     assert.deepEqual(await sendStart(state.url, cwd, '   '), { ok: false, error: 'a non-empty prompt is required' })
     assert.deepEqual(await callRpc(state.url, 'sendStart', ['no-such-project', 'x']), { ok: false, error: 'unknown project: no-such-project' })

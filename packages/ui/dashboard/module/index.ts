@@ -225,13 +225,11 @@ export { Slot, PanelShape, RowShapes, SentenceShape, WordsShape, type SlotRead }
 export { PartDescription } from '../components/PartDescription.js'
 export { Input } from '../components/ui/input.js'
 export { GaugeFace } from '../components/ui/gauge.js'
-export { ClaudeLogo, CodexLogo } from '../components/driver-logos.js'
 export { cn } from '../lib/utils.js'
 export { inPlace } from '../lib/in-place.js'
 export { runWord, runSaid, runTone, runLineTone, runState } from '../lib/run-words.js'
 export { RunMark } from '../components/RunMark.js'
 export { usePolled, useLoaded, useAskOn, forgetRemembered, type ReadState } from '../lib/use-async.js'
-export { useSpendOffset } from '../components/Quota.js'
 /** For a read of runs: read again the moment the runs of a project (of every one, `undefined`) change, as the dashboard's own lists are. */
 export { runsAgain } from '../lib/runs-changed.js'
 export { useKeptDraft } from '../lib/draft-handoff.js'
@@ -283,6 +281,7 @@ export { rowButtonClass, rowItemClass, RowChevron, RowSaid, RowItem, BoxOfRow } 
 export { SetupLine, SetupPress, SetupSaid } from '../components/SessionSetup.js'
 // The places a module draws itself: a profile's editor draws every control of the message box, the usage card the usage bar's line.
 export { ComposerControls, ViewsAt, useViewsAt, useControlsSaid, type ControlBox, type ControlsSaid } from '../components/Places.js'
+export { ModuleSlot } from '../components/ModulePageView.js'
 /** For a read of what a pick for every next run decides (the profile picked under the box): read again the moment one is saved, which its control tells. */
 export { nextRunAgain, tellNextRunPicked } from '../lib/next-run-picked.js'
 /** Keep the page's entry while something typed would be lost by leaving it: Back asks first, and so does the browser on a reload. */
@@ -322,7 +321,7 @@ export { runName } from '../../src/client.js'
 export { SettingsFoot, SettingsItem, SettingsItems, SettingsSection, SettingsRow, SettingsRowShapes, SettingsSelectRow, ToggleRow, type SettingsOption } from '../components/SettingsRows.js'
 export { Avatar } from '../components/PersonMenu.js'
 export { usePerson, personChanged } from '../lib/use-person.js'
-export { AgentFix, useAgentState } from '../components/Logins.js'
+export { CommandLine, FixAction, Linked, PackageLogo } from '../components/Logins.js'
 // The git hosts and OpenAgent's accounts at them, as the Permissions page reads them: a "Send as"
 // select of a host's accounts, the press that adds one, and a typed repository's address read.
 export { useGitHosts } from '../components/Logins.js'
@@ -333,9 +332,11 @@ export { typedRepository, type TypedRepository } from '../../src/typed-repositor
 export { PathStrip } from '../components/PathStrip.js'
 
 export { Dialog } from '../components/ui/dialog.js'
-export { useCodingAgents, type CodingAgent } from '../lib/models.js'
-export { MAX_SPEND_OFFSET } from '../../src/preference-defaults.js'
-export { formatRelative, formatDateTime, formatDuration, formatAge, formatDay } from '../lib/format-date.js'
+export { useCodingAgents, type CodingAgent } from '../lib/agents.js'
+export { effortLabel } from '../lib/effort.js'
+export { FocusHome } from '../lib/focus-home.js'
+export { MAX_SPEND_OFFSET } from '@openagt/hooks/ui'
+export { formatRelative, formatDateTime, formatDuration, formatDurationLong, formatAge, formatDay, formatResetDay, formatResetTooltip } from '../lib/format-date.js'
 export { useNarrow } from '../lib/use-narrow.js'
 export { useIsMobile, isMobileScreen } from '../lib/use-mobile.js'
 export { Waiting } from '../components/Waiting.js'

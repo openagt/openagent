@@ -3,7 +3,7 @@ import { ChevronRight } from 'lucide-react'
 import { cn } from '../lib/utils.js'
 import { formatElapsed } from '../lib/format-date.js'
 import { runTone, runWord } from '../lib/run-words.js'
-import { anyModelName, useModels } from '../lib/models.js'
+import { anyModelName, useAgents } from '../lib/agents.js'
 import { stepWords, type SubagentRow, type SubagentStep } from '../lib/subagents.js'
 import { Markdown } from './Markdown.js'
 import { Seconds } from './ToolCalls.js'
@@ -21,7 +21,7 @@ const NAME_EVERY_MS = 2500
 
 /** A subagent's row: the verb in grey, its name in dark, its model; while it works the tool it is on; how long it took. */
 function AgentRow({ row, onOpen }: { row: SubagentRow; onOpen?: ((key: string) => void) | undefined }) {
-  const models = useModels()
+  const models = useAgents()
   return (
     <button type="button" onClick={() => onOpen?.(row.key)} className="group/sub flex w-full min-w-0 items-center gap-1.5 text-left hover:text-foreground" aria-label={`Open the subagent: ${row.name}`}>
       <span className={cn('shrink-0', row.working && 'text-shimmer')}>{row.working ? 'Running agent' : 'Ran agent'}</span>

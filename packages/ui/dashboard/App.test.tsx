@@ -105,7 +105,9 @@ function answerShell(modules: unknown[]): void {
   answers.set('onRecentAgents', () => [])
   answers.set('onAgents', () => [])
   answers.set('onOverview', () => ({ active: [] }))
-  answers.set('onAgentUpdates', () => [])
+  // The coding agents as each says itself, and whether a run is named as it starts.
+  answers.set('onCodingAgents', () => [])
+  answers.set('onNamesRuns', () => true)
   // A project's Overview reads its files, for its box's `#`.
   answers.set('onProjectFiles', () => [])
   // The Overview draws its cards once the person's layout is read.
@@ -518,7 +520,6 @@ describe('module cards on the Overview (#1818)', () => {
   /** The Overview's own reads, answered empty: the shell's stub answers null otherwise, and a null list is not an empty one. */
   function answerOverview(modules: unknown[]): void {
     answerShell(modules)
-    answers.set('onQuota', () => null)
     answers.set('onDashboard', () => null)
     // Landing on a started run renders its page, whose changes card reads a list.
     answers.set('onAgentChanges', () => [])
@@ -779,7 +780,6 @@ describe('the project select (#1513)', () => {
       },
     ])
     answers.set('onProjects', () => [PROJECT, OTHER])
-    answers.set('onQuota', () => null)
     answers.set('onDocs', () => [])
     answers.set('onProjectFiles', () => [])
     answers.set('onAgentChanges', () => [])
@@ -1319,7 +1319,6 @@ describe('the shell on a phone', () => {
     const id = '2026-11-14T23-05-03-506Z'
     try {
       answerShell([{ package: '@acme/waiting', url: moduleModule('__phoneWaiting', { place: 'overview.card', id: 'waiting', label: 'Waiting', needsYou: true, View: WaitingCard }), projects: [PROJECT.id] }])
-      answers.set('onQuota', () => null)
       answers.set('onDashboard', () => null)
       answers.set('onAgentChanges', () => [])
       answers.set('onDocs', () => [])

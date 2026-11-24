@@ -1,5 +1,5 @@
 import { isSkillName, type FileBranchWrite } from '@openagt/agent-data'
-import { isProfileId, MODULE_NAME, type RunOptions } from '@openagt/hooks'
+import { isProfileId, MODULE_NAME, type AgentDriverOptions, type RunOptions } from '@openagt/hooks'
 import type { ProjectSkillsPick } from './profile.js'
 import { publishedBranch } from '@openagt/agent-data/names'
 import { deleteRun, writeRun, type RecordDeps } from '../record-store.js'
@@ -137,7 +137,7 @@ export function markerCard(run: { id: string; startedAt: string; prompt: string;
     driver: run.driver,
     ...(run.model !== undefined ? { model: run.model } : {}),
     // `host` as the run's live card has it too: a reader tells this machine's runs from another's by it.
-    caller: { runner: run.mark, host: run.mark.host, ...forReaders(run.mark) },
+    caller: { runner: run.mark, host: run.mark.host, ...forReaders(run.mark, agentAsked(run.driver, run.model)) },
   }
 }
 
@@ -148,9 +148,9 @@ export function markerCard(run: { id: string; startedAt: string; prompt: string;
  * change, and what it was started for, which a git host's check reads to find the run a thread has,
  * and the repos a session with no project has, which its page shows.
  */
-export function forReaders(mark: Lasting): Lasting & { options?: RunOptions } {
+export function forReaders(mark: Lasting, agent: AgentDriverOptions = {}): Lasting & { options?: RunOptions } {
   // The run's options, one slice per module, as the run was asked them: what its box's controls say.
-  const options = markOptions(mark)
+  const options = { ...(Object.keys(agent).length > 0 ? { 'agent-driver': agent } : {}), ...markOptions(mark) }
   return {
     ...(Object.keys(options).length > 0 ? { options } : {}),
     ...(mark.base !== undefined ? { base: publishedBranch(mark.base) ?? mark.base } : {}),
@@ -164,6 +164,11 @@ export function forReaders(mark: Lasting): Lasting & { options?: RunOptions } {
     ...(mark.pluginsWithout !== undefined ? { pluginsWithout: mark.pluginsWithout } : {}),
     ...(mark.projectSkills !== undefined ? { projectSkills: mark.projectSkills } : {}),
   }
+}
+
+/** agent-driver's slice of a run's options, as its card keeps it: the coding agent the run is on, its model and how hard it thinks. */
+export function agentAsked(driver: string, model?: string, effort?: string): AgentDriverOptions {
+  return { driver, ...(model !== undefined ? { model } : {}), ...(effort !== undefined ? { effort } : {}) }
 }
 
 /**

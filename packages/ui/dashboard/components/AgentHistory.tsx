@@ -10,7 +10,6 @@ import type { ComponentType } from 'react'
 import type { AgentMeta, AgentStatus, RecentAgent, ProjectSummary, Waiting } from '../../src/index.js'
 import { needsWord, waitingKey } from '../../src/client.js'
 import type { ModuleHostPerson } from '../module/index.js'
-import { DRIVER_LABELS, driverFromImpl } from '../../src/client.js'
 import { buttonVariants } from './ui/button.js'
 import { inPlace } from '../lib/in-place.js'
 import { formatRoute, type Route } from '../lib/route.js'
@@ -24,8 +23,8 @@ import { useRailScroll } from '../lib/rail-scroll.js'
 import { useProjectLabel } from '../lib/project-labels.js'
 import { runState } from '../lib/run-words.js'
 import { RunMark } from './RunMark.js'
-import { DriverLogo } from './driver-logos.js'
-import { modelName, useModels } from '../lib/models.js'
+import { agentOf, modelName, useAgents, useNamesRuns } from '../lib/agents.js'
+import { PackageLogo } from './Logins.js'
 import { PR_MARKS, type PrState } from '../lib/pr-marks.js'
 import { agentLabel, awaitingName } from '../lib/agent-label.js'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuCheckboxItem, DropdownMenuSeparator } from './ui/dropdown-menu.js'
@@ -188,7 +187,6 @@ export function AgentHistory({
       setOpenMobile(false)
       go(...args)
     }
-  // The coding agent picked for the next start: the stand-in row's logo.
   const preferences = usePreferences()
   const label = useProjectLabel()
   // The optimistic row, and the id of the run it stands in for.
@@ -304,7 +302,8 @@ export function AgentHistory({
   const yours = (person: string | undefined): boolean => person !== undefined && me?.email !== undefined && person.toLowerCase() === me.email
   const ownMark = (person: string | undefined): { name?: string; picture?: string } => (yours(person) && me ? { name: me.name, ...(me.avatar !== undefined ? { picture: me.avatar } : {}) } : {})
 
-  const models = useModels()
+  const codingAgents = useAgents()
+  const namesRuns = useNamesRuns()
   const pageHref = (segment: string) => hrefOf({ projectId: null, agentId: null, page: segment, ...(scope ? { scope } : {}) })
   const renderRow = (row: Row) => (
     <AgentHistoryRow
@@ -315,10 +314,10 @@ export function AgentHistory({
       intent={agentLabel(row.agent)}
       // A name is seconds away: the row holds the place rather than printing the whole prompt and
       // swapping it for the name a moment later.
-      naming={awaitingName(row.agent, preferences.nameRuns !== false)}
+      naming={awaitingName(row.agent, namesRuns)}
       driver={row.agent.driver}
       {...(row.agent.person ? { person: row.agent.person, account: accountOf(row.projectId, row.agent.person), ...ownMark(row.agent.person) } : {})}
-      {...(row.agent.model ? { model: modelName(models?.[driverFromImpl(row.agent.driver) ?? 'claude-code'], row.agent.model) } : {})}
+      {...(row.agent.model ? { model: modelName(agentOf(codingAgents, row.agent.driver), row.agent.model) } : {})}
       {...(row.agent.effort ? { effort: row.agent.effort } : {})}
       {...(row.agent.base ? { base: row.agent.base } : {})}
       // On the Overview the project is what tells the rows apart, so the row still names it; a
@@ -466,12 +465,11 @@ export function AgentHistory({
                                   printing the prompt and having it swapped a second later. */}
                               <AgentHistoryRow
                                 status="running"
-                                {...(preferences.nameRuns === false ? { intent: optimistic?.intent ?? undefined } : startTitle !== undefined ? { intent: startTitle } : { intent: undefined, naming: true })}
+                                {...(!namesRuns ? { intent: optimistic?.intent ?? undefined } : startTitle !== undefined ? { intent: startTitle } : { intent: undefined, naming: true })}
                                 {...(crossProject && startProjectName ? { project: startProjectName } : {})}
                                 subtitle="just now"
                                 age="now"
                                 show={show}
-                                driver={preferences.driver}
                                 active={starting}
                                 standIn
                                 onClick={leave(() => onSelect(null))}
@@ -914,7 +912,7 @@ function AgentHistoryRow({
   /** Their picture when the git host has none to give: the person's own, for their own runs. */
   picture?: string | undefined
 }) {
-  const picked = driverFromImpl(driver)
+  const ran = agentOf(useAgents(), driver)
   // The host it runs on, by the name its project's module gives it.
   const hostLabel = useRunHosts(host ? host.projectId : null).find(one => one.id === host?.id)?.label
   const onHost = host ? `Runs on ${hostLabel ?? 'another host'}` : undefined
@@ -936,7 +934,7 @@ function AgentHistoryRow({
       ? { Icon: GitBranch, said: `${needsWord('unpushed', gitHost)} · ${unpublished} commit${unpublished === 1 ? '' : 's'}` }
       : undefined
   const personWords = person ? personSaid(person, account) : undefined
-  const agentSaid = picked ? [DRIVER_LABELS[picked], ...(model ? [model] : [])].join(' · ') : undefined
+  const agentSaid = ran ? [ran.label, ...(model ? [model] : [])].join(' · ') : undefined
   // Everything about the run in one sentence, the row's name for a reader that cannot see its
   // marks or point at it: the word, where the run is and when it started, whose it is, which
   // coding agent ran it, and the computer or host it ran on.
@@ -945,7 +943,7 @@ function AgentHistoryRow({
     ...(project ? [project] : []),
     subtitle,
     ...(personWords ? [personWords] : []),
-    ...(picked ? [DRIVER_LABELS[picked]] : []),
+    ...(ran ? [ran.label] : []),
     ...(startedOn ? [`started on ${startedOn}`] : []),
     ...(host ? [`runs on ${hostLabel ?? 'another host'}`] : []),
     ...(prSaid ? [prSaid] : []),
@@ -966,7 +964,7 @@ function AgentHistoryRow({
     ...(host ? [{ fact: 'Runs on', said: hostLabel ?? 'another host', node: <HOST_ICON className="size-3 shrink-0" aria-hidden /> }] : []),
   ]
   // A run whose model its record does not say is its coding agent's logo alone.
-  const ranOn = picked ? [...(model ? [model] : []), ...(model && effort ? [effortLabel(effort)] : [])] : undefined
+  const ranOn = ran ? [...(model ? [model] : []), ...(model && effort ? [effortLabel(effort)] : [])] : undefined
   const marks = (
     <>
       {/* The mark stands where a status word would, and carries that word for a reader who
@@ -1023,18 +1021,18 @@ function AgentHistoryRow({
           ) : (
             <PersonMark className={PERSON_MARK} />
           )}
-          {show.agent && picked && agentSaid && (
+          {show.agent && ran && agentSaid && (
             <span className="absolute -right-1.5 -bottom-1 flex size-3 items-center justify-center rounded-full bg-sidebar">
               <RowMark said={agentSaid}>
-                <DriverLogo driver={picked} className="size-2.5 text-muted-foreground" />
+                <PackageLogo svg={ran.logo} className="size-2.5 text-muted-foreground" />
               </RowMark>
             </span>
           )}
         </span>
       )}
-      {show.agent && !(show.person && (personWords || standIn)) && picked && agentSaid && (
+      {show.agent && !(show.person && (personWords || standIn)) && ran && agentSaid && (
         <RowMark said={agentSaid}>
-          <DriverLogo driver={picked} className="size-3.5 text-muted-foreground" />
+          <PackageLogo svg={ran.logo} className="size-3.5 text-muted-foreground" />
         </RowMark>
       )}
     </>
@@ -1086,9 +1084,9 @@ function AgentHistoryRow({
                 </span>
               </>
             )}
-            {picked && ranOn && (
-              <span role="img" aria-label={[DRIVER_LABELS[picked], ...ranOn].join(' · ')} className={cn('flex shrink-0 items-center gap-1.5 text-xs whitespace-nowrap', !person && 'flex-1')}>
-                <DriverLogo driver={picked} className="size-3.5 shrink-0" />
+            {ran && ranOn && (
+              <span role="img" aria-label={[ran.label, ...ranOn].join(' · ')} className={cn('flex shrink-0 items-center gap-1.5 text-xs whitespace-nowrap', !person && 'flex-1')}>
+                <PackageLogo svg={ran.logo} className="size-3.5 shrink-0" />
                 {ranOn[0] && <span>{ranOn[0]}</span>}
                 {ranOn[1] && <span className="text-muted-foreground">· {ranOn[1]}</span>}
               </span>

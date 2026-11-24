@@ -5,7 +5,7 @@ import type { RunOptions } from '@openagt/hooks'
 import type { ProjectSummary, StartFromPick } from '../../src/index.js'
 import { onStartBranches, onStartCheck } from '../rpc/projects.js'
 import { usePreferences, usePreferencesLoaded, updatePreferences } from '../lib/preferences.js'
-import { isDriverName, offeredPublishPicks, publishPickIn } from '../../src/client.js'
+import { offeredPublishPicks, publishPickIn } from '../../src/client.js'
 import { hostTarget, useRunHosts, useSelectedHost } from '../lib/run-hosts.js'
 import type { StartPicks } from '../lib/started-from.js'
 import { startPicks, useStartAgent } from '../lib/use-start-agent.js'
@@ -21,7 +21,6 @@ import { StartFromMenu, prTargetBranch, startFromBase } from './StartFromMenu.js
 import { ProjectPicker } from './ProjectPicker.js'
 import { ReposMenu, folderName, type PickedRepo } from './SessionRepos.js'
 import { Dots } from './ToolCalls.js'
-import { AgentFix, agentWords, useAgentState } from './Logins.js'
 import { useGitAccountSetup, useSessionAccount } from './GitHosts.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
 import { shortcut } from '../lib/shortcut.js'
@@ -139,8 +138,6 @@ export function StartAgentForm({
   // What the modules' controls picked for the next run alone (`composer.control`), until it starts or another project is picked.
   const [options, setOptions] = useState<RunOptions>({})
   useEffect(() => setOptions({}), [projectId])
-  // What would stop the run these picks start, as the modules say it (`app.attention`): said above the box, each with its fix.
-  const attention = useAttention(projectId, options)
   // What the box holds, so another project picked takes the prompt along to its page.
   const typed = useRef('')
   const pickProject = (id: string) => {
@@ -152,6 +149,9 @@ export function StartAgentForm({
   // A host the project's modules bring, picked in "Run on" (a GitHub Actions runner): the start names
   // it by its id, and the daemon starts the run there.
   const host = hostTarget(useRunHosts(noProject ? null : projectId), useSelectedHost())
+  // What would stop a run these picks start on this computer, as the modules say it (`app.attention`):
+  // said above the box, each with its fix. A host beside this computer says what stops a run there itself, in its check.
+  const attention = useAttention(projectId, host ? undefined : options)
   // Whether a pull request can be opened here: unknown until the launcher is read, so every pick is
   // offered until then; the daemon that starts the run holds a pull request pick to the branch
   // where its project has no git host.
@@ -183,21 +183,12 @@ export function StartAgentForm({
   const prInto = prBranch !== undefined && mainFor !== prBranch ? prBranch : undefined
   const prTarget = prBranch !== undefined && startFrom ? { into: prInto ?? startFrom.main, picks: [prBranch, startFrom.main], onPick: (branch: string) => setMainFor(branch === prBranch ? null : prBranch) } : undefined
 
-  // Re-read when the pick changes: `claude` being logged in says nothing about `codex`.
-  const driver = preferences.driver
-  // Asked again once a press fixed what it said: the agent's own state is followed only while the check says a press can.
-  const [recheck, setRecheck] = useState(0)
-  const readiness = useLoaded(() => (host ? onStartCheck(projectId, driver, host.id) : onStartCheck(projectId, driver)), null, [projectId, driver, recheck, host?.id])
-  const fixable = readiness?.fix !== undefined
-  const { state: agent, reload: reloadAgent } = useAgentState(isDriverName(driver) ? driver : undefined, fixable)
+  // Asked again at each change of the picks, and once what the modules said would stop the run is
+  // fixed: the host's own check says what is still in the way.
+  const runItems = (attention ?? []).filter(item => item.scope === 'run').length
+  const readiness = useLoaded(() => (host ? onStartCheck(projectId, options, host.id) : onStartCheck(projectId, options)), null, [projectId, JSON.stringify(options), runItems, host?.id])
   // The project's repository, whose host is where the session pushes.
   const address = launcher?.address
-  const wasReady = useRef<boolean | undefined>(undefined)
-  useEffect(() => {
-    const ready = fixable ? agent?.ready : undefined
-    if (wasReady.current === false && ready === true) setRecheck(n => n + 1)
-    wasReady.current = ready
-  }, [fixable, agent?.ready])
 
   // The git host account picked for this session, when the person picked one; the computer's otherwise.
   const [pickedAccount, setPickedAccount] = useState<string | undefined>()
@@ -251,9 +242,6 @@ export function StartAgentForm({
           ...((noProject || remote) && account !== undefined ? { gitAccount: account } : {}),
           ...(publishes ? { publish: publishPick } : {}),
           ...(prInto !== undefined ? { prBase: prInto } : {}),
-          ...(preferences.driver ? { driver: preferences.driver } : {}),
-          ...(preferences.model ? { model: preferences.model } : {}),
-          ...(preferences.effort ? { effort: preferences.effort } : {}),
           ...withImages,
           ...(ticked.length > 0 ? { repos: ticked.map(repo => ({ name: repo.name, from: repo.path })) } : {}),
         }) // select the run we just started (#761)
@@ -329,16 +317,12 @@ export function StartAgentForm({
           <>
             {/* A start that hit what the check says says nothing the boxes below do not. */}
             {error && !readiness?.problems.length && <Refusal {...said(error)} />}
-            {readiness?.problems.map(problem =>
-              problem === readiness.fix?.problem ? (
-                <Refusal
-                  key={problem}
-                  {...(agent && !agent.ready ? { title: agentWords(agent), actions: <AgentFix state={agent} onChanged={() => void reloadAgent()} size="sm" /> } : said(problem))}
-                />
-              ) : (
+            {/* What the host's check says its agent's own fix is for, a module's item about the run says, with its press. */}
+            {readiness?.problems
+              .filter(problem => !(problem === readiness.fix?.problem && runItems > 0))
+              .map(problem => (
                 <Refusal key={problem} {...said(problem)} />
-              ),
-            )}
+              ))}
             <SetupItemsLine items={attention ?? []} projectId={projectId} />
             {readiness?.warnings.map(warning => (
               <p key={warning} role="alert" className="flex items-start gap-2 rounded-lg bg-[color-mix(in_oklab,var(--color-warning)_8%,var(--color-background))] px-3 py-2 text-sm text-foreground">

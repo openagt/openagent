@@ -14,7 +14,7 @@ const shownText = (el: Element): string | null => {
 }
 
 // The session line names the model as the daemon lists it; no daemon here, so the list never answers.
-vi.mock('../rpc/models.js', () => ({ onModels: () => new Promise(() => {}) }))
+vi.mock('../rpc/agents.js', () => ({ onCodingAgents: async () => [{ id: 'claude-code', label: 'Claude Code', models: { models: [] } }, { id: 'codex', label: 'Codex', models: { models: [] } }], onNamesRuns: async () => true }))
 
 const { EventList, askedReplies, quietEnds, replyBeforeEnd } = await import('./EventList.js')
 
@@ -609,13 +609,13 @@ describe('EventList session line', () => {
     expect(ids()).toEqual(['setup', '0'])
   })
 
-  test('while the agent works on its first prompt and nothing has come yet, the line names the step going on, and it is the only moving line', () => {
+  test('while the agent works on its first prompt and nothing has come yet, the line names the step going on, and it is the only moving line', async () => {
     const { rerender } = render(<EventList events={[prompt]} setup={{}} working stick={false} />)
     expect(screen.getAllByRole('status').map(shownText)).toEqual(['Starting session'])
     rerender(<EventList events={[prompt]} setup={{ driver: 'codex' }} working stick={false} />)
     expect(screen.getAllByRole('status').map(shownText)).toEqual(['Making the checkout'])
     rerender(<EventList events={[prompt]} setup={setup} working stick={false} />)
-    expect(screen.getAllByRole('status').map(shownText)).toEqual(['Starting Codex'])
+    await waitFor(() => expect(screen.getAllByRole('status').map(shownText)).toEqual(['Starting Codex']))
     // The agent's first output: set up, and the usual moving line takes over.
     rerender(<EventList events={[prompt, { kind: 'driver', event: { type: 'thought', text: 'hm' } }]} setup={setup} working stick={false} />)
     expect(screen.getByRole('button', { name: 'Initialized session' })).toBeTruthy()

@@ -16,10 +16,10 @@ describe('useStartAgent', () => {
     sendStart.mockResolvedValue({ ok: true, agentId: 'r1' })
     const { result } = renderHook(() => useStartAgent())
     let started: unknown
-    await act(async () => void (started = await result.current.start('p1', 'go', { model: 'opus' })))
+    await act(async () => void (started = await result.current.start('p1', 'go', { options: { 'agent-driver': { model: 'opus' } } })))
     expect(started).toEqual({ ok: true, agentId: 'r1' })
     expect(sendStart).toHaveBeenCalledTimes(1)
-    expect(sendStart).toHaveBeenCalledWith('p1', 'go', { model: 'opus' })
+    expect(sendStart).toHaveBeenCalledWith('p1', 'go', { options: { 'agent-driver': { model: 'opus' } } })
     expect(result.current.error).toBeNull()
   })
 

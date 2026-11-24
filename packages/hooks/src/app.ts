@@ -108,6 +108,7 @@ export interface AttentionItem {
  */
 export interface AttentionArgs {
   project?: ProjectRef
+  /** The options picked in a launcher whose run would start on this computer: a host beside it says what stops a run there in its own check. */
   options?: RunOptions
   /** The project's runs that ended waiting on the person, newest first, each with what it waits on. */
   waiting?: () => Promise<WaitingRun[]>

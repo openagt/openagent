@@ -6,7 +6,7 @@ import { findRun, listRuns } from '../record-store.js'
 import { isRunId, parseRunCard, type RunCard } from '../record.js'
 import { logCardFile } from '../session-log.js'
 import { PLUGINS_WITHOUT_ENV, PROFILE_ENV, PROJECT_SKILLS_ENV, isSkillName, sessionFolder, sessionsHome, sessionsHomeOf } from '@openagt/agent-data'
-import { LOCAL_HOST, MODULE_NAME, PICKED_PROFILE, isProfileId, type ProjectRef, type RunFound, type RunHost, type RunInput, type RunOptions, type RunReadiness, type RunRef, type RunStatus, type RunSummary, type InboxLine, type PromptLine } from '@openagt/hooks'
+import { LOCAL_HOST, MODULE_NAME, NAME_RUNS, PICKED_AGENT, PICKED_PROFILE, isProfileId, type AgentPick, type ProjectRef, type Settings, type RunFound, type RunHost, type RunInput, type RunOptions, type RunReadiness, type RunRef, type RunRequest, type RunStatus, type RunSummary, type InboxLine, type PromptLine } from '@openagt/hooks'
 import { currentBranch, worktreePath } from '@openagt/git-branches'
 import { handedDownSettings, runProfile } from './profile.js'
 import { inboxPath, liveDir } from './live-card.js'
@@ -15,6 +15,9 @@ import { isPidAlive } from './run-lock.js'
 import { profileLoginFor, detachResume, detachRun, GIT_ACCOUNT_ENV, readyToRun, spawnResume, spawnRun } from './runner.js'
 import type { RunRequest as AskedRun } from './run.js'
 import { nameHandOver } from './title.js'
+import { ReadyNaming } from './ready-naming.js'
+import { nameStarted } from './started-names.js'
+import { codingAgents } from '../agents.js'
 
 /**
  * This computer's host (`run.host`, #2394): a run started here is a process of its own, detached,
@@ -37,6 +40,10 @@ export interface LocalHostDeps {
   host?: string
   /** How long a Stop waits for a run that is starting to name its process. */
   startingMs?: number
+  /** The settings a run's picks for every next run are read from: the distribution's. */
+  settings?: () => Promise<Settings>
+  /** Where a run's name is asked as it starts: the naming sessions this process keeps waiting. */
+  naming?: Pick<ReadyNaming, 'names' | 'name' | 'prepare'>
 }
 
 /** How long a Stop waits for a run just started to name its process: as long as a page shows a run as starting. */
@@ -48,6 +55,30 @@ export function localHost(deps: LocalHostDeps = {}): RunHost {
   const isAlive = deps.isAlive ?? isPidAlive
   const here = deps.host ?? hostname()
   const startingMs = deps.startingMs ?? STARTING_MS
+  const settings = deps.settings ?? (() => handedDownSettings())
+  const naming = (): Pick<ReadyNaming, 'names' | 'name' | 'prepare'> => deps.naming ?? (readyNaming ??= new ReadyNaming())
+  /** The coding agent a run that names none is on: the distribution's first. */
+  const firstAgent = async (): Promise<string | undefined> => (await codingAgents().catch(() => []))[0]?.id
+  /** Whether runs started here are named: the person's setting, read as each run starts; a store that cannot be read names them. */
+  const namesRuns = (): Promise<boolean> => settings().then(read => read.get(NAME_RUNS), () => true)
+
+  /**
+   * A run's name, asked as the run is started rather than once its process is up: of a naming
+   * session waiting for the project's runs, it is in about a second after Start. The run is handed
+   * a file to find it in, and a page asks for it here meanwhile (`started-names.ts`). Asked only
+   * where the Start brings none of its own and the person names runs: read here, so a run a
+   * schedule starts is named exactly as one a person starts is.
+   */
+  const nameAsStarted = async (dir: string, prompt: string, driver: string | undefined, title: RunRequest['title']): Promise<{ title: RunRequest['title']; started: (id: string) => void; failed: () => void }> => {
+    const none = { started: () => {}, failed: () => {} }
+    if (title !== undefined) return { title, ...none }
+    if (!(await namesRuns())) return { title: false, ...none }
+    const agent = driver ?? (await firstAgent())
+    if (agent === undefined || !naming().names(prompt)) return { title: undefined, ...none }
+    const stop = new AbortController()
+    const name = naming().name(dir, prompt, agent, stop.signal)
+    return { title: name, started: id => nameStarted(id, name), failed: () => stop.abort() }
+  }
 
   /** Whether the run's live card says it is working, here, under a process that is alive. */
   const working = async (dir: string, id: string): Promise<boolean> => {
@@ -89,24 +120,37 @@ export function localHost(deps: LocalHostDeps = {}): RunHost {
     id: LOCAL_HOST,
     label: 'This computer',
 
-    async check({ project, options }) {
-      return ready(placeOf(project), options['agent-driver']?.driver)
+    // A Start is near, on these picks (the launcher opened, or its picks changed): the naming
+    // session that run will take is started now, while the person types, unless one already waits.
+    async check({ project, options: given }) {
+      const dir = placeOf(project)
+      const driver = (await withPicks(given, settings))['agent-driver']?.driver
+      void (async () => {
+        const agent = driver ?? (await firstAgent())
+        if (agent !== undefined && (await namesRuns())) await naming().prepare(dir, agent)
+      })().catch(() => {})
+      return ready(dir, driver)
     },
 
     async start({ project, prompt, images, options: given, title }) {
       refuse(project, given)
-      // A run whose options name no profile is on the one picked for every next run on this computer.
-      const options = await withPickedProfile(given)
+      // A run whose options name no profile, or no coding agent, is on the ones picked for every next run on this computer.
+      const options = await withPicks(given, settings)
       const dir = placeOf(project)
       const driver = options['agent-driver']?.driver
       // A run is refused before it spends a checkout when its coding agent cannot start, or the account it works as cannot be used here.
       const login = options.github?.account ?? (await loginFor(dir, options.profiles?.profile))
       const readiness = await ready(dir, driver, login)
       if (readiness.problems.length > 0) throw new Error(readiness.problems.join(' '))
-      const name = nameHandOver(title)
-      const { id } = await detachRun(dir, { prompt, ...(images !== undefined && images.length > 0 ? { images } : {}), ...(driver !== undefined ? { driver } : {}), ...asked(options), env: { ...picks(options), ...name.env } }, deps.spawnRun ? { spawn: deps.spawnRun } : {})
+      const naming = await nameAsStarted(dir, prompt, driver, title)
+      const name = nameHandOver(naming.title)
+      const started = await detachRun(dir, { prompt, ...(images !== undefined && images.length > 0 ? { images } : {}), ...(driver !== undefined ? { driver } : {}), ...asked(options), env: { ...picks(options), ...name.env } }, deps.spawnRun ? { spawn: deps.spawnRun } : {}).catch((err: unknown) => {
+        naming.failed()
+        throw err
+      })
       name.started()
-      return { id }
+      naming.started(started.id)
+      return { id: started.id }
     },
 
     resume,
@@ -308,11 +352,23 @@ function summaryOf(card: RunCard, project: ProjectRef | undefined): RunSummary {
   }
 }
 
-/** The run's options, on the profile picked for every next run on this computer where they name none (`PICKED_PROFILE`); a store that cannot be read picks none. */
-async function withPickedProfile(options: RunOptions): Promise<RunOptions> {
-  if (options.profiles?.profile !== undefined) return options
-  const picked = await handedDownSettings()
-    .then(settings => settings.get(PICKED_PROFILE))
-    .catch(() => undefined)
-  return picked === undefined ? options : { ...options, profiles: { ...options.profiles, profile: picked } }
+/** The naming sessions this process keeps waiting for the runs it starts, made at the first that is named. */
+let readyNaming: ReadyNaming | undefined
+
+/**
+ * The run's options, on the picks made for every next run on this computer where they name none:
+ * the profile picked (`PICKED_PROFILE`), and the coding agent with its model and effort: the run's
+ * own where its options name an agent, else its profile's, else the one picked (`PICKED_AGENT`). A
+ * store that cannot be read picks none.
+ */
+async function withPicks(options: RunOptions, settings: () => Promise<Settings>): Promise<RunOptions> {
+  const read = await settings().catch(() => undefined)
+  const pickedProfile = options.profiles?.profile ?? (await read?.get(PICKED_PROFILE).catch(() => undefined))
+  const profiled = pickedProfile === undefined ? options : { ...options, profiles: { ...options.profiles, profile: pickedProfile } }
+  const asked = options['agent-driver'] ?? {}
+  if (asked.driver !== undefined || read === undefined) return profiled
+  const profile = (await runProfile(pickedProfile, read).catch(() => undefined))?.options['agent-driver'] ?? {}
+  const picked: AgentPick = profile.driver !== undefined ? profile : await read.get(PICKED_AGENT).catch(() => ({}))
+  const agent = { ...(picked.driver !== undefined ? { driver: picked.driver } : {}), ...(picked.model !== undefined ? { model: picked.model } : {}), ...(picked.effort !== undefined ? { effort: picked.effort } : {}) }
+  return Object.keys(agent).length === 0 ? profiled : { ...profiled, 'agent-driver': { ...asked, ...agent } }
 }

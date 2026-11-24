@@ -1,5 +1,5 @@
 import { MODULE_NAME } from './module.js'
-import type { RunOptions } from './run.js'
+import type { AgentDriverOptions, RunOptions } from './run.js'
 import { defineSetting } from './settings.js'
 
 // The catalog (#2394): the settings modules own and other modules read, declared here beside the
@@ -127,8 +127,8 @@ export function profileOf(saved: readonly Profile[], id: string | undefined): Pr
 /**
  * A saved profile, read: each module's slice as it was saved, so a profile keeps whatever the
  * modules' controls put in it. The fields the run engine takes from a profile as they are, the
- * accounts and the skills and plugins picks, are read strictly: one that is not as it should be is
- * left out, and so is a slice left with nothing.
+ * coding agent with its model and effort, the accounts and the skills and plugins picks, are read
+ * strictly: one that is not as it should be is left out, and so is a slice left with nothing.
  */
 function profileFrom(value: unknown): Profile | undefined {
   if (!isMap(value)) return undefined
@@ -146,14 +146,16 @@ function profileFrom(value: unknown): Profile | undefined {
 function checkedSlice(module: string, slice: Record<string, unknown>): Record<string, unknown> {
   const kept: Record<string, unknown> = { ...slice }
   const names = (value: unknown): string[] | undefined => (Array.isArray(value) && value.length > 0 && value.every(one => typeof one === 'string' && one.trim()) ? [...(value as string[])] : undefined)
+  const text = (value: unknown): string | undefined => (typeof value === 'string' && value.trim() ? value.trim() : undefined)
   const keep = (field: string, read: (value: unknown) => unknown): void => {
     if (!(field in kept)) return
     const value = read(kept[field])
     if (value === undefined) delete kept[field]
     else kept[field] = value
   }
-  if (module === 'github') keep('account', value => (typeof value === 'string' && value.trim() ? value.trim() : undefined))
+  if (module === 'github') keep('account', text)
   if (module === 'agent-driver') {
+    for (const field of ['driver', 'model', 'effort']) keep(field, text)
     keep('claude', names)
     keep('codex', names)
   }
@@ -166,6 +168,39 @@ function checkedSlice(module: string, slice: Record<string, unknown>): Record<st
   }
   return kept
 }
+
+/** What is picked for every next run of a coding agent's: the agent, its model and how hard it thinks. */
+export type AgentPick = Pick<AgentDriverOptions, 'driver' | 'model' | 'effort'>
+
+/**
+ * agent-driver's: the coding agent, the model and the effort picked under the message box for
+ * every next run on this computer, which a run started here is on where its options name none. A
+ * part that is not valid reads as unset, and the rest stays.
+ */
+export const PICKED_AGENT = defineSetting<AgentPick>({
+  key: 'agent-driver.picked',
+  scope: 'computer',
+  default: {},
+  parse: value => {
+    if (!isMap(value)) return undefined
+    const word = (part: unknown): string | undefined => (typeof part === 'string' && /^[\w.:/-]+$/.test(part) ? part : undefined)
+    const driver = word(value['driver'])
+    const model = word(value['model'])
+    const effort = word(value['effort'])
+    return { ...(driver !== undefined ? { driver } : {}), ...(model !== undefined ? { model } : {}), ...(effort !== undefined ? { effort } : {}) }
+  },
+})
+
+/**
+ * agent-driver's: each run started on this computer is named by a small model, in a few words; off,
+ * a run is listed by what it was asked. A Start that brings a name of its own is named that.
+ */
+export const NAME_RUNS = defineSetting<boolean>({
+  key: 'agent-driver.name-runs',
+  scope: 'computer',
+  default: true,
+  parse: value => (typeof value === 'boolean' ? value : undefined),
+})
 
 /**
  * How often at most a scheduled command starts on a computer, where a person set it there:

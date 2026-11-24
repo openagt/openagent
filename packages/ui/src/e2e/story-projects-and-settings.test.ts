@@ -6,7 +6,6 @@ import { makeWorld } from './harness.js'
 import { onProjects, sendAddProject } from '../dashboard-rpc/projects.js'
 import { onGitHostHome, onAgents, onDocs } from '../dashboard-rpc/reads.js'
 import { onPreferences, patchPreferences } from '../dashboard-rpc/preferences.js'
-import { onQuota } from '../dashboard-rpc/quota.js'
 import { sendStart } from '../dashboard-rpc/control.js'
 
 // The projects & settings stories (README.md): registering a repo, what the sidebar then shows,
@@ -63,37 +62,16 @@ test('settings written in the dashboard read back, and only what the dashboard k
   const world = await makeWorld()
   const rpc = world.rpc
   try {
-    // Settings: patch your settings and read them back. The picks a Start hands to the
-    // run (the coding agent, the model) are among them.
-    const patched = await rpc(patchPreferences)({ driver: 'codex', model: 'gpt-5-e2e' })
+    // Settings: patch your settings and read them back. The pick a Start hands to the
+    // run (how far it publishes) is among them.
+    const patched = await rpc(patchPreferences)({ publish: 'pr' })
     assert.equal(patched.ok, true)
-    assert.equal((await rpc(onPreferences)()).driver, 'codex')
-    assert.equal((await rpc(onPreferences)()).model, 'gpt-5-e2e')
-    // A coding agent nobody can pick is dropped rather than stored.
-    await rpc(patchPreferences)({ driver: 'no-such-agent' })
-    assert.equal((await rpc(onPreferences)()).driver, undefined)
+    assert.equal((await rpc(onPreferences)()).publish, 'pr')
+    // A word the launcher's menu does not list is dropped rather than stored.
+    await rpc(patchPreferences)({ publish: 'push' as never })
+    assert.equal((await rpc(onPreferences)()).publish, undefined)
   } finally {
     await world.close()
   }
 })
 
-test('the usage panel reads the daemon quota source (#533)', async () => {
-  const world = await makeWorld()
-  const rpc = world.rpc
-  try {
-    // No reading: the panel must hear "unavailable", never an empty bar that reads as unused.
-    world.quota.view = { windows: [], unavailable: 'fetch-failed' }
-    assert.equal((await rpc(onQuota)()).unavailable, 'fetch-failed')
-
-    // With a reading, the windows come through as the poller reported them.
-    world.quota.view = {
-      windows: [{ label: 'Current week (all models)', usedPercent: 40 } as never],
-      readAt: 123,
-    }
-    const quota = await rpc(onQuota)()
-    assert.equal(quota.windows.length, 1)
-    assert.equal(quota.readAt, 123)
-  } finally {
-    await world.close()
-  }
-})

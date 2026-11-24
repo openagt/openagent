@@ -63,6 +63,9 @@ export { gitHostEnv } from './engine/git-host.js'
 export { INBOX_FILE } from './engine/live-card.js'
 export { localHost, type LocalHostDeps } from './engine/host.js'
 export { ReadyNaming, type ReadyNamingDeps } from './engine/ready-naming.js'
+export { forgetStartedNames, nameStarted, startedName, withStartedNames } from './engine/started-names.js'
+// The models a coding agent offers, as its adapter asks it once per account.
+export { modelsAskedOnce, firstAccountOf, modelsOf, type AgentModels, type ModelsAsked } from './models.js'
 export { NAME_FILE_ENV, givenName, nameHandOver } from './engine/title.js'
 // The coding agents' accounts and their rotation (#2394): the lists, the order runs take them in,
 // the limits, and the next free one taking over a turn at a usage limit.

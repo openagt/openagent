@@ -2,7 +2,7 @@ import { afterEach, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { SubagentRow } from '../lib/subagents.js'
 
-vi.mock('../rpc/models.js', () => ({ onModels: () => new Promise(() => {}) }))
+vi.mock('../rpc/agents.js', () => ({ onCodingAgents: () => new Promise(() => {}), onNamesRuns: () => new Promise(() => {}) }))
 const { SubagentSteps } = await import('./SubagentLine.js')
 
 afterEach(() => {

@@ -77,6 +77,10 @@ export interface RunAgent {
   readonly id: string
   /** Its name for a person: `Claude Code`. */
   readonly label: string
+  /** Its mark, as SVG markup drawn in the text's colour (`fill="currentColor"`): beside its name, wherever a run on it is shown. */
+  readonly logo?: string
+  /** Its program on this computer, for its updates: the command it runs as (`claude`), and the npm package its versions come out under. */
+  readonly program?: { readonly bin: string; readonly npm: string }
   /** It asks the person with a tool of its own ({@link Driver.ownQuestionTool}): its runs get no skill that teaches asking. */
   readonly ownQuestionTool?: boolean
   /**
@@ -85,6 +89,13 @@ export interface RunAgent {
    * None: it runs on whatever login it has.
    */
   readonly accounts?: AgentLogins
+  /**
+   * The models it offers, by its own names, as it lists them on the account its runs take first:
+   * asked once for each account, as its picker would, and again with `fresh` (a new version can
+   * offer other models). Rejects where it cannot say, with the error's `code` `ENOENT` where its
+   * program is not on this computer.
+   */
+  models?(opts?: { fresh?: boolean }): Promise<DriverModel[]>
   /** What would stop a run on it here, asked before a run spends a checkout: its CLI missing or logged out. */
   ready(opts: RunAgentReadyOptions): Promise<DriverReadiness>
   /** The driver one run's sessions start on, unrestricted: nobody is there to approve what its agent does in the run's checkout. */

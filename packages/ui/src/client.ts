@@ -2,7 +2,6 @@
 // here — `formatOpenAgentEvent` and the run-view derivations — with no Node imports, so
 // the client can import these at runtime without dragging the server barrel (sandbox,
 // node:fs/http, …) into the browser bundle. Types come from the root entry.
-export { DRIVERS, DRIVER_LABELS, isDriverName, driverFromImpl, type DriverName } from './driver-names.js'
 export { PUBLISH_LABELS, isPublishPick, offeredPublishPicks, publishPickIn, type PublishPick } from './publish-levels.js'
 export { formatOpenAgentEvent } from './terminal.js'
 export { ACCENTS, DEFAULT_ACCENT_LABELS, accentOf, CODE_FONTS, DOCUMENT_FONTS, FONTS, fontFace, PALETTES, PALETTE_LABELS, type Accent, type CodeFont, type DocumentFont, type Font, type Palette } from './appearance.js'
@@ -28,7 +27,6 @@ export { waitingKey } from './dashboard/keys.js'
 // What a run needs of the person, in the two words every list says it in.
 export { needsWord, type RunNeed } from './dashboard/waiting-words.js'
 export type { ProjectionRead } from './dashboard/projects.js'
-export { MAX_SPEND_OFFSET } from './preference-defaults.js'
 
 
 // How long a run just started counts as starting, so the page and a Stop wait for it alike.

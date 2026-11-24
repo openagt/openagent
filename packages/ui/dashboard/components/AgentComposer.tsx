@@ -4,7 +4,7 @@ import { useContext, useEffect, useRef, useState, type MutableRefObject, type Re
 import { Loader2 } from 'lucide-react'
 import { cn } from '../lib/utils.js'
 import { IN_BOX } from '../lib/in-box.js'
-import { Composer, type ComposerHandle, type SessionModel } from './Composer.js'
+import { Composer, type ComposerHandle } from './Composer.js'
 import { sendMessage } from '../rpc/control.js'
 import { useAction } from '../lib/use-action.js'
 import { useStop } from '../lib/use-stop.js'
@@ -63,7 +63,6 @@ export function AgentComposer({
   editInBox,
   giveBack,
   focusBox,
-  model,
   context,
   contextSet,
   publish,
@@ -95,9 +94,7 @@ export function AgentComposer({
   giveBack?: MutableRefObject<((text: string, images?: string[]) => void) | null> | undefined
   /** Set here to what gives the box the focus: a question answered from its card. */
   focusBox?: MutableRefObject<(() => void) | null> | undefined
-  /** The model the session runs on: said under the box, at the right. */
-  model?: SessionModel | undefined
-  /** How full the session's context is, as a circle beside the model. */
+  /** How full the session's context is, as a circle at the right of the row under the box, after its controls. */
   context?: ReactNode
   /** The shell's Context (#492), as the launcher's box has it (his pick): what is picked goes with the next message, said at its end, and is cleared once it went. */
   contextSet?: ContextSet | undefined
@@ -318,7 +315,6 @@ export function AgentComposer({
         submitBusyLabel={live ? 'Sending…' : 'Continuing…'}
         inAgent
         sessionRow={row}
-        sessionModel={model}
         sessionContext={context}
         {...(contextSet ? { addContext: contextSet.add, removeContext: contextSet.remove } : {})}
         // The launcher's gear, line for line in its places: the modules' lines, as the session's record

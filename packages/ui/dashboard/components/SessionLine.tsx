@@ -1,8 +1,7 @@
 import { useState, type KeyboardEvent } from 'react'
 import { CircleCheck } from 'lucide-react'
 import type { AgentMeta } from '../../src/index.js'
-import { DRIVER_LABELS, driverFromImpl } from '../../src/client.js'
-import { modelName, useModels } from '../lib/models.js'
+import { agentOf, modelName, useAgents } from '../lib/agents.js'
 import { cn } from '../lib/utils.js'
 import { Caret, LeavingDots, Seconds } from './ToolCalls.js'
 import { CrossFade } from './CrossFade.js'
@@ -68,10 +67,9 @@ export function SessionLine({
   nested?: boolean
 }) {
   const [open, setOpen] = useState(false)
-  const picked = driverFromImpl(setup.driver)
-  const models = useModels()
-  const agent = picked ? DRIVER_LABELS[picked] : setup.driver
-  const model = setup.model && modelName(picked ? models?.[picked] : undefined, setup.model)
+  const ran = agentOf(useAgents(), setup.driver)
+  const agent = ran?.label ?? setup.driver
+  const model = setup.model && modelName(ran, setup.model)
   // One row from the session's start to its end: its steps as they go, behind the moving dots and
   // with the seconds, then "Initialized session", the step's words fading out as those come in, as
   // Claude Code on the web's row changes.

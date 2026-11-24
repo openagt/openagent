@@ -42,7 +42,7 @@
       "types": "./dist/engine/module.d.ts",
       "default": "./dist/engine/module.js"
     },
-    "./server": "./dist/accounts/server.js",
+    "./server": "./dist/server.js",
     "./dashboard": "./dist/dashboard/dashboard.js",
     "./SKILL.md": "./SKILL.md",
     "./package.json": "./package.json"

@@ -34,7 +34,7 @@ const FLEX: Record<CardWidth, string> = {
   '1': 'basis-full grow-[12]',
 }
 
-/** What is no card but stands among them, full width, right under the card `card`, or first when that card is not on the page or there is none: the coding agents' updates, under what needs the person. */
+/** What is no card but stands among them, full width, right under the card `card`, or first when that card is not on the page or there is none: the notices, under what needs the person, one under the other. */
 export interface Under {
   card: string | undefined
   node: ReactNode
@@ -42,7 +42,7 @@ export interface Under {
 
 /** An {@link Under}'s room in the rows: none when it draws nothing, so it leaves no gap. */
 export function UnderCards({ under }: { under: Under }) {
-  return <div className="min-w-0 basis-full space-y-10 empty:hidden">{under.node}</div>
+  return <div className="min-w-0 basis-full space-y-2 empty:hidden">{under.node}</div>
 }
 
 /** The key of {@link Under} among the cards: what `CardGrid`'s `until` names to stop after it. */

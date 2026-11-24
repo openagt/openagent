@@ -1,9 +1,7 @@
 import { resolveAgentCheckout } from '../store/index.js'
 import { defaultProjectsProvider, type ProjectsProvider } from '../dashboard/projects.js'
 import type { PreferencesStore } from '../registry.js'
-import type { QuotaSource } from '../dashboard/quota.js'
-import type { ModelsSource } from '../dashboard/models.js'
-import type { AgentUpdates } from '../dashboard/agent-updates.js'
+import type { OpenAgentUpdates } from '../dashboard/openagent-update.js'
 import type { ProjectStateReader } from '../project-state.js'
 import type { AddProjectResult, RemoveProjectResult, StartAgentOptions, StartAgentResult, StartedInResult } from '../dashboard/types.js'
 import type { ProjectRef, RunHost, RunRef } from '@openagt/hooks'
@@ -37,8 +35,6 @@ export interface DashboardContext {
   addProject: AddProjectHandler
   startedIn: StartedInHandler
   removeProject: RemoveProjectHandler
-  /** A Start is near in a project, on a coding agent: have what the run will want first ready for it (its name). Never throws. */
-  prepareStart: (projectId: string, driver?: string) => void
   /** This computer's host (`run.host`, #2394): where a run starts when no other host is picked. */
   host: RunHost
   /**
@@ -49,12 +45,8 @@ export interface DashboardContext {
   otherHosts: (project?: ProjectRef) => Promise<RunHost[]>
   /** The user-preferences store (#410), over the registry file. */
   preferences: PreferencesStore
-  /** The quota source behind the usage panel (#533). */
-  quota: QuotaSource
-  /** Which models each coding agent offers, for the agent and model menu. */
-  models: ModelsSource
-  /** Whether a newer version of a coding agent on this computer is out, and its update. */
-  agentUpdates: AgentUpdates
+  /** Whether a newer OpenAgent than the one running here is out. */
+  openAgentUpdate: OpenAgentUpdates
   /** What a project's page and row say of it beside its runs (#1500): what needs fixing there, and why its data stays here. */
   projectState: ProjectStateReader
 }
@@ -139,19 +131,9 @@ export function contextPreferences(): PreferencesStore {
   return fromContext('preferences')
 }
 
-/** The quota source behind the usage panel (#533). */
-export function contextQuota(): QuotaSource {
-  return fromContext('quota')
-}
-
-/** Whether a newer version of a coding agent on this computer is out, and its update. */
-export function contextAgentUpdates(): AgentUpdates {
-  return fromContext('agentUpdates')
-}
-
-/** Which models each coding agent offers. */
-export function contextModels(): ModelsSource {
-  return fromContext('models')
+/** Whether a newer OpenAgent than the one running here is out. */
+export function contextOpenAgentUpdate(): OpenAgentUpdates {
+  return fromContext('openAgentUpdate')
 }
 
 /** What a project's page and row say of it beside its runs (#1500). */
@@ -168,11 +150,6 @@ export function contextStartAgent(): DashboardContext['startAgent'] {
 /** Install + register a repo (#433), which only the daemon can do. */
 export function contextAddProject(): DashboardContext['addProject'] {
   return fromContext('addProject')
-}
-
-/** Have what a Start near in a project will want ready for it (its name), which only the daemon can do. */
-export function contextPrepareStart(): DashboardContext['prepareStart'] {
-  return fromContext('prepareStart')
 }
 
 /** Find or add the project a second `openagent` was started in (#2141), which only the daemon can do. */

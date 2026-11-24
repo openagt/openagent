@@ -5,16 +5,13 @@ import { onDashboard } from '../rpc/reads.js'
 import { usePolled } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
-import { useMountedModules } from '../lib/use-modules.js'
-import { useAgentAccounts } from './AgentAccounts.js'
-import { ModuleSlot } from './ModulePageView.js'
 import { Facts, Panel, PanelGroup, StepNumber } from './ui/panel.js'
 import { Skeleton } from './ui/skeleton.js'
 import { updatePreferences } from '../lib/preferences.js'
 import { AddProjectEffects } from './AddProjectEffects.js'
 import { ProjectPicker } from './ProjectPicker.js'
 import { HostFix } from './AddGitAccount.js'
-import { AgentFix, agentLoginState, hostLoginState, hostWords, useAgentState, useGitHosts } from './Logins.js'
+import { hostLoginState, hostWords, useGitHosts } from './Logins.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { useAttention } from '../lib/use-attention.js'
 import { attentionDetail, attentionKey, useAttentionFixes } from './Attention.js'
@@ -40,12 +37,6 @@ import { attentionDetail, attentionKey, useAttentionFixes } from './Attention.js
 
 /** What the ✕ says it does. */
 const HIDE = 'Hide; Settings › Appearance brings it back'
-
-/** The coding agents a session can run on: each one's CLI, its list of accounts, and its name on the press that connects it. */
-const AGENTS = [
-  { driver: 'claude-code', list: 'claude', name: 'Claude' },
-  { driver: 'codex', list: 'codex', name: 'Codex' },
-] as const
 
 /** One step: what it is, whether it is done, and what to do about it. */
 interface Step {
@@ -74,52 +65,17 @@ export function OnboardingChecklist({
   // Slower than the Overview's own 5s poll: these change at human speed.
   // Kept for the next visit: the steps open where they stood, not as titles that then grow.
   const { value: data, reload, state } = usePolled<DashboardData | null>(onDashboard, null, 10_000, [], { remember: 'onboarding:dashboard', stored: true })
-  // What sessions need on this computer: a coding agent with an account, and an account at each git host.
-  const claude = useAgentState('claude-code')
-  const codex = useAgentState('codex')
-  const accounts = { claude: useAgentAccounts('claude').view, codex: useAgentAccounts('codex').view }
+  // What sessions need on this computer: an account at each git host, and what the modules say (a coding agent to connect).
   const { view: hosts, reload: reloadHosts } = useGitHosts()
-  const agents = AGENTS.map(agent => ({ ...agent, ...(agent.driver === 'claude-code' ? claude : codex) }))
-  const reloadAgents = (): void => void Promise.all(agents.map(agent => agent.reload()))
-  // The press that connects an agent is its package's (`agent.connect`): the window the Permissions page adds an account in.
-  const { views, loaded: modulesLoaded } = useMountedModules()
-  const connect = views['agent.connect'][0]
   // The step the person opened; by default, the first one not done.
   const [picked, setPicked] = useState<string | undefined>()
-  const setupItems = (useAttention(null) ?? []).filter(item => item.kind === 'setup' && item.scope === 'computer')
+  const attention = useAttention(null)
+  const setupItems = (attention ?? []).filter(item => item.kind === 'setup' && item.scope === 'computer')
   const fixes = useAttentionFixes(undefined, () => void reload())
 
   // Before the projects are read, the app's own list says whether there is one.
   const projectCount = data?.totals.projects ?? projects.length
 
-  const connected = agents.filter(agent => agent.state?.ready)
-  // One connected: which, and whose account. Both: which.
-  const whose = connected.length === 1 ? accounts[connected[0]!.list]?.accounts.find(account => !account.loggedOut)?.name : undefined
-  const agentStep: Step = {
-    key: 'agent',
-    label: 'Connect a coding agent',
-    description: 'Sessions run on Claude Code or Codex, with your own account. One is enough; add the other any time.',
-    done: connected.length > 0,
-    doneNote: [connected.map(agent => agent.name).join(', '), whose].filter(Boolean).join(' · '),
-    // A press an agent, Claude's the primary: the agent sessions start on unless a person picks another. An agent whose
-    // program this computer does not have is installed first.
-    action: (
-      <div className="flex max-w-full flex-wrap items-center gap-2">
-        {agents.map((agent, at) =>
-          agent.state && agentLoginState(agent.state) === 'not-installed' ? (
-            <AgentFix key={agent.driver} state={agent.state} onChanged={reloadAgents} {...(at === 0 ? {} : { variant: 'secondary' as const })} />
-          ) : connect ? (
-            <ModuleSlot key={agent.driver} package={connect.package} label={`connect ${agent.name}`}>
-              <connect.View agent={agent.list} primary={at === 0} onConnected={reloadAgents} />
-            </ModuleSlot>
-          ) : (
-            // Until the agents' package is in, its press's shape holds its place: nothing in the row moves when it comes.
-            !modulesLoaded && <Skeleton key={agent.driver} className="h-8 w-22 max-md:h-11" />
-          ),
-        )}
-      </div>
-    ),
-  }
   const hostSteps: Step[] = (hosts?.hosts ?? []).flatMap(row => {
     const p = row.provider
     if (!p) return []
@@ -151,9 +107,8 @@ export function OnboardingChecklist({
   })
 
   const steps: Step[] = [
-    agentStep,
-    ...hostSteps,
     ...moduleSteps,
+    ...hostSteps,
     {
       key: 'project',
       label: 'Add your first project',
@@ -179,14 +134,14 @@ export function OnboardingChecklist({
   ]
 
   // No step before its reads have said where it stands: an unread project count is not "no project".
-  const loginsRead = claude.state !== undefined && codex.state !== undefined && hosts !== undefined
+  const loginsRead = attention !== null && hosts !== undefined
   const reading = state === 'unknown' || !loginsRead
   const open = picked !== undefined && steps.some(step => step.key === picked && !step.done) ? picked : steps.find(step => !step.done)?.key
 
   const doneCount = steps.filter(step => step.done).length
-  // Every step done: nothing to discover, and the box under it is how a session starts. The same while the steps are
-  // read, where every one known so far is done.
-  if (steps.every(step => step.done)) return null
+  // Every step done: nothing to discover, and the box under it is how a session starts. Only once what the modules
+  // say and the git hosts are read: either can add a step, and the card waits for them rather than coming late.
+  if (loginsRead && steps.every(step => step.done)) return null
   return (
     <>
     {fixes.overlay}
@@ -219,7 +174,7 @@ export function OnboardingChecklist({
           <p className="sr-only">Loading…</p>
           {/* The steps as they will stand once read, so nothing in them moves when the answer comes: each its mark and its
               title, the open step its words under its name (read with the git hosts, or fixed) and its presses' shapes at
-              the row's end, centred on the row. Only once the coding agent and the git hosts are read (each can add a
+              the row's end, centred on the row. Only once what the modules say and the git hosts are read (each can add a
               step at the top, which would push the rows drawn): nothing under the steps is drawn before they are. */}
           {loginsRead && (
             <Panel ordered aria-hidden>
@@ -233,15 +188,7 @@ export function OnboardingChecklist({
                         {typeof step.description === 'string' ? <p className="text-xs text-muted-foreground">{step.description}</p> : step.description}
                       </div>
                       <div className="flex max-w-full shrink-0 flex-wrap items-center gap-3">
-                        {/* The coding agent's step has a press an agent. */}
-                        {step.key === 'agent' ? (
-                          <>
-                            <Skeleton className="h-8 w-22 max-md:h-11" />
-                            <Skeleton className="h-8 w-22 max-md:h-11" />
-                          </>
-                        ) : (
-                          <Skeleton className="h-8 w-36" />
-                        )}
+                        <Skeleton className="h-8 w-36" />
                       </div>
                     </div>
                   ) : (

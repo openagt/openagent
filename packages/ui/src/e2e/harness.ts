@@ -24,7 +24,6 @@ import { sendStart, sendStop } from '../dashboard-rpc/control.js'
 import { onAgents } from '../dashboard-rpc/reads.js'
 import type { OpenAgentEvent } from '../events.js'
 import type { StartAgentOptions } from '../dashboard/types.js'
-import type { QuotaView } from '../dashboard/quota.js'
 
 export { git } from './fixture.js'
 
@@ -58,8 +57,6 @@ export interface StoryWorld {
   /** The daemon's home workspace (a plain temp dir, not a registered project). */
   home: string
   runtime: ProjectRuntime
-  /** The usage panel's reading (mutable): what `onQuota` serves. */
-  quota: { view: QuotaView }
   /**
    * Bind one dashboard RPC to this world's context. The real mount wires the context once, at
    * start-up; a story stands several worlds up in one process, so re-providing before every call
@@ -118,8 +115,7 @@ export async function release(project: StoryProject, agentId: string): Promise<v
 
 /**
  * Stand up one story world. The dashboard context mirrors `runDaemon`'s `startDashboard` wiring
- * piece for piece — same closures, same registry-backed stores — except where the daemon holds a
- * live poller (quota), which a story controls through a mutable stub instead.
+ * piece for piece — same closures, same registry-backed stores.
  */
 export async function makeWorld(): Promise<StoryWorld> {
   const home = mkdtempSync(join(tmpdir(), 'openagent-e2e-home-'))
@@ -131,7 +127,6 @@ export async function makeWorld(): Promise<StoryWorld> {
   const host = fakeRunHost()
   const runtime = createProjectRuntime({ cwd: home, env: process.env, host })
 
-  const quota = { view: { windows: [] } as QuotaView }
   const context = {
     host,
     // The demo's runs are all this computer's: no host beside it.
@@ -140,14 +135,8 @@ export async function makeWorld(): Promise<StoryWorld> {
     addProject: runtime.onAddProject,
     startedIn: runtime.onStartedIn,
     removeProject: runtime.onRemoveProject,
-    prepareStart: runtime.onPrepareStart,
     preferences: registryPreferencesStore(),
-    // The story sets one view; both questions are answered off it, since a story that cares about
-    // the model's own week states that window in the view it sets (#1619).
-    quota: { read: async () => quota.view, stop: () => {} },
-    // No story reads the menu, and none may start a coding agent's CLI to ask.
-    models: { read: async () => ({ 'claude-code': { models: [] as [] }, codex: { models: [] as [] } }), forget: () => {} },
-    agentUpdates: { read: async () => [], update: async () => ({ ok: false as const, error: 'not wired in this test' }), openAgent: async () => undefined },
+    openAgentUpdate: { read: async () => undefined },
     projectState: async () => ({ errors: [] }),
   }
 
@@ -166,7 +155,6 @@ export async function makeWorld(): Promise<StoryWorld> {
   const world: StoryWorld = {
     home,
     runtime,
-    quota,
     rpc,
 
     async hostCalls() {
@@ -266,7 +254,6 @@ export async function makeWorld(): Promise<StoryWorld> {
           10_000,
         ).catch(() => {})
       }
-      await runtime.dispose().catch(() => {})
       delete process.env[STARTS_FILE_ENV]
       await rm(home, { recursive: true, force: true }).catch(() => {})
       for (const repo of repos) await rm(repo, { recursive: true, force: true }).catch(() => {})

@@ -4,7 +4,7 @@ import { createHooks, defineModule, type AttentionItem, type Hooks, type Waiting
 import { memoryStore } from '@openagt/hooks/testing'
 import ask from '@openagt/ask/module'
 import { buildWaiting, waitingKey, type Waiting, type WaitingDeps } from './waiting.js'
-import { forgetStartedNames, nameStarted } from '../started-names.js'
+import { forgetStartedNames, nameStarted } from '@openagt/agent-driver'
 import { pendingChoices } from '../open-choices.js'
 import { eventsOf } from '../store/run-record.js'
 import type { AnyDiaryLine } from '../store/runs.js'

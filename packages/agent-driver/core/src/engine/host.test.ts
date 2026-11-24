@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { logCardFile } from '../session-log.js'
 import { patchRun } from '../record-store.js'
 import { PLUGINS_WITHOUT_ENV, PROFILE_ENV, PROJECT_SKILLS_ENV, sessionFolder, sessionsHome } from '@openagt/agent-data'
-import { LOCAL_HOST, type ProjectRef, type RunHost, type RunReadiness, type InboxLine } from '@openagt/hooks'
+import { LOCAL_HOST, NAME_RUNS, PICKED_AGENT, PROFILES, type ProjectRef, type RunHost, type RunReadiness, type InboxLine } from '@openagt/hooks'
 import { worktreePath } from '@openagt/git-branches'
 import { localHost, type LocalHostDeps } from './host.js'
 import { inboxPath, liveDir } from './live-card.js'
@@ -16,6 +16,8 @@ import { GIT_ACCOUNT_ENV, runArgs, type SpawnedResume, type SpawnedRun } from '.
 import { NAME_FILE_ENV } from './title.js'
 import { git, removeRepo, testRepo } from './test-repo.js'
 import { NOW } from './run-test-support.js'
+import { memorySettings } from '@openagt/hooks/testing'
+import { startedName } from './started-names.js'
 
 // This computer's host, with the runs' processes stood in for: what each is spawned with, what a
 // person says to a run reaching it or resuming it, a Stop's signal, the runs it lists, and where a
@@ -37,6 +39,7 @@ function host(deps: LocalHostDeps = {}): { host: RunHost; runs: SpawnedRun[]; re
       loginFor: async () => undefined,
       host: HERE,
       startingMs: 0,
+      naming: { names: () => false, name: async () => undefined, prepare: async () => {} },
       ...deps,
     }),
   }
@@ -111,6 +114,59 @@ test("a start hands the run the name its starter is asking for, in a file the ru
       assert.ok(tries < 100, 'the name is handed over')
       await new Promise(resolve => setTimeout(resolve, 10))
     }
+  } finally {
+    await removeRepo(repo)
+  }
+})
+
+test('a run whose options name no coding agent is on its profile\'s, else on the one picked for every next run, with that pick\'s model and effort', async () => {
+  const repo = await testRepo()
+  try {
+    const settings = memorySettings()
+    await settings.set(PICKED_AGENT, { driver: 'codex', model: 'gpt-5', effort: 'high' })
+    await settings.set(PROFILES, [{ id: 'opus', name: 'Opus', options: { 'agent-driver': { driver: 'claude-code', model: 'opus' } } }])
+    const checked: (string | undefined)[] = []
+    const { host: here, runs } = host({ settings: async () => settings, ready: async (_dir, driver) => (checked.push(driver), NOTHING_WRONG) })
+    const project = projectAt(repo)
+    await here.start({ project, prompt: 'x', options: {}, title: false })
+    await here.start({ project, prompt: 'x', options: { 'agent-driver': { driver: 'claude-code' } }, title: false })
+    await here.start({ project, prompt: 'x', options: { profiles: { profile: 'opus' } }, title: false })
+    assert.deepEqual(
+      runs.map(run => [run.driver, run.model, run.effort]),
+      [
+        ['codex', 'gpt-5', 'high'],
+        ['claude-code', undefined, undefined],
+        ['claude-code', 'opus', undefined],
+      ],
+    )
+    await here.check!({ project, options: {} })
+    assert.equal(checked.at(-1), 'codex', 'a check is asked of the agent the picks would run')
+  } finally {
+    await removeRepo(repo)
+  }
+})
+
+test('a run whose Start brings no name is named as it starts, where the person names runs, and the name is kept for the page until the record has it', async () => {
+  const repo = await testRepo()
+  try {
+    const settings = memorySettings()
+    const asked: string[] = []
+    const prepared: string[] = []
+    const naming = { names: () => true, name: async (_dir: string, prompt: string, driver: string) => (asked.push(`${driver}: ${prompt}`), 'Login fix'), prepare: async (_dir: string, driver: string) => void prepared.push(driver) }
+    await settings.set(PICKED_AGENT, { driver: 'codex' })
+    const { host: here, runs } = host({ settings: async () => settings, naming })
+    const project = projectAt(repo)
+    const { id } = await here.start({ project, prompt: 'fix the login', options: {} })
+    assert.deepEqual(asked, ['codex: fix the login'])
+    assert.ok(runs[0]?.env?.[NAME_FILE_ENV], 'the run is told where its name comes')
+    assert.equal(await startedName(id), 'Login fix')
+    await here.check!({ project, options: {} })
+    await new Promise(resolve => setTimeout(resolve, 10))
+    assert.deepEqual(prepared, ['codex'], 'a check readies the naming session the next run takes')
+    await settings.set(NAME_RUNS, false)
+    await here.start({ project, prompt: 'fix the logout', options: {} })
+    assert.equal(runs[1]?.env?.['OPENAGENT_NAME_RUN'], '0', 'named by no one: the run keeps the words it was asked')
+    assert.equal(asked.length, 1)
   } finally {
     await removeRepo(repo)
   }

@@ -15,7 +15,8 @@ type Agents = { claude: unknown[]; codex: unknown[] }
  */
 function hostFor(answer: (args: string[], input?: string) => Promise<ModuleCommandResult>) {
   const runComputerCommand = vi.fn(async (args: string[], _command?: string, input?: string) => answer(args, input))
-  const callComputer = vi.fn(async (name: string, _input: object) => answer([name]))
+  // What each agent needs to run here, read by an agent's row with no account: every agent can run, unless the test answers `states` itself.
+  const callComputer = vi.fn(async (name: string, _input: object) => (name === 'states' ? answer([name]).then(said => (said.ok && Array.isArray(said.output) ? said : { ok: true as const, output: [] })) : answer([name])))
   return { host: fakeHost('@openagt/agent-driver', { runComputerCommand, callComputer }), runComputerCommand, callComputer }
 }
 

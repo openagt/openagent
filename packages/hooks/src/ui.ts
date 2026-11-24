@@ -36,6 +36,8 @@ export interface UiHost {
   openSettings(entry: string, item?: string): void
   /** Start a run in the project with this prompt, with the person's own picks, and land on it: the run's id, or in words why there is none. */
   startRun(projectId: string, prompt: string): Promise<{ ok: true; agentId: string } | { ok: false; error: string }>
+  /** Call one function of the package's server part in no project, for a package of the computer's (`for: 'computer'`), its answer read as JSON. */
+  callComputer(name: string, input: object): Promise<UiCommandResult>
 }
 
 /** What a command or a call answered: its output read as JSON, or in words why there is none. */
@@ -140,29 +142,22 @@ export interface UiSettingsProps {
   item?: string
 }
 
+/**
+ * How far either side of the quota boundary the usage bar's handle reaches, in percentage points
+ * (#960): the bound of the line a module puts on the bar, which the bar holds a drag to.
+ */
+export const MAX_SPEND_OFFSET = 50
+
 /** What the usage bar's line is given: the bar it is drawn on, for the projects that have the module. */
 export interface UiUsageLineProps {
   projects: UiProject[]
   /**
-   * The week's usage bar, as the shell draws it, with the line at `offset` (percentage points
-   * from the quota boundary, negative before it) and its handle calling `onChangeOffset` as it
-   * is dragged: the view draws it, with what it reads and saves of the line.
+   * The week's usage bar, with the line at `offset` (percentage points from the quota boundary,
+   * negative before it, within {@link MAX_SPEND_OFFSET}). Its handle moves the line as it is
+   * dragged, and saves where it rests through `onChangeOffset`, saying under the bar why a save
+   * failed: the view draws it, with what it reads of the line.
    */
-  Bar: ComponentType<{ offset?: number; onChangeOffset?: (points: number) => void }>
-}
-
-/** What the press that connects a coding agent is given. */
-export interface UiConnectAgentProps {
-  /** The agent it connects. */
-  agent: 'claude' | 'codex'
-  /** Whether it is the page's one primary press. */
-  primary: boolean
-  /** What it says, where the agent's name stands beside it already ("Add account"); the agent's mark and name when unsaid. */
-  label?: string
-  /** A smaller press, for a line of a form. */
-  small?: boolean
-  /** An account was added, or a sign-in ended without one: what the page knows of the agent is read again. */
-  onConnected: () => void
+  Bar: ComponentType<{ offset?: number; onChangeOffset?: (points: number) => Promise<UiActionResult> }>
 }
 
 /** Which box a control under the message box is drawn in. */
@@ -249,9 +244,9 @@ export interface ViewPlaces {
       /** Its place among every module's cards, lower first; 50 when unsaid, ties by package name. */
       order?: number
       /**
-       * It is the card of what needs the person: the coding agents' updates
-       * stand right under it, wherever the layout puts it, and no card after it is drawn until
-       * what waits on the person was first read. The first module's card that says so.
+       * It is the card of what needs the person: the Overview's notices (`overview.notice`) stand
+       * right under it, wherever the layout puts it, and no card after it is drawn until what
+       * waits on the person was first read. The first module's card that says so.
        */
       needsYou?: true
     }
@@ -259,6 +254,8 @@ export interface ViewPlaces {
   }
   /** A few words in the line under the Overview's title. */
   'overview.line': { entry: { id: string; label: string; order?: number }; props: UiCardProps }
+  /** A notice on the Overview, under the card of what needs the person: news of this computer, such as a coding agent's newer version. Nothing drawn when there is none. */
+  'overview.notice': { entry: { id: string; order?: number }; props: UiCardProps }
   /** A pane beside the chat, on every project's page and every run's page: an icon in the page's top bar opens it. */
   'chat.pane': {
     entry: {
@@ -341,8 +338,6 @@ export interface ViewPlaces {
   }
   /** The line on the usage bar where the module's unattended work stops; the first module's that has one. */
   'usage.line': { entry: { id: string }; props: UiUsageLineProps }
-  /** The press that connects a coding agent, where a new install is asked for one: the agent's name on it, and its sign-in in a window of its own. The first module's that has one. */
-  'agent.connect': { entry: { id: string }; props: UiConnectAgentProps }
 }
 
 export type ViewPlace = keyof ViewPlaces

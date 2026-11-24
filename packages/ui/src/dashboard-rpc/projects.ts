@@ -1,9 +1,11 @@
-import { contextAddProject, contextHost, contextOtherHosts, contextPrepareStart, contextProjectState, contextProjects, contextRemoveProject, contextStartedIn, resolveProjectPath } from './context.js'
+import { contextAddProject, contextHost, contextOtherHosts, contextProjectState, contextProjects, contextRemoveProject, contextStartedIn, resolveProjectPath } from './context.js'
 import { projectRefAt } from '../distribution-hooks.js'
 import { DATA_BRANCH, addressOfRemote, errorMessage, isRepoOwner, originDefaultBranch, readRepoOwners, repositoryAddress, writeRepoOwners } from '@openagt/agent-data'
 import { readHosted, refreshHosted, type HostedRepo } from './hosted-repos.js'
 import { cloneAccountFor, originGit } from './send-as.js'
 import type { StartReadiness } from '../start-readiness.js'
+import type { RunOptions } from '@openagt/hooks'
+import { isRunOptions } from '../daemon-runtime.js'
 import { SESSIONS_ID } from '../project-address.js'
 import { hasRemote } from '../has-remote.js'
 import { openagentVersion } from '../version.js'
@@ -296,23 +298,22 @@ export async function onRunHosts(projectId: string): Promise<RunHostChoice[]> {
 /**
  * What would stop a run in this project before it spends a checkout, said in the launcher before
  * the Start: the check of the host it runs on (`run.host`, #2394), this computer's unless `host`
- * names another, given the coding agent picked. A missing CLI or a logged-out one is a problem the
+ * names another, given the launcher's picks for it. A missing CLI or a logged-out one is a problem the
  * run itself would refuse on; a warning is said and blocks nothing. A check that fails is said as a
  * warning: it is a broken check, not a reason to stop. `null` for an unknown project or host, or a
  * host with no check: nothing to say.
  */
-export async function onStartCheck(projectId: string, driver?: string, host?: string): Promise<StartReadiness | null> {
+export async function onStartCheck(projectId: string, options?: RunOptions, host?: string): Promise<StartReadiness | null> {
   const cwd = await resolveProjectPath(projectId)
   if (!cwd) return null
-  // The launcher asks this as it opens and at each change of agent: a Start is near, on this agent.
-  contextPrepareStart()(projectId, typeof driver === 'string' ? driver : undefined)
   const project = projectId === SESSIONS_ID ? undefined : await projectRefAt(projectId, cwd)
   const here = contextHost()
   const checks = typeof host !== 'string' || host === here.id ? here : (await contextOtherHosts(project).catch(() => [])).find(other => other.id === host)
   if (!checks?.check) return null
   try {
-    const options = typeof driver === 'string' ? { 'agent-driver': { driver } } : {}
-    const checked = await checks.check(project ? { project, options } : { options })
+    // Asked as the launcher opens and at each change of its picks: a Start is near, on these picks, and the host may ready what that run will want first.
+    const picked = isRunOptions(options) ? options : {}
+    const checked = await checks.check(project ? { project, options: picked } : { options: picked })
     return { problems: checked.problems, warnings: checked.warnings, ...(checked.fix ? { fix: checked.fix } : {}) }
   } catch (err) {
     return { problems: [], warnings: [errorMessage(err)] }
