@@ -98,7 +98,7 @@ async function runAgent(ctx: RunContext): Promise<void> {
   }
   // A checkout with an untracked directory in it is a dirty tree, which the branches rule never reclaims.
   await hideLiveDir(workspace).catch(() => {})
-  ctx.outcome = await sessionTurns(leg, workspace, dir, ctx.signal, ctx.env, ctx.asking)
+  ctx.outcome = await sessionTurns(leg, workspace, dir, ctx.signal, ctx.env, ctx.asking, ctx.context)
 }
 
 /**

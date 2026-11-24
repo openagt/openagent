@@ -122,7 +122,6 @@ test('a start that cannot make a run is refused before anything is spawned: a pi
     const { host: here, runs } = host({ ready: async (_dir, driver) => (driver === 'codex' ? { problems: ['Codex is not logged in.'], warnings: [] } : NOTHING_WRONG) })
     const project = projectAt(repo)
     await assert.rejects(here.start({ prompt: 'x', options: { 'git-branches': { base: 'main' } } }), /A session with no project has no git/)
-    await assert.rejects(here.start({ project, prompt: 'x', options: { 'git-branches': { repos: [{ name: 'a', from: '/a' }] } } }), /The repos are for a session with no project/)
     await assert.rejects(here.start({ project, prompt: 'x', options: { profiles: { profile: '../me' } } }), /A profile is named by its id/)
     await assert.rejects(here.start({ project, prompt: 'x', options: { skills: { project: ['a skill'] } } }), /Skills are named by their names/)
     await assert.rejects(here.start({ project, prompt: 'x', options: { plugins: { without: ['A Plugin'] } } }), /Plugins are named by their names/)

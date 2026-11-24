@@ -67,7 +67,6 @@ function refusedPicks(options: StartAgentOptions, noProject: boolean): string | 
   const skillList = (value: unknown): value is string[] => Array.isArray(value) && value.length > 0 && value.every(isSkillName)
   if (options.pluginsWithout !== undefined && !(Array.isArray(options.pluginsWithout) && options.pluginsWithout.every(name => typeof name === 'string' && MODULE_NAME.test(name)))) return 'Plugins are named by their names.'
   if (options.projectSkills !== undefined && options.projectSkills !== 'all' && options.projectSkills !== 'none' && !skillList(options.projectSkills)) return 'Project skills are all, none, or named by their names.'
-  if (!noProject && options.repos !== undefined) return 'Repos are added to a session with no project: a project works in its own checkout.'
   // A repo is a whole path, and the run's process is handed them one per line.
   if (options.repos !== undefined && !(Array.isArray(options.repos) && options.repos.every(folder => typeof folder === 'string' && isAbsolute(folder) && !folder.includes('\n')))) {
     return 'A repo is named by the path of its folder on this computer.'

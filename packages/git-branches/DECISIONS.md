@@ -69,6 +69,15 @@ already made, and lists it in its pull request; for anything else it proposes an
   gets a clone with none. The folder holds everything: deleting it deletes the session's
   work. Picked over worktrees, which a project's runs use: a session's repo is no project,
   and nothing of the session is left in it.
+- A run in a project has its repos as the same clones, in the same folder of the sessions
+  home, beside its checkout of the project, which is still where it works. Its prompt is
+  followed by where each copy made now is and where it came from: the agent starts in the
+  checkout and would not find them. Before, such a repo was a path in the prompt, and the
+  agent worked in the person's own checkout of it, on the branch that was on. Picked over
+  the copies inside the project's checkout, which git would read as the project's own new
+  files, and over a worktree in the repo, which leaves a folder and a branch in a repo
+  that is not the session's project. The copy holds what is committed in the repo's
+  folder, as with no project.
 - Everything after the worktree is best-effort: a checkout missing any of it is a worse
   run, not a failed one.
 

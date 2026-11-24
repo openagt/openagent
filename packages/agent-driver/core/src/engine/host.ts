@@ -237,7 +237,7 @@ function processOf(card: RunCard | undefined): { pid?: number; host?: string } {
 
 /**
  * Picks that cannot make a run, refused before anything is spent: what a session with no project
- * has no git for, repos for a run in a project, and names that are not names. The run's process
+ * has no git for, and names that are not names. The run's process
  * reads its picks off its command line and its environment: only what reads as the thing it names goes there.
  */
 function refuse(project: ProjectRef | undefined, options: RunOptions): void {
@@ -245,7 +245,6 @@ function refuse(project: ProjectRef | undefined, options: RunOptions): void {
   if (!project && (branches.base !== undefined || branches.branch !== undefined || options.publish !== undefined || options.github?.prBase !== undefined || options.skills?.project !== undefined)) {
     throw new Error('A session with no project has no git: no branch to start from or work on, nothing to publish, and no project skills.')
   }
-  if (project && branches.repos !== undefined) throw new Error('The repos are for a session with no project: a run in a project works in its own checkout.')
   if (branches.branch !== undefined && branches.base !== undefined) throw new Error('A run given a branch to work on starts from no other.')
   if (options.github?.account !== undefined && !/^\S+$/.test(options.github.account)) throw new Error('An account is named by its login.')
   const profile = options.profiles?.profile

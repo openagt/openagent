@@ -88,9 +88,11 @@ function queued(line: PromptLine): Queued {
  * The agent's session in `workspace`, from its start to the end of the last turn this process owes
  * it, its live record kept in `dir`: how the run ended. A signal to stop asks the agent to end its
  * turn where it is; `leg.killed` ends its process tree at once. `asking` is how the run asks the
- * person, when it does.
+ * person, when it does. `context` is what the steps before had to tell the agent
+ * (`RunContext.context`): handed over with the first prompt this process sends, after the text
+ * the run was given to attach.
  */
-export async function sessionTurns(leg: Leg, workspace: string, dir: string, stopped: AbortSignal, env: Readonly<Record<string, string>>, asking?: RunAsking): Promise<RunOutcome> {
+export async function sessionTurns(leg: Leg, workspace: string, dir: string, stopped: AbortSignal, env: Readonly<Record<string, string>>, asking?: RunAsking, context: readonly string[] = []): Promise<RunOutcome> {
   const { id: _id, status: _status, endedAt: _endedAt, ...startCard } = leg.card
   const continued = leg.earlier !== undefined
   const resumeSessionId = leg.earlier?.sessionId
@@ -123,7 +125,7 @@ export async function sessionTurns(leg: Leg, workspace: string, dir: string, sto
     // A continued run whose record names no conversation has none to go on with: it starts afresh.
     let fresh = continued && resumeSessionId === undefined
     // Handed over with the run's own prompt only: the first one this process sends.
-    let attached = leg.attached
+    let attached = [...(leg.attached !== undefined ? [leg.attached] : []), ...context].join('\n\n') || undefined
     while (driverSession) {
       end = { status: 'done' }
       let failure: unknown
@@ -279,5 +281,6 @@ export function earlierWorkLine(id: string, pr: { url: string } | undefined): st
  */
 async function afresh(session: DriverSession, leg: Leg, prompt: string, sent: DriverPromptOptions): Promise<DriverTurn> {
   await session.log?.record({ type: 'notice', message: AFRESH_NOTICE })
-  return session.prompt(prompt, { ...sent, resume: false, attached: earlierWorkLine(leg.id, leg.card.pr) })
+  // What this process had to hand over (the copies made for it now) still goes, after the line on the earlier work.
+  return session.prompt(prompt, { ...sent, resume: false, attached: [earlierWorkLine(leg.id, leg.card.pr), ...(sent.attached !== undefined ? [sent.attached] : [])].join('\n\n') })
 }

@@ -4,8 +4,8 @@ import { checkoutRoot, nodeGitRunner, originUrl, sessionFolder, type GitRunner }
 import { agentBranchName } from './branch-names.js'
 
 /**
- * A repo a session with no project has as context: the folder it was copied from, and the name
- * of its copy in the session's folder.
+ * A repo a session has as context, beside the project it is in or with none: the folder it was
+ * copied from, and the name of its copy in the session's folder.
  */
 export interface SessionRepo {
   name: string
@@ -37,26 +37,39 @@ export async function sessionRepos(folders: readonly string[], git: GitRunner = 
 export const SESSION_FOLDER_STAYS = 'a session folder stays'
 
 /**
- * Where a run with no project works: a folder of its own in the sessions home, made when it is not
- * there yet. The folder itself has no branch and no git: it stays when the run ends, holding what
- * the agent made, and a resumed run goes on in it.
+ * A session's own folder in the sessions home, made when it is not there yet: where a run with no
+ * project works, and where a run in a project keeps the copies of the repos it has as context,
+ * its own work being in its checkout of the project. The folder itself has no branch and no git:
+ * it stays when the run ends, holding what the agent made, and a resumed run goes on in it.
  *
  * Each repo the session has is a copy in it, under its name: a clone of the repo's folder as it is
  * committed, on a new branch `agent-<id>`, its `origin` the repo's own (none when the repo has none,
- * so nothing goes back into the folder it came from). A clone and not a worktree: the repo is no
- * project, and the session leaves nothing in it; deleting the session's folder takes it all. A copy
- * already there is kept as it is, with the agent's work; one that is gone is made again.
+ * so nothing goes back into the folder it came from). A clone and not a worktree: the repo is not
+ * the session's project, and the session leaves nothing in it; deleting the session's folder takes
+ * it all. A copy already there is kept as it is, with the agent's work; one that is gone is made
+ * again. `made` names the copies this call made, for the agent to be told of.
  */
-export async function openSessionFolder(home: string, id: string, repos: readonly SessionRepo[] = [], git: GitRunner = nodeGitRunner()): Promise<{ path: string }> {
+export async function openSessionFolder(home: string, id: string, repos: readonly SessionRepo[] = [], git: GitRunner = nodeGitRunner()): Promise<{ path: string; made: SessionRepo[] }> {
   const path = sessionFolder(home, id)
   await mkdir(path, { recursive: true })
+  const made: SessionRepo[] = []
   for (const repo of repos) {
     const copy = join(path, repo.name)
     if (await stat(copy).then(() => true, () => false)) continue
+    made.push(repo)
     await git(['clone', '--quiet', '--', repo.from, copy], path)
     const origin = await originUrl(repo.from, git)
     await git(origin ? ['remote', 'set-url', 'origin', origin] : ['remote', 'remove', 'origin'], copy)
     await git(['checkout', '--quiet', '-b', agentBranchName(id)], copy)
   }
-  return { path }
+  return { path, made }
+}
+
+/**
+ * What a run in a project is told of the copies just made for it: where each is and where it came
+ * from. A run with no project is told nothing: it starts in the folder that holds them.
+ */
+export function copiesLine(folder: string, id: string, made: readonly SessionRepo[]): string {
+  const copies = made.map(repo => `${join(folder, repo.name)} (copied from ${repo.from})`).join(', ')
+  return `Context: this session has its own ${made.length === 1 ? 'copy of a repo' : 'copies of repos'}, on the branch ${agentBranchName(id)}: ${copies}. Read and change ${made.length === 1 ? 'it' : 'them'} there, not in the folder${made.length === 1 ? '' : 's'} copied from.`
 }

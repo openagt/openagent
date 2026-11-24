@@ -4,7 +4,7 @@ import { defineModule, RunOrder, type ModuleDefinition, type RunContext } from '
 import { agentBranchName } from './branch-names.js'
 import { attachCheckout, createCheckout } from './checkout.js'
 import { reclaimWorktree } from './reclaim.js'
-import { openSessionFolder, SESSION_FOLDER_STAYS } from './session-folder.js'
+import { copiesLine, openSessionFolder, SESSION_FOLDER_STAYS } from './session-folder.js'
 import { worktreeBranch, worktreePath, type AddedWorktree } from './worktree.js'
 
 /**
@@ -39,7 +39,9 @@ export default gitBranchesModule()
  * Where the run works: for a run with no project, a folder of its own in the sessions home, with
  * a copy of each of its repos; else a checkout of the project, the branches package's one
  * sequence, on a fresh branch or on the one the run was given. A continued run goes on in the
- * checkout it kept, or in a new one attached to its branch.
+ * checkout it kept, or in a new one attached to its branch. A run in a project has the copies of
+ * its repos too, in a session's folder beside its checkout, and its prompt says where each one
+ * made now is: the agent starts in the checkout, and would not find them.
  *
  * A run that makes its own branch writes down the commit the branch was made at, kept for its
  * whole life: the run's own work is what came after it, which is how it is still told apart once
@@ -59,14 +61,17 @@ async function makeCheckout(ctx: RunContext, git: GitRunner): Promise<void> {
     const checkout = await keptCheckout(dir, ctx.id, before.branch, options.base, git)
     ctx.workspace = checkout.path
     ctx.facts['git-branches'] = { ...before, branch: checkout.branch, ...(checkout.again ? { again: true, ...(await startCommit(checkout.path, git)) } : {}) }
-    return
+  } else {
+    const checkout =
+      options.branch !== undefined
+        ? await attachCheckout(dir, { agentId: ctx.id, branch: options.branch }, git)
+        : await createCheckout(dir, { agentId: ctx.id, ...(options.base !== undefined ? { base: options.base } : {}) }, git)
+    ctx.workspace = checkout.path
+    ctx.facts['git-branches'] = { branch: checkout.branch, ...(options.branch === undefined ? await startCommit(checkout.path, git) : {}) }
   }
-  const checkout =
-    options.branch !== undefined
-      ? await attachCheckout(dir, { agentId: ctx.id, branch: options.branch }, git)
-      : await createCheckout(dir, { agentId: ctx.id, ...(options.base !== undefined ? { base: options.base } : {}) }, git)
-  ctx.workspace = checkout.path
-  ctx.facts['git-branches'] = { branch: checkout.branch, ...(options.branch === undefined ? await startCommit(checkout.path, git) : {}) }
+  if (options.repos === undefined || options.repos.length === 0) return
+  const copies = await openSessionFolder(sessionsHome(), ctx.id, options.repos, git)
+  if (copies.made.length > 0) ctx.context.push(copiesLine(copies.path, ctx.id, copies.made))
 }
 
 /**

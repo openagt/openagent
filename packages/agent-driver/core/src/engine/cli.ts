@@ -33,10 +33,10 @@ ${helpRows([
   ['--pr-base <branch>', `with --pr-base, the --publish sentence names <branch> as the branch its pull request goes into, instead of origin's default branch`],
   ['--branch <name>', `with --branch, the run works on <name>, a branch that exists, such as a person's pull request's, instead of a fresh one`],
   ['--for <thread>', `with --for, the run's record names what it was started for, a thread's address on the git host, so the next call there finds it`],
-  ['--repos <folders>', `with --repos, in the sessions home, each git repository among <folders>, one per line, is copied into the session's folder (below)`],
+  ['--repos <folders>', `with --repos, each git repository among <folders>, one per line, is copied into the session's folder (below)`],
 ])}
 
-${helpText(`In the sessions home (~/.openagent-sessions, or $XDG_CONFIG_HOME/openagent-sessions) a run has no project: it works in a folder of its own there, <home>/<id>, with no git, kept when it ends; its record is kept with the other sessions' in the personal folder, and --publish, --base, --pr-base and --branch are refused. Each repo given with --repos is a clone in it, <home>/<id>/<repo's folder name>, on a new branch agent-<id>, its origin the repo's own (none when the repo has none); the run's record names them, and a resumed run goes on with the same ones. --repos is refused in a project.`)}
+${helpText(`In the sessions home (~/.openagent-sessions, or $XDG_CONFIG_HOME/openagent-sessions) a run has no project: it works in a folder of its own there, <home>/<id>, with no git, kept when it ends; its record is kept with the other sessions' in the personal folder, and --publish, --base, --pr-base and --branch are refused. Each repo given with --repos is a clone in it, <home>/<id>/<repo's folder name>, on a new branch agent-<id>, its origin the repo's own (none when the repo has none); the run's record names them, and a resumed run goes on with the same ones. A run in a project given --repos has the same folder for the copies alone, its own work being in its checkout of the project, and its prompt is followed by where the copies are.`)}
 
 ${helpText(`A run is on a profile (a name and a saved set of run options, kept with the person in their folder), the one OPENAGENT_PROFILE names, else Default; its options are the run's where the session picked none: at the git host its login, unless OPENAGENT_GIT_ACCOUNT names the pick for that session, on Claude and Codex the accounts it names that this computer has, the plugins it goes without and the project's own skills it names. The record keeps the profile and the login, and a resumed run goes on with them, on the profile as it stands then. An account this computer cannot use at the git host stops the run before it starts, naming it.`)}
 
@@ -131,10 +131,8 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     if (noProject) {
       const gitFlag = (['publish', 'base', 'pr-base', 'branch'] as const).find(flag => values[flag] !== undefined && !(flag === 'publish' && noLevel))
       if (gitFlag !== undefined) throw new UsageError(`--${gitFlag} is for a run in a project: a session with no project has no git`)
-    } else if (values.repos !== undefined) {
-      throw new UsageError('--repos is for a session with no project: a run in a project works in its own checkout')
     }
-    // The repos a session has as context, one folder per line, each copied into the session's folder.
+    // The repos a session has as context, in a project or with none, one folder per line, each copied into the session's folder.
     const folders = (values.repos ?? '').split('\n').map(line => line.trim()).filter(Boolean)
     const repos = folders.length > 0 ? await sessionRepos(folders, git).catch((err: unknown) => {
       const line = errorMessage(err)

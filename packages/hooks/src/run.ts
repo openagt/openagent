@@ -45,13 +45,13 @@ export interface GithubOptions {
   prBase?: string
 }
 
-/** git-branches' slice: where the run's own branch starts, or the branch it works on; and, for a run with no project, the repos it has. */
+/** git-branches' slice: where the run's own branch starts, or the branch it works on; and the repos it has as context. */
 export interface GitBranchesOptions {
   /** A branch of this clone, or origin's copy of one; origin's default branch when absent. */
   base?: string
   /** A branch that exists, worked on in place of a fresh one: a person's pull request's. */
   branch?: string
-  /** For a run with no project: the repos copied into its folder, each under its name there. */
+  /** The repos copied into the session's folder, each under its name there: where a run with no project works, beside the checkout of a run in a project. */
   repos?: { name: string; from: string }[]
 }
 
@@ -147,7 +147,7 @@ export interface RunContext {
   workspace?: string
   /** The skills the run's modules give it (`run.skills`), the plugins it goes without left out: linked where it works at `RunOrder.SKILLS`. */
   readonly skills: readonly RunSkill[]
-  /** Sentences the prompt gets before the agent starts, added by the steps before `RunOrder.RUN`. */
+  /** What the steps before `RunOrder.RUN` tell the agent: handed over with the first prompt the run's process sends, after an empty line each. */
   readonly context: string[]
   /**
    * Variables the run works with, added at `RunOrder.ACCOUNTS`: the account it works as at its git

@@ -65,7 +65,7 @@ export interface Lasting {
   baseCommit?: string
   /** What the run was started for, as whoever started it names it (`run --for`): a thread on the git host, its address, so the next call there finds this run. */
   for?: string
-  /** The repos a session with no project has as context (`run --repos`), each a copy in its folder. */
+  /** The repos a session has as context (`run --repos`), each a copy in its folder. */
   repos?: SessionRepo[]
   /** The profile the run is on, by its id (`OPENAGENT_PROFILE`): each leg runs on its options as it stands then; Default when absent. */
   profile?: string
