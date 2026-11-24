@@ -1,14 +1,14 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { rpcKind, type RpcComputerHost } from '@openagt/hooks/rpc'
-import { memorySettings } from '@openagt/hooks/testing'
+import { computerRpcHost } from '@openagt/hooks/testing'
 import { NOTIFY_COMMAND } from './command.js'
 import { command, saveCommand } from './server.js'
 
 // Settings › Notification command's functions, against settings kept in memory.
 
 function computer(): RpcComputerHost {
-  return { settings: memorySettings() }
+  return computerRpcHost()
 }
 
 test('reading the command only reads; saving it changes it', () => {

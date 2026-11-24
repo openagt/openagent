@@ -22,7 +22,7 @@ export interface UiProject {
   remote?: string
 }
 
-/** What the shell does for an entry's functions, as a view gets it from the shell's `useModuleHost`: the module's own package's commands, run in a project. */
+/** What the shell does for an entry's functions, as a view gets it from the shell's `useModuleHost`: the module's own package's commands, run in a project, and what an action opens or starts. */
 export interface UiHost {
   /** The module's package. */
   readonly package: string
@@ -32,6 +32,10 @@ export interface UiHost {
   act(projectId: string, args: string[], command?: string): Promise<UiCommandResult>
   /** Call one function of the package's server part in the project (`@openagt/hooks/rpc`), its answer read as JSON. */
   call(projectId: string, name: string, input: object): Promise<UiCommandResult>
+  /** Open an entry of Settings over the page, by its id; with `item`, at that page inside it (a project's entry: the project's id). */
+  openSettings(entry: string, item?: string): void
+  /** Start a run in the project with this prompt, with the person's own picks, and land on it: the run's id, or in words why there is none. */
+  startRun(projectId: string, prompt: string): Promise<{ ok: true; agentId: string } | { ok: false; error: string }>
 }
 
 /** What a command or a call answered: its output read as JSON, or in words why there is none. */
@@ -313,6 +317,11 @@ export interface ViewPlaces {
       order?: number
       /** The entry only shows what is (skills' list of a project's own skills): with every project picked, no line says which projects a change is saved to. */
       readOnly?: true
+      /**
+       * The entry is one project's at a time (where its data is kept): with every project picked, it
+       * is drawn for none, and these words ask for one, with a press for each project that has it.
+       */
+      pickProject?: string
     }
     props: UiSettingsProps
   }

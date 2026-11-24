@@ -189,6 +189,30 @@ test('a run goes without the plugins its options name: none of their steps, skil
   assert.deepEqual((await hooks.skills({ project: P2 }, { every: true })).map(skill => skill.name), ['github', 'browser'], "a clean-up asks every module's skills, a plugin that is off too")
 })
 
+test('asked about this computer, a plugin kept per project is asked where it is on in a project, and handed the projects it is on in', async () => {
+  const told: string[][] = []
+  const hooks = hooksOf([
+    {
+      module: defineModule({
+        name: 'tickets',
+        plugin: { scope: 'project' },
+        hooks: {
+          'app.attention': async (_args, app) => {
+            const projects = await app.projects()
+            told.push(projects.map(project => project.id))
+            return [{ kind: 'setup', scope: 'computer', words: 'Populate the tickets' }]
+          },
+        },
+      }),
+    },
+  ])
+  assert.deepEqual(await hooks.attention({}), { items: [], whole: true }, 'on in no project, nothing is asked')
+  await hooks.setEnabled('tickets', true, P2)
+  assert.deepEqual(await hooks.attention({}), { items: [{ kind: 'setup', scope: 'computer', words: 'Populate the tickets', module: 'tickets' }], whole: true })
+  assert.deepEqual(await hooks.attention({ options: { plugins: { without: ['tickets'] } } }), { items: [], whole: true }, 'nor where the options go without it')
+  assert.deepEqual(told, [['p2']])
+})
+
 test('a second skill, coding agent or host of one name is left out and told; a handler that throws is told, and the others are still asked', async () => {
   const errors: HandlerError[] = []
   const hooks = hooksOf(

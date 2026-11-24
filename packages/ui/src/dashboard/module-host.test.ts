@@ -10,6 +10,8 @@ const SETTINGS = memorySettings()
 
 /** A project whose runs' host knows nothing of any run: what a call about none is given. */
 const NO_RUNS: ServerHostDeps = {
+  projects: async () => [{ id: 'p', name: 'p', dir: '/p' }],
+  accounts: { hosts: async () => [], sendAs: async () => ({ ok: false, error: 'no account' }) },
   project: async () => ({ id: 'p', name: 'p', dir: '/p' }),
   find: async () => undefined,
   questions: async () => [],

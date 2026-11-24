@@ -60,8 +60,8 @@ export interface AppRoute {
 /** What a route's path may be: `/_`, then a name of lower-case words joined by dashes. */
 export const ROUTE_PATH = /^\/_[a-z][a-z0-9]*(-[a-z0-9]+)*$/
 
-/** What fixes an item: one of the module's own `ui.action`s, by its id, or a page to open. */
-export type AttentionFix = { label: string; action: string } | { label: string; href: string }
+/** What fixes an item: one of the module's own `ui.action`s, by its id, a page to open, or an entry of Settings to open, by its id (`?settings=<id>`). */
+export type AttentionFix = { label: string; action: string } | { label: string; href: string } | { label: string; settings: string }
 
 /** How a list marks an item at a glance: a question to answer, a pull request to merge, a branch never published, files never committed. */
 export type AttentionMark = 'question' | 'pull-request' | 'branch' | 'changes'
@@ -124,8 +124,12 @@ export interface WaitingRun {
   questions: RunQuestion[]
 }
 
-/** What needs the person, as one module sees it. */
-export type AppAttention = (args: AttentionArgs) => AttentionItem[] | Promise<AttentionItem[]>
+/**
+ * What needs the person, as one module sees it, handed what its life in the app is (`app`): the
+ * projects it is on in among them. Asked with no project, about this computer: a plugin kept per
+ * project is asked then where it is on in one of the projects, and says what it says of them all.
+ */
+export type AppAttention = (args: AttentionArgs, app: AppContext) => AttentionItem[] | Promise<AttentionItem[]>
 
 /** An item, with the module that said it: the one whose `ui.action` its fix names. */
 export interface Attention extends AttentionItem {

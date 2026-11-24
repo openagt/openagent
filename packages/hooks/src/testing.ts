@@ -3,7 +3,9 @@
 // part's function is handed.
 import { StoreOrder } from './order.js'
 import type { InboxLine } from './agent.js'
-import type { RpcHost } from './rpc.js'
+import type { GitAccounts } from './account.js'
+import type { AppContext } from './app.js'
+import type { RpcComputerHost, RpcHost } from './rpc.js'
 import type { RunContext, RunEvent, RunFound, RunHost, RunInput, RunRef, RunRequest, RunStatus, RunSummary } from './run.js'
 import { settingsIn, type Settings } from './settings.js'
 import { chainStore, changesOf, checkPath, isUnder, messageOf, scopeKey, type Scope, type Store, type StoreBackend } from './store.js'
@@ -201,6 +203,26 @@ export function fakeRun(given: Partial<Omit<RunContext, 'store' | 'settings'>> &
   }
 }
 
+/** What a module's life in the app is handed, for its tests: `projects` its projects (none when unsaid), a store and its settings in memory, and a signal never aborted. */
+export function fakeApp(given: Partial<AppContext> = {}): AppContext {
+  const store = given.store ?? chainStore([memoryStore()])
+  return { projects: async () => [], store, settings: settingsIn(store), signal: new AbortController().signal, ...given }
+}
+
+/** OpenAgent's accounts for a test: none at any host, so nothing can be sent. */
+const NO_ACCOUNTS: GitAccounts = {
+  hosts: async () => [],
+  sendAs: async host => ({ ok: false, error: `OpenAgent has no account at ${host}` }),
+}
+
+/**
+ * The host a function of a module of the computer's is handed, for the module's server tests:
+ * settings in memory, no project registered and no account at any git host, unless `given` says otherwise.
+ */
+export function computerRpcHost(given: Partial<RpcComputerHost> = {}): RpcComputerHost {
+  return { settings: memorySettings(), projects: async () => [], accounts: NO_ACCOUNTS, ...given }
+}
+
 /**
  * The host a function of a project's module is handed, for the module's server tests: the project
  * `project` at `/work/project`, settings in memory, and no run, merge or question known, and every
@@ -209,6 +231,8 @@ export function fakeRun(given: Partial<Omit<RunContext, 'store' | 'settings'>> &
 export function rpcHost(given: Partial<RpcHost> = {}): RpcHost {
   return {
     settings: memorySettings(),
+    projects: async () => [{ id: 'project', name: 'project', dir: '/work/project' }],
+    accounts: NO_ACCOUNTS,
     root: '/work/project',
     project: async () => ({ id: 'project', name: 'project', dir: '/work/project' }),
     run: async () => undefined,

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { rpcKind } from '@openagt/hooks/rpc'
-import { memorySettings, rpcHost } from '@openagt/hooks/testing'
+import { computerRpcHost, rpcHost } from '@openagt/hooks/testing'
 import { bridgeQuestions, resetBridgeQuestions } from './bridge-store.js'
 import { answer, bridge, browserAction, cancel, pickBrowser, run, token } from './server.js'
 import { BROWSER } from './settings.js'
@@ -75,7 +75,7 @@ test('Settings › Claude web reads where the bridge stands, the folder the exte
   const was = process.env.XDG_CONFIG_HOME
   process.env.XDG_CONFIG_HOME = config
   try {
-    const host = { settings: memorySettings() }
+    const host = computerRpcHost()
     bridgeQuestions().recordVersion('0.12.0', '0.13.0', true)
     const read = await bridge(host, {})
     assert.equal(read.browser, 'yours')
@@ -95,7 +95,7 @@ test('Settings › Claude web reads where the bridge stands, the folder the exte
 
 test('the browser picked is saved; what is no browser, or no action on it, is refused (#1332)', async () => {
   assert.deepEqual([rpcKind(pickBrowser), rpcKind(browserAction)], ['act', 'act'])
-  const host = { settings: memorySettings() }
+  const host = computerRpcHost()
   await pickBrowser(host, { browser: 'app' })
   assert.equal(await host.settings.get(BROWSER), 'app')
   await assert.rejects(pickBrowser(host, { browser: 'theirs' as 'app' }), { message: 'The browser is OpenAgent’s or yours.' })
