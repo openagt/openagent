@@ -1,3 +1,4 @@
+import { SESSIONS_ID } from '../project-address.js'
 import type { AgentMeta, AgentStatus } from '../store/index.js'
 
 /** One run of a project, as a module sees it: what a page or a card shows of a run, and no more. */
@@ -25,6 +26,11 @@ export interface ModuleAgent {
   model?: string
   /** Its pull request, with how it stands as the git host last said (`merged`: the sidebar's merged run), once read. */
   pr?: { number: number; url: string; state?: AgentMeta['prState'] }
+  /**
+   * The project the run is in, by id, when it is not the one its list was asked of: a session with
+   * no project listed under a project it has a copy of (`projects-under.ts`). Opened as that one's.
+   */
+  in?: string
 }
 
 /**
@@ -53,6 +59,7 @@ export function moduleAgentOf(agent: AgentMeta): ModuleAgent {
     ...(agent.driver ? { driver: agent.driver } : {}),
     ...(agent.model ? { model: agent.model } : {}),
     ...(agent.pr ? { pr: { ...agent.pr, ...(agent.prState ? { state: agent.prState } : {}) } } : {}),
+    ...(agent.under ? { in: SESSIONS_ID } : {}),
   }
 }
 

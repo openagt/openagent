@@ -1,3 +1,4 @@
+import { projectsUnder } from './projects-under.js'
 import type { Attention, Hooks, WaitingRun } from '@openagt/hooks'
 import { readRunEvents, type AgentMeta } from '../store/index.js'
 import { contextRuns, runHostOf } from '../dashboard-rpc/context.js'
@@ -28,6 +29,8 @@ export interface Waiting extends Attention {
   kind: 'waiting'
   projectId: string
   projectName: string
+  /** A session with no project's: the projects it is listed under (`projects-under.ts`), by id, whose "Waiting on you" says it too. */
+  under?: string[]
 }
 
 /** Injectable seam so {@link buildWaiting} is unit-testable off disk. */
@@ -53,7 +56,7 @@ export async function buildWaiting(projects: ProjectSummary[], deps: WaitingDeps
   // Every project at once, and each one's sources at once: what a module reads may be a git host's,
   // and asking them one project after the other kept the list waiting seconds.
   const hooks = await (deps.hooks ?? distributionHooks)()
-  const read = await Promise.all([...projects.map(project => projectWaiting(project, deps, hooks)), ...(sessions !== undefined ? [sessionsWaiting(sessions, deps, hooks)] : [])])
+  const read = await Promise.all([...projects.map(project => projectWaiting(project, deps, hooks)), ...(sessions !== undefined ? [sessionsWaiting(sessions, projects, deps, hooks)] : [])])
   const items = read.flatMap(project => project.items)
   const whole = read.flatMap(project => (project.whole ? [project.id] : []))
   items.sort((a, b) => (b.since ?? '').localeCompare(a.since ?? ''))
@@ -116,11 +119,21 @@ async function projectWaiting(project: ProjectSummary, deps: WaitingDeps, hooks:
  * say of the ones that wait, as a session's question. They are in no project's list, so nothing
  * said they waited: not "Waiting on you", not its count, not a notification.
  */
-async function sessionsWaiting(home: string, deps: WaitingDeps, hooks: Hooks): Promise<{ id: string; items: Waiting[]; whole: boolean }> {
+async function sessionsWaiting(home: string, projects: readonly ProjectSummary[], deps: WaitingDeps, hooks: Hooks): Promise<{ id: string; items: Waiting[]; whole: boolean }> {
   const live = (deps.agents ?? contextRuns)(undefined).catch(() => undefined)
   const sessions = { id: SESSIONS_ID, name: 'the sessions with no project', path: home }
   const modules = await modulesWaiting(undefined, hooks, () => waitingRuns(undefined, live, deps.events ?? hostEvents, sessions.name))
-  return { id: SESSIONS_ID, items: modules.items.map(item => ({ ...item, projectId: SESSIONS_ID, projectName: '' })), whole: modules.whole && (await live) !== undefined }
+  // A session that has a copy of a project waits in that project's list too.
+  const runs = (await live) ?? []
+  const underOf = (run: string | undefined): string[] => projectsUnder(runs.find(agent => agent.id === run), projects).map(project => project.id)
+  return {
+    id: SESSIONS_ID,
+    items: modules.items.map(item => {
+      const under = underOf(item.run)
+      return { ...item, projectId: SESSIONS_ID, projectName: '', ...(under.length > 0 ? { under } : {}) }
+    }),
+    whole: modules.whole && (await live) !== undefined,
+  }
 }
 
 /** What the modules on in the project say waits on the person there, given its runs that wait; asked only of a distribution where one says anything. No project: the sessions that have none. */

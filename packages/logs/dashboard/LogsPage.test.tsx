@@ -406,3 +406,17 @@ test("each project's newest 50 runs are read through the server part; a project 
     ['p2', 'runs', { limit: 50 }],
   ])
 })
+
+test('a session with no project that has a copy of the project is listed with its runs, and opens on its own page, the sessions\'', async () => {
+  const host = hostWith([{ id: 'r1', startedAt: at(now - 2000), endedAt: at(now), status: 'done', title: 'In the project' }], [{ id: 's1', startedAt: at(now - 1000), status: 'done', title: 'Brought it in', in: 'session' }])
+  render(
+    <ModuleHostContext.Provider value={host}>
+      <LogsPage projects={[{ id: 'p1', name: 'alpha', remote: 'github.com/me/project' }]} projectId={null} path={[]} />
+    </ModuleHostContext.Provider>,
+  )
+  const link = await screen.findByRole('link', { name: 'Brought it in' })
+  expect(link.getAttribute('href')).toBe('/session/s1')
+  fireEvent.click(link)
+  expect(host.openAgent.mock.calls).toEqual([['session', 's1']])
+  expect(screen.getByRole('link', { name: 'In the project' }).getAttribute('href')).toBe('/p1/r1')
+})

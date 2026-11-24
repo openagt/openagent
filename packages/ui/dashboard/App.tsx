@@ -267,8 +267,9 @@ export function App() {
 
   const project = projectId ? projects.find(p => p.id === projectId) : undefined
   const projectName = project ? (labels.get(project.id) ?? project.name) : null
-  // What waits on the person as the pages show it: the picked project's items, or every project's.
-  const waiting = useMemo(() => (scope ? waitingRead.items.filter(item => item.projectId === scope) : waitingRead.items), [waitingRead, scope])
+  // What waits on the person as the pages show it: the picked project's items, or every project's. A session with no
+  // project that has a copy of the picked one waits in its list too.
+  const waiting = useMemo(() => (scope ? waitingRead.items.filter(item => item.projectId === scope || item.under?.includes(scope)) : waitingRead.items), [waitingRead, scope])
   // What every part that shows it reads, a module's card among them: one object while the read stands.
   const waitingShown = useMemo(() => ({ items: waiting, state: waitingState, all: waitingRead }), [waiting, waitingState, waitingRead])
   // A URL naming a project that is not registered (renamed, removed, mistyped). Only this load's

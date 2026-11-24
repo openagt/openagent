@@ -1,3 +1,4 @@
+import { withProjectsUnder } from '../dashboard/projects-under.js'
 import { SESSIONS_ID } from '../project-address.js'
 import { stat } from 'node:fs/promises'
 import { moduleAgents, type ModuleAgent, type ModuleAgentsWanted } from '../dashboard/module-agents.js'
@@ -31,9 +32,20 @@ async function withProjects<T>(build: (projects: ProjectSummary[]) => Promise<T>
  * of each marked on it. The sessions with no project are a project of their own here.
  */
 export async function onAgents(projectId: string): Promise<AgentMeta[]> {
+  if (projectId === SESSIONS_ID) return sessionRows()
   const at = await contextProject(projectId)
   const cwd = await resolveProjectPath(projectId)
-  return at && cwd ? runRows(at.project) : []
+  const [own, sessions] = await Promise.all([at && cwd ? runRows(at.project) : [], sessionRows().catch((): AgentMeta[] => [])])
+  // A session with no project that has a copy of this one is listed here too.
+  return [...own, ...sessions.filter(agent => agent.under?.some(project => project.id === projectId))]
+}
+
+/** The sessions with no project, as their list shows them, each with the projects it is listed under. */
+async function sessionRows(): Promise<AgentMeta[]> {
+  const home = await resolveProjectPath(SESSIONS_ID)
+  if (!home) return []
+  const [rows, projects] = await Promise.all([runRows(undefined), contextProjects().list().catch(() => [])])
+  return withProjectsUnder(rows, projects)
 }
 
 /** A project's runs as its list shows them: its hosts' runs, marked with what the modules read of them. */
@@ -122,10 +134,7 @@ async function pooledRuns(limit?: number): Promise<RecentAgent[]> {
       projects,
       {
         agents: project => runRows({ id: project.id, name: project.name, dir: project.path }),
-        sessions: async () => {
-          const home = await resolveProjectPath(SESSIONS_ID)
-          return home ? runRows(undefined) : []
-        },
+        sessions: sessionRows,
       },
       limit,
     ),

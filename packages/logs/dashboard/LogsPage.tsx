@@ -8,6 +8,8 @@ const LIMIT = 50
 /** One run, with the project it was recorded in. */
 export interface RunRow {
   project: UiProject
+  /** The project the run is in, by id, when it is not the row's: a session with no project listed under a project it has a copy of. Opened as that one's. */
+  in?: string
   card: Omit<RunCard, 'caller'> & {
     /** Whose run it is, by the email its record is kept under; a very old card has none. */
     person?: string
@@ -39,7 +41,7 @@ export function withLiveRuns(rows: readonly RunRow[], live: readonly LiveRuns[])
     const own = rows.filter(row => row.project.id === project.id)
     // Only as far back as the project's own page: past it, its records are not read either.
     const from = own.length >= LIMIT ? own.reduce((oldest, row) => (row.card.startedAt < oldest ? row.card.startedAt : oldest), own[0]!.card.startedAt) : ''
-    for (const run of runs) if (!recorded.has(`${project.id}/${run.id}`) && run.startedAt >= from) shown.push({ project, card: { id: run.id, startedAt: run.startedAt, ...cardOf(run) } })
+    for (const run of runs) if (!recorded.has(`${project.id}/${run.id}`) && run.startedAt >= from) shown.push({ project, ...(run.in !== undefined ? { in: run.in } : {}), card: { id: run.id, startedAt: run.startedAt, ...cardOf(run) } })
   }
   return shown.sort((a, b) => b.card.startedAt.localeCompare(a.card.startedAt))
 }
@@ -194,7 +196,7 @@ export function LogsPage({ projects }: UiPageProps) {
   // What waits on the person, every project's, as the shell read it for the sidebar's "Waiting on you": a run there waits here too, in its words.
   // Newest last, so a run that waits on two things is said by its newest.
   const needs = new Map([...useWaiting().all.items].reverse().flatMap(item => (item.scope === 'run' && item.run !== undefined ? [[`${item.projectId}/${item.run}`, item] as const] : [])))
-  const needOf = (row: RunRow): WaitingItem | undefined => needs.get(`${row.project.id}/${row.card.id}`)
+  const needOf = (row: RunRow): WaitingItem | undefined => needs.get(`${row.in ?? row.project.id}/${row.card.id}`)
   const standingOf = (row: RunRow): Standing => runState(row.card, needOf(row))
   const accountOf = usePeople(read.rows.map(({ project, card }) => ({ projectId: project.id, person: card.person })), host.people, 'logs:people')
 
@@ -261,15 +263,15 @@ export function LogsPage({ projects }: UiPageProps) {
               <PanelGroups className="gap-y-8">
                 {days.map(({ day, rows, cost }) => (
                   <PanelGroup key={day} title={day} {...(cost > 0 ? { count: dollars(cost) } : {})}>
-                    {rows.map(row => ({ ...row, standing: standingOf(row), need: needOf(row) })).map(({ project, card, standing, need }) => (
+                    {rows.map(row => ({ ...row, standing: standingOf(row), need: needOf(row) })).map(({ project, in: home, card, standing, need }) => (
                       <PanelRow
                         key={`${project.id}/${card.id}`}
                         state={<RunMark status={standing.state} />}
                         // As every list names a run; a run with none of its names goes by its id. What it was asked, whole, under the pointer.
                         title={runName(card) ?? card.id}
                         titleHint={card.intent?.trim() || undefined}
-                        href={host.agentHref(project.id, card.id)}
-                        onClick={() => host.openAgent(project.id, card.id)}
+                        href={host.agentHref(home ?? project.id, card.id)}
+                        onClick={() => host.openAgent(home ?? project.id, card.id)}
                         meta={[
                           <span className={runLineTone(standing.state)}>{standingSaid(card, standing)}</span>,
                           // On a phone the time stands in the line, so the name has the row's width and the row keeps its two lines.
@@ -317,7 +319,7 @@ export function LogsPage({ projects }: UiPageProps) {
                           ? {}
                           : {
                               actions: (
-                                <Button variant={asks(card) ? 'default' : 'secondary'} size="sm" className="relative" aria-label={`${pressOf(card)}: ${runName(card) ?? card.id}`} onClick={() => host.openAgent(project.id, card.id)}>
+                                <Button variant={asks(card) ? 'default' : 'secondary'} size="sm" className="relative" aria-label={`${pressOf(card)}: ${runName(card) ?? card.id}`} onClick={() => host.openAgent(home ?? project.id, card.id)}>
                                   {pressOf(card)}
                                 </Button>
                               ),
