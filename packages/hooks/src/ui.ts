@@ -272,8 +272,11 @@ export interface ViewPlaces {
     }
     props: UiPaneProps
   }
-  /** A few words in the bar above a run's message box, until the run has ended and its branch was read. */
-  'chat.summary': { entry: { id: string }; props: UiRunProps }
+  /**
+   * A few words in the bar above a run's message box, until the run has ended and its branch was
+   * read; an entry that says `ended` is drawn from then on instead (git-branches': what the branch holds).
+   */
+  'chat.summary': { entry: { id: string; ended?: true }; props: UiRunProps }
   /**
    * Rows of the panel of a session's work above its message box, after the project's own row: one
    * per repo the session holds work in beside its project (git-branches' copies of repos), each

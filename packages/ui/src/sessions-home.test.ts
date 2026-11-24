@@ -37,7 +37,7 @@ test('a Start with no project goes to the host with none, and no level, its home
       assert.equal((await stat(join(sessionsHome(env), '.openagent'))).isDirectory(), true, 'the home is made for it')
       const refused = { ok: false, error: 'A session with no project runs with no branch.' }
       assert.deepEqual(await runtime.onStart('x', { publish: 'pr' }, SESSIONS_ID), { ok: false, error: 'A session with no project and no repo has nothing to publish.' })
-      assert.deepEqual(await runtime.onStart('x', { base: 'main' }, SESSIONS_ID), refused)
+      assert.deepEqual(await runtime.onStart('x', { prBase: 'main' }, SESSIONS_ID), refused)
       assert.equal(host.requests.length, 1)
       // The account picked for the session, or the computer's: the GitHub step works as it with no project too.
       assert.equal((await runtime.onStart('Open an issue', { account: 'octo-agent' }, SESSIONS_ID)).ok, true)

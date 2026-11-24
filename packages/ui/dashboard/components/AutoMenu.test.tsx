@@ -1,16 +1,25 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import type { PublishPick } from '../../src/client.js'
+import { cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
+import type { ReactNode } from 'react'
+import type { UiProject } from '@openagt/hooks/ui'
 import { GearMenu, openSetupLine, setupLine } from '../test-utils.js'
-import { AutoMenu, autoSaid } from './AutoMenu.js'
+import { ModulesContext, mountedOf, type MountedOption } from '../lib/use-modules.js'
+import { AutoMenu, autoSaid, useAutoLevels, type AutoLevel } from './AutoMenu.js'
 
 afterEach(cleanup)
 
-const ALL: PublishPick[] = ['nothing', 'commit', 'branch', 'pr', 'merge']
+/** Every level, as a project with a remote on a git host is offered them: Off, git-branches' two, then the ones that open a pull request. */
+const ALL: AutoLevel[] = [
+  { id: 'nothing', label: 'Off', description: 'Adds nothing to your message. The agent decides, and usually commits.' },
+  { id: 'commit', label: 'Commit', description: 'It commits its work on its branch.' },
+  { id: 'branch', label: 'Publish branch', description: 'It commits and pushes its branch.' },
+  { id: 'pr', label: 'Open PR', description: 'It commits, pushes its branch and opens a pull request.' },
+  { id: 'merge', label: 'Merge on green', description: 'It commits, pushes its branch and opens a pull request set to merge once its checks pass.' },
+]
 
 function renderMenu(over: Partial<Parameters<typeof AutoMenu>[0]> = {}) {
   const onPublish = vi.fn()
-  const view = render(<GearMenu lines={<AutoMenu publish="nothing" picks={ALL} onPublish={onPublish} {...over} />} />)
+  const view = render(<GearMenu lines={<AutoMenu publish="nothing" levels={ALL} onPublish={onPublish} {...over} />} />)
   return { onPublish, ...view }
 }
 
@@ -31,10 +40,10 @@ describe('AutoMenu', () => {
   })
 
   test("the gear's hover says the level in the line's words", () => {
-    expect(autoSaid('nothing')).toBe('Auto off')
-    expect(autoSaid('merge')).toBe('Merge on green')
-    expect(autoSaid('pr', { into: 'login-page' })).toBe('Open PR → login-page')
-    expect(autoSaid('commit', { into: 'login-page' })).toBe('Commit')
+    expect(autoSaid('nothing', ALL)).toBe('Auto off')
+    expect(autoSaid('merge', ALL)).toBe('Merge on green')
+    expect(autoSaid('pr', ALL, { into: 'login-page' })).toBe('Open PR → login-page')
+    expect(autoSaid('commit', ALL, { into: 'login-page' })).toBe('Commit')
   })
 
   test('the line is set apart from the lines above it', async () => {
@@ -59,8 +68,8 @@ describe('AutoMenu', () => {
     expect(screen.getAllByRole('menuitemradio').map(item => item.lastElementChild!.classList.contains('lucide-check'))).toEqual([false, false, false, true, false])
   })
 
-  test('only the offered picks are listed', async () => {
-    renderMenu({ publish: 'commit', picks: ['nothing', 'commit'] })
+  test('only the offered levels are listed', async () => {
+    renderMenu({ publish: 'commit', levels: ALL.slice(0, 2) })
     await openSetupLine('When it finishes')
     expect(screen.getAllByRole('menuitemradio').map(item => item.getAttribute('aria-checked'))).toEqual(['false', 'true'])
   })
@@ -101,5 +110,31 @@ describe('AutoMenu', () => {
     renderMenu({ publish: 'pr', target: { into: 'login-page' } })
     expect((await openSetupLine('When it finishes')).textContent).toBe('When it finishes: Open PR → login-page')
     expect(screen.queryByText('The pull request goes into')).toBeNull()
+  })
+})
+
+describe('useAutoLevels', () => {
+  const option = (id: string, label: string, offered?: (project: UiProject | undefined) => boolean): MountedOption<'composer.auto'> => ({
+    place: 'composer.auto',
+    id,
+    label,
+    sentence: `${label}.`,
+    ...(offered ? { offered } : {}),
+    package: '@me/git',
+    module: 'git',
+    projects: ['p1'],
+  })
+  const levels = (project: UiProject | undefined, gitHost: boolean, projectId = 'p1') => {
+    const modules = mountedOf({ options: { 'composer.auto': [option('commit', 'Commit'), option('branch', 'Publish branch', on => on?.remote !== undefined)] } })
+    const wrapper = ({ children }: { children: ReactNode }) => <ModulesContext.Provider value={modules}>{children}</ModulesContext.Provider>
+    return renderHook(() => useAutoLevels(projectId, project, gitHost), { wrapper }).result.current.map(level => level.id)
+  }
+
+  test("Off, then each module's level where it says it is offered, then the levels that open a pull request where the project has a git host", () => {
+    expect(levels({ id: 'p1', name: 'shop', remote: 'github.com/me/shop' }, true)).toEqual(['nothing', 'commit', 'branch', 'pr', 'merge'])
+    expect(levels({ id: 'p1', name: 'shop', remote: 'example.com/me/shop' }, false)).toEqual(['nothing', 'commit', 'branch'])
+    expect(levels({ id: 'p1', name: 'shop' }, false)).toEqual(['nothing', 'commit'])
+    // A project the module is not on is offered none of its levels.
+    expect(levels(undefined, true, 'p2')).toEqual(['nothing', 'pr', 'merge'])
   })
 })

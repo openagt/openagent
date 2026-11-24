@@ -3,13 +3,12 @@ import { useContext, useEffect, useRef, useState } from 'react'
 import type { GitHostHome, OpenAgentEvent, RepositoryOffer } from '../../src/index.js'
 import { sessionInfo } from '../../src/client.js'
 import { RevealedTitle } from './RevealedTitle.js'
-import { MoreVertical, ChevronDown, FolderOpen, Code, Check, ExternalLink, Square, FolderX, Trash2, Copy, CloudUpload, Database, Info } from 'lucide-react'
+import { MoreVertical, ChevronDown, FolderOpen, Code, Check, ExternalLink, Square, Trash2, Copy, CloudUpload, Database, Info } from 'lucide-react'
 import { onGitHostHome, onRepositoryOffer } from '../rpc/reads.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import { PROJECT_AGENT_DATA_ENTRY } from './ProjectAgentDataSettings.js'
 import {
   sendOpenInApp,
-  sendRemoveWorktree,
   sendDeleteAgent,
   sendCreateRepository,
 } from '../rpc/control.js'
@@ -41,7 +40,7 @@ import {
 //
 // Given an agent, the agent's name is its button: the name with a small ⌄, opening to the session's
 // details, its folder, its editor, the project's page on its git host, its session link, the command
-// that resumes it, and Stop, Remove worktree, Delete.
+// that resumes it, the modules' items (git-branches' Remove worktree), and Stop, Delete.
 //
 // Given none, a ⋮ holds all of the project's: its git host page, its skills, the offer of a
 // repository, where the agents' records go, its folder, its editor. It stands in the same place on
@@ -58,11 +57,9 @@ export function AgentActionsMenu({
   label,
   naming = false,
   retainedWorktree = false,
-  onWorktreeRemoved,
   onDeleted,
   onProjectRemoved,
   details,
-  size,
 }: {
   projectId: string
   agentId?: string | null | undefined
@@ -74,14 +71,11 @@ export function AgentActionsMenu({
   /** The session's name is still coming (a run just started): when it arrives it comes in letter by letter. A name that was only slow to load comes in plain. */
   naming?: boolean
   retainedWorktree?: boolean
-  onWorktreeRemoved?: (() => void) | undefined
   onDeleted?: (() => void) | undefined
   /** Told once the project is off the list; given, the project's menu offers "Remove project". */
   onProjectRemoved?: (() => void) | undefined
   /** The session's details strip under the bar (its coding agent, its spend): the session's menu shows and hides it. */
   details?: { open: boolean; onToggle: () => void } | undefined
-  /** The size on disk of the session's worktree, said beside "Remove worktree". */
-  size?: string | undefined
 }) {
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   // Given an agent, this is its page's menu, under the session's name; with none, the ⋮ of a page with no session.
@@ -138,12 +132,6 @@ export function AgentActionsMenu({
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   const openApp = (target: 'files' | 'editor') => run(() => sendOpenInApp(projectId, target, agentId ?? undefined), 'Failed to open.')
-  const removeWorktree = () => {
-    if (!agentId) return
-    void run(() => sendRemoveWorktree(projectId, agentId), 'Could not remove the worktree.').then(outcome => {
-      if (outcome.ok) onWorktreeRemoved?.()
-    })
-  }
 
   // A name the run was being given comes in letter by letter, as the session's row in the list does.
   // Per session: the next one opened has a name of its own, and was not waited for because this one's was.
@@ -153,8 +141,6 @@ export function AgentActionsMenu({
   const name = label?.trim() || agentId
   // What the button is called: the menu acts on one session, or, with none, on the project.
   const title = session ? 'Session actions' : 'Project actions'
-  // A session with no project keeps its folder, its work: it goes only with the session, by Delete.
-  const removable = retainedWorktree && !live && !!agentId && projectId !== SESSIONS_ID
   const deletable = !!onDeleted && !live && !!agentId
   // The project's page on its git host: the first item of the project's menu, and in a session's
   // menu after what opens the session's own.
@@ -275,8 +261,8 @@ export function AgentActionsMenu({
 
           {offered.items}
 
-          {/* A rule only above something: a menu with nothing to stop, remove or delete ends on its last item. */}
-          {(live || removable || deletable) && <DropdownMenuSeparator />}
+          {/* A rule only above something: a menu with nothing to stop or delete ends on its last item. */}
+          {(live || deletable) && <DropdownMenuSeparator />}
 
           {live && (
             <DropdownMenuItem disabled={stopping || down} onClick={stopSession}>
@@ -284,12 +270,6 @@ export function AgentActionsMenu({
             </DropdownMenuItem>
           )}
 
-          {removable && (
-            <DropdownMenuItem disabled={busy} onClick={() => removeWorktree()}>
-              <FolderX className="h-3.5 w-3.5 shrink-0" /> <span className="flex-1">Remove worktree</span>
-              {size && <span className="ml-auto pl-3 text-xs text-muted-foreground">{size}</span>}
-            </DropdownMenuItem>
-          )}
           {deletable && (
             <DropdownMenuItem onClick={() => setConfirmDelete(true)} className="text-danger">
               <Trash2 className="h-3.5 w-3.5 shrink-0" /> Delete session…

@@ -13,7 +13,7 @@ vi.mock('./ProjectErrorBanner.js', () => ({ ProjectErrorBanner: () => null }))
 vi.mock('./StartAgentForm.js', () => ({ StartAgentForm: () => <div>start form</div> }))
 vi.mock('./WaitingList.js', () => ({ WaitingList: ({ items }: { items: unknown[] }) => <div>{items.length} rows</div>, holdsBack: (items: unknown[]) => items.length > 6 }))
 
-vi.mock('./FolderBehind.js', () => ({ FolderBehindLine: ({ projectId }: { projectId: string }) => <div>folder of {projectId} behind</div> }))
+vi.mock('./Attention.js', () => ({ ProjectItemsLine: ({ projectId }: { projectId: string }) => <div>what {projectId} needs</div> }))
 
 const { ProjectHome } = await import('./ProjectHome.js')
 
@@ -71,17 +71,17 @@ describe('ProjectHome', () => {
     expect(onDocs).not.toHaveBeenCalled()
   })
 
-  test('the line for a folder behind its remote is the project’s, under what waits on you', () => {
+  test('what the project needs is said under what waits on you', () => {
     render(<ProjectHome projectId="p1" waiting={[WAITS]} files={[]} context={new Set()} addContext={() => {}} removeContext={() => {}} toggleContext={() => {}} onOpenAgent={() => {}} projects={[]} onPickProject={() => {}} onProjectAdded={() => {}} />)
-    const line = screen.getByText('folder of p1 behind')
+    const line = screen.getByText('what p1 needs')
     const waiting = screen.getByRole('region', { name: 'Waiting on you' })
     expect(waiting.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(line.parentElement).toBe(waiting.parentElement)
   })
 
-  test('with nothing waiting, the line for a folder behind stands over the box, at the page’s top, not under it', () => {
+  test('with nothing waiting, what the project needs stands over the box, at the page’s top, not under it', () => {
     render(<ProjectHome projectId="p1" waiting={[]} files={[]} context={new Set()} addContext={() => {}} removeContext={() => {}} toggleContext={() => {}} onOpenAgent={() => {}} projects={[]} onPickProject={() => {}} onProjectAdded={() => {}} />)
-    const lines = screen.getAllByText('folder of p1 behind')
+    const lines = screen.getAllByText('what p1 needs')
     expect(lines).toHaveLength(1)
     expect(lines[0]!.compareDocumentPosition(screen.getByText('start form')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(lines[0]!.closest('.max-w-3xl')!.className.split(' ')).toContain('pt-(--home-top)')
@@ -93,7 +93,7 @@ describe('ProjectHome', () => {
     expect(screen.getByRole('region', { name: 'Waiting on you' }).parentElement!.className.split(' ')).toContain('pt-12')
     cleanup()
     page([])
-    expect(screen.getByText('folder of p1 behind').parentElement!.className.split(' ')).toContain('pt-12')
+    expect(screen.getByText('what p1 needs').parentElement!.className.split(' ')).toContain('pt-12')
   })
 
   test('nothing waits: no section, no heading', () => {

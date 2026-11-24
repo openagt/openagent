@@ -2,10 +2,10 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { flushSync } from 'react-dom'
 import { CircleAlert, TriangleAlert } from 'lucide-react'
 import type { RunOptions } from '@openagt/hooks'
-import type { ProjectSummary, StartFromPick } from '../../src/index.js'
-import { onStartBranches, onStartCheck } from '../rpc/projects.js'
-import { usePreferences, usePreferencesLoaded, updatePreferences } from '../lib/preferences.js'
-import { isDriverName, offeredPublishPicks, publishPickIn } from '../../src/client.js'
+import type { ProjectSummary } from '../../src/index.js'
+import { onStartCheck } from '../rpc/projects.js'
+import { usePreferences, updatePreferences } from '../lib/preferences.js'
+import { isDriverName } from '../../src/client.js'
 import { hostTarget, useRunHosts, useSelectedHost } from '../lib/run-hosts.js'
 import type { StartPicks } from '../lib/started-from.js'
 import { startPicks, useStartAgent } from '../lib/use-start-agent.js'
@@ -14,10 +14,9 @@ import { useLoaded } from '../lib/use-async.js'
 
 import { promptWithContext } from '../lib/use-context-set.js'
 import { keepDraft, keepDraftImages, stashPendingDraft } from '../lib/draft-handoff.js'
-import { AutoMenu, autoCovers, autoSaid } from './AutoMenu.js'
+import { AutoMenu, autoCovers, autoPickIn, autoSaid, useAutoLevels } from './AutoMenu.js'
 import { ProjectContextMenu, isRepoPath } from './ContextMenu.js'
 import { Composer, type ComposerHandle } from './Composer.js'
-import { StartFromMenu, prTargetBranch, startFromBase } from './StartFromMenu.js'
 import { ProjectPicker } from './ProjectPicker.js'
 import { ReposMenu, folderName, type PickedRepo } from './SessionRepos.js'
 import { Dots } from './ToolCalls.js'
@@ -49,21 +48,16 @@ const STARTING_SAID_AFTER_MS = 300
 // picked files ride the prompt as one `Context:` line at its end, and the repos go with the Start,
 // which copies them for the session.
 // The row above the box says where the Start goes: the "Run on" pick, which the Composer draws
-// first, then the project's name, then the branch the agent starts from.
-// That branch is a menu: the project's main branch (origin's default branch, fetched fresh), "My
-// local branch", the branch the project's folder is on, as committed on this machine, or another
-// of origin's branches, fetched fresh. The pick is saved per project. It reaches the run as the
-// branch its checkout is made from: the local branch's name, or origin's copy of the branch by its
-// full name; the main branch names none. The pick is drawn only where it is obeyed: the daemon
-// offers it only for a project with a remote whose folder is on a branch.
+// first, then the project's name, then the modules' controls there (`composer.control` at
+// `start`: the branch the agent starts from).
 // Under the box, first, the gear: the session's setup in one menu (SessionSetup.tsx), then the
 // Context picker; the model menu is at the right. The gear's hover says its picks, so nothing is hidden.
 // Its last line, set apart, "When it finishes": what the agent does by itself then (the Auto level).
-// In it, how far the run takes its work: Off, Commit, Publish branch, Open PR, Merge on green.
+// In it, how far the run takes its work: Off, then the levels the modules offer (`composer.auto`),
+// then Open PR and Merge on green where the project has a git host.
 // The level goes with the Start; Off sends none. Until the person
 // picks, the button shows the pick the daemon will start the run at: Commit, which pushes
-// nothing. Saved, so the pick holds for every next run. A project with no git host package
-// is offered Off, Commit and Publish branch only, and one with no remote Off and Commit.
+// nothing. Saved, so the pick holds for every next run.
 // Above it, the git host account this session pushes as. A pick there is for this session alone:
 // it goes with the Start, and the computer's own pick, the Permissions page's, stays. Not saved:
 // the next session starts on the computer's again.
@@ -158,30 +152,12 @@ export function StartAgentForm({
   const gitHost = launcher?.gitHost ?? true
   // A project with no remote can publish nothing: its picks stop at the commit.
   const remote = launcher?.remote ?? true
-  // With no project the level is for the session's copies of repos, whatever host each is on: every pick is offered.
-  const publishPicks = noProject ? offeredPublishPicks(true, true) : offeredPublishPicks(gitHost, remote)
-  const publishPick = noProject ? publishPickIn(preferences.publish, true, true) : publishPickIn(preferences.publish, gitHost, remote)
-  // The branches every project's menu lists, where the pick is offered at all.
-  const startFrom = launcher?.startFrom
-  const startFromPick = preferences.startFrom?.[projectId]
-  const preferencesLoaded = usePreferencesLoaded()
-  // The whole map is written: a save names keys, and this is one key. The main branch is the
-  // absent entry, so picking it takes the project out.
-  const pickStartFrom = (pick: StartFromPick | undefined) => {
-    const { [projectId]: _was, ...others } = preferences.startFrom ?? {}
-    updatePreferences({ startFrom: pick ? { ...others, [projectId]: pick } : others })
-    // The red error may be about the branch just left behind.
-    if (error) reset()
-  }
-
-  // Where the pull request goes: the picked branch unless the person said main, for that branch; a
-  // new pick of the branch to start from starts over. Whether origin has "My local branch" is read
-  // from origin, as the branch menu's list is: this clone's copies keep branches origin deleted.
-  const [mainFor, setMainFor] = useState<string | null>(null)
-  const localOnOrigin = useLoaded<string[] | undefined>(startFrom && startFromPick?.kind === 'local' ? () => onStartBranches(projectId).then(read => read?.branches, () => undefined) : null, undefined, [projectId, startFrom !== undefined, startFromPick?.kind])
-  const prBranch = startFrom ? prTargetBranch(startFromPick, startFrom.main, startFrom.local, localOnOrigin) : undefined
-  const prInto = prBranch !== undefined && mainFor !== prBranch ? prBranch : undefined
-  const prTarget = prBranch !== undefined && startFrom ? { into: prInto ?? startFrom.main, picks: [prBranch, startFrom.main], onPick: (branch: string) => setMainFor(branch === prBranch ? null : prBranch) } : undefined
+  // The project as a place is given it, once the launcher is read: whether it has a remote is what a
+  // module tells its levels by. With no project the level is for the session's copies of repos,
+  // whatever host each is on: every level is offered.
+  const autoProject = !noProject && launcher ? { id: projectId, name: projectName ?? projectId, ...(remote ? { remote: launcher.address ?? 'origin' } : {}) } : undefined
+  const levels = useAutoLevels(projectId, autoProject, noProject || gitHost)
+  const publishPick = autoPickIn(preferences.publish, levels)
 
   // Re-read when the pick changes: `claude` being logged in says nothing about `codex`.
   const driver = preferences.driver
@@ -213,7 +189,7 @@ export function StartAgentForm({
   const publishes = !noProject || ticked.length > 0
   const setupSaid = [
     gitAccount.said,
-    publishes && autoSaid(publishPick, prTarget),
+    publishes && autoSaid(publishPick, levels),
   ]
     .filter(Boolean)
     .join(' · ')
@@ -228,8 +204,6 @@ export function StartAgentForm({
       // A project's Start carries the saved pick alone, and the daemon holds it to what the project is offered; with no
       // project the pick in force goes with the repos it is for, and none with no repo.
       ...(noProject ? (publishes ? { ...unpublished, publish: publishPick } : unpublished) : startPicks(preferences)),
-      ...(startFrom ? startFromBase(startFromPick, startFrom.main, startFrom.local) : {}),
-      ...(prInto !== undefined ? { prBase: prInto } : {}),
       ...(host ? { host: host.id } : {}),
       ...(ticked.length > 0 ? { repos: ticked.map(repo => repo.path) } : {}),
       ...((noProject || remote) && account !== undefined ? { account } : {}),
@@ -240,17 +214,14 @@ export function StartAgentForm({
       // later, so seed an optimistic row with the typed prompt until the real one takes over.
       // A run on a host carries the host's label, so the view can mark where it executes.
       // What this page says goes with it, for the run's page until the run's record says it.
-      const started = startFrom ? (startFromPick?.kind === 'local' ? startFrom.local : startFromPick?.kind === 'published' ? startFromPick.branch : startFrom.main) : undefined
       // The box keeps the words until the move has taken its picture of them; its draft goes with the page.
       void carryBox(() => {
         keepDraft(`launcher:${projectId}`, '')
         keepDraftImages(`launcher:${projectId}`, [])
         onAgentStarted?.(text, result.agentId, host?.label, {
           ...(Object.keys(options).length > 0 ? { options } : {}),
-          ...(started !== undefined ? { branch: started } : {}),
           ...((noProject || remote) && account !== undefined ? { gitAccount: account } : {}),
           ...(publishes ? { publish: publishPick } : {}),
-          ...(prInto !== undefined ? { prBase: prInto } : {}),
           ...(preferences.driver ? { driver: preferences.driver } : {}),
           ...(preferences.model ? { model: preferences.model } : {}),
           ...(preferences.effort ? { effort: preferences.effort } : {}),
@@ -283,17 +254,11 @@ export function StartAgentForm({
         files={files}
         addContext={addContext}
         removeContext={removeContext}
-        // Where the agent starts, above the box after the "Run on" pick: the project, then the branch
-        // it starts from. No project word until the name is known, never a wrong one: the row's
-        // height is fixed, so the name landing moves nothing. The branch is the row's last, so
-        // nothing beside it is pushed when it lands or its words change; it waits for the name,
-        // which would otherwise land before it and push it, and for the saved pick, which would
-        // otherwise flip its words.
+        // Where the agent starts, above the box after the "Run on" pick: the project, then the
+        // modules' controls there. No project word until the name is known, never a wrong one: the
+        // row's height is fixed, so the name landing moves nothing.
         startsAt={
-          <>
-            <ProjectPicker look="row" none={{ label: 'No project', tip: 'The session works in a folder of its own' }} picked={noProject ? null : projectId} pickedName={projectName} projects={projects} busy={busy} onPick={id => pickProject(id ?? SESSIONS_ID)} onProjectAdded={onProjectAdded} />
-            {!noProject && projectName && startFrom && preferencesLoaded && <StartFromMenu projectId={projectId} main={startFrom.main} local={startFrom.local} pick={startFromPick} onPick={pickStartFrom} busy={busy} />}
-          </>
+          <ProjectPicker look="row" none={{ label: 'No project', tip: 'The session works in a folder of its own' }} picked={noProject ? null : projectId} pickedName={projectName} projects={projects} busy={busy} onPick={id => pickProject(id ?? SESSIONS_ID)} onProjectAdded={onProjectAdded} />
         }
         controlBox={{ in: 'launcher', projectId, options, onChange: setOptions, busy, pickProject: id => pickProject(id ?? SESSIONS_ID) }}
         // The gear's lines (his order), after the modules': who it pushes as, the project's git host
@@ -304,7 +269,7 @@ export function StartAgentForm({
           lines: (
             <>
               {gitAccount.line}
-              {publishes && <AutoMenu publish={publishPick} picks={publishPicks} onPublish={pick => updatePreferences({ publish: pick })} target={prTarget} covers={autoCovers(noProject ? null : projectName, ticked.length)} />}
+              {publishes && <AutoMenu publish={publishPick} levels={levels} onPublish={pick => updatePreferences({ publish: pick })} covers={autoCovers(noProject ? null : projectName, ticked.length)} />}
             </>
           ),
         }}

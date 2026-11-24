@@ -1,5 +1,5 @@
 import { nodeGitRunner, originDefaultBranch, type GitRunner } from '@openagt/agent-data'
-import { currentBranch } from './git-status.js'
+import { currentBranch } from './worktree.js'
 
 // A project's folder behind its remote (#2421). An agent's checkout starts from the remote's main
 // branch, fetched first, but the folder itself is updated by nothing: after pull requests merge it

@@ -6,9 +6,6 @@ import type { PublishPick } from '../publish-levels.js'
 // Preview RPCs speak. They live here, on neither the HTTP server nor the RPC mount, so both —
 // plus the RPCs themselves — depend on this leaf rather than on each other.
 
-/** The outcome of removing a retained worktree (#737). */
-export type RemoveWorktreeResult = { ok: true } | { ok: false; error: string }
-
 /** The outcome of deleting a session — its records and worktree (#1032). */
 export type DeleteAgentResult = { ok: true } | { ok: false; error: string }
 
@@ -71,14 +68,6 @@ export interface StartAgentOptions {
   driver?: string
   /** The person's saved pick of how far the run takes its work when the agent finishes. Absent, none is saved: the daemon starts the run at `commit`. A saved pick the project is not offered is held to the furthest the project goes with no pull request. */
   publish?: PublishPick
-  /**
-   * What the agent's own branch starts from, from the launcher's branch menu. A branch's name: that
-   * branch as this computer has it, commits that are not pushed included ("My local branch"). A
-   * `publishedBase`: that branch as origin has it, fetched at the Start; one origin no longer has,
-   * or an origin that cannot be read, refuses the Start. Absent, origin's default branch. A word
-   * that is no branch name refuses the Start.
-   */
-  base?: string
   /**
    * The branch the run's pull request goes into, from the launcher's Auto menu, kept on the run's
    * record for its agent and the Open PR press. Absent, the repository's default branch. A word

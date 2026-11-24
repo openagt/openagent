@@ -4,7 +4,7 @@ import { stat } from 'node:fs/promises'
 import { hasImage, isImageName, type ReadyNaming } from '@openagt/agent-driver'
 import { IMAGES_PER_MESSAGE } from './images.js'
 import { isDriverName } from './driver-names.js'
-import { MODULE_NAME, type Hooks, type ProjectRef, type RunHost, type RunOptions, type RunRequest } from '@openagt/hooks'
+import { MODULE_NAME, isBranchName, type Hooks, type ProjectRef, type RunHost, type RunOptions, type RunRequest } from '@openagt/hooks'
 import { sessionRepos } from '@openagt/git-branches'
 import { nameStarted } from './started-names.js'
 import { findCheckout, isPidAlive, projectBranches, readLiveMetas } from './store/index.js'
@@ -14,12 +14,9 @@ import { ownRunsWatch } from './dashboard/runs-watch.js'
 import { screenInDiary } from './dashboard/screen.js'
 import { addProject, listProjects, readPreferences, removeProject } from './registry.js'
 import { errorMessage, fileBranchRepo, installProject, projectKey, sessionsHome, writeSharing, projectId } from '@openagt/agent-data'
-import { publishedBranch } from '@openagt/agent-data/names'
-import { branchesOnOrigin } from './dashboard/start-branch.js'
 import { removeProjectFiles } from './remove-files.js'
 import { projectRefAt } from './distribution-hooks.js'
 import { isPublishPick, publishLevelOf, publishPickIn } from './publish-levels.js'
-import { isBranchName } from './branch-name.js'
 import { hasRemote } from './has-remote.js'
 import { projectGitHost } from './store/git-host.js'
 import { providedDataChanged } from './store/provided.js'
@@ -54,7 +51,7 @@ function refusedPicks(options: StartAgentOptions, noProject: boolean): string | 
   if (options.options !== undefined && !isRunOptions(options.options)) return 'The run options are one object per module.'
   // A session with no project: with no branch; the repos it has are copied into its folder, and are
   // what it publishes. Its git host account goes with it: it may reach the host all the same.
-  if (noProject && (options.base !== undefined || options.prBase !== undefined)) return 'A session with no project runs with no branch.'
+  if (noProject && options.prBase !== undefined) return 'A session with no project runs with no branch.'
   if (noProject && options.publish !== undefined && !(Array.isArray(options.repos) && options.repos.length > 0)) return 'A session with no project and no repo has nothing to publish.'
   if (options.images !== undefined && !(Array.isArray(options.images) && options.images.length <= IMAGES_PER_MESSAGE && options.images.every(isImageName))) return 'Images are named by the names the dashboard kept them under.'
   // Another host runs a project's run, on a machine of its own.
@@ -131,18 +128,8 @@ export function createProjectRuntime({ cwd, env, naming, host, otherHosts = asyn
     if (refused !== undefined) return { ok: false, error: refused }
     const projectCwd = noProject ? await readySessionsHome(sessionsHome(env)) : await resolveProject(targetProjectId)
     if (!projectCwd) return { ok: false, error: `unknown project: ${targetProjectId}` }
-    // The branch to start from ends up on the run's command line: only a branch name goes there.
-    // Refused, not dropped: a run started from the main branch instead would be a silent swap.
-    if (options.base !== undefined && !isBranchName(options.base)) return { ok: false, error: `not a branch name: ${String(options.base)}` }
+    // The branch a pull request goes into ends up on the run's command line: only a branch name goes there.
     if (options.prBase !== undefined && !isBranchName(options.prBase)) return { ok: false, error: `not a branch name: ${String(options.prBase)}` }
-    // A branch picked off origin's list may have gone since. Asked of origin here, so the person is
-    // told above the box, rather than by a run that fails to make its checkout.
-    const published = options.base !== undefined ? publishedBranch(options.base) : undefined
-    if (published !== undefined) {
-      const onOrigin = await branchesOnOrigin(projectCwd)
-      if (!onOrigin) return { ok: false, error: `Could not read the branch ${published} from origin. Check the connection, or pick another branch to start from.` }
-      if (!onOrigin.includes(published)) return { ok: false, error: `The branch ${published} is no longer on origin. Pick another branch to start from.` }
-    }
     // The pick in force is decided here, so every Start goes the same way whichever page sent it:
     // with none saved the run commits and pushes nothing, and with one the project is not offered
     // it goes as far as the project does with no pull request: its branch pushed, or its work
@@ -351,7 +338,7 @@ function flatOptionsOf(options: StartAgentOptions, publish: RunOptions['publish'
     ...(options.model !== undefined ? { model: options.model } : {}),
     ...(options.effort !== undefined ? { effort: options.effort } : {}),
   }
-  const branches = { ...(options.base !== undefined ? { base: options.base } : {}), ...(repos !== undefined && repos.length > 0 ? { repos } : {}) }
+  const branches = repos !== undefined && repos.length > 0 ? { repos } : {}
   const github = { ...(options.prBase !== undefined ? { prBase: options.prBase } : {}), ...(options.account !== undefined ? { account: options.account } : {}) }
   return {
     ...(Object.keys(agentDriver).length > 0 ? { 'agent-driver': agentDriver } : {}),

@@ -3,7 +3,7 @@
 // the client can import these at runtime without dragging the server barrel (sandbox,
 // node:fs/http, …) into the browser bundle. Types come from the root entry.
 export { DRIVERS, DRIVER_LABELS, isDriverName, driverFromImpl, type DriverName } from './driver-names.js'
-export { PUBLISH_LABELS, isPublishPick, offeredPublishPicks, publishPickIn, type PublishPick } from './publish-levels.js'
+export { isPublishPick, pickIn, type PublishPick } from './publish-levels.js'
 export { formatOpenAgentEvent } from './terminal.js'
 export { ACCENTS, DEFAULT_ACCENT_LABELS, accentOf, CODE_FONTS, DOCUMENT_FONTS, FONTS, fontFace, PALETTES, PALETTE_LABELS, type Accent, type CodeFont, type DocumentFont, type Font, type Palette } from './appearance.js'
 // What every list calls a run, so the same run never goes by two names.

@@ -16,7 +16,7 @@
 export type { AgentError, SessionInfo } from './agent-view.js'
 export type { ChoiceRequest, OpenAgentEvent } from './events.js'
 export type { QuotaBoundary } from './quota-boundary.js'
-export type { Preferences, StartFromPick } from './registry.js'
+export type { Preferences } from './registry.js'
 export type { PublishPick } from './publish-levels.js'
 export type { DriverQuotaWindow } from '@openagt/hooks'
 export type { AgentDoing, AgentMeta, AgentStatus } from './store/agent-store.js'

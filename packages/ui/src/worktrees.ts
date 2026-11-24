@@ -15,19 +15,6 @@ export interface WorktreeRow {
   live: boolean
 }
 
-/** The outcome of {@link removeProjectWorktree}. */
-export type RemoveResult =
-  | {
-      ok: true
-      /**
-       * Branches that went with the checkout: the branch it was on, when that held nothing of
-       * its own (#1650); the run-id branch the agent branched away from, when everything on
-       * it is in the branch that stays (#1657). Absent when nothing went.
-       */
-      branchesDeleted?: string[]
-    }
-  | { ok: false; error: string }
-
 /**
  * The worktrees a project still has on disk (#752), newest first — the same view the dashboard's
  * retained-worktrees list is built from, through the same store reads, so the CLI is a second
@@ -62,36 +49,6 @@ export async function listProjectWorktrees(cwd: string, opts: { sizes?: boolean 
   return rows.sort((a, b) => (a.agentId < b.agentId ? 1 : a.agentId > b.agentId ? -1 : 0))
 }
 
-/**
- * Remove one retained worktree (#752/#737/E5): the one implementation behind every surface that
- * removes one: the dashboard's Remove button (#982). The run's own tool reclaims a finished run's
- * checkout by the same rule; this is for the checkouts that rule kept.
- *
- * **One rule: only what is committed may go**: the rule is the branches provider's, whose
- * `remove` takes a clean checkout and leaves its branch on this machine, pushing nothing
- * (#1774); its refusal is answered in its own words.
- *
- * Refuses while the agent is still going — an agent's checkout is where its agent is working, and Stop
- * is how you end an agent, not pulling the floor out from under it.
- */
-export async function removeProjectWorktree(cwd: string, agentId: string, branches: BranchesFor = projectBranches): Promise<RemoveResult> {
-  if (!isRunId(agentId)) return { ok: false, error: `invalid session id: ${agentId}` }
-  const live = await readLiveMetas(cwd, undefined, branches).catch(() => [])
-  const agent = live.find(agent => agent.id === agentId)
-  if (agent?.status === 'running') {
-    return { ok: false, error: 'that session is still going; stop it before removing its worktree' }
-  }
-  const source = await branches(cwd).catch(() => undefined)
-  if (!source) return { ok: false, error: 'no package of this project provides its checkouts' }
-  try {
-    // The commit the run's branch started from, when its card names one: a branch with no commit
-    // past it goes with the checkout, and one with its own work stays.
-    return await source.remove(agentId, agent?.baseCommit !== undefined ? { from: agent.baseCommit } : {})
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) }
-  }
-}
-
 /** The outcome of {@link deleteProjectAgent}. */
 export type DeleteAgentResult = { ok: true } | { ok: false; error: string }
 
@@ -106,7 +63,7 @@ export interface DeleteAgentOptions {
 /**
  * Delete a session (#1032): take it out of the dashboard, records and all.
  *
- * This is the sibling of {@link removeProjectWorktree}, and the difference is the whole point.
+ * This is the sibling of git-branches' Remove worktree, and the difference is the whole point.
  * Remove-worktree reclaims the checkout on disk and keeps the session — its row, its replayable
  * log — because the run is recorded on the data branch. Delete removes that record too: the card
  * (`<id>.json`, what the rail lists) and the diary (`<id>.jsonl`, what replays), so the row is

@@ -9,7 +9,6 @@ const onRepositoryOffer = vi.fn(async () => null as { repository: string; name: 
 const sendCreateRepository = vi.fn(async () => ({ ok: true, url: 'https://github.com/me/shop' }) as unknown)
 const sendOpenInApp = vi.fn(async () => ({ ok: true as const }))
 const sendStop = vi.fn(async (): Promise<{ ok: true } | { ok: false; error: string }> => ({ ok: true }))
-const sendRemoveWorktree = vi.fn(async () => ({ ok: true as const }))
 const sendDeleteAgent = vi.fn(async () => ({ ok: true as const }))
 const sendRemoveProject = vi.fn(async (_projectId: string, _files: boolean) => ({ ok: true }) as unknown)
 vi.mock('../rpc/reads.js', () => ({ onGitHostHome, onRepositoryOffer }))
@@ -22,7 +21,6 @@ vi.mock('../lib/host-services.js', async importOriginal => {
 vi.mock('../rpc/control.js', () => ({
   sendOpenInApp,
   sendStop,
-  sendRemoveWorktree,
   sendDeleteAgent,
   sendCreateRepository,
 }))
@@ -467,12 +465,6 @@ describe('the menu of an agent\'s page', () => {
     openMenu()
     await waitFor(() => expect(screen.getByText('Open project folder')).toBeTruthy())
     expect(screen.queryByText(/details/)).toBeNull()
-  })
-
-  test('"Remove worktree" says the worktree\'s size on disk beside it', async () => {
-    render(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} label="x" retainedWorktree size="1.2 MB" />)
-    openMenu()
-    expect((await screen.findByText('Remove worktree')).closest('[role=menuitem]')!.textContent!.trim()).toBe('Remove worktree1.2 MB')
   })
 })
 

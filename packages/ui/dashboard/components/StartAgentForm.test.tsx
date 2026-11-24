@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render as renderPage, screen, waitFor, within } from '@testing-library/react'
+import type { ReactElement } from 'react'
 import { forgetRemembered } from '../lib/use-async.js'
 import { MARKDOWN_RENDER, openMenu } from '../test-utils.js'
-import { ModulesContext, mountedOf } from '../lib/use-modules.js'
+import { ModulesContext, mountedOf, type MountedOption } from '../lib/use-modules.js'
 import { keepDraft, keepDraftImages, keptDraft, keptDraftImages, takePendingDraft } from '../lib/draft-handoff.js'
 import { resetRunHostsForTest, selectHost } from '../lib/run-hosts.js'
 
@@ -12,11 +13,10 @@ const onCommands = vi.hoisted(() => vi.fn())
 const onStartCheck = vi.hoisted(() => vi.fn())
 
 const onProjects = vi.hoisted(() => vi.fn(async () => [] as unknown[]))
-const onStartBranches = vi.hoisted(() => vi.fn(async () => ({ branches: ['feature-x'] }) as { branches?: string[] }))
 const onRepos = vi.hoisted(() => vi.fn(async () => ({ repos: [] as { path: string; name: string; url?: string }[], canAddFolder: false })))
 // The hosts beside this computer the project's modules bring: none unless a test says.
 const onRunHosts = vi.hoisted(() => vi.fn(async () => [] as { id: string; label: string }[]))
-vi.mock('../rpc/projects.js', () => ({ onCommands, onStartBranches, onStartCheck, onProjects, onRepos, onRunHosts, sendAddRepoFolder: vi.fn() }))
+vi.mock('../rpc/projects.js', () => ({ onCommands, onStartCheck, onProjects, onRepos, onRunHosts, sendAddRepoFolder: vi.fn() }))
 
 // Mutable so a test can pick the coding agent and the model; reset after each.
 const prefs = vi.hoisted(() => ({ current: {} as Record<string, unknown> }))
@@ -151,11 +151,25 @@ const autoMenu = () => {
 const gearSaid = (): string => screen.getByTestId('said').textContent ?? ''
 /** The labels of the publish options the open "When it finishes" list has. */
 const publishOptions = () => screen.getAllByRole('menuitemradio').map(item => item.querySelector('span > span')!.textContent)
-/** The launcher's "start from" chip, when there is one. */
-const LOCAL = { kind: 'local' } as const
-const startFromChip = () => screen.queryByRole('combobox', { name: 'The agent starts from' })
-/** A project with a remote, whose folder is on `my/work`. */
-const WITH_BRANCHES = { commands: [], gitHost: true, remote: true, address: 'github.com/acme/shop', startFrom: { main: 'main', local: 'my/work' } }
+/** A project with a remote on GitHub. */
+const WITH_BRANCHES = { commands: [], gitHost: true, remote: true, address: 'github.com/acme/shop' }
+
+/** git-branches' levels of the "When it finishes" menu (`composer.auto`), Publish branch offered where the project has a remote. */
+const level = (id: string, label: string, description: string, offered?: (project: { remote?: string } | undefined) => boolean): MountedOption<'composer.auto'> => ({
+  place: 'composer.auto',
+  id,
+  label,
+  description,
+  sentence: `${label}.`,
+  ...(offered ? { offered } : {}),
+  package: '@openagt/git-branches',
+  module: 'git-branches',
+  projects: ['p1'],
+  sessions: true,
+})
+const AUTO = mountedOf({ options: { 'composer.auto': [level('commit', 'Commit', 'It commits its work on its branch.'), level('branch', 'Publish branch', 'It commits and pushes its branch.', project => project === undefined || project.remote !== undefined)] } })
+/** The form, with the levels git-branches brings mounted. */
+const render = (page: ReactElement) => renderPage(page, { wrapper: ({ children }) => <ModulesContext.Provider value={AUTO}>{children}</ModulesContext.Provider> })
 const props = { projectId: 'p1', files: [], context: new Set<string>(), addContext: noop, removeContext: noop, toggleContext: noop, projects: [], onPickProject: noop, onProjectAdded: noop }
 
 describe('StartAgentForm (#1774)', () => {
@@ -310,17 +324,12 @@ describe('StartAgentForm (#1774)', () => {
     expect(within(screen.getByTestId('controls')).getAllByRole('combobox').map(button => button.textContent)).toEqual(['Context'])
   })
 
-  test("the gear's hover says its picks with the menu shut: the account, the level and where its pull request goes", async () => {
+  test("the gear's hover says its picks with the menu shut: the account and the level", async () => {
     onCommands.mockResolvedValue(WITH_BRANCHES)
     runsAccount.login = 'octo'
     prefs.current = { publish: 'merge' }
     render(<StartAgentForm {...props} projectName="gemstack" />)
     await waitFor(() => expect(gearSaid()).toBe('@octo · Merge on green'))
-    cleanup()
-    // A branch picked to start from is where the pull request goes.
-    prefs.current = { publish: 'pr', startFrom: { p1: { kind: 'published', branch: 'feature-x' } } }
-    render(<StartAgentForm {...props} projectName="gemstack" />)
-    await waitFor(() => expect(gearSaid()).toBe('@octo · Open PR → feature-x'))
   })
 
   test("a host with no account logged in: the gear is in the warning's colour, and its hover says so; with an account, or no remote, it is not", async () => {
@@ -439,72 +448,17 @@ describe('StartAgentForm (#1774)', () => {
     await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', { publish: 'merge' }))
   })
 
-  describe('where the pull request goes', () => {
-    const FEATURE = { kind: 'published', branch: 'feature-x' } as const
-    const sent = async () => {
-      start.mockResolvedValue({ agentId: 'r1' })
-      fireEvent.click(screen.getByText('submit-typed'))
-      await waitFor(() => expect(start).toHaveBeenCalled())
-      return start.mock.lastCall![2] as { prBase?: string; base?: string }
-    }
-
-    test('a picked branch on origin at Open PR: the line names it, it goes with the Start, and picking main sends none and reads so', async () => {
-      onCommands.mockResolvedValue(WITH_BRANCHES)
-      prefs.current = { publish: 'pr', startFrom: { p1: FEATURE } }
-      render(<StartAgentForm {...props} projectName="gemstack" />)
-      await waitFor(() => expect(autoMenu().textContent).toBe('When it finishes: Open PR → feature-x'))
-      expect((await sent()).prBase).toBe('feature-x')
-      start.mockClear()
-      await openMenu(autoMenu())
-      fireEvent.click(screen.getByRole('menuitemradio', { name: 'main' }))
-      await waitFor(() => expect(autoMenu().textContent).toBe('When it finishes: Open PR → main'))
-      expect((await sent()).prBase).toBeUndefined()
-    })
-
-    test('the main branch picked to start from: no target', async () => {
-      onCommands.mockResolvedValue(WITH_BRANCHES)
-      prefs.current = { publish: 'merge' }
-      render(<StartAgentForm {...props} projectName="gemstack" />)
-      await waitFor(() => expect(startFromChip()).not.toBeNull())
-      expect(autoMenu().textContent).toBe('When it finishes: Merge on green')
-    })
-
-    test('My local branch: a target once origin is read to have it; not on origin, none and the pull request goes to main', async () => {
-      onCommands.mockResolvedValue(WITH_BRANCHES)
-      onStartBranches.mockResolvedValueOnce({ branches: ['my/work'] })
-      prefs.current = { publish: 'pr', startFrom: { p1: LOCAL } }
-      render(<StartAgentForm {...props} projectName="gemstack" />)
-      await waitFor(() => expect(autoMenu().textContent).toBe('When it finishes: Open PR → my/work'))
-      cleanup()
-      onStartBranches.mockResolvedValueOnce({ branches: ['feature-x'] })
-      render(<StartAgentForm {...props} projectName="gemstack" />)
-      await waitFor(() => expect(onStartBranches).toHaveBeenCalledTimes(2))
-      await waitFor(() => expect(startFromChip()).not.toBeNull())
-      expect(autoMenu().textContent).toBe('When it finishes: Open PR')
-      expect((await sent()).prBase).toBeUndefined()
-    })
-
-    test('at Commit the section is not offered, and the branch still goes with the Start, for a later Open PR', async () => {
-      onCommands.mockResolvedValue(WITH_BRANCHES)
-      prefs.current = { publish: 'commit', startFrom: { p1: FEATURE } }
-      render(<StartAgentForm {...props} projectName="gemstack" />)
-      await waitFor(() => expect(startFromChip()).not.toBeNull())
-      expect(autoMenu().textContent).toBe('When it finishes: Commit')
-      expect((await sent()).prBase).toBe('feature-x')
-    })
-  })
-
-  test('what this page says goes with the Start, for the run\'s page until its record says it: the branch, the account, the level, the target, the model', async () => {
+  test('what this page says goes with the Start, for the run\'s page until its record says it: the account, the level, the model', async () => {
     onCommands.mockResolvedValue(WITH_BRANCHES)
     runsAccount.login = 'octo'
-    prefs.current = { publish: 'pr', driver: 'codex', model: 'gpt-5', effort: 'high', startFrom: { p1: { kind: 'published', branch: 'feature-x' } } }
+    prefs.current = { publish: 'pr', driver: 'codex', model: 'gpt-5', effort: 'high' }
     start.mockResolvedValue({ agentId: 'r1' })
     const onAgentStarted = vi.fn()
     render(<StartAgentForm {...props} projectName="gemstack" onAgentStarted={onAgentStarted} />)
-    await waitFor(() => expect(autoMenu().textContent).toBe('When it finishes: Open PR → feature-x'))
+    await waitFor(() => expect(autoMenu().textContent).toBe('When it finishes: Open PR'))
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(onAgentStarted).toHaveBeenCalled())
-    expect(onAgentStarted.mock.lastCall![3]).toEqual({ branch: 'feature-x', gitAccount: 'octo', publish: 'pr', prBase: 'feature-x', driver: 'codex', model: 'gpt-5', effort: 'high' })
+    expect(onAgentStarted.mock.lastCall![3]).toEqual({ gitAccount: 'octo', publish: 'pr', driver: 'codex', model: 'gpt-5', effort: 'high' })
     expect((start.mock.lastCall![2] as { account?: string }).account).toBe('octo')
     runsAccount.login = undefined
   })
@@ -716,59 +670,6 @@ describe('StartAgentForm (#1774)', () => {
     expect(start.mock.calls[0]![2]).not.toHaveProperty('repos')
   })
 
-  test('the "start from" chip is after the project\'s chip and reads the main branch until the person picks; then the Start names no branch', async () => {
-    onCommands.mockResolvedValue(WITH_BRANCHES)
-    start.mockResolvedValue({ agentId: 'r1' })
-    render(<StartAgentForm {...props} projectName="gemstack" />)
-    await waitFor(() => expect(startFromChip()).not.toBeNull())
-    expect(startsAt()).toBe('gemstackmain')
-    fireEvent.click(screen.getByText('submit-typed'))
-    await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', {}))
-  })
-
-  test('the local pick is saved for this project alone, shown on the chip, and the Start names the local branch; the main pick takes the project out again', async () => {
-    onCommands.mockResolvedValue(WITH_BRANCHES)
-    start.mockResolvedValue({ agentId: 'r1' })
-    prefs.current = { startFrom: { other: LOCAL } }
-    render(<StartAgentForm {...props} projectName="gemstack" />)
-    await waitFor(() => expect(startFromChip()).not.toBeNull())
-    // Another project's pick is not this one's.
-    expect(startFromChip()!.textContent).toBe('main')
-    await openMenu(startFromChip()!)
-    fireEvent.click(screen.getByRole('option', { name: /^My local branch my\/work/ }))
-    expect(updatePreferences).toHaveBeenCalledWith({ startFrom: { other: LOCAL, p1: LOCAL } })
-
-    cleanup()
-    updatePreferences.mockClear()
-    prefs.current = { startFrom: { other: LOCAL, p1: LOCAL } }
-    render(<StartAgentForm {...props} projectName="gemstack" />)
-    await waitFor(() => expect(startFromChip()).not.toBeNull())
-    expect(startFromChip()!.textContent).toBe('my/work (local)')
-    fireEvent.click(screen.getByText('submit-typed'))
-    await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', { base: 'my/work' }))
-    await openMenu(startFromChip()!)
-    fireEvent.click(screen.getByRole('option', { name: /^main/ }))
-    expect(updatePreferences).toHaveBeenCalledWith({ startFrom: { other: LOCAL } })
-  })
-
-  test("a published pick is saved for this project, read on the chip by its name, and the Start names origin's copy of it, and the branch as where its pull request goes", async () => {
-    onCommands.mockResolvedValue(WITH_BRANCHES)
-    start.mockResolvedValue({ agentId: 'r1' })
-    render(<StartAgentForm {...props} projectName="gemstack" />)
-    await waitFor(() => expect(startFromChip()).not.toBeNull())
-    await openMenu(startFromChip()!)
-    fireEvent.click(await screen.findByRole('option', { name: 'feature-x' }))
-    expect(updatePreferences).toHaveBeenCalledWith({ startFrom: { p1: { kind: 'published', branch: 'feature-x' } } })
-
-    cleanup()
-    prefs.current = { startFrom: { p1: { kind: 'published', branch: 'feature-x' } } }
-    render(<StartAgentForm {...props} projectName="gemstack" />)
-    await waitFor(() => expect(startFromChip()).not.toBeNull())
-    expect(startFromChip()!.textContent).toBe('feature-x')
-    fireEvent.click(screen.getByText('submit-typed'))
-    await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', { base: 'refs/remotes/origin/feature-x', prBase: 'feature-x' }))
-  })
-
   test('typing after a failed start drops the red line', () => {
     onCommands.mockResolvedValue({ commands: [], gitHost: true })
     startReset.mockClear()
@@ -777,49 +678,6 @@ describe('StartAgentForm (#1774)', () => {
     act(() => (composerProps.current.onPromptChange as (value: string) => void)('a'))
     expect(startReset).toHaveBeenCalledTimes(1)
     startSays.error = null
-  })
-
-  test('picking another branch drops the red line a Start left about the last one', async () => {
-    onCommands.mockResolvedValue(WITH_BRANCHES)
-    startReset.mockClear()
-    startSays.error = 'The branch gone is no longer on origin. Pick another branch to start from.'
-    prefs.current = { startFrom: { p1: { kind: 'published', branch: 'gone' } } }
-    render(<StartAgentForm {...props} projectName="gemstack" />)
-    await waitFor(() => expect(startFromChip()).not.toBeNull())
-    await openMenu(startFromChip()!)
-    expect(startReset).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('option', { name: /^main/ }))
-    expect(startReset).toHaveBeenCalledTimes(1)
-    startSays.error = null
-  })
-
-  test('a project with no branches to pick from has no "start from" chip, and a saved local pick names no branch', async () => {
-    onCommands.mockResolvedValue({ commands: [], gitHost: true, remote: true })
-    start.mockResolvedValue({ agentId: 'r1' })
-    prefs.current = { startFrom: { p1: LOCAL } }
-    render(<StartAgentForm {...props} projectName="gemstack" />)
-    await waitFor(() => expect(onCommands).toHaveBeenCalled())
-    fireEvent.click(screen.getByText('submit-typed'))
-    await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', {}))
-    expect(startFromChip()).toBeNull()
-    expect(startsAt()).toBe('gemstack')
-  })
-
-  test('the "start from" chip waits for the project\'s name and for the saved pick, so it never moves and its words never flip', async () => {
-    onCommands.mockResolvedValue(WITH_BRANCHES)
-    prefs.current = { startFrom: { p1: LOCAL } }
-    prefsLoaded.current = false
-    const { rerender } = render(<StartAgentForm {...props} />)
-    await waitFor(() => expect(onCommands).toHaveBeenCalled())
-    // The launcher has answered, the name has not: no chip yet, the name's chip would push it.
-    await new Promise(resolve => setTimeout(resolve, 0))
-    expect(startsAt()).toBe('')
-    rerender(<StartAgentForm {...props} projectName="gemstack" />)
-    // The saved pick is not read yet: no chip that would read "main" and then flip.
-    expect(startsAt()).toBe('gemstack')
-    prefsLoaded.current = true
-    rerender(<StartAgentForm {...props} projectName="gemstack" />)
-    expect(startsAt()).toBe('gemstackmy/work (local)')
   })
 
   test('the picked files ride the prompt as one line at its end, after the command\'s own words; the picked repos go with the Start, to be copied', async () => {

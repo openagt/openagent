@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { execFileSync } from 'node:child_process'
-import { isBranchName } from './branch-name.js'
+import { isBranchName } from './catalog.js'
 
 /** What git itself says of the name. */
 function gitTakes(name: string): boolean {

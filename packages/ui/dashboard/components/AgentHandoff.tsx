@@ -1,77 +1,27 @@
 import { useContext, useState, type ReactNode } from 'react'
 import type { AgentHandoff } from '../../src/index.js'
-import { ChevronDown, GitBranchPlus, GitPullRequestDraft, Upload } from 'lucide-react'
-import { sendBringBranch, sendMerge, sendMergeBranch, sendMessage, sendOpenPullRequest, sendPush } from '../rpc/control.js'
+import { ChevronDown, GitPullRequestDraft } from 'lucide-react'
+import { sendMerge, sendOpenPullRequest, sendPush } from '../rpc/control.js'
 import type { AgentHandoffState } from '../lib/use-agent-handoff.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
 import { cn } from '../lib/utils.js'
 import { Button, buttonVariants } from './ui/button.js'
 import { ButtonGroup, ButtonGroupSeparator } from './ui/button-group.js'
-import { DiffStat } from './DiffStat.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu.js'
-import { Facts } from './ui/panel.js'
 
-// The end-of-session handoff (#799): what this session produced, and the next step offered rather
-// than described. Before this, a finished session showed no branch, no commits and no diff, so
-// finding out what it actually did meant leaving the dashboard for the command line.
+// The end-of-session handoff's pull request presses (#799), at the end of the bar above the
+// message box: Open PR, the push that brings an open one the newer commits, and its merge. The
+// rest of the bar, what the branch holds and the presses that keep the work on this machine or
+// publish its branch, is git-branches' (`chat.summary`, `chat.handoff`); these are the git host's.
 //
-// It used to be a panel of its own under the action bar, which repeated the bar's branch name and
-// pushed the session output down even when the answer was "nothing changed". It is now the verdict
-// and the next step, in the bar above the message box beside the branch they are about (#1023).
-// The commits and the files themselves are in the side panel's Changes tab.
+// Opening a pull request puts the agent's work on a shared remote under the user's name, so it is
+// a deliberate click, and the button's own word says it has not happened yet. Once a PR exists it
+// is not offered again: the bar links the PR, and the Human Queue (#632) has picked it up by then.
+// What shows is what the PR still needs: the push of commits it does not have, and its merge. Work
+// committed after the PR merged or closed is offered the next one.
 //
 // The read is branch-addressed, so it survives the checkout: a clean agent's worktree is removed
 // when it ends.
-
-/** The one-line verdict, in the action bar: what the session left behind, or that it left nothing. */
-export function HandoffSummary({ handoff }: { handoff: AgentHandoff | null }) {
-  if (!handoff) return null
-  // A landed run's branch is gone on purpose; what it held is read by its last commit, and when
-  // this machine does not have that commit there is nothing to count: landed is said beside it.
-  if (!handoff.exists && handoff.landed) return null
-  // A branch that is gone and a branch that was never pushed are different facts, and the summary
-  // is only useful if it tells them apart. Gone because the run changed nothing is no changes.
-  if (!handoff.exists) return <span className="text-muted-foreground">{handoff.unchanged ? 'no changes' : 'branch gone'}</span>
-  // A merged branch whose record names no start reads as empty too — its commits are all on the
-  // base, so `base..branch` lists nothing — but "merged" and "no changes" are opposite verdicts,
-  // and only one of them is true. One whose record names its start keeps its count below.
-  const commits = `${handoff.commits.length} commit${handoff.commits.length === 1 ? '' : 's'}`
-  // Commits that undo each other leave the files as the base has them. The commits are still what
-  // the agent did, so they are counted, and that nothing is left of them is said beside the count.
-  if (handoff.empty && handoff.commits.length > 0) return <Facts facts={[commits, 'no change left']} className="text-muted-foreground" />
-  // Nothing committed and files left on disk: neither "merged" nor "no changes" is true of that,
-  // and the words beside the Commit button name the files. So the verdict says nothing.
-  if (handoff.empty && handoff.pendingFiles?.length) return null
-  if (handoff.empty) return <span className="text-muted-foreground">{handoff.merged ? 'merged' : 'no changes'}</span>
-  const files = `${handoff.files.length} file${handoff.files.length === 1 ? '' : 's'}`
-  // What the branch holds, as Claude Code says it: the `+N −N` pair alone. The counts behind it —
-  // how many commits, how many files, whether they are on the remote — are the same work in more
-  // words, so they are its hover rather than three more things to read on a row that already carries
-  // the branch and the next step. The files themselves are a pane away.
-  const held = [commits, files, ...(handoff.pushed && !handoff.pr ? ['pushed'] : [])].join(' · ')
-  return (
-    <span className="flex shrink-0 items-center whitespace-nowrap" title={held} aria-label={held}>
-      <DiffStat added={handoff.insertions} removed={handoff.deletions} className="text-xs font-medium" />
-    </span>
-  )
-}
-
-/**
- * The next step, as a button, at the end of the action bar.
- *
- * What is left once a session has ended: its work is on this machine only, since an agent pushes
- * and opens its pull request only when its task or the person asks, and this is how a person
- * publishes it. Both put the agent's work on a shared remote under the user's name, so it is a
- * deliberate click, and the button's own word — Publish branch, Open PR — says it has not
- * happened yet. They sit in the
- * bar rather than behind the disclosure, because the point of the handoff is to be offered without
- * being looked for. Once a PR exists neither shows — the bar links the PR, and the Human Queue
- * (#632) has picked it up by then. What shows is what the PR still needs: the commit of work
- * left uncommitted, the push of commits it does not have, and its merge. Work committed after the
- * PR merged or closed is offered the next one.
- */
-/** What the Commit button says to the agent: it commits its own work, in its own words. */
-const COMMIT_MESSAGE = 'Commit your work.'
 
 /** The next step's look: a quiet press on the bar's own fill, not the page's primary one. Busy, a press stays focusable (`aria-disabled`): a disabled one drops the focus to the page. */
 const NEXT_STEP = 'bg-background/60 hover:bg-background aria-disabled:pointer-events-none aria-disabled:opacity-50'
@@ -81,24 +31,12 @@ function mainBranchName(base: string | undefined): string {
   return base !== undefined && !/^[0-9a-f]{40}$/.test(base) ? base.replace(/^origin\//, '') : 'the main branch'
 }
 
-/** Whether a prompt is the Commit button's ask. */
-export function isCommitAsk(prompt: string | undefined): boolean {
-  return prompt === COMMIT_MESSAGE
-}
-
-/** Where the next step would be, while the agent does what the Commit button asked of it. */
-export function Committing() {
-  return <Reason>Committing…</Reason>
-}
-
 export function HandoffActions(props: {
   projectId: string
   agentId: string
   /** One of the session's copies of repos, by its name: the presses act on it, in place of the project. */
   repo?: string | undefined
   state: AgentHandoffState
-  /** The Commit button's ask is on its way to the agent (`null`: it did not go through), so the page shows it at once. */
-  onAsked?: ((text: string | null) => void) | undefined
 }) {
   const { handoff, act } = props.state
   // What the last press did, said until the work on the branch moves on or the bar is put away.
@@ -161,7 +99,6 @@ function NextStep({
   agentId,
   repo,
   state,
-  onAsked,
   press,
   armed,
 }: {
@@ -169,7 +106,6 @@ function NextStep({
   agentId: string
   repo?: string | undefined
   state: AgentHandoffState
-  onAsked?: ((text: string | null) => void) | undefined
   press: Pressed
   /** This PR merges by itself once its checks pass. */
   armed: boolean
@@ -179,52 +115,11 @@ function NextStep({
   const down = useContext(DaemonDown)
   // Each press of the next step: marked so a press that went finds the next one, and off while one goes.
   const step = { 'data-next-step': true, disabled: down, 'aria-disabled': state.busy || undefined }
-  if (!handoff) return null
-  // Merged into the project's main branch on this machine: the work is in, and its branch went with it.
-  if (handoff.landed) return <Reason>Merged into the main branch.</Reason>
-  // While the PR lookup is still out (#1028), nothing is offered: acting on "not known yet" is
-  // how a second PR gets opened.
-  if (handoff.prPending) return null
-  // Uncommitted work comes before every other step, with a pull request or without one: a push or
-  // an opened pull request would be refused while the checkout is unclean, and a merge would leave
-  // the newest work behind. The work is named, and the next step is offered: the agent is asked to commit it. The agent
-  // commits, not the dashboard: it knows what it changed and writes the message, and nothing is
-  // committed on its behalf. This is also the agent that committed, was asked for more, and left
-  // that uncommitted.
-  const paths = handoff.pendingFiles ?? []
-  if (paths.length > 0) {
-    return (
-      <>
-        <Uncommitted paths={paths} committed={!handoff.empty} />
-        <Button
-          size="sm"
-          variant="ghost"
-          className={NEXT_STEP}
-          {...step}
-          onClick={() => {
-            if (state.busy) return
-            onAsked?.(COMMIT_MESSAGE)
-            const ask = () =>
-              sendMessage(projectId, COMMIT_MESSAGE, agentId).then(
-                sent => {
-                  if (!sent.ok) onAsked?.(null)
-                  return sent
-                },
-                err => {
-                  onAsked?.(null)
-                  throw err
-                },
-              )
-            press('commit', ask, 'Could not ask the agent to commit.')
-          }}
-        >
-          <Steady words={['Commit', 'Asking…']} now={pending === 'commit' ? 1 : 0} />
-        </Button>
-      </>
-    )
-  }
-  const pushed = handoff.gitHost ? { text: 'Pushed.' } : { text: 'Pushed. Pull requests need a remote on GitHub.', title: 'Another git host needs a module of its own in OpenAgent' }
-  const push = () => press('push', () => (repo !== undefined ? sendPush(projectId, agentId, repo) : sendPush(projectId, agentId)), 'Could not push the branch.', () => ({ pushed: true }), () => pushed)
+  // Merged on this machine, or a pull request lookup still out (#1028): nothing to offer, and
+  // acting on "not known yet" is how a second PR gets opened. Work left uncommitted comes first: a
+  // push or an opened pull request would be refused while the checkout is unclean, and a merge
+  // would leave the newest work behind; git-branches offers its commit.
+  if (!handoff || handoff.landed || handoff.prPending || (handoff.pendingFiles?.length ?? 0) > 0) return null
   // Once a PR exists the bar links it and the needs-you queue (#632) has it: offering to open one
   // again is the single mistake this must not make. What is still worth offering is the Merge
   // (#1391): an open, unmerged PR takes one human click to land. An agent asked for more after its
@@ -239,6 +134,7 @@ function NextStep({
     const pr = handoff.pr
     const prHead = pr.headRefOid
     if (!handoff.pushed && handoff.commits.slice(1).some(commit => commit.sha === prHead)) {
+      const push = () => press('push', () => (repo !== undefined ? sendPush(projectId, agentId, repo) : sendPush(projectId, agentId)), 'Could not push the branch.', () => ({ pushed: true }), () => ({ text: 'Pushed.' }))
       return (
         <>
           <Reason>not in the PR yet</Reason>
@@ -269,62 +165,12 @@ function NextStep({
       </Button>
     )
   }
-  // A run that changed nothing shows nothing here: there is nothing to do, and a finished run with
-  // work always shows its button, so silence already says it. A reason is written only where
-  // something was left behind the user may act on.
-  // A branch the run's own tool deleted because it held nothing is no loss, so it too is silent.
-  if (!handoff.exists) return handoff.unchanged ? null : <Reason>Branch gone — nothing to open a PR from.</Reason>
-  // A branch with no diff never gets the button (#1173): there is nothing the git host would accept a PR
-  // for, and offering one that fails with "No commits between main and <branch>" is the dead end
-  // this bar exists to prevent. Commits that undo each other: there is work, and none of it is
-  // left to take. Said, so the missing button does not read as a fault.
-  if (handoff.empty) return handoff.commits.length > 0 ? <Reason>Nothing to {handoff.hasRemote ? 'publish' : 'merge'}: the commits cancel out.</Reason> : null
-  // The main branch already has the work: there is no step left, with a remote or without one.
-  // The commits and files stay counted beside it, measured from where the run's work began.
-  // A copy with no remote is merged into the folder it was copied from: the row names the repo, the hover the folder.
-  if (handoff.merged) {
-    const folder = handoff.copiedFrom?.path
-    if (folder !== undefined) return <Reason title={`Merged into the main branch of ${folder}`}>Merged into your folder.</Reason>
-    return <Reason>Merged into {mainBranchName(handoff.base)}.</Reason>
-  }
-  // No remote: nothing to push to and no pull request to open, so the work reaches the project's
-  // own folder by a merge on this machine, and that is the one step offered.
-  if (!handoff.hasRemote) {
-    if (repo !== undefined) {
-      // A copy names the folder it was copied from; a repository the agent cloned into the session on its own names none, and its work stays there.
-      if (!handoff.copiedFrom) return <Reason>No remote: the work stays in this copy.</Reason>
-      return <CopyBack projectId={projectId} agentId={agentId} repo={repo} handoff={handoff} copiedFrom={handoff.copiedFrom} state={state} press={press} step={step} />
-    }
-    return (
-      <>
-        <Reason beside>Not in {mainBranchName(handoff.base)} yet.</Reason>
-        <Button
-          size="sm"
-          variant="ghost"
-          className={NEXT_STEP}
-          {...step}
-          onClick={() => press('merge-branch', () => sendMergeBranch(projectId, agentId), 'Could not merge the branch.')}
-        >
-          <Steady words={['Merge', 'Merging…']} now={pending === 'merge-branch' ? 1 : 0} />
-        </Button>
-      </>
-    )
-  }
-  // No git host package (#1820): nothing opens a pull request for this project, so the last step is
-  // the push, and a pushed branch is where the handoff ends.
-  if (!handoff.gitHost) {
-    if (handoff.pushed) return null
-    return (
-      <>
-        <Button size="sm" variant="ghost" className={NEXT_STEP} {...step} onClick={push}>
-          <Steady words={['Publish branch', 'Publishing…']} now={pending === 'push' ? 1 : 0} />
-        </Button>
-      </>
-    )
-  }
+  // No pull request to open: a branch that is gone, one with no diff (#1173: the git host would
+  // refuse it with "No commits between main and <branch>"), work the main branch already has, a
+  // project with no remote or with no git host package (#1820). What is said of each is git-branches'.
+  if (!handoff.exists || handoff.empty || handoff.merged || !handoff.hasRemote || !handoff.gitHost) return null
   // A split button: "Open PR" names the outcome and pushes the branch on the way, and the arrow
-  // beside it holds the other choices: a draft pull request, and the push alone, for work that
-  // should reach the remote with no pull request yet (gone once the branch is pushed).
+  // beside it holds a draft pull request.
   const openPr = (draft: boolean) =>
     press(
       'pr',
@@ -346,98 +192,21 @@ function NextStep({
           title={`${handoff.pushed ? 'Opens' : 'Pushes the branch and opens'} a pull request for ${handoff.branch}`}
           onClick={() => openPr(false)}
         >
-          <Steady words={['Open PR', 'Opening PR…', 'Publishing…']} now={pending === 'pr' ? 1 : pending === 'push' ? 2 : 0} />
+          <Steady words={['Open PR', 'Opening PR…']} now={pending === 'pr' ? 1 : 0} />
         </Button>
         <ButtonGroupSeparator className="bg-border opacity-100" />
         <DropdownMenu>
-            <DropdownMenuTrigger
-              type="button"
-              aria-label="Other choices"
-              {...step}
-              className={cn(
-                buttonVariants({ size: 'sm', variant: 'ghost' }),
-                NEXT_STEP,
-                'px-1 data-[popup-open]:bg-background',
-              )}
-            >
-              <ChevronDown className="h-3.5 w-3.5" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-[10rem]">
-              <DropdownMenuItem onClick={() => openPr(true)}>
-                <GitPullRequestDraft className="h-3.5 w-3.5" />
-                Create draft PR
-              </DropdownMenuItem>
-              {!handoff.pushed && (
-                <DropdownMenuItem onClick={push}>
-                  <Upload className="h-3.5 w-3.5" />
-                  Publish branch
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <DropdownMenuTrigger type="button" aria-label="Other choices" {...step} className={cn(buttonVariants({ size: 'sm', variant: 'ghost' }), NEXT_STEP, 'px-1 data-[popup-open]:bg-background')}>
+            <ChevronDown className="h-3.5 w-3.5" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-[10rem]">
+            <DropdownMenuItem onClick={() => openPr(true)}>
+              <GitPullRequestDraft className="h-3.5 w-3.5" />
+              Create draft PR
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </ButtonGroup>
-    </>
-  )
-}
-
-/**
- * A copy of a repo with no remote, back to the folder it was copied from: "Merge" brings its
- * branch there and merges it into the folder's main branch, as a project with no remote merges;
- * its arrow holds "Only add the branch", for a folder busy on another branch. Once the folder has
- * the branch, the Merge is the one step left.
- */
-function CopyBack({ projectId, agentId, repo, handoff, copiedFrom, state, press, step }: {
-  projectId: string
-  agentId: string
-  repo: string
-  handoff: AgentHandoff
-  copiedFrom: NonNullable<AgentHandoff['copiedFrom']>
-  state: AgentHandoffState
-  press: Pressed
-  step: Record<string, unknown>
-}) {
-  const main = mainBranchName(handoff.base)
-  const bring = (merge: boolean) =>
-    press(
-      merge ? 'merge-branch' : 'bring',
-      () => sendBringBranch(projectId, agentId, repo, merge ? { merge: true } : {}),
-      merge ? 'Could not merge the branch.' : 'Could not add the branch.',
-      () => (merge ? { merged: true } : { copiedFrom: { ...copiedFrom, hasBranch: true } }),
-    )
-  const merge = (
-    <Button
-      size="sm"
-      variant="ghost"
-      className={cn(NEXT_STEP, !copiedFrom.hasBranch && 'pr-1.5!')}
-      {...step}
-      title={`Merges ${handoff.branch} into ${main} in ${copiedFrom.path}`}
-      onClick={() => bring(true)}
-    >
-      <Steady words={['Merge', 'Merging…']} now={state.pending === 'merge-branch' ? 1 : 0} />
-    </Button>
-  )
-  return (
-    <>
-      <Reason title={copiedFrom.path} beside>{copiedFrom.hasBranch ? `In your folder, not in ${main} yet.` : `Not in ${main} yet.`}</Reason>
-      {copiedFrom.hasBranch ? (
-        merge
-      ) : (
-        <ButtonGroup>
-          {merge}
-          <ButtonGroupSeparator className="bg-border opacity-100" />
-          <DropdownMenu>
-            <DropdownMenuTrigger type="button" aria-label="Other choices" {...step} className={cn(buttonVariants({ size: 'sm', variant: 'ghost' }), NEXT_STEP, 'px-1 data-[popup-open]:bg-background')}>
-              <ChevronDown className="h-3.5 w-3.5" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-[10rem]">
-              <DropdownMenuItem onClick={() => bring(false)}>
-                <GitBranchPlus className="h-3.5 w-3.5" />
-                Only add the branch
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </ButtonGroup>
-      )}
     </>
   )
 }
@@ -460,30 +229,6 @@ function Carries({ carries }: { carries: NonNullable<AgentHandoff['carries']> })
       {files} over {base}
     </Reason>
   )
-}
-
-/**
- * The work a checkout holds uncommitted, named; nothing when the tree is clean. `committed` says
- * the branch has commits already, so "Nothing committed" would be false.
- */
-function Uncommitted({ paths, committed = false }: { paths: string[]; committed?: boolean }) {
-  if (paths.length === 0) return null
-  return (
-    <Reason title={paths.join('\n')}>
-      {committed ? '' : 'Nothing committed — '}
-      {namePending(paths)} left uncommitted.
-    </Reason>
-  )
-}
-
-/**
- * The uncommitted paths, worded for a one-line bar: the first couple named, the rest counted.
- * The full list is one hover (the Reason's title) away.
- */
-function namePending(paths: string[]): string {
-  const shown = paths.slice(0, 2).join(', ')
-  const rest = paths.length - Math.min(paths.length, 2)
-  return rest > 0 ? `${shown} and ${rest} more` : shown
 }
 
 /**
@@ -510,13 +255,12 @@ function mergesLater(number: number): string {
 }
 
 /** Why there is nothing to press. Reads as part of the bar, not as an error. `hidden`: said to a screen reader elsewhere. */
-function Reason({ children, title, hidden = false, beside = false }: { children: ReactNode; title?: string; hidden?: boolean; beside?: boolean }) {
+function Reason({ children, title, hidden = false }: { children: ReactNode; title?: string; hidden?: boolean }) {
   // Capped and truncated: the bar's actions never shrink, so a long file name must ellipsize here
   // rather than push the row wide. On a phone it wraps in a narrow column instead: the panel's rows
   // share one column for their ends, and a reason one line long there leaves the names no room.
-  // One `beside` a press is not there on a phone at all: the press says the step.
   return (
-    <span className={cn('inline-block max-w-[24rem] truncate align-middle text-xs text-muted-foreground max-md:max-w-32 max-md:whitespace-normal max-md:text-right', beside && 'max-md:hidden')} {...(title ? { title } : {})} {...(hidden ? { 'aria-hidden': true } : {})}>
+    <span className="inline-block max-w-[24rem] truncate align-middle text-xs text-muted-foreground max-md:max-w-32 max-md:whitespace-normal max-md:text-right" {...(title ? { title } : {})} {...(hidden ? { 'aria-hidden': true } : {})}>
       {children}
     </span>
   )

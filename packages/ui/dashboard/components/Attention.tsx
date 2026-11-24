@@ -1,8 +1,9 @@
 import { useContext, useMemo, useState, type ReactNode } from 'react'
-import { CircleAlert } from 'lucide-react'
+import { CircleAlert, Info } from 'lucide-react'
 import type { Attention } from '@openagt/hooks'
 import type { UiActionResult } from '../module/index.js'
 import { useMountedModules } from '../lib/use-modules.js'
+import { useAttention } from '../lib/use-attention.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
 import { Button } from './ui/button.js'
@@ -33,12 +34,12 @@ export function attentionDetail(item: Attention): string | undefined {
  * whose action no module brings here. `overlay` is drawn where it outlives a menu that closed.
  * `onFixed` is told when a fix is done, so the list is asked again.
  */
-export function useAttentionFixes(projectId: string | undefined, onFixed?: () => void): { fixOf: (item: Attention) => (() => void) | undefined; pending: boolean; overlay: ReactNode } {
+export function useAttentionFixes(projectId: string | undefined, onFixed?: (result: UiActionResult) => void): { fixOf: (item: Attention) => (() => void) | undefined; pending: boolean; overlay: ReactNode } {
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   const actions = useMountedModules().actions['attention.fix']
   const [item, setItem] = useState<string | undefined>()
   const on = useMemo(() => ({ ...(projectId !== undefined && projectId !== SESSIONS_ID ? { projectId } : {}), ...(item !== undefined ? { item } : {}) }), [projectId, item])
-  const { press, pending, overlay } = useRunOffer<'attention.fix'>(on, (_offered, _result: UiActionResult) => onFixed?.())
+  const { press, pending, overlay } = useRunOffer<'attention.fix'>(on, (_offered, result: UiActionResult) => onFixed?.(result))
   const fixOf = (attention: Attention): (() => void) | undefined => {
     const fix = attention.fix
     if (!fix) return undefined
@@ -96,6 +97,51 @@ export function SetupItemsLine({ items, projectId, onFixed }: { items: readonly 
             </div>
           )
         })}
+      {overlay}
+    </>
+  )
+}
+
+/**
+ * The `setup` items about a project (`scope: 'project'`), at the top of its "New agent session"
+ * page: each in a line of its own, with its fix and, when the fix failed, its words under it.
+ */
+export function ProjectItemsLine({ projectId }: { projectId: string }) {
+  const [fixed, setFixed] = useState(0)
+  const items = (useAttention(projectId, undefined, fixed) ?? []).filter(item => item.kind === 'setup' && item.scope === 'project')
+  const [failed, setFailed] = useState<string | null>(null)
+  const { fixOf, pending, overlay } = useAttentionFixes(projectId, result => {
+    setFailed(result.ok ? null : result.error)
+    setFixed(n => n + 1)
+  })
+  if (items.length === 0) return null
+  return (
+    <>
+      {items.map(item => {
+        const fix = fixOf(item)
+        const detail = attentionDetail(item)
+        return (
+          <section key={attentionKey(item)} aria-label="Project" className="rounded-md border border-border px-3 py-2 text-sm">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <Info className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+              <span className="flex-1">
+                <InlineMarkdown text={item.words} />
+                {detail !== undefined && <span className="text-muted-foreground"> {detail}</span>}
+              </span>
+              {fix && item.fix && (
+                <Button size="sm" variant="outline" loading={pending} onClick={fix}>
+                  {item.fix.label}
+                </Button>
+              )}
+            </div>
+            {failed !== null && (
+              <p role="alert" className="mt-1 text-xs whitespace-pre-wrap text-danger">
+                {failed}
+              </p>
+            )}
+          </section>
+        )
+      })}
       {overlay}
     </>
   )

@@ -3,7 +3,7 @@ import { mock, test } from 'node:test'
 import { join } from 'node:path'
 import { mkdtemp, rm, mkdir, writeFile, readFile, realpath, stat } from 'node:fs/promises'
 import { hostname, tmpdir } from 'node:os'
-import { sendStop, sendMessage, sendRemoveWorktree, sendOpenPullRequest } from './control.js'
+import { sendStop, sendMessage, sendOpenPullRequest } from './control.js'
 import { callModule } from './module-calls.js'
 import { onRetainedWorktrees, onAgents, onRecentAgents } from './reads.js'
 import { addProject } from '../registry.js'
@@ -278,127 +278,6 @@ test('a message with no run, or an unsafe run id, is refused (#749)', async () =
 
 // #737: a failed agent keeps its worktree for inspection, so removing one is an explicit action —
 // and must never yank the checkout out from under an agent that is still going.
-
-test('sendRemoveWorktree refuses while that run is still live (#737)', async () => {
-  const ctx = await projectWithWorktreeAgent() // its card says `running`
-  try {
-    const result = await sendRemoveWorktree(ctx.projectId, ctx.agentId)
-    assert.equal(result.ok, false)
-    assert.match(result.ok === false ? result.error : '', /still going/)
-    assert.ok(await readFile(join(worktreePath(ctx.dir, ctx.agentId), OPENAGENT_DIR, `${ctx.agentId}.json`), 'utf8'), 'the worktree is untouched')
-  } finally {
-    ctx.restore()
-    await rm(ctx.dir, { recursive: true, force: true })
-  }
-})
-
-test('sendRemoveWorktree rejects an unsafe run id before touching anything (#737)', async () => {
-  const ctx = await projectWithWorktreeAgent()
-  try {
-    const result = await sendRemoveWorktree(ctx.projectId, '../../etc')
-    assert.equal(result.ok, false)
-    assert.match(result.ok === false ? result.error : '', /invalid session id/)
-  } finally {
-    ctx.restore()
-    await rm(ctx.dir, { recursive: true, force: true })
-  }
-})
-
-// #982: the dashboard's Remove and the sweep are now one implementation, so the
-// button gets the commit-first removal and the checks the CLI already had. Before that it went
-// straight to a forcing removeWorktree, which deleted the very diff a retained checkout was kept
-// for, and reported success for a session that had no worktree at all.
-
-/** A registered project whose retained worktree holds an uncommitted edit, in a real git repo. */
-async function projectWithDirtyWorktree(): Promise<{
-  dir: string
-  projectId: string
-  agentId: string
-  worktree: string
-  branch: string
-  restore: () => void
-}> {
-  const git = nodeGitRunner()
-  const dir = await realpath(await mkdtemp(join(tmpdir(), 'openagent-remove-')))
-  await git(['init'], dir)
-  await git(['config', 'user.email', 't@t'], dir)
-  await git(['config', 'user.name', 't'], dir)
-  await writeFile(join(dir, 'index.html'), '<h1>Hello, world!</h1>\n')
-  await git(['add', '-A'], dir)
-  await git(['commit', '-m', 'init'], dir)
-  // A real bare `origin`, as a project has: an agent's branch starts from its default branch.
-  await git(['init', '-q', '--bare', join(dir, 'origin.git')], dir)
-  await git(['remote', 'add', 'origin', join(dir, 'origin.git')], dir)
-
-  const agentId = 'run1'
-  const { path, branch } = await addWorktree(dir, { agentId, branch: agentBranchName(agentId) }, git)
-  await writeFile(join(path, 'index.html'), '<h1>Welcome!</h1>\n')
-
-  const previous = process.env.XDG_CONFIG_HOME
-  process.env.XDG_CONFIG_HOME = join(dir, 'cfg')
-  await mkdir(process.env.XDG_CONFIG_HOME, { recursive: true })
-  await addProject(dir, new Date().toISOString())
-  // The context every RPC reads (D3). In tests it is a global that outlives an await,
-  // unlike the request-scoped one a real serve() provides.
-  provideTestContext()
-
-  return {
-    dir,
-    projectId: idFor(dir),
-    agentId,
-    worktree: path,
-    branch,
-    restore: () => {
-      if (previous === undefined) delete process.env.XDG_CONFIG_HOME
-      else process.env.XDG_CONFIG_HOME = previous
-    },
-  }
-}
-
-test('the dashboard Remove keeps a checkout holding uncommitted work, and says so (#982/E5/#1638)', async () => {
-  const ctx = await projectWithDirtyWorktree()
-  try {
-    const result = await sendRemoveWorktree(ctx.projectId, ctx.agentId)
-    assert.equal(result.ok, false)
-    assert.match(result.ok === false ? result.error : '', /uncommitted work/)
-    const git = nodeGitRunner()
-    assert.match(await readFile(join(ctx.worktree, 'index.html'), 'utf8'), /Welcome!/, 'the edit is still in the checkout, uncommitted')
-    await assert.rejects(() => git(['rev-parse', '--verify', `refs/remotes/origin/${ctx.branch}`], ctx.dir), 'and nothing reached the remote')
-  } finally {
-    ctx.restore()
-    await rm(ctx.dir, { recursive: true, force: true })
-  }
-})
-
-test('the dashboard Remove takes away a checkout whose agent committed, keeps its branch and pushes nothing (#982/E5)', async () => {
-  const ctx = await projectWithDirtyWorktree()
-  try {
-    const git = nodeGitRunner()
-    await git(['config', 'user.email', 't@t'], ctx.worktree)
-    await git(['config', 'user.name', 't'], ctx.worktree)
-    await git(['add', '-A'], ctx.worktree)
-    await git(['commit', '-q', '-m', 'work'], ctx.worktree)
-    assert.deepEqual(await sendRemoveWorktree(ctx.projectId, ctx.agentId), { ok: true })
-    assert.match(await git(['show', `${ctx.branch}:index.html`], ctx.dir), /Welcome!/, 'the committed edit survived on the run branch')
-    await assert.rejects(() => stat(ctx.worktree), 'the checkout is gone')
-    await assert.rejects(() => git(['rev-parse', '--verify', `refs/remotes/origin/${ctx.branch}`], ctx.dir), 'and nothing reached the remote: publishing is the person\'s call')
-  } finally {
-    ctx.restore()
-    await rm(ctx.dir, { recursive: true, force: true })
-  }
-})
-
-test('the dashboard Remove reports an unknown session instead of claiming success (#982)', async () => {
-  const ctx = await projectWithWorktreeAgent()
-  try {
-    const result = await sendRemoveWorktree(ctx.projectId, 'nosuchrun')
-    assert.equal(result.ok, false)
-    assert.match(result.ok === false ? result.error : '', /no checkout for agent nosuchrun/)
-  } finally {
-    ctx.restore()
-    await rm(ctx.dir, { recursive: true, force: true })
-  }
-})
 
 test('onRetainedWorktrees hides a live run, and lists one that has finished (#737)', async () => {
   const ctx = await projectWithWorktreeAgent()

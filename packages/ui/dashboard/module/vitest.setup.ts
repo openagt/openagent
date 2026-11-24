@@ -1,4 +1,6 @@
+import { createElement } from 'react'
 import { configure } from '@testing-library/react'
+import { vi } from 'vitest'
 
 // What every module's tests run in, set once for all of them (`moduleTests` in `./vite.ts`).
 
@@ -15,3 +17,12 @@ configure({ asyncUtilTimeout: 5000 })
 // shown item in view (the Files pane's tabs, the Changes list's diffs) calls them.
 Element.prototype.scrollIntoView ??= () => {}
 Element.prototype.scrollTo ??= () => {}
+
+// A tooltip opens once the pointer has rested on its trigger a moment (ui/tooltip.tsx), and a
+// test's pointer never rests: it only arrives. Here every tooltip opens as the pointer comes, as
+// in the shell's own tests.
+vi.mock('@base-ui/react/tooltip', async importOriginal => {
+  const { Tooltip } = await importOriginal<typeof import('@base-ui/react/tooltip')>()
+  const Trigger = (props: Record<string, unknown>) => createElement(Tooltip.Trigger, { ...props, delay: 0 })
+  return { Tooltip: { ...Tooltip, Trigger } }
+})

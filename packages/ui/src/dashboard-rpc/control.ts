@@ -9,14 +9,13 @@ import { IMAGES_PER_MESSAGE } from '../images.js'
 
 import { findAgent, isRunId, projectRuns, type AgentMeta } from '../store/index.js'
 import { withAgentLock } from '../agent-locks.js'
-import { removeProjectWorktree, deleteProjectAgent } from '../worktrees.js'
-import { bringAgentBranch, mergeAgentPr, openAgentPullRequest, mergeAgentBranch, pushAgentBranch, readRunHandoff, type HandoffResult } from '../dashboard/agent-handoff.js'
+import { deleteProjectAgent } from '../worktrees.js'
+import { mergeAgentPr, openAgentPullRequest, pushAgentBranch, readRunHandoff, type HandoffResult } from '../dashboard/agent-handoff.js'
 import { copyTarget } from '../dashboard/session-copies.js'
 import { createRepository, type CreateRepositoryResult } from '../store/repository.js'
 import { providedDataChanged } from '../store/provided.js'
 import type {
   DeleteAgentResult,
-  RemoveWorktreeResult,
   StartAgentOptions,
   StartAgentResult,
 } from '../dashboard/types.js'
@@ -105,24 +104,13 @@ export async function sendNow(projectId: string, agentId: string): Promise<Steer
 }
 
 /**
- * Remove a retained worktree (#737). An agent that failed or was stopped keeps its checkout so you
- * can inspect it; this is the explicit cleanup for one, since nothing removes them on a timer.
- *
- * The checks and the removal are {@link removeProjectWorktree}'s, shared with the CLI's removal
- * path (#982) so the surfaces cannot drift again; this adds only the agent lock around them.
- */
-export async function sendRemoveWorktree(projectId: string, agentId: string): Promise<RemoveWorktreeResult> {
-  return withWorktreeRemoval(projectId, agentId, cwd => removeProjectWorktree(cwd, agentId))
-}
-
-/**
- * Shared body of the two worktree-removing writes (#982/#1032): resolve the project and refuse
- * when it has no local path. Only the removal action and its result shape differ.
+ * The body of the worktree-removing write (#1032): resolve the project and refuse when it has no
+ * local path, then remove under the run's lock.
  */
 async function withWorktreeRemoval<T>(projectId: string, agentId: string, remove: (cwd: string) => Promise<T>): Promise<T | { ok: false; error: string }> {
   const cwd = await resolveProjectPath(projectId)
   if (!cwd) return { ok: false, error: 'this project has no local path on this server' }
-  // Under the agent lock: a Remove/Delete and an Open PR on the same finished run each run their
+  // Under the agent lock: a Delete and an Open PR on the same finished run each run their
   // own git in its checkout; serialized, whichever runs second finds the state the first one left
   // and acts on that.
   return withAgentLock(agentLockKey(cwd, agentId), () => remove(cwd))
@@ -130,7 +118,7 @@ async function withWorktreeRemoval<T>(projectId: string, agentId: string, remove
 
 /**
  * Delete a session (#1032): remove it from the dashboard, records and all — the sibling of
- * {@link sendRemoveWorktree}, and the one destructive-of-history action, so its surface confirms
+ * git-branches' Remove worktree, and the one destructive-of-history action, so its surface confirms
  * first. The checks, the worktree removal and what it leaves behind (the branch and its
  * commits) are all {@link deleteProjectAgent}'s; this adds only the agent lock around them.
  */
@@ -239,30 +227,6 @@ export async function sendCreateRepository(projectId: string): Promise<CreateRep
   const created = await createRepository(cwd)
   if (created.ok) providedDataChanged(cwd)
   return created
-}
-
-/**
- * The user's "Merge into main" action: merge a finished run's branch into the project's default
- * branch on this machine, for a project with no remote to push to. Under the agent lock, as the
- * push is, so the merge cannot race a Remove.
- */
-export async function sendMergeBranch(projectId: string, agentId: string): Promise<HandoffResult> {
-  const target = await handoffTargetFor(projectId, agentId)
-  if (!target) return { ok: false, error: 'unknown session' }
-  if (target.agent.status === 'running') return { ok: false, error: 'that session is still going' }
-  return withAgentLock(agentLockKey(target.cwd, agentId), () => mergeAgentBranch(target.cwd, target.agent))
-}
-
-/**
- * The user's Merge on a copy of a repo with no remote, or its "Only add the branch": the copy's
- * branch goes to the folder it was copied from, and with `merge` into that folder's default
- * branch. Under the agent lock, as the push is.
- */
-export async function sendBringBranch(projectId: string, agentId: string, repo: string, options: { merge?: boolean } = {}): Promise<HandoffResult> {
-  const target = await handoffTargetFor(projectId, agentId, repo)
-  if (!target) return { ok: false, error: 'unknown session' }
-  if (target.agent.status === 'running') return { ok: false, error: 'that session is still going' }
-  return withAgentLock(agentLockKey(target.cwd, agentId), () => bringAgentBranch(target.cwd, target.agent, options))
 }
 
 /**

@@ -14,9 +14,9 @@ import { Button } from './ui/button.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { SessionContextMenu } from './ContextMenu.js'
 import { SessionReposSaid } from './SessionRepos.js'
-import { AutoMenu, autoCovers, autoSaid } from './AutoMenu.js'
+import { AutoMenu, autoCovers, autoSaid, useAutoLevels } from './AutoMenu.js'
 import { GitHostOff } from './GitHosts.js'
-import { isPublishPick, offeredPublishPicks, type PublishPick } from '../../src/client.js'
+import { isPublishPick, type PublishPick } from '../../src/client.js'
 import { useProjectLauncher } from '../lib/use-project-launcher.js'
 import { promptWithContext, type ContextSet } from '../lib/use-context-set.js'
 import { overlayOpen, pressed, shortcut } from '../lib/shortcut.js'
@@ -164,6 +164,9 @@ export function AgentComposer({
   // level keeps the old one, which must not read as changed.
   // Picked back to what the record says, there is nothing to send.
   const launcher = useProjectLauncher(projectId)
+  // The levels offered, as the launcher's: every one with no project, the session's copies of repos being wherever each is.
+  const autoProject = projectId !== SESSIONS_ID && launcher ? { id: projectId, name: projectId, ...(launcher.remote ? { remote: launcher.address ?? 'origin' } : {}) } : undefined
+  const levels = useAutoLevels(projectId, autoProject, projectId === SESSIONS_ID || (launcher?.gitHost ?? true))
   const recorded: PublishPick = isPublishPick(publish) ? publish : 'nothing'
   const [picked, setPicked] = useState<PublishPick | null>(null)
   useEffect(() => setPicked(null), [agentId])
@@ -295,7 +298,7 @@ export function AgentComposer({
   const autoTarget = prBase !== undefined ? { into: prBase } : undefined
   const setupSaid = [
     gitAccount !== undefined && `@${gitAccount}`,
-    publishes && autoSaid(picked ?? recorded, autoTarget),
+    publishes && autoSaid(picked ?? recorded, levels, autoTarget),
   ]
     .filter(Boolean)
     .join(' · ')
@@ -331,7 +334,7 @@ export function AgentComposer({
           lines: (
             <>
               <GitHostOff home={gitHost ?? null} account={gitAccount} />
-              {publishes && <AutoMenu publish={picked ?? recorded} picks={noProject ? offeredPublishPicks(true, true) : offeredPublishPicks(launcher?.gitHost ?? true, launcher?.remote ?? true)} onPublish={pick => setPicked(pick === recorded ? null : pick)} covers={autoCovers(noProject ? null : 'the project', repos?.length ?? 0)} target={autoTarget} />}
+              {publishes && <AutoMenu publish={picked ?? recorded} levels={levels} onPublish={pick => setPicked(pick === recorded ? null : pick)} covers={autoCovers(noProject ? null : 'the project', repos?.length ?? 0)} target={autoTarget} />}
             </>
           ),
         }}

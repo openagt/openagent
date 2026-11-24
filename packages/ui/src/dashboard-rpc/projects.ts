@@ -1,15 +1,12 @@
 import { contextAddProject, contextHost, contextOtherHosts, contextPrepareStart, contextProjectState, contextProjects, contextRemoveProject, contextStartedIn, resolveProjectPath } from './context.js'
 import { projectRefAt } from '../distribution-hooks.js'
-import { DATA_BRANCH, addressOfRemote, errorMessage, isRepoOwner, originDefaultBranch, readRepoOwners, repositoryAddress, shareProjectData, writeRepoOwners } from '@openagt/agent-data'
+import { addressOfRemote, errorMessage, isRepoOwner, readRepoOwners, repositoryAddress, shareProjectData, writeRepoOwners } from '@openagt/agent-data'
 import { readHosted, refreshHosted, type HostedRepo } from './hosted-repos.js'
-import { cloneAccountFor, originGit, originHost, remoteAccount } from './send-as.js'
+import { cloneAccountFor, originHost, remoteAccount } from './send-as.js'
 import type { StartReadiness } from '../start-readiness.js'
 import { SESSIONS_ID } from '../project-address.js'
 import { hasRemote } from '../has-remote.js'
 import { openagentVersion } from '../version.js'
-import { currentBranch } from '../dashboard/git-status.js'
-import { branchesOnOrigin } from '../dashboard/start-branch.js'
-import { readFolderBehind, updateFolder, type FolderBehind } from '../dashboard/folder-behind.js'
 import { addRepoFolder, listProjects, listRepoFolders, removeRepoFolder } from '../registry.js'
 import { thisComputersRepos, type FoundRepo } from '../dashboard/repos.js'
 import { cloneProject, cloneTargetOf } from '../clone-project.js'
@@ -226,7 +223,7 @@ export async function sendAddRepoFolder(): Promise<{ ok: true; added: boolean } 
   return { ok: true, added: true }
 }
 
-/** What the launcher offers for a project: how far its runs can go, and the branches they start from. */
+/** What the launcher offers for a project: how far its runs can go. */
 export interface ProjectLauncher {
   /** Whether one of the project's packages provides a git host; without one no pull request can be opened, so the publish menu stops at the branch. */
   gitHost: boolean
@@ -234,64 +231,14 @@ export interface ProjectLauncher {
   remote: boolean
   /** The address the project's repository was cloned from (`github.com/acme/shop`): its host is the git host a session pushes to, as the account it picks there. */
   address?: string
-  /**
-   * What the launcher's branch menu always lists: `main`, the name of origin's default branch, and
-   * `local`, the branch the project's folder is on now. Absent where a pick could not be obeyed:
-   * the repository has no remote, or the folder is on no branch. The rest of the menu is
-   * {@link onStartBranches}.
-   */
-  startFrom?: { main: string; local: string }
 }
 
-/**
- * What the launcher offers for a project: whether it has a git host, and the branches an agent can
- * start from. `null` when the project is unknown here.
- */
+/** What the launcher offers for a project: whether it has a git host and a remote. `null` when the project is unknown here. */
 export async function onCommands(projectId: string): Promise<ProjectLauncher | null> {
   const cwd = await resolveProjectPath(projectId)
   if (!cwd) return null
-  const [gitHost, remote, address, main, local] = await Promise.all([projectGitHost(cwd).catch(() => undefined), hasRemote(cwd), repositoryAddress(cwd), originDefaultBranch(cwd), currentBranch(cwd)])
-  // Both read locally, never fetched. `HEAD` is a folder on no branch: there is no local branch to start from.
-  const startFrom = remote && main !== undefined && local !== undefined && local !== 'HEAD' ? { main: main.slice('origin/'.length), local } : undefined
-  return { gitHost: gitHost !== undefined, remote, ...(address ? { address } : {}), ...(startFrom ? { startFrom } : {}) }
-}
-
-/**
- * How far the project's folder is behind its remote's main branch (#2421); `null` when it is not, or
- * for a project with no folder here. Origin is asked as one of OpenAgent's accounts, never the
- * person's own login; where it cannot be asked, the clone's own copy of the branch is what counts.
- */
-export async function onFolderBehind(projectId: string): Promise<FolderBehind | null> {
-  const cwd = await resolveProjectPath(projectId)
-  if (!cwd) return null
-  const origin = await originGit(cwd).catch(() => undefined)
-  return (await readFolderBehind(cwd, { origin })) ?? null
-}
-
-/** Bring the project's folder up to its remote's main branch: a fast-forward, or git's refusal in its words. */
-export async function sendUpdateFolder(projectId: string): Promise<{ ok: true } | { ok: false; error: string }> {
-  const cwd = await resolveProjectPath(projectId)
-  if (!cwd) return { ok: false, error: 'this project has no local path on this server' }
-  return updateFolder(cwd)
-}
-
-/** The other branches the launcher's menu lists; `branches` is absent where origin could not be read. */
-export interface StartBranches {
-  branches?: string[]
-}
-
-/**
- * The branches an agent can start from besides the two `onCommands` names, read live from origin
- * each time the launcher's menu opens: all of origin's but its main branch, which the menu lists
- * first, and the branch that holds the runs' records, which is no code to start from. `null` when
- * the project is unknown here.
- */
-export async function onStartBranches(projectId: string): Promise<StartBranches | null> {
-  const cwd = await resolveProjectPath(projectId)
-  if (!cwd) return null
-  const [listed, main] = await Promise.all([branchesOnOrigin(cwd), originDefaultBranch(cwd)])
-  if (!listed) return {}
-  return { branches: listed.filter(branch => branch !== DATA_BRANCH && `origin/${branch}` !== main) }
+  const [gitHost, remote, address] = await Promise.all([projectGitHost(cwd).catch(() => undefined), hasRemote(cwd), repositoryAddress(cwd)])
+  return { gitHost: gitHost !== undefined, remote, ...(address ? { address } : {}) }
 }
 
 /** A host a run may be picked to run on beside this computer's (`run.host`, #2394): its id, and its name in the "Run on" menu. */

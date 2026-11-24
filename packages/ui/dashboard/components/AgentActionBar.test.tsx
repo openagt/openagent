@@ -79,16 +79,6 @@ describe('AgentActionBar', () => {
     }
   })
 
-  test('the worktree\'s size is handed to the session\'s menu, not said in the bar; before the agent\'s own reads have answered there is none, and no count', () => {
-    const withError = [...AGENTS.failed!.slice(0, 2), { kind: 'error', message: 'The push was rejected' }, ...AGENTS.failed!.slice(2)] as OpenAgentEvent[]
-    const { container, rerender } = render(<AgentActionBar projectId="p1" agentId="run-1" events={withError} label="Dark mode" checkout={DIRTY} ready={false} />)
-    expect(container.textContent).toBe('[Dark mode ⌄][⋮]')
-    expect(lastSession()['size']).toBe('')
-    rerender(<AgentActionBar projectId="p1" agentId="run-1" events={AGENTS.finished!} label="Dark mode" checkout={DIRTY} />)
-    expect(lastSession()['size']).toBe('5 MB')
-    expect(container.textContent).not.toContain('5 MB')
-  })
-
   test('the bar starts 16 in on every screen, the sidebar opening from the bar of pages on a phone; its end is its own, for the panes\' icons', () => {
     const { container } = render(<AgentActionBar projectId="p1" agentId="run-1" events={AGENTS.finished!} label="Dark mode" checkout={DIRTY} />)
     const row = container.firstElementChild!.firstElementChild!.className.split(' ')

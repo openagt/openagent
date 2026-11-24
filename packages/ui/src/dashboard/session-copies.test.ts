@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { AgentMeta } from '../store/index.js'
 import { isSessionCopy } from '../store/branches.js'
-import { copyTarget, isCopyName, sessionCopies } from './session-copies.js'
+import { copyTarget, isCopyName } from './session-copies.js'
 
 // A session's copies of repos, read off its folder in a sessions home of the test's own, with real git.
 
@@ -35,16 +35,6 @@ const agent: AgentMeta = { id: ID, startedAt: '2026-11-24T10:00:00.000Z', status
 test('a copy is named by one folder\'s own name: never a path, and none of the dot-entries', () => {
   assert.deepEqual(['site', 'my.repo', 'a b'].map(isCopyName), [true, true, true])
   assert.deepEqual(['../site', 'a/b', 'a\\b', '.openagent', '..', '', 3, undefined].map(isCopyName), [false, false, false, false, false, false, false, false])
-})
-
-test("the session's copies are the repositories in its folder, by name; a session with no folder has none", async () => {
-  const at = await home()
-  try {
-    assert.deepEqual(await sessionCopies(ID, at.home), ['api', 'site'], 'the plain folder and the live record are no copies')
-    assert.deepEqual(await sessionCopies('2026-01-01T00-00-00-000Z', at.home), [])
-  } finally {
-    await rm(at.home, { recursive: true, force: true })
-  }
 })
 
 test("a copy is acted on in its own folder, on the branch it is on now, with none of what the record says of the project's branch", async () => {

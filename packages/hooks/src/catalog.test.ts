@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { COMPUTER, PERSON, SETTINGS_FILE, chainStore, settingsIn } from './index.js'
-import { DEFAULT_PROFILE, PERSON_INFO, PROFILES, SCHEDULED_COMMANDS, isPersonName, isProfileName, profileIdOf, profileOf, profilesIn } from './catalog.js'
+import { DEFAULT_PROFILE, PERSON_INFO, PROFILES, SCHEDULED_COMMANDS, START_FROM, isPersonName, isProfileName, profileIdOf, profileOf, profilesIn } from './catalog.js'
 import { memoryStore } from './testing.js'
 
 test("the person's name and picture: saved with the person, each part read strictly, and none set is the computer's", async () => {
@@ -58,4 +58,17 @@ test("the scheduled commands a computer runs: kept on the computer, by project t
   assert.deepEqual(await settings.get(SCHEDULED_COMMANDS), { shop: { triage: { on: '2026-10-03T08:00:00.000Z' } } })
   await saved([])
   assert.deepEqual(await settings.get(SCHEDULED_COMMANDS), {})
+})
+
+test('where every next run of a project starts, by its id: the local branch or a branch of origin’s, the main branch being no entry; a pick that is not one is dropped', () => {
+  const local = { kind: 'local' }
+  const published = { kind: 'published', branch: 'local' }
+  assert.deepEqual(START_FROM.parse({ 'app-1a2b': local, 'web-3c4d': 'main', '': local, 'api-5e6f': true }), { 'app-1a2b': local })
+  assert.deepEqual(START_FROM.parse({ 'app-1a2b': published, 'web-3c4d': local }), { 'app-1a2b': published, 'web-3c4d': local }, 'a branch literally named local is no local pick')
+  assert.deepEqual(START_FROM.parse({ 'app-1a2b': 'local' }), {}, 'a bare word is no pick')
+  assert.deepEqual(START_FROM.parse({ a: { kind: 'published' }, b: { kind: 'published', branch: '--upload-pack=x' }, c: { kind: 'published', branch: 'a b' }, d: { kind: 'main' } }), {}, 'a pick names a branch')
+  assert.equal(START_FROM.parse(['app-1a2b']), undefined)
+  assert.equal(START_FROM.parse('local'), undefined)
+  const many = Object.fromEntries(Array.from({ length: 250 }, (_, i) => [`p-${i}`, local]))
+  assert.equal(Object.keys(START_FROM.parse(many) ?? {}).length, 200, 'bounded')
 })

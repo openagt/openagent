@@ -7,7 +7,8 @@ const sendStop = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/control.js', () => ({ sendMessage, sendStop }))
 // The "Auto" menu is tested on its own; here a stand-in says the pick it shows and offers a pick.
 vi.mock('./AutoMenu.js', () => ({
-  autoSaid: (publish: string, target?: { into: string }) => `auto ${publish}${target ? ` → ${target.into}` : ''}`,
+  autoSaid: (publish: string, _levels: unknown, target?: { into: string }) => `auto ${publish}${target ? ` → ${target.into}` : ''}`,
+  useAutoLevels: () => [],
   autoCovers: (project: string | null, copies: number) => (copies === 0 ? undefined : project ? `for ${project} and copies` : 'for copies'),
   AutoMenu: ({ publish, onPublish, covers }: { publish: string; onPublish: (pick: string) => void; covers?: string }) => (
     <span>
