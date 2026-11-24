@@ -2,6 +2,7 @@ import { describe, expect, test, vi } from 'vitest'
 import {
   formatAge,
   formatDate,
+  formatDay,
   formatDateTime,
   formatResetDay,
   formatResetTooltip,
@@ -152,5 +153,17 @@ describe('formatResetDay / formatResetTooltip (#960 Edit)', () => {
     const monthDay = new Date(at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
     const zone = Intl.DateTimeFormat().resolvedOptions().timeZone
     expect(formatResetTooltip(at)).toBe(`Quota resets on ${monthDay}, ${time()} (${zone})`)
+  })
+})
+
+describe('formatDay', () => {
+  test('a day is said as Today, Yesterday, else its weekday and date, with the year when it is another one', () => {
+    const today = new Date('2026-10-25T15:00:00')
+    expect(formatDay('2026-10-25T01:00:00', today)).toBe('Today')
+    expect(formatDay('2026-10-24T23:00:00', today)).toBe('Yesterday')
+    // In the browser's own language: the weekday, the month and the day.
+    expect(formatDay('2026-10-21T10:00:00', today)).toBe(new Date('2026-10-21T10:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' }))
+    expect(formatDay('2025-10-21T10:00:00', today)).toContain('2025')
+    expect(formatDay(undefined, today)).toBe('')
   })
 })

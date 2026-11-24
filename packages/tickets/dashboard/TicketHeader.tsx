@@ -229,7 +229,7 @@ export function TicketFacts({
             ) : (
               <span className="min-w-0 truncate">{holder}</span>
             )}
-            {/* A run at it is said by the stage's turning mark; one that ended is said here. */}
+            {/* A run at it is said by the stage's pulsing mark; one that ended is said here. */}
             {holderStatus !== undefined && claimState(holderStatus) !== 'working' && <span className="text-faint-foreground">{claimStanding(holderStatus)}</span>}
           </Fact>
         )}

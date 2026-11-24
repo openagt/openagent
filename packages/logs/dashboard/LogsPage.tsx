@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { Button, Empty, Facts, FilterChips, MiddleCut, Page, PanelGroup, PanelGroups, PanelRow, PanelShape, PersonMark, RunMark, Skeleton, Slot, WordsShape, formatDateTime, formatDuration, needsWord, personSaid, rpcClient, runName, runLineTone, runState, useCodingAgents, useGitHostPeople, useIsMobile, runsAgain, runWord, useModuleHost, usePolled, useWaiting, type CodingAgent, type ModuleAgent, type ModuleHostPerson, type UiPageProps, type UiProject, type ReadState, type WaitingItem } from '@openagt/ui/module'
+import { Button, Empty, Facts, FilterChips, MiddleCut, Page, PanelGroup, PanelGroups, PanelRow, PanelShape, PersonMark, RunMark, Skeleton, Slot, WordsShape, formatDateTime, formatDay, formatDuration, needsWord, personSaid, rpcClient, runName, runLineTone, runState, useCodingAgents, useGitHostPeople, useIsMobile, runsAgain, runWord, useModuleHost, usePolled, useWaiting, type CodingAgent, type ModuleAgent, type ModuleHostPerson, type UiPageProps, type UiProject, type ReadState, type WaitingItem } from '@openagt/ui/module'
 import type { RunCard } from '@openagt/agent-driver'
 
 /** How many runs each project lists: the command's own default page is 20; the page shows more. */
@@ -106,21 +106,11 @@ export function leftParts(card: Pick<RunRow['card'], 'uncommitted' | 'unpublishe
 /** How a row stands: by the sidebar's rule ({@link runState}), given what waits on the person for its run, the sidebar's "Waiting on you". */
 type Standing = ReturnType<typeof runState>
 
-/** The day a run started, as a heading says it: "Today", "Yesterday", else the weekday and the date. */
-export function dayOf(iso: string, now: Date = new Date()): string {
-  const day = new Date(iso)
-  const start = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
-  const days = Math.round((start(now) - start(day)) / 86_400_000)
-  if (days === 0) return 'Today'
-  if (days === 1) return 'Yesterday'
-  return day.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric', ...(day.getFullYear() !== now.getFullYear() ? { year: 'numeric' } : {}) })
-}
-
 /** The runs in order, cut into their days, each day with what its runs cost together. */
 export function byDay(rows: RunRow[], now: Date = new Date()): { day: string; rows: RunRow[]; cost: number }[] {
   const days: { day: string; rows: RunRow[]; cost: number }[] = []
   for (const row of rows) {
-    const day = dayOf(row.card.startedAt, now)
+    const day = formatDay(row.card.startedAt, now)
     const last = days[days.length - 1]
     if (last?.day === day) last.rows.push(row)
     else days.push({ day, rows: [row], cost: 0 })

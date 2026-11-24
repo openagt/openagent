@@ -2,7 +2,7 @@ import { afterEach, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { ModuleHostContext, forgetRemembered, type ModuleAgent, type WaitingItem } from '@openagt/ui/module'
 import { fakeHost, type FakeHost } from '@openagt/ui/module/testing'
-import { LogsPage, dayOf } from './LogsPage.js'
+import { LogsPage } from './LogsPage.js'
 
 // What waits on the person as the shell read it for the sidebar's "Waiting on you", a test's: the page reads the shell's read.
 const shell = vi.hoisted(() => ({ items: [] as WaitingItem[] }))
@@ -62,14 +62,6 @@ test('with every project showing, the sessions with no project are listed too, a
   render(page('p1'))
   expect(await screen.findByText('In the project')).toBeTruthy()
   expect(screen.queryByText('Greeting exchange')).toBeNull()
-})
-
-test('a day is said as Today, Yesterday, else its weekday and date', () => {
-  const today = new Date('2026-10-25T15:00:00')
-  expect(dayOf('2026-10-25T01:00:00', today)).toBe('Today')
-  expect(dayOf('2026-10-24T23:00:00', today)).toBe('Yesterday')
-  // In the browser's own language: the weekday, the month and the day.
-  expect(dayOf('2026-10-21T10:00:00', today)).toBe(new Date('2026-10-21T10:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' }))
 })
 
 test('the runs cut by day, each day with what its runs cost; a run by its name, what it was asked under the pointer, how long it took; a chip shows one status', async () => {
@@ -133,7 +125,7 @@ test("a run's name is a link to the run: the keyboard reaches it, it opens the r
   expect(host.openAgent.mock.calls).toEqual([['p1', 'r1']])
 })
 
-test("each status is the sidebar's mark and word: a waiting run's hexagon waits and it needs an answer, and one that ended is done", async () => {
+test("each status is the sidebar's mark and word: a waiting run's hexagon is in the waiting colour and it needs an answer, and one that ended is a quiet outline", async () => {
   const host = hostWith([
     { id: 'r1', startedAt: at(now - 1000), status: 'waiting', title: 'Asks' },
     { id: 'r2', startedAt: at(now - 2000), endedAt: at(now - 1000), status: 'done', title: 'Ended' },
@@ -146,7 +138,7 @@ test("each status is the sidebar's mark and word: a waiting run's hexagon waits 
   const mark = (title: string) => screen.getAllByText(title)[0]!.closest('li')!.querySelector('svg')!.getAttribute('class')
   await screen.findAllByText('Asks')
   expect(mark('Asks')).toContain('text-warning')
-  expect(mark('Ended')).toContain('text-success')
+  expect(mark('Ended')).toContain('text-faint-foreground')
   // The Human Queue's two words for a run parked on a question: one word for one state.
   expect(screen.getAllByText('Asks')[0]!.closest('li')!.textContent).toContain('Needs answer')
 })

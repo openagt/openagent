@@ -228,7 +228,7 @@ function claimSaid(ticket: WorkspaceTicket): string {
 
 /**
  * A claim's mark, of the stage marks' one size: the holding run's own while one of the project's
- * runs holds it (its ring turning while it works), a still one for any other holder.
+ * runs holds it (pulsing while it works or waits), a still one for any other holder.
  */
 function ClaimMark({ ticket }: { ticket: WorkspaceTicket }) {
   if (!ticket.lockedByAgent || ticket.holderStatus === undefined) return <StateCell state="stopped" className="size-3" />

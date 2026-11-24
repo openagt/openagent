@@ -1,5 +1,6 @@
 import type { AgentMeta, Preferences } from '../../src/index.js'
 import { agentLabel } from './agent-label.js'
+import { formatDay } from './format-date.js'
 
 /** An order the sidebar's list of runs offers. */
 export type RecentsSort = NonNullable<Preferences['recentsSort']>
@@ -10,6 +11,19 @@ export const RECENTS_SORT_LABELS: Readonly<Record<RecentsSort, string>> = {
   updated: 'Last updated',
   name: 'Name',
 }
+
+/** What the sidebar's list is grouped by. */
+export type RecentsGroup = NonNullable<Preferences['recentsGroup']>
+
+/** The groupings, as the sidebar's menu lists them: the default first. */
+export const RECENTS_GROUP_LABELS: Readonly<Record<RecentsGroup, string>> = {
+  none: 'Nothing',
+  project: 'Project',
+  day: 'Day',
+}
+
+/** What a group of runs with no project is called. */
+export const NO_PROJECT_LABEL = 'No project'
 
 /**
  * The sidebar's runs in the order the person picked. By creation, the default, a run keeps its
@@ -25,4 +39,18 @@ export function sortRuns<R extends { agent: AgentMeta }>(rows: readonly R[], ord
   if (order === 'updated') return [...rows].sort((a, b) => newestFirst(a.agent.updatedAt, b.agent.updatedAt) || byCreated(a, b))
   if (order === 'name') return [...rows].sort((a, b) => agentLabel(a.agent).localeCompare(agentLabel(b.agent), undefined, { sensitivity: 'base', numeric: true }) || byCreated(a, b))
   return [...rows].sort(byCreated)
+}
+
+/**
+ * The ordered runs cut into the groups the person picked, each under its line: by project, a
+ * project's runs together where its newest stands, the runs with none under "No project"; by day,
+ * the day of the date the list is ordered by. A list ordered by name has no days to cut it by, so
+ * it stays one list, as does any list not grouped; one list has no line.
+ */
+export function groupRuns<R extends { agent: AgentMeta; project?: string }>(rows: readonly R[], by: RecentsGroup, order: RecentsSort, now: Date = new Date()): { label?: string; rows: R[] }[] {
+  if (by === 'none' || (by === 'day' && order === 'name')) return [{ rows: [...rows] }]
+  const labelOf = (row: R) => (by === 'project' ? (row.project ?? NO_PROJECT_LABEL) : formatDay(order === 'updated' ? row.agent.updatedAt : row.agent.startedAt, now))
+  const groups = new Map<string, R[]>()
+  for (const row of rows) groups.set(labelOf(row), [...(groups.get(labelOf(row)) ?? []), row])
+  return [...groups].map(([label, rows]) => ({ label, rows }))
 }

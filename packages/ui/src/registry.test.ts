@@ -231,6 +231,8 @@ test('every boolean preference survives a save; the sanitizer cannot silently dr
     onboardingDismissed: true,
     nameRuns: true,
     showThinking: true,
+    recentsPerson: true,
+    recentsAgent: true,
   }
   const fs = memFs()
   await writePreferences(allOn, ENV, fs)
@@ -287,6 +289,10 @@ test('the sidebar\'s order keeps only the orders it offers; the default, by crea
   assert.deepEqual(await stored({ recentsSort: 'name' }), { recentsSort: 'name' })
   assert.deepEqual(await stored({ recentsSort: 'created' }), {})
   assert.deepEqual(await stored({ recentsSort: 'random' }), {})
+  // What the list's rows show, each a yes or no, and what it is grouped by, one list being stored as nothing.
+  assert.deepEqual(await stored({ recentsPerson: true, recentsAgent: true, recentsGroup: 'day' }), { recentsPerson: true, recentsAgent: true, recentsGroup: 'day' })
+  assert.deepEqual(await stored({ recentsPerson: false, recentsAgent: 'yes', recentsGroup: 'none' }), { recentsPerson: false })
+  assert.deepEqual(await stored({ recentsGroup: 'project' }), { recentsGroup: 'project' })
 })
 
 test('patchPreferences merges only the keys it is given (#1148)', async () => {

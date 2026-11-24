@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react'
 import type { AgentMeta, ProjectSummary } from '../../src/index.js'
-import { afterEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { SidebarProvider } from './ui/sidebar.js'
 import { hoverTooltip, openMenu, phoneScreen } from '../test-utils.js'
@@ -62,7 +62,7 @@ function agent(over: Partial<AgentMeta> = {}): AgentMeta {
 const renderRail = (ui: ReactElement) => render(<SidebarProvider>{ui}</SidebarProvider>)
 
 describe('AgentHistory (#785)', () => {
-  test('what waits on the person is its own part over the Log: a run\'s name and how long it has waited, what it needs under them, five, then a row that opens the Overview; the Overview row has no count', () => {
+  test('what waits on the person is its own part over the Log: a run\'s name and how long it has waited, what it needs under them in the waiting colour; five, then a row that opens the Overview', () => {
     const asks = (n: number) => ({ projectId: 'p1', projectName: 'p1', kind: 'waiting' as const, module: 'ask', scope: 'run' as const, run: `r${n}`, id: `r${n}:q${n}`, words: 'Needs answer', title: `Run ${n}`, mark: 'question' as const, since: new Date(Date.now() - 3 * 60_000).toISOString() })
     const onSelectRecent = vi.fn()
     const onDashboard = vi.fn()
@@ -72,8 +72,11 @@ describe('AgentHistory (#785)', () => {
     expect(screen.getByText('Waiting on you')).toBeTruthy()
     const row = screen.getByRole('link', { name: 'Run 1 · Needs answer' })
     expect(row.getAttribute('href')).toBe('/p1/r1')
-    // Two lines: the name and its age, then what it needs.
+    // Two lines: the name and its age, then what it needs, in the waiting colour.
     expect([...row.firstElementChild!.children].map(line => line.textContent)).toEqual(['Run 13m', 'Needs answer'])
+    expect(row.firstElementChild!.lastElementChild!.className).toContain('text-warning')
+    // The row is known by its run as it travels between the two lists.
+    expect([row.getAttribute('data-glide'), row.getAttribute('data-glide-part')]).toEqual(['p1:r1', 'waiting'])
     fireEvent.click(row)
     expect(onSelectRecent).toHaveBeenCalledWith('p1', 'r1')
     expect(screen.queryByRole('link', { name: /^Run 6/ })).toBeNull()
@@ -91,6 +94,43 @@ describe('AgentHistory (#785)', () => {
     expect(screen.getAllByRole('link', { name: /Pick a colour/ }).map(link => link.getAttribute('aria-label'))).toEqual(['Pick a colour · Needs answer'])
     expect(screen.getByRole('link', { name: 'Pick a colour · Needs answer' }).getAttribute('aria-current')).toBe('page')
     expect(screen.getByRole('link', { name: /Make the cart/ })).toBeTruthy()
+  })
+
+  test('everything under the project select is one scroll: the pages, what waits and the Log; scrolled past what waits, the Log\'s label is held, fades the rows under it and says how many wait', () => {
+    const asks = (n: number) => ({ projectId: 'p1', projectName: 'p1', kind: 'waiting' as const, module: 'ask', scope: 'run' as const, run: `r${n}`, id: `r${n}:q`, words: 'Needs answer', title: `Run ${n}`, mark: 'question' as const, since: new Date().toISOString() })
+    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'done' })]} selectedAgentId={null} onSelect={() => {}} waiting={[asks(1), asks(2)]} />)
+    const viewport = document.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]')!
+    for (const name of [/^New agent session/, /^Overview/, 'Run 1 · Needs answer', /· done ·/]) expect(viewport.contains(screen.getByRole('link', { name }))).toBe(true)
+    // The person's row at the foot, and the project select, stay out of it.
+    for (const slot of ['sidebar-header', 'sidebar-footer']) expect(viewport.contains(document.querySelector(`[data-slot="${slot}"]`)!)).toBe(false)
+    const part = (name: string) => document.querySelector<HTMLElement>(`[data-rail-part="${name}"]`)!
+    const held = (name: string) => part(name).querySelector('[data-stuck]') !== null
+    expect([held('waiting'), held('log')]).toEqual([false, false])
+    expect(screen.queryByRole('button', { name: '2 waiting' })).toBeNull()
+    // jsdom lays nothing out: the parts stand where the test says, against a scroll whose top is 0.
+    const place = (el: HTMLElement, top: number, bottom: number) => (el.getBoundingClientRect = () => ({ top, bottom, left: 0, right: 0, width: 0, height: bottom - top, x: 0, y: top, toJSON: () => ({}) }))
+    const scrollTo = (scrollTop: number, waiting: [number, number], log: [number, number]) => {
+      place(part('waiting'), ...waiting)
+      place(part('log'), ...log)
+      viewport.scrollTop = scrollTop
+      act(() => void fireEvent.scroll(viewport))
+    }
+    // Scrolled past the pages: what waits is at the top, its label held.
+    scrollTo(220, [-20, 80], [80, 400])
+    expect([held('waiting'), held('log')]).toEqual([true, false])
+    expect(screen.queryByRole('button', { name: '2 waiting' })).toBeNull()
+    // Scrolled past what waits: the Log's label takes its place and says how many wait.
+    scrollTo(400, [-200, -100], [-100, 220])
+    expect([held('waiting'), held('log')]).toEqual([false, true])
+    const chip = screen.getByRole('button', { name: '2 waiting' })
+    const intoView = vi.fn()
+    part('waiting').scrollIntoView = intoView
+    fireEvent.click(chip)
+    expect(intoView).toHaveBeenCalled()
+    // Back at the top, nothing is held.
+    scrollTo(0, [240, 340], [340, 660])
+    expect([held('waiting'), held('log')]).toEqual([false, false])
+    expect(screen.queryByRole('button', { name: '2 waiting' })).toBeNull()
   })
 
   test('with nothing waiting there is no "Waiting on you" part', () => {
@@ -128,7 +168,7 @@ describe('AgentHistory (#785)', () => {
   test('a failed run\'s mark is the failed hexagon, still', () => {
     const { container } = renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'failed' })]} selectedAgentId={null} onSelect={() => {}} />)
     expect(screen.getByLabelText('failed').getAttribute('data-state')).toBe('failed')
-    expect(container.querySelector('.motion-safe\\:animate-spin')).toBeNull()
+    expect(container.querySelector('.motion-safe\\:animate-pulse')).toBeNull()
   })
 
   test('a working run reads as working and animates', () => {
@@ -137,20 +177,29 @@ describe('AgentHistory (#785)', () => {
     expect(screen.getByLabelText('working')).toBeTruthy()
     expect(screen.getByRole('link', { name: /· working ·/ })).toBeTruthy()
     expect(screen.getByLabelText('working').getAttribute('data-state')).toBe('working')
-    expect(container.querySelector('.motion-safe\\:animate-spin')).toBeTruthy()
+    expect(container.querySelector('.motion-safe\\:animate-pulse')).toBeTruthy()
   })
 
-  test("where the listed runs were run by different coding agents, each row's agent is a logo at its end", () => {
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ driver: 'codex' }), agent({ id: 'r2', driver: 'claude-code' })]} selectedAgentId={null} onSelect={() => {}} />)
-    expect(screen.getByLabelText('Codex')).toBeTruthy()
-    expect(screen.getByLabelText('Claude Code')).toBeTruthy()
-  })
-
-  test('where every listed run shares its person and its coding agent, no row marks them, and each row still says them', () => {
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'done', driver: 'codex', person: 'ada@x.dev' }), agent({ id: 'r2', status: 'done', driver: 'codex', person: 'ada@x.dev' })]} selectedAgentId={null} onSelect={() => {}} />)
+  test('a row is its mark, its name and its age until more is asked for: no person, no logo, no project, and its name still says them', () => {
+    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'done', driver: 'codex', person: 'ada@x.dev' }), agent({ id: 'r2', status: 'done', driver: 'claude-code', person: 'rom@y.dev' })]} selectedAgentId={null} onSelect={() => {}} />)
     expect(screen.queryByLabelText('Codex')).toBeNull()
     expect(screen.queryByRole('img', { name: 'ada@x.dev' })).toBeNull()
-    for (const row of screen.getAllByRole('link', { name: /· done ·/ })) expect(row.getAttribute('aria-label')).toMatch(/ada@x\.dev · Codex/)
+    expect(screen.getAllByRole('link', { name: /· done ·/ }).map(row => row.getAttribute('aria-label'))).toEqual([expect.stringMatching(/ada@x\.dev · Codex/), expect.stringMatching(/rom@y\.dev · Claude Code/)])
+  })
+
+  test('asked for from the menu beside "Log", a row shows which coding agent ran it, and whose run it is; with both, the logo rides on the picture', () => {
+    const agents = [agent({ status: 'done', driver: 'codex', person: 'ada@x.dev', model: 'gpt-5' })]
+    preferences.current = { recentsAgent: true }
+    renderRail(<AgentHistory projectId="p1" scope="p1" agents={agents} selectedAgentId={null} onSelect={() => {}} />)
+    expect(screen.getByLabelText('Codex · gpt-5').closest('.rounded-full')).toBeNull()
+    expect(screen.queryByRole('img', { name: 'ada@x.dev' })).toBeNull()
+    cleanup()
+    preferences.current = { recentsAgent: true, recentsPerson: true }
+    renderRail(<AgentHistory projectId="p1" scope="p1" agents={agents} selectedAgentId={null} onSelect={() => {}} />)
+    const person = screen.getByRole('img', { name: 'ada@x.dev' })
+    // One mark for the two: the logo on a small disc at the picture's corner.
+    expect(person.parentElement!.contains(screen.getByLabelText('Codex · gpt-5'))).toBe(true)
+    expect(screen.getByLabelText('Codex · gpt-5').parentElement!.className).toContain('absolute')
   })
 
   test('a row ends with how long ago its run started, in a word', () => {
@@ -165,14 +214,15 @@ describe('AgentHistory (#785)', () => {
     expect(screen.queryByText("replace 'Hello, world!' with 'Welcome!'")).toBeNull()
   })
 
-  test('a run that ended on its question reads as needing an answer, with the still mark', () => {
-    // It asked and waits for the answer: its mark stays still, where a working run's turns.
+  test('a run that ended on its question reads as needing an answer, its mark in the waiting colour', () => {
+    // It asked and waits for the answer: its mark is a working run's in another colour.
     const { container } = renderRail(
       <AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'waiting' })]} selectedAgentId={null} onSelect={() => {}} />,
     )
     expect(screen.getByLabelText('needs answer')).toBeTruthy()
     expect(screen.queryByLabelText('working')).toBeNull()
-    expect(container.querySelector('.motion-safe\\:animate-spin')).toBeNull()
+    expect(container.querySelector('svg.text-warning')).toBeTruthy()
+    expect(container.querySelector('svg.text-info')).toBeNull()
     expect(screen.getByLabelText('needs answer').getAttribute('data-state')).toBe('waiting')
   })
 
@@ -182,7 +232,7 @@ describe('AgentHistory (#785)', () => {
     )
     expect(screen.getByLabelText('saving…')).toBeTruthy()
     expect(screen.queryByLabelText('done')).toBeNull()
-    expect(container.querySelector('.motion-safe\\:animate-spin')).toBeTruthy()
+    expect(container.querySelector('.motion-safe\\:animate-pulse')).toBeTruthy()
   })
 
   test('an ended run without the mark reads as plain done (#1455)', () => {
@@ -401,13 +451,15 @@ describe('AgentHistory (#785)', () => {
 // bespoke collapsing <aside> of #862 — the shadcn Sidebar owns collapse, and the shell never drove
 // the old prop, so those strip/float tests are retired with it.
 describe('AgentHistory rows', () => {
-  test('the coding agent\'s logo is the last mark of every row, after the host\'s glyph, so the logos stand in one column', async () => {
-    const main = agent({ id: 'main', target: 'web', driver: 'codex' })
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[main, agent({ id: 'other', driver: 'claude-code' })]} selectedAgentId={null} onSelect={() => {}} />)
+  test('the marks of a row stand in one order: where it runs, its pull requests and the work it left, its age, then who and which agent', async () => {
+    preferences.current = { recentsAgent: true }
+    const main = agent({ id: 'main', status: 'done', target: 'web', driver: 'codex', pr: { number: 3, url: 'u' }, prState: 'open', unpublished: 1 })
+    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[main]} selectedAgentId={null} onSelect={() => {}} />)
     const row = (await screen.findByLabelText('Runs on Claude Code on the web')).closest('a')!
-    const marks = [...row.querySelectorAll('[aria-label]')].map(mark => mark.getAttribute('aria-label'))
-    expect(marks.at(-1)).toBe('Codex')
-    expect(marks.indexOf('Runs on Claude Code on the web')).toBeLessThan(marks.indexOf('Codex'))
+    expect([...row.querySelectorAll('[aria-label]')].map(mark => mark.getAttribute('aria-label'))).toEqual(['done', 'Runs on Claude Code on the web', 'PR #3 open', 'Needs PR · 1 commit', 'Codex'])
+    // The request and the work stand just before the age, closer to it than to the name.
+    expect(screen.getByLabelText('PR #3 open').parentElement!.className).toContain('-mr-2')
+    expect(screen.getByLabelText('PR #3 open').parentElement!.nextElementSibling!.textContent).toMatch(/^\d+[a-z]$/)
   })
 
   test('a run another machine started says whose it is; this daemon\'s own does not (#1067, #1648)', () => {
@@ -435,11 +487,8 @@ describe('AgentHistory rows', () => {
     expect(screen.getAllByLabelText(/^Needs PR/)).toHaveLength(2)
     // Files left uncommitted come first: committing them is the run's next step.
     expect(screen.getByLabelText('Needs commit · 1 file').querySelector('svg')!.getAttribute('class')).toContain('lucide-file-pen')
-    // Just before the logo, where a pull request's mark stands.
-    const row = screen.getByLabelText('Needs PR · 2 commits').closest('a')!
-    const marks = [...row.querySelectorAll('[aria-label]')].map(mark => mark.getAttribute('aria-label'))
-    expect(marks.slice(-2)).toEqual(['Needs PR · 2 commits', 'Claude Code'])
-    expect(row.getAttribute('aria-label')).toContain('Needs PR · 2 commits')
+    // The row's own sentence says it too.
+    expect(screen.getByLabelText('Needs PR · 2 commits').closest('a')!.getAttribute('aria-label')).toContain('Needs PR · 2 commits')
   })
 
   test('on a page of no project, the picked project\'s rows say what its git host allows, as on its own pages', () => {
@@ -448,7 +497,7 @@ describe('AgentHistory rows', () => {
     expect(screen.getByLabelText('Needs push · 1 commit')).toBeTruthy()
   })
 
-  test('a run\'s pull request is a glyph before the logo, its shape and colour by how it stands, and the hover says which', async () => {
+  test('a run\'s pull request is a glyph before its age, its shape and colour by how it stands', async () => {
     const agents = [
       agent({ id: 'open', status: 'done', driver: 'claude-code', pr: { number: 12, url: 'u' }, prState: 'open' }),
       agent({ id: 'draft', status: 'done', pr: { number: 13, url: 'u' }, prState: 'draft' }),
@@ -458,7 +507,7 @@ describe('AgentHistory rows', () => {
       agent({ id: 'none', status: 'done' }),
     ]
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={agents} selectedAgentId={null} onSelect={() => {}} />)
-    const glyph = (label: string) => screen.getByLabelText(label).querySelector('svg')!.getAttribute('class')
+    const glyph = (label: string) => `${screen.getByLabelText(label).querySelector('svg')!.getAttribute('class')} ${screen.getByLabelText(label).querySelector('[data-pr]')!.className}`
     expect(glyph('PR #12 open')).toContain('lucide-git-pull-request')
     expect(glyph('PR #12 open')).toContain('text-success')
     expect(glyph('PR #13 draft')).toContain('lucide-git-pull-request-draft')
@@ -469,11 +518,15 @@ describe('AgentHistory rows', () => {
     // A request whose state is not known has no mark, which would read as one more state; its number stays in the row's sentence.
     expect(screen.getAllByLabelText(/^PR #/)).toHaveLength(4)
     expect(screen.getByRole('link', { name: /PR #16$/ })).toBeTruthy()
-    // Just before the logo, so the PR marks stand in one column.
-    const row = screen.getByLabelText('PR #12 open').closest('a')!
-    const marks = [...row.querySelectorAll('[aria-label]')].map(mark => mark.getAttribute('aria-label'))
-    expect(marks.slice(-2)).toEqual(['PR #12 open', 'Claude Code'])
-    expect(row.getAttribute('aria-label')).toContain('PR #12 open')
+    expect(screen.getByLabelText('PR #12 open').closest('a')!.getAttribute('aria-label')).toContain('PR #12 open')
+  })
+
+  test('a run with several pull requests: those that stand alike are one glyph with their count at its corner, those that differ stand side by side', () => {
+    const earlierPrs = [{ number: 7, url: 'a', state: 'merged' as const }, { number: 8, url: 'b', state: 'merged' as const }, { number: 9, url: 'c', state: 'open' as const }]
+    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'done', earlierPrs, pr: { number: 9, url: 'c' }, prState: 'open' })]} selectedAgentId={null} onSelect={() => {}} />)
+    // The request it has now is among the earlier ones too: said once.
+    const marks = screen.getByLabelText('PRs #7 merged, #8 merged, #9 open')
+    expect([...marks.querySelectorAll('[data-pr]')].map(mark => [mark.getAttribute('data-pr'), mark.textContent])).toEqual([['merged', '2'], ['open', '']])
   })
 
   // The shared shell: the rail is present on the home/Overview too (no project selected), showing
@@ -519,8 +572,12 @@ describe('whose run a row is', () => {
 
   const ada = { email: 'ada@x.dev', login: 'ada', avatar: 'https://avatars.githubusercontent.com/u/1' }
   const row = (name: RegExp) => screen.getByRole('link', { name })
+  // The person asked for it, from the menu beside "Log".
+  beforeEach(() => {
+    preferences.current = { recentsPerson: true, recentsAgent: true }
+  })
 
-  test("two letters at first, the person's picture once the git host said, before the agent's logo; pointed at, it says who", async () => {
+  test("two letters at first, the person's picture once the git host said, the agent's logo on it", async () => {
     onGitHostPeople.mockResolvedValue([ada])
     renderRail(
       <AgentHistory
@@ -666,7 +723,7 @@ describe('runs on another host on the rail (#1263, #2394)', () => {
     )
     expect(await screen.findByLabelText('Runs on Claude Code on the web')).toBeTruthy()
     // Where it runs is the host, not the agent: it is Claude Code.
-    expect(screen.getByLabelText('Claude Code')).toBeTruthy()
+    expect(screen.getByRole('link', { name: /· working ·/ }).getAttribute('aria-label')).toMatch(/Claude Code · runs on Claude Code on the web/)
     // At work over there for as long as its record says so.
     expect(screen.getByLabelText('working')).toBeTruthy()
   })
@@ -685,23 +742,28 @@ describe('runs on another host on the rail (#1263, #2394)', () => {
 })
 
 describe('AgentHistory row hover', () => {
-  test('pointed at, a row shows its whole title beside it, and under it what its marks would say', async () => {
+  test('pointed at, a row says all of it beside itself: its whole name, then a line per thing known of the run', async () => {
     const long = 'refactor the queue promotion sweep so drains claim tickets through lock files'
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ intent: long, driver: 'codex' })]} selectedAgentId={null} onSelect={() => {}} />)
-    const tip = await hoverTooltip((await screen.findByText(long)).closest('.rail-title') as HTMLElement)
-    expect(tip.textContent).toContain(long)
-    expect(tip.textContent).toContain('Codex')
+    const recentAgents = [{ projectId: 'p1', projectName: 'shop', agent: agent({ status: 'done', intent: long, driver: 'codex', model: 'gpt-5', person: 'ada@x.dev', pr: { number: 5, url: 'https://x/pull/5' }, prState: 'open', unpublished: 2 }) }]
+    renderRail(<AgentHistory projectId={null} agents={[]} recentAgents={recentAgents} selectedAgentId={null} onSelect={() => {}} />)
+    const tip = await hoverTooltip(screen.getByRole('link', { name: new RegExp(`^${long}`) }))
+    expect(tip.firstElementChild!.textContent).toBe(long)
+    const facts = Object.fromEntries(within(tip).getAllByRole('listitem').map(fact => [fact.firstElementChild!.textContent, fact.lastElementChild!.textContent]))
+    expect(facts).toMatchObject({ State: 'Done', Project: 'shop', 'Started by': 'ada@x.dev', Agent: 'Codex · gpt-5', PR: '#5 open', Work: 'Needs PR · 2 commits' })
+    expect(Object.keys(facts)).toEqual(['State', 'Project', 'Started by', 'Agent', 'Started', 'PR', 'Work'])
   })
 
-  test('each mark at the row\'s end says what it is', async () => {
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'done', driver: 'claude-code', pr: { number: 5, url: 'https://x/pull/5' }, prState: 'open' })]} selectedAgentId={null} onSelect={() => {}} />)
-    expect((await hoverTooltip(screen.getByLabelText('PR #5 open'))).textContent).toBe('PR #5 open')
+  test('a row with nothing but its name says its state and when it started', async () => {
+    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ title: 'Plain', status: 'failed', startedAt: new Date().toISOString() })]} selectedAgentId={null} onSelect={() => {}} />)
+    const tip = await hoverTooltip(screen.getByRole('link', { name: /^Plain/ }))
+    expect(within(tip).getAllByRole('listitem').map(fact => fact.textContent)).toEqual(['StateFailed', 'StartedJust now'])
   })
 
-  test('the coding agent\'s logo says the agent and the model it ran on', async () => {
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'done', driver: 'claude-code', model: 'claude-opus-5-5' }), agent({ id: 'r2', driver: 'codex' })]} selectedAgentId={null} onSelect={() => {}} />)
-    // No list of models read here: the model is said by its id.
-    expect((await hoverTooltip(screen.getByLabelText('Claude Code · claude-opus-5-5'))).textContent).toBe('Claude Code · claude-opus-5-5')
+  test('what waits on the person says its name whole, what it needs in words and what that is about', async () => {
+    const asked = { projectId: 'p1', projectName: 'shop', kind: 'waiting' as const, module: 'ask', scope: 'run' as const, run: 'r1', id: 'r1:q', words: 'Needs answer', title: 'Pick a colour', detail: 'Blue or green?', mark: 'question' as const, since: new Date().toISOString() }
+    renderRail(<AgentHistory projectId={null} agents={[]} recentAgents={[]} selectedAgentId={null} onSelect={() => {}} waiting={[asked]} />)
+    const tip = await hoverTooltip(screen.getByRole('link', { name: 'Pick a colour · Needs answer' }))
+    expect([...tip.children].map(line => line.textContent)).toEqual(['Pick a colour', 'Needs answer · Blue or green? · shop'])
   })
 })
 
@@ -724,7 +786,7 @@ describe('the project select (#1513)', () => {
     expect(screen.getByRole('combobox', { name: 'Project: All projects' })).toBeTruthy()
   })
 
-  test('two projects with the same name say which folder each is in, on the button, in the menu and on the rows', async () => {
+  test('two projects with the same name say which folder each is in, on the button, in the menu and in the name of each row', async () => {
     const work: ProjectSummary = { id: 'shop-1', path: '/home/me/work/shop', name: 'shop', activated: true, gitHost: false }
     const clients: ProjectSummary = { id: 'shop-2', path: '/home/me/clients/shop', name: 'shop', activated: true, gitHost: false }
     const projects = [work, clients, idle]
@@ -745,7 +807,7 @@ describe('the project select (#1513)', () => {
     unmount()
     renderRail(rail(null))
     // The Overview's rows name their project the same way.
-    expect(screen.getByText('clients/shop')).toBeTruthy()
+    expect(screen.getByRole('link', { name: /^second/ }).getAttribute('aria-label')).toContain('clients/shop')
   })
 
   test('while the project the address names is not read, neither "All projects" nor "No sessions yet." shows', () => {
@@ -970,14 +1032,58 @@ describe('AgentHistory on a phone', () => {
     preferences.current = { recentsSort: 'updated' }
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={agents} selectedAgentId={null} onSelect={() => {}} />)
     expect(names()).toEqual(['Old question', 'New work'])
-    await openMenu(screen.getByRole('button', { name: 'Sort agents' }))
+    await openMenu(screen.getByRole('button', { name: 'Sort and view' }))
     // The pick is said as a radio's, checked or not, not only drawn.
     expect((await screen.findAllByRole('menuitemradio')).map(item => [item.textContent, item.getAttribute('aria-checked')])).toEqual([
       ['Date created', 'false'],
       ['Last updated', 'true'],
       ['Name', 'false'],
+      // One project's list has no projects to cut it by.
+      ['Nothing', 'true'],
+      ['Day', 'false'],
     ])
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'Name' }))
     expect(updatePreferences).toHaveBeenCalledWith({ recentsSort: 'name' })
+  })
+
+  test('the menu beside "Log" also picks what a row shows and what the list is cut by, each kept as the person\'s', async () => {
+    const recentAgents = [{ projectId: 'p1', projectName: 'shop', agent: agent({ status: 'done' }) }]
+    preferences.current = { recentsPerson: true, recentsGroup: 'project' }
+    renderRail(<AgentHistory projectId={null} agents={[]} recentAgents={recentAgents} selectedAgentId={null} onSelect={() => {}} />)
+    await openMenu(screen.getByRole('button', { name: 'Sort and view' }))
+    expect((await screen.findAllByRole('menuitemcheckbox')).map(item => [item.textContent, item.getAttribute('aria-checked')])).toEqual([['Who started it', 'true'], ['Coding agent', 'false']])
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Coding agent' }))
+    expect(updatePreferences).toHaveBeenCalledWith({ recentsAgent: true })
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Who started it' }))
+    expect(updatePreferences).toHaveBeenCalledWith({ recentsPerson: false })
+    // Every project's list can be cut by project.
+    expect(screen.getByRole('menuitemradio', { name: 'Project' }).getAttribute('aria-checked')).toBe('true')
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Day' }))
+    expect(updatePreferences).toHaveBeenCalledWith({ recentsGroup: 'day' })
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Nothing' }))
+    expect(updatePreferences).toHaveBeenCalledWith({ recentsGroup: 'none' })
+  })
+
+  test('cut by project, each project\'s runs stand under its line, those with no project under "No project"; cut by day, under the day they started', () => {
+    // A second apart, so the two of today are in a known order whatever the hour.
+    const at = (daysAgo: number, secondsAgo = 0) => new Date(Date.now() - daysAgo * 86_400_000 - secondsAgo * 1000).toISOString()
+    const recentAgents = [
+      { projectId: 'p1', projectName: 'shop', agent: agent({ id: 'a', status: 'done', title: 'Cart', startedAt: at(0) }) },
+      { projectId: 'session', projectName: 'session', agent: agent({ id: 'b', status: 'done', title: 'Chat', startedAt: at(0, 1) }) },
+      { projectId: 'p1', projectName: 'shop', agent: agent({ id: 'c', status: 'done', title: 'Login', startedAt: at(1) }) },
+    ]
+    const lines = () => [...document.querySelector('[data-rail-part="log"] ul')!.children].map(item => (item.getAttribute('role') === 'presentation' ? `— ${item.textContent}` : item.firstElementChild!.getAttribute('aria-label')!.split(' · ')[0]))
+    preferences.current = { recentsGroup: 'project' }
+    renderRail(<AgentHistory projectId={null} agents={[]} recentAgents={recentAgents} selectedAgentId={null} onSelect={() => {}} />)
+    expect(lines()).toEqual(['— shop', 'Cart', 'Login', '— No project', 'Chat'])
+    cleanup()
+    preferences.current = { recentsGroup: 'day' }
+    renderRail(<AgentHistory projectId={null} agents={[]} recentAgents={recentAgents} selectedAgentId={null} onSelect={() => {}} />)
+    expect(lines()).toEqual(['— Today', 'Cart', 'Chat', '— Yesterday', 'Login'])
+    cleanup()
+    // By name there are no days to cut by, and one project's list has no projects: one list, no line.
+    preferences.current = { recentsGroup: 'day', recentsSort: 'name' }
+    renderRail(<AgentHistory projectId={null} agents={[]} recentAgents={recentAgents} selectedAgentId={null} onSelect={() => {}} />)
+    expect(lines()).toEqual(['Cart', 'Chat', 'Login'])
   })
 })
