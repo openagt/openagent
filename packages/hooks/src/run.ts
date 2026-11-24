@@ -282,6 +282,8 @@ export interface RunSummary {
   session?: { id: string; resume?: string }
   /** It ended, and the process that ran it is still saving its record and cleaning up its checkout. */
   saving?: true
+  /** Its record says it works, and the process that ran it is gone: nothing works on it, and its host's sweep ends it. */
+  gone?: true
 }
 
 /** Which of a host's runs a list asks for, when not all of them; given both, a run must be both. */

@@ -294,7 +294,7 @@ test("the runs it lists are the project's records and its runs at work, newest f
 
     // A read never writes: a run whose process died still says it works, until its sweep ends it.
     await liveCard(repo, first, 'running', { pid: 9999, host: HERE })
-    assert.equal((await here.list(project, { ids: [first] }))[0]?.status, 'working')
+    assert.deepEqual([(await here.list(project, { ids: [first] }))[0]?.status, (await here.list(project, { ids: [first] }))[0]?.gone], ['working', true])
     // Ended clean, its process still alive here: saving its record.
     await liveCard(repo, first, 'done', { pid: 4242, host: HERE })
     assert.equal((await here.list(project, { ids: [first] }))[0]?.saving, true)

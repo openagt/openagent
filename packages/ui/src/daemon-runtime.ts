@@ -212,8 +212,8 @@ export function createProjectRuntime({ cwd, env, host, otherHosts = async () => 
     const here = await stat(record.path).then(s => s.isDirectory()).catch(() => false)
     if (here) {
       // An agent at work would go on working in a project the dashboard no longer shows, as this
-      // computer's host says its runs; one whose process died is closed by its sweep.
-      const working = (await host.list({ id: record.id, name: basename(record.path), dir: record.path }).catch(() => [])).some(run => run.status === 'working')
+      // computer's host says its runs. A run whose process died does not count: nothing is working there.
+      const working = (await host.list({ id: record.id, name: basename(record.path), dir: record.path }).catch(() => [])).some(run => run.status === 'working' && !run.gone)
       if (working) return { ok: false, error: 'An agent is working in this project. Stop it, then remove the project.' }
     }
     await removeProject(id, env)

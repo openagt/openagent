@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { listSessionFolders, sessionFolder, sessionsHomeOf } from '@openagt/agent-data'
-import { currentBranch, worktreeDirEntries, worktreePath } from '@openagt/git-branches'
+import { worktreeBranch, worktreeDirEntries, worktreePath } from '@openagt/git-branches'
 import type { GitBranchesFacts, GithubFacts, PullRequest, RunAgent, RunFacts, RunFeedEvent, RunOptions, RunStatus, RunSummary, RunsWanted } from '@openagt/hooks'
 import { isRunId, parseRunCard, startOfId, type AnyDiaryLine, type RunCard } from '../record.js'
 import { findRun, keptRuns, readDiary } from '../record-store.js'
@@ -38,28 +38,39 @@ export function standing(record: RunCard | undefined, live: RunCard | undefined)
 }
 
 /**
- * The folders a project's runs work in now: each checkout under its `.branches/` with a `.git` of
- * its own (without one, git there reads the project's own checkout), or each session's folder in
- * the sessions home.
+ * The folders a project's runs work in now: each checkout under its `.branches/`, at the branch it
+ * has out while git can read it there, or each session's folder in the sessions home. A checkout
+ * git cannot read (its clean-up is removing it) is still its run's folder.
  */
 export async function runFolders(dir: string): Promise<RunFolder[]> {
   const home = await sessionsHomeOf(dir)
   if (home !== undefined) return listSessionFolders(home)
   const folders: RunFolder[] = []
   for (const entry of await worktreeDirEntries(dir)) {
-    const folder = await ownFolder(dir, entry.agentId)
-    if (folder) folders.push(folder)
+    const branch = await worktreeBranch(entry.path).catch(() => undefined)
+    folders.push({ id: entry.agentId, path: entry.path, ...(branch !== undefined ? { branch } : {}) })
   }
   return folders
 }
 
-/** The run's folder while it is there, with the branch it has out: see {@link runFolders}. */
-export async function ownFolder(dir: string, id: string): Promise<RunFolder | undefined> {
+/** The run's folder while it is there: see {@link runFolders}. */
+export async function folderOf(dir: string, id: string): Promise<RunFolder | undefined> {
   const home = await sessionsHomeOf(dir)
   const path = home !== undefined ? sessionFolder(home, id) : worktreePath(dir, id)
-  if (!(await stat(home !== undefined ? path : join(path, '.git')).then(() => true, () => false))) return undefined
-  const branch = home !== undefined ? undefined : await currentBranch(path).catch(() => undefined)
+  if (!(await stat(path).then(found => found.isDirectory(), () => false))) return undefined
+  const branch = home !== undefined ? undefined : await worktreeBranch(path).catch(() => undefined)
   return { id, path, ...(branch !== undefined ? { branch } : {}) }
+}
+
+/**
+ * The run's folder while its work is there: a session's folder, or a checkout of the project with a
+ * `.git` of its own; without one, git in that folder would read the project's own checkout, and its
+ * branch would pass for the run's.
+ */
+export async function ownFolder(dir: string, id: string): Promise<RunFolder | undefined> {
+  const folder = await folderOf(dir, id)
+  if (!folder || ((await sessionsHomeOf(dir)) === undefined && !(await stat(join(folder.path, '.git')).then(() => true, () => false)))) return undefined
+  return folder
 }
 
 /** A run's live card, in its folder while it works there; none when it has none, whatever tool wrote it. */
@@ -195,6 +206,8 @@ export function summaryOf(card: Listed, at: SummaryAt): RunSummary {
     // Ended clean while the process its card names is alive here: it is saving the run's record and
     // cleaning up its checkout, and a row that said "done" through that read as finished with nothing coming.
     ...(card.status === 'done' && typeof pid === 'number' && computer === at.deps.here && at.deps.isAlive(pid) ? { saving: true as const } : {}),
+    // Says it works, under a process of this computer's that is gone: read as it is, for the sweep to end.
+    ...(card.status === 'running' && typeof pid === 'number' && computer === at.deps.here && !at.deps.isAlive(pid) ? { gone: true as const } : {}),
   }
 }
 
@@ -209,7 +222,7 @@ const STARTING_MS = 30_000
  */
 export async function diaryOf(dir: string, id: string): Promise<TailTarget<AnyDiaryLine> | undefined> {
   if (!isRunId(id)) return undefined
-  const folder = await ownFolder(dir, id)
+  const folder = await folderOf(dir, id)
   if (folder) return { file: join(liveDir(folder.path), logDiaryFile(id)) }
   const record = await findRun(dir, id).catch(() => undefined)
   if (!record || record.status === 'running') return { pending: true }

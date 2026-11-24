@@ -1,4 +1,5 @@
 import { strict as assert } from 'node:assert'
+import { localHost } from '@openagt/agent-driver'
 import { test } from 'node:test'
 import { execFileSync } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
@@ -319,7 +320,8 @@ test('a project with an agent at work is not removed, a card left "running" by a
   const env = { XDG_CONFIG_HOME: cfg, GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.com', GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@example.com' }
   const before = Object.fromEntries(Object.keys(env).map(key => [key, process.env[key]]))
   Object.assign(process.env, env)
-  const runtime = createProjectRuntime({ cwd: cfg, env, host: fakeHost() })
+  // This computer's host, which says the project's runs off their files.
+  const runtime = createProjectRuntime({ cwd: cfg, env, host: localHost({ agents: async () => [] }) })
   try {
     assert.deepEqual(await runtime.onAddProject(folder, false), { ok: true, alreadyActivated: false })
     const [project] = await listProjects(env)

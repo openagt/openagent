@@ -108,15 +108,15 @@ describe('AgentActionsMenu (#toolbar-menu)', () => {
       { kind: 'session', driver: 'claude', workspace: '/repo/.openagent/worktrees/run-1', fake: false },
       { kind: 'session-update', sessionId: '45015d11-755b-423c-ae71-8dbfd54f7cce' },
     ] as never
-    render(<AgentActionsMenu projectId="p1" agentId="run-1" events={events} onDeleted={vi.fn()} />)
+    // The command is the run's coding agent's to say, and comes with the run's read.
+    const resume = "mkdir -p '/repo/.openagent/worktrees/run-1' && cd '/repo/.openagent/worktrees/run-1' && claude --resume 45015d11-755b-423c-ae71-8dbfd54f7cce"
+    render(<AgentActionsMenu projectId="p1" agentId="run-1" events={events} onDeleted={vi.fn()} resumeCommand={resume} />)
     openMenu()
     // The id is visible in its own right: it is the only handle on the conversation off-dashboard.
     expect(await screen.findByText('45015d11')).toBeTruthy()
     fireEvent.click(screen.getByText('Copy resume command'))
     await waitFor(() =>
-      expect(writeText).toHaveBeenCalledWith(
-        "mkdir -p '/repo/.openagent/worktrees/run-1' && cd '/repo/.openagent/worktrees/run-1' && claude --resume 45015d11-755b-423c-ae71-8dbfd54f7cce",
-      ),
+      expect(writeText).toHaveBeenCalledWith(resume),
     )
     // And it says so, since a click that only fills the clipboard shows nothing otherwise.
     await waitFor(() => expect(screen.getByText('Copied')).toBeTruthy())
