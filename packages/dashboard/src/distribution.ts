@@ -42,6 +42,8 @@ const DISTRIBUTION: DashboardDistribution = [
   { package: '@openagt/ui-card-waiting', for: 'computer' },
   // The person's name and picture, Settings › Profile.
   { package: '@openagt/user-info', for: 'computer' },
+  // The agent profiles: their page, the profile every next run is on, and Default.
+  { package: '@openagt/profiles', for: 'computer' },
   // notifications-command, a plugin that starts off: the person's command, run when a run on this
   // computer needs them.
   { package: '@openagt/notifications-command', for: 'computer' },

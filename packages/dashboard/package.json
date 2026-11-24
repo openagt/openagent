@@ -59,6 +59,7 @@
     "@openagt/logs": "workspace:*",
     "@openagt/notifications-browser": "workspace:*",
     "@openagt/notifications-command": "workspace:*",
+    "@openagt/profiles": "workspace:*",
     "@openagt/queue": "workspace:*",
     "@openagt/saved-prompts": "workspace:*",
     "@openagt/scheduled-agents": "workspace:*",

@@ -25,6 +25,7 @@ export const DASHBOARD_PACKAGES: DashboardDistribution = [
   { package: '@openagt/ui-renderer-markdown', for: 'computer' },
   { package: '@openagt/ui-card-waiting', for: 'computer' },
   { package: '@openagt/user-info', for: 'computer' },
+  { package: '@openagt/profiles', for: 'computer' },
 
   { package: '@openagt/notifications-command', for: 'computer' },
   { package: '@openagt/notifications-browser', for: 'computer', on: true },
