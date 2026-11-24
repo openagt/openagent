@@ -24,3 +24,11 @@
 {"kind":"cost","usd":0.0844892,"at":"2026-11-24T13:05:32.369Z"}
 {"kind":"question","title":"How do you take your coffee?","header":"Coffee","options":[{"id":"opt:0","label":"Black","detail":"Nothing added."},{"id":"opt:1","label":"With milk","detail":"A splash of milk or cream."},{"id":"opt:2","label":"Sweet","detail":"Sugar or syrup."},{"id":"opt:3","label":"Milk and sugar","detail":"Both."}],"at":"2026-11-24T13:05:32.369Z"}
 {"kind":"ended","status":"waiting","at":"2026-11-24T13:05:32.369Z"}
+{"kind":"start","prompt":"You paused to ask: \"How do you take your coffee?\". The user chose: Black. Continue with that decision.","at":"2026-11-24T13:05:48.563Z"}
+{"kind":"session","sessionId":"52a08fdd-bcb4-46ca-a242-d728a566680e","at":"2026-11-24T13:05:48.564Z"}
+{"kind":"tokens","tokens":21891,"at":"2026-11-24T13:05:49.190Z"}
+{"kind":"said","text":"Black it is: coffee with nothing added. Want another question?","at":"2026-11-24T13:05:49.190Z"}
+{"kind":"rate-limit","limit":{"status":"allowed","window":"five_hour","resetsAt":1795542000000,"windows":[{"window":"five_hour","percentUsed":11,"resetsAt":1795542000000},{"window":"seven_day","percentUsed":46,"resetsAt":1795838400000}]},"at":"2026-11-24T13:05:49.194Z"}
+{"kind":"result","text":"Black it is: coffee with nothing added. Want another question?","sessionId":"52a08fdd-bcb4-46ca-a242-d728a566680e","at":"2026-11-24T13:05:49.721Z"}
+{"kind":"cost","usd":0.0918604,"at":"2026-11-24T13:05:49.721Z"}
+{"kind":"ended","status":"done","at":"2026-11-24T13:05:49.722Z"}
