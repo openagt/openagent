@@ -62,6 +62,11 @@ const START_KEY = 'openagent.start'
 /** The copy's own git setting that names the folder it was copied from. */
 const FROM_KEY = 'openagent.from'
 
+/** The commit a session's copy of a repo was made at, as the copy names it: what it holds beyond it is the session's work. Nothing for any other repository. */
+export async function copyStart(repo: string, git: GitRunner = nodeGitRunner()): Promise<string | undefined> {
+  return (await git(['config', '--get', START_KEY], repo).catch(() => '')).trim() || undefined
+}
+
 /**
  * The folder a session's copy of a repo was copied from, as the copy names it: where the work of a
  * copy with no remote goes back to (`bring.ts`). Nothing for any other repository.
@@ -133,9 +138,9 @@ export async function dropUntouchedCopies(home: string, id: string, repos: reado
   for (const repo of repos) {
     const copy = join(path, repo.name)
     if (!(await stat(join(copy, '.git')).then(() => true, () => false))) continue
-    const start = (await git(['config', '--get', START_KEY], copy).catch(() => '')).trim()
+    const start = await copyStart(copy, git)
     const untouched =
-      start !== '' &&
+      start !== undefined &&
       (await Promise.all([git(['status', '--porcelain'], copy), git(['rev-list', '--max-count=1', '--branches', '--not', start], copy)]).then(([dirty, own]) => dirty.trim() === '' && own.trim() === '', () => false))
     if (!untouched) continue
     await rm(copy, { recursive: true, force: true })

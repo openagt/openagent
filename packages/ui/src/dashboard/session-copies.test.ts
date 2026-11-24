@@ -54,6 +54,9 @@ test("a copy is acted on in its own folder, on the branch it is on now, with non
     const target = await copyTarget(agent, 'site', { home: at.home })
     assert.equal(target?.cwd, join(at.folder, 'site'))
     assert.deepEqual(target?.agent, { id: ID, startedAt: agent.startedAt, status: 'done', branch: 'agent-fix-footer' })
+    // A copy that names the commit it was made at is measured from there.
+    git(join(at.folder, 'site'), 'config', 'openagent.start', 'b'.repeat(40))
+    assert.equal((await copyTarget(agent, 'site', { home: at.home }))?.agent.baseCommit, 'b'.repeat(40))
     assert.equal(await copyTarget(agent, 'notes', { home: at.home }), undefined, 'a folder that is no repository')
     assert.equal(await copyTarget(agent, '../' + ID + '/site', { home: at.home }), undefined, 'a path is no name')
     assert.equal(await copyTarget(agent, 'gone', { home: at.home }), undefined)
