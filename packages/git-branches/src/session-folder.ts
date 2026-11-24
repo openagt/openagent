@@ -1,4 +1,4 @@
-import { mkdir, realpath, rm, rmdir, stat } from 'node:fs/promises'
+import { mkdir, readdir, realpath, rm, rmdir, stat } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import { checkoutRoot, nodeGitRunner, originDefaultBranch } from './git.js'
 import { type GitRunner, originUrl } from '@openagt/hooks'
@@ -10,9 +10,10 @@ export type { SessionRepo } from './repo-names.js'
 
 /**
  * The repos given to a session, each by a folder in it: the repo's own top folder, named as
- * {@link nameRepos} names them. Rejects a folder that is no git repository, saying which.
+ * {@link nameRepos} names them, beside the repos the session has (`have`) and the other names its
+ * folder holds (`taken`). Rejects a folder that is no git repository, saying which.
  */
-export async function sessionRepos(folders: readonly string[], git: GitRunner = nodeGitRunner()): Promise<SessionRepo[]> {
+export async function sessionRepos(folders: readonly string[], git: GitRunner = nodeGitRunner(), have: readonly SessionRepo[] = [], taken: readonly string[] = []): Promise<SessionRepo[]> {
   const tops: string[] = []
   for (const folder of folders) {
     tops.push(
@@ -21,7 +22,7 @@ export async function sessionRepos(folders: readonly string[], git: GitRunner = 
       }),
     )
   }
-  return nameRepos(tops)
+  return nameRepos(tops, have, taken)
 }
 
 /**
@@ -123,18 +124,56 @@ export async function openSessionFolder(home: string, id: string, repos: readonl
 }
 
 /**
- * A run in a project is over: the copies it never touched go, and its session folder with them
- * once it is empty. A copy is untouched when its tree is clean and no branch of it holds a commit
+ * Repos given to a session that is already going, by a tick with a message, a resume, or its
+ * agent's own `add` command: each made a copy in its folder as at its start
+ * ({@link openSessionFolder}), named beside `have`, the repos it has, and beside whatever else its
+ * folder holds. Answers the repos it has now and the copies this call made. A repo it has already
+ * adds nothing.
+ */
+export async function addSessionRepos(
+  home: string,
+  id: string,
+  have: readonly SessionRepo[],
+  folders: readonly string[],
+  git: GitRunner = nodeGitRunner(),
+): Promise<{ repos: SessionRepo[]; made: SessionRepo[]; path: string }> {
+  const path = sessionFolder(home, id)
+  const taken = (await readdir(path).catch(() => [] as string[])).filter(name => !have.some(repo => repo.name === name))
+  const fresh = await sessionRepos(folders, git, have, taken)
+  const { made } = await openSessionFolder(home, id, fresh, git)
+  return { repos: [...have, ...fresh], made, path }
+}
+
+/**
+ * The copies in a session's folder its repos do not name yet: each one made by `add` while its run
+ * went on, which the copy itself says, naming the folder it was copied from. A repository the
+ * agent cloned there on its own names none, and is no repo of the session's.
+ */
+export async function foundCopies(home: string, id: string, have: readonly SessionRepo[], git: GitRunner = nodeGitRunner()): Promise<SessionRepo[]> {
+  const path = sessionFolder(home, id)
+  const names = (await readdir(path).catch(() => [] as string[])).filter(name => isCopyName(name) && !have.some(repo => repo.name === name)).sort()
+  const found = await Promise.all(
+    names.map(async name => {
+      const from = await copiedFrom(join(path, name), git)
+      return from !== undefined ? { name, from } : undefined
+    }),
+  )
+  return found.filter((repo): repo is SessionRepo => repo !== undefined)
+}
+
+/**
+ * A run in a project is over: the copies it never touched go, every one its folder holds, the
+ * ones added while it went on too, and its session folder with them once it is empty. A copy is untouched when its tree is clean and no branch of it holds a commit
  * beyond the one it was made at, which the copy itself names. One with work stays, pushed or not:
  * a resumed run goes on in it, and its branch is where the session's work bar reads it. A copy that
  * went is made again by a resume ({@link openSessionFolder}). A copy that does not say where it
  * started stays. Answers the names that went.
  */
-export async function dropUntouchedCopies(home: string, id: string, repos: readonly SessionRepo[], git: GitRunner = nodeGitRunner()): Promise<string[]> {
+export async function dropUntouchedCopies(home: string, id: string, git: GitRunner = nodeGitRunner()): Promise<string[]> {
   const path = sessionFolder(home, id)
   const gone: string[] = []
-  for (const repo of repos) {
-    const copy = join(path, repo.name)
+  for (const name of (await readdir(path).catch(() => [] as string[])).filter(isCopyName)) {
+    const copy = join(path, name)
     if (!(await stat(join(copy, '.git')).then(() => true, () => false))) continue
     const start = await copyStart(copy, git)
     const untouched =
@@ -142,7 +181,7 @@ export async function dropUntouchedCopies(home: string, id: string, repos: reado
       (await Promise.all([git(['status', '--porcelain'], copy), git(['rev-list', '--max-count=1', '--branches', '--not', start], copy)]).then(([dirty, own]) => dirty.trim() === '' && own.trim() === '', () => false))
     if (!untouched) continue
     await rm(copy, { recursive: true, force: true })
-    gone.push(repo.name)
+    gone.push(name)
   }
   // Only an empty folder goes: `rmdir` refuses one that still holds a copy.
   await rmdir(path).catch(() => {})

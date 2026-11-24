@@ -67,7 +67,10 @@ async function makeCheckout(ctx: RunContext, git: GitRunner): Promise<void> {
   // The repos are named by whoever wrote the options: a name that is no folder's, or a folder that is no repository's, refuses the run.
   const repos = await checkedRepos(options.repos ?? [], git)
   if (!ctx.project) {
-    ctx.workspace = (await openSessionFolder(sessionsHome(), ctx.id, repos, git)).path
+    const folder = await openSessionFolder(sessionsHome(), ctx.id, repos, git)
+    ctx.workspace = folder.path
+    // A fresh run starts in the folder that holds its copies; a resume given more is told of the new ones (projects' line).
+    if (ctx.resume && folder.made.length > 0) ctx.facts['git-branches'] = { ...ctx.facts['git-branches'], copies: { folder: folder.path, branch: agentBranchName(ctx.id), made: folder.made.map(({ name, from }) => ({ name, from })) } }
     return
   }
   const { dir } = ctx.project
@@ -148,10 +151,8 @@ async function reclaim(ctx: RunContext, git: GitRunner): Promise<void> {
       (err: unknown) => ({ ok: false, reason: errorMessage(err) }) as const,
     )
     facts.reclaimed = reclaimed.ok ? { reclaimed: true, ...(reclaimed.branchesDeleted ? { deleted: reclaimed.branchesDeleted } : {}) } : { reclaimed: false, reason: reclaimed.reason }
-    // Its copies of repos: the ones it never touched go with the run, the rest stay with their work.
-    // Only names of copies: a run refused over a name it was given made no copy by it.
-    const repos = (ctx.options['git-branches']?.repos ?? []).filter(repo => isCopyName(repo.name))
-    if (repos.length > 0) await dropUntouchedCopies(sessionsHome(), ctx.id, repos, git).catch(() => {})
+    // Its copies of repos, the ones added while it went on too: the ones it never touched go with the run, the rest stay with their work.
+    await dropUntouchedCopies(sessionsHome(), ctx.id, git).catch(() => {})
   }
 }
 
