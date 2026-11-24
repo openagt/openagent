@@ -742,21 +742,38 @@ describe('runs on another host on the rail (#1263, #2394)', () => {
 })
 
 describe('AgentHistory row hover', () => {
-  test('pointed at, a row says all of it beside itself: its whole name, then a line per thing known of the run', async () => {
+  test('pointed at, a row says all of it beside itself: its whole name and how it stands, a chip per thing known of where it is, and at the foot who started it and what ran it', async () => {
     const long = 'refactor the queue promotion sweep so drains claim tickets through lock files'
-    const recentAgents = [{ projectId: 'p1', projectName: 'shop', agent: agent({ status: 'done', intent: long, driver: 'codex', model: 'gpt-5', person: 'ada@x.dev', pr: { number: 5, url: 'https://x/pull/5' }, prState: 'open', unpublished: 2 }) }]
+    const recentAgents = [{ projectId: 'p1', projectName: 'shop', agent: agent({ status: 'done', intent: long, driver: 'codex', model: 'gpt-5', effort: 'xhigh', base: 'next', person: 'ada@x.dev', pr: { number: 5, url: 'https://x/pull/5' }, prState: 'open', unpublished: 2 }) }]
     renderRail(<AgentHistory projectId={null} agents={[]} recentAgents={recentAgents} selectedAgentId={null} onSelect={() => {}} />)
     const tip = await hoverTooltip(screen.getByRole('link', { name: new RegExp(`^${long}`) }))
-    expect(tip.firstElementChild!.textContent).toBe(long)
-    const facts = Object.fromEntries(within(tip).getAllByRole('listitem').map(fact => [fact.firstElementChild!.textContent, fact.lastElementChild!.textContent]))
-    expect(facts).toMatchObject({ State: 'Done', Project: 'shop', 'Started by': 'ada@x.dev', Agent: 'Codex · gpt-5', PR: '#5 open', Work: 'Needs PR · 2 commits' })
-    expect(Object.keys(facts)).toEqual(['State', 'Project', 'Started by', 'Agent', 'Started', 'PR', 'Work'])
+    expect(tip.querySelector('[data-card="name"]')!.textContent).toBe(long)
+    expect(tip.querySelector('[data-card="state"]')!.textContent).toMatch(/^Done · /)
+    // No table of labels: what is known of where the run is, a chip each, the branch with its project.
+    expect(within(tip).getAllByRole('listitem').map(chip => chip.getAttribute('aria-label'))).toEqual(['Project: shop · next', 'PR: #5 · Open', 'Work: Needs PR · 2 commits'])
+    // The foot: the person by name over their address, and the model by its maker's logo with how hard it thought, the coding agent's name not written.
+    const foot = tip.querySelector('[data-card="foot"]')!
+    expect(foot.textContent).toBe('ADadaada@x.devgpt-5· Extra high')
+    expect(within(foot as HTMLElement).getByRole('img', { name: 'Codex · gpt-5 · Extra high' })).toBeTruthy()
+    expect(tip.textContent).not.toContain('Codex')
+    // One width for every row.
+    expect(tip.className).toContain('w-75')
   })
 
-  test('a row with nothing but its name says its state and when it started', async () => {
+  test('a row with nothing but its name says its state and when it started, and has no foot', async () => {
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ title: 'Plain', status: 'failed', startedAt: new Date().toISOString() })]} selectedAgentId={null} onSelect={() => {}} />)
     const tip = await hoverTooltip(screen.getByRole('link', { name: /^Plain/ }))
-    expect(within(tip).getAllByRole('listitem').map(fact => fact.textContent)).toEqual(['StateFailed', 'StartedJust now'])
+    expect(tip.querySelector('[data-card="state"]')!.textContent).toBe('Failed · just now')
+    expect(within(tip).queryAllByRole('listitem')).toEqual([])
+    expect(tip.querySelector('[data-card="foot"]')).toBeNull()
+  })
+
+  test("a run whose record names no model shows its coding agent's logo alone, named for a reader", async () => {
+    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ title: 'Plain', status: 'done', driver: 'claude-code' })]} selectedAgentId={null} onSelect={() => {}} />)
+    const tip = await hoverTooltip(screen.getByRole('link', { name: /^Plain/ }))
+    const foot = tip.querySelector('[data-card="foot"]') as HTMLElement
+    expect(within(foot).getByRole('img', { name: 'Claude Code' })).toBeTruthy()
+    expect(foot.textContent).toBe('')
   })
 
   test('what waits on the person says its name whole, what it needs in words and what that is about', async () => {
