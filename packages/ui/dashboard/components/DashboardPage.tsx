@@ -1,5 +1,5 @@
 import type { ActiveAgent, Waiting } from '../../src/index.js'
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { flushSync } from 'react-dom'
 import { SlidersHorizontal } from 'lucide-react'
 import { Quota } from './Quota.js'
@@ -10,7 +10,7 @@ import { AgentUpdates } from './AgentUpdates.js'
 import { Agents } from './Agents.js'
 import { useRunsDoing } from '../lib/use-doing.js'
 import { useModuleCards, type OverviewCard } from './ModuleCards.js'
-import { CardGrid, EditOverview, TakeOffMark, UNDER, UnderCards, type Under } from './CustomizeOverview.js'
+import { CardGrid, EditOverview, TakeOffMark, UnderCards, type Under } from './CustomizeOverview.js'
 import { ALL_PROJECTS, arrangeCards } from '../../src/client.js'
 import type { ProjectSummary } from '../../src/index.js'
 import type { ReadState } from '../lib/use-async.js'
@@ -28,8 +28,9 @@ import { useIsMobile } from '../lib/use-mobile.js'
  */
 const PACKAGES_PLACE = 3
 
-// The Overview landing page (#1139): the box that starts a session first, then a focused at-a-glance
-// board — what needs a human (the Human Queue, `ui-card-waiting`'s card), the first steps under it, then usage and the agents
+// The Overview landing page (#1139): what a new install can still set up ("Discover OpenAgent") while a step is open,
+// the box that starts a session, then a focused at-a-glance
+// board — what needs a human (the Human Queue, `ui-card-waiting`'s card), then usage and the agents
 // working now, then the other cards the installed packages declare, in two columns (#1818: the
 // queue package's AI Queue, the tickets package's hot tickets, the scheduler package's
 // Automations). A card with nothing to show says so in its middle, a sentence under a quiet glyph ("No agent is at work.").
@@ -94,7 +95,7 @@ export function DashboardPage({
   const placeKnown = modulesLoaded || moduleLine.length > 0 || listedPages !== null
   // What the number counts, mark by mark: "1 question, 1 to publish".
   const counts = waitingCounts(waiting)
-  // The card of what needs the person, a module's: the first steps stand under it, and the cards after
+  // The card of what needs the person, a module's: the agents' updates stand under it, and the cards after
   // it wait for what it shows, and for its code while its room is held.
   const needsYouCard = moduleCards.find(card => card.needsYou)
   const needsYou = needsYouCard?.id
@@ -136,8 +137,8 @@ export function DashboardPage({
     // Under what needs the person, what is at work and the usage a half each (his pick: the usage's sentence needs the room), then a column two thirds wide down the page's left and one a third wide
     // beside it, the packages' cards taking their turns in both: each third comes after the card it
     // stands beside (the hot tickets beside what is at work, the account's usage, the one figure that
-    // governs everything the agent may do next (#1139), beside the queue), so the first steps under
-    // what needs the person never move the thirds to the left.
+    // governs everything the agent may do next (#1139), beside the queue), so what stands under
+    // what needs the person never moves the thirds to the left.
     {
       id: 'working',
       stale: active.state === 'kept',
@@ -191,18 +192,8 @@ export function DashboardPage({
     updatePreferences({ overviewLayouts: rest })
   }
 
-  // What needs the person leads; what a new install still has to do comes right under it, wherever the layout puts it.
-  const [firstStepsRead, setFirstStepsRead] = useState(false)
-  const firstStepsHaveRead = useCallback(() => setFirstStepsRead(true), [])
-  const firstSteps: Under = {
-    card: needsYou,
-    node: (
-      <>
-        {!onboardingDismissed && <OnboardingChecklist projects={projects} onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} onProjectAdded={onProjectAdded} onRead={firstStepsHaveRead} listedPages={listedPages} />}
-        <AgentUpdates />
-      </>
-    ),
-  }
+  // What needs the person leads the cards; the agents' updates come right under it, wherever the layout puts it.
+  const underNeedsYou: Under = { card: needsYou, node: <AgentUpdates /> }
 
   return (
     <Page
@@ -246,14 +237,16 @@ export function DashboardPage({
         )
       }
     >
-      {/* Arranging keeps the parts in their order and where they stand: the first steps and the updates stay, and what arranging adds comes after the parts. */}
+      {/* Arranging keeps the parts in their order and where they stand: the updates stay, and what arranging adds comes after the parts. */}
       <div className="space-y-10">
+        {/* What a new install can still set up, first while a step is open (his pick): a session cannot start before its first one. */}
+        {!onboardingDismissed && <OnboardingChecklist projects={projects} onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} onProjectAdded={onProjectAdded} listedPages={listedPages} />}
         {/* The page's own, before every card (his and Rom's pick): arranging the cards neither moves it nor takes it off. */}
         {start}
         {!layoutRead ? null : editing ? (
           <EditOverview
             arranged={arranged}
-            under={firstSteps}
+            under={underNeedsYou}
             layouts={layouts}
             layoutKey={layoutKey}
             notice={
@@ -274,11 +267,11 @@ export function DashboardPage({
               : {})}
           />
         ) : arranged.some(({ hidden }) => !hidden) ? (
-          // On a first visit the parts come in from the top: none is drawn under the Human Queue or the first steps until they have answered, as either grows from its waiting room by more than a line.
-          <CardGrid cards={arranged.filter(({ hidden }) => !hidden)} under={firstSteps} until={needsYouWaits ? needsYou : !onboardingDismissed && !firstStepsRead ? UNDER : undefined} />
+          // On a first visit the parts come in from the top: none is drawn under the Human Queue until it has answered, as it grows from its waiting room by more than a line.
+          <CardGrid cards={arranged.filter(({ hidden }) => !hidden)} under={underNeedsYou} until={needsYouWaits ? needsYou : undefined} />
         ) : (
           <>
-            <UnderCards under={firstSteps} />
+            <UnderCards under={underNeedsYou} />
             <div className="flex flex-wrap items-center gap-3">
               <p className="text-sm text-muted-foreground">Every card is off the Overview. Press Customize to put some back.</p>
               <Button variant="secondary" onClick={() => setEditing(true)}>

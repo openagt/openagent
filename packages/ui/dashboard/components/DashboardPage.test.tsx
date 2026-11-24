@@ -7,18 +7,7 @@ import type { ListedPage } from '../lib/use-modules.js'
 // for the page (#overview layouts). The cards are tested on their own; here they are stand-ins, the
 // agents at work are handed in as the shell reads them, and the preferences are a plain object a write changes.
 vi.mock('./Quota.js', () => ({ Quota: () => <div>usage</div> }))
-const firstSteps = vi.hoisted(() => ({ read: true }))
-vi.mock('./OnboardingChecklist.js', async () => {
-  const { useLayoutEffect } = await import('react')
-  return {
-    OnboardingChecklist: ({ onRead }: { onRead: () => void }) => {
-      useLayoutEffect(() => {
-        if (firstSteps.read) onRead()
-      })
-      return <div>onboarding</div>
-    },
-  }
-})
+vi.mock('./OnboardingChecklist.js', () => ({ OnboardingChecklist: () => <div>onboarding</div> }))
 vi.mock('./YourProfilesPart.js', () => ({ YourProfilesPart: () => <span>your profiles</span> }))
 const modules = vi.hoisted(() => ({ loaded: true, gone: false, line: [] as { id: string; order: number; node: unknown }[] }))
 vi.mock('./ModuleCards.js', async () => {
@@ -76,7 +65,6 @@ beforeEach(() => {
   modules.loaded = true
   modules.line = []
   modules.gone = false
-  firstSteps.read = true
 })
 afterEach(cleanup)
 
@@ -112,21 +100,23 @@ describe('the Overview', () => {
     expect(screen.queryByText('working on r1')).toBeNull()
   })
 
-  test('the first steps stand right under what needs the person, wherever the layout puts it, and first when it is off the page', async () => {
+  test('"Discover OpenAgent" is the first part of the page, above the box that starts a session, whatever the layout; its ✕ takes it off', async () => {
     working = []
+    const withBox = () => render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} onSelectAgent={() => {}} onAgentStarted={() => {}} waiting={[]} waitingState="fresh" active={{ active: working, state: 'fresh' }} projects={projects} scope={null} listedPages={listed} start={<p>the box</p>} />)
     prefs.value = {}
-    show()
-    const firstSteps = await screen.findByText('onboarding')
-    expect(firstSteps.parentElement!.previousElementSibling!.getAttribute('data-card')).toBe('human-queue')
-    expect(firstSteps.parentElement!.nextElementSibling!.getAttribute('data-card')).toBe('working')
-    cleanup()
-    prefs.value = { overviewLayouts: { '*': [{ id: 'usage' }, { id: 'human-queue', hidden: true }] } }
-    show()
-    expect((await screen.findByText('onboarding')).parentElement!.previousElementSibling).toBeNull()
+    withBox()
+    const discover = await screen.findByText('onboarding')
+    expect(discover.previousElementSibling).toBeNull()
+    expect(discover.nextElementSibling!.textContent).toBe('the box')
     cleanup()
     prefs.value = { overviewLayouts: { '*': ['usage', 'human-queue', 'working', '@x/notes/recent', '@x/tickets/hot'].map(id => ({ id, hidden: true })) } }
-    show()
-    expect(await screen.findByText('onboarding')).toBeTruthy()
+    withBox()
+    expect((await screen.findByText('onboarding')).nextElementSibling!.textContent).toBe('the box')
+    cleanup()
+    prefs.value = { onboardingDismissed: true }
+    withBox()
+    await screen.findByText('the box')
+    expect(screen.queryByText('onboarding')).toBeNull()
   })
 
   test('a layout orders, sizes and hides the cards; one it does not name comes after, at its own width; a width narrower than a card fits is not kept', async () => {
@@ -408,26 +398,12 @@ describe('the Overview', () => {
     }
   })
 
-  test('on a first visit nothing is drawn under the Human Queue or the first steps until they have answered, so nothing is pushed when they do', async () => {
-    prefs.value = {}
-    firstSteps.read = false
+  test('on a first visit nothing is drawn under the Human Queue until it has answered, so nothing is pushed when it does', async () => {
     const { rerender } = show(null, { waiting: false, active: false }, false)
     await screen.findByText('Human Queue')
     expect(drawn().map(card => card.id)).toEqual(['human-queue'])
-    expect(screen.queryByText('onboarding')).toBeNull()
     rerender(overview())
-    expect(await screen.findByText('onboarding')).toBeTruthy()
-    expect(drawn().map(card => card.id)).toEqual(['human-queue'])
-    firstSteps.read = true
-    rerender(overview())
-    expect(drawn().map(card => card.id)).toEqual(['human-queue', 'working', 'usage', '@x/notes/recent', '@x/tickets/hot'])
-    cleanup()
-    // With the first steps put away, only the Human Queue is waited for.
-    prefs.value = { onboardingDismissed: true }
-    firstSteps.read = false
-    show()
-    await screen.findByText('Human Queue')
-    expect(drawn().map(card => card.id)).toEqual(['human-queue', 'working', 'usage', '@x/notes/recent', '@x/tickets/hot'])
+    await waitFor(() => expect(drawn().map(card => card.id)).toEqual(['human-queue', 'working', 'usage', '@x/notes/recent', '@x/tickets/hot']))
   })
 
   test('no card is drawn before the layout is read: a card taken off never reads anything', async () => {
