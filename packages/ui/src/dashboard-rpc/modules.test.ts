@@ -95,6 +95,7 @@ test('the dashboard\'s modules are every registered project\'s, one per package,
       assert.deepEqual(await listed(), [
         { package: '@openagt/agent-driver', url: '/_computer-modules/%40openagt%2Fagent-driver/dashboard.js', projects: [], computer: true },
         { package: '@openagt/notifications-browser', url: '/_computer-modules/%40openagt%2Fnotifications-browser/dashboard.js', projects: [], computer: true },
+        { package: '@openagt/store-git-repository', url: '/_computer-modules/%40openagt%2Fstore-git-repository/dashboard.js', projects: [], computer: true },
         { package: '@openagt/ui-card-waiting', url: '/_computer-modules/%40openagt%2Fui-card-waiting/dashboard.js', projects: [], computer: true },
         { package: '@openagt/ui-renderer-markdown', url: '/_computer-modules/%40openagt%2Fui-renderer-markdown/dashboard.js', projects: [], computer: true },
         { package: '@openagt/user-info', url: '/_computer-modules/%40openagt%2Fuser-info/dashboard.js', projects: [], computer: true },
@@ -128,6 +129,7 @@ test("with no project added, the computer's modules are there and run their own 
       assert.deepEqual(await listed(), [
         { package: '@openagt/agent-driver', url: '/_computer-modules/%40openagt%2Fagent-driver/dashboard.js', projects: [], computer: true },
         { package: '@openagt/notifications-browser', url: '/_computer-modules/%40openagt%2Fnotifications-browser/dashboard.js', projects: [], computer: true },
+        { package: '@openagt/store-git-repository', url: '/_computer-modules/%40openagt%2Fstore-git-repository/dashboard.js', projects: [], computer: true },
         { package: '@openagt/ui-card-waiting', url: '/_computer-modules/%40openagt%2Fui-card-waiting/dashboard.js', projects: [], computer: true },
         { package: '@openagt/ui-renderer-markdown', url: '/_computer-modules/%40openagt%2Fui-renderer-markdown/dashboard.js', projects: [], computer: true },
         { package: '@openagt/user-info', url: '/_computer-modules/%40openagt%2Fuser-info/dashboard.js', projects: [], computer: true },

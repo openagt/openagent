@@ -12,7 +12,7 @@ import type { DashboardDistribution, DashboardPackage } from './distribution-pac
  */
 export const DASHBOARD_PACKAGES: DashboardDistribution = [
   { package: '@openagt/store-filesystem' },
-  { package: '@openagt/store-git-repository' },
+  { package: '@openagt/store-git-repository', for: 'computer' },
   { package: '@openagt/store-git-branch' },
   { package: '@openagt/git-branches' },
   { package: '@openagt/github' },

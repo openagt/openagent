@@ -3,10 +3,9 @@ import { test } from 'node:test'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { nodeGitRunner, readRemoteAccount, type ProvidedCommand } from '@openagt/agent-data'
+import { nodeGitRunner, type ProvidedCommand } from '@openagt/agent-data'
 import { loginsWiring } from './logins.js'
 import { provideTestContext } from './test-context.js'
-import { sendPersonalFolderAs, sendSyncPersonalFolder } from './personal-folder.js'
 import { originAccountOf, remoteAccount } from './send-as.js'
 
 // The account OpenAgent sends a repository as, through the dashboard's calls: GitHub's accounts and
@@ -65,12 +64,9 @@ test("a repository's branches are pushed as the account kept at its Share switch
     assert.deepEqual(await originAccountOf(repo), { ok: true, account: { login: 'octo', host: 'github.com', config: CONFIG } }, 'the one runs use')
   }))
 
-test("with no account of OpenAgent's at the host, the personal folder is not synced, and keeps no remote", () =>
+test("with no account of OpenAgent's named at a host, nothing is sent as one: the refusal says where an account is added", () =>
   withComputer(async () => {
-    // A GitHub address: the repository there is never reached as the person's own login.
-    const refused = await sendSyncPersonalFolder('github.com/me/agent', undefined)
+    const refused = await remoteAccount('github.com', undefined)
     assert.equal(refused.ok, false)
-    assert.match((refused as { error: string }).error, /as your own login.*add one in Permissions/, 'refused before the repository is asked, saying where an account is added')
-    assert.deepEqual(await sendPersonalFolderAs('octo-agent'), { ok: false, error: 'Your folder syncs with no repository on a git host.' })
-    assert.equal(await readRemoteAccount(join(process.env.XDG_CONFIG_HOME!, 'openagent')).catch(() => undefined), undefined)
+    assert.match((refused as { error: string }).error, /as your own login.*add one in Permissions/)
   }, []))

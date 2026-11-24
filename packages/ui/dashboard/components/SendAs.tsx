@@ -1,5 +1,5 @@
 import { useContext } from 'react'
-import type { SendAsHost } from '../rpc/personal-folder.js'
+import type { HostAccounts } from '@openagt/hooks'
 import { PERMISSIONS_PAGE } from '../lib/use-route.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import { useAddGitAccount } from './AddGitAccount.js'
@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 // login): one of its own accounts at the repository's host, picked where sending is turned on.
 
 /** The login a select starts on: the one already kept, else the one runs use, else the first. */
-export function firstSendAs(host: SendAsHost | undefined, kept?: string): string | undefined {
+export function firstSendAs(host: HostAccounts | undefined, kept?: string): string | undefined {
   if (!host || host.logins.length === 0) return undefined
   if (kept !== undefined && host.logins.includes(kept)) return kept
   return host.runs ?? host.logins[0]
@@ -20,7 +20,7 @@ export function firstSendAs(host: SendAsHost | undefined, kept?: string): string
  * press adds one, in the dialog, which is then the one picked: nothing is sent as the person's own
  * login. With no host known, the press opens the Permissions page.
  */
-export function SendAs({ host, value, onChange, disabled = false, label = 'Send as' }: { host: SendAsHost | undefined; value: string | undefined; onChange: (login: string) => void; disabled?: boolean; label?: string }) {
+export function SendAs({ host, value, onChange, disabled = false, label = 'Send as' }: { host: HostAccounts | undefined; value: string | undefined; onChange: (login: string) => void; disabled?: boolean; label?: string }) {
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   const adding = useAddGitAccount(login => onChange(login))
   if (!host || host.logins.length === 0) {

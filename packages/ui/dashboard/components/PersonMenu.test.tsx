@@ -8,12 +8,13 @@ const accounts = vi.hoisted(() => ({ onAgentAccounts: vi.fn(), sendUseAgentAccou
 vi.mock('../rpc/accounts.js', () => accounts)
 const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendUseGitHostAccount: vi.fn(), sendGitHostLogin: vi.fn(), sendGitHostInstall: vi.fn(), onAgentState: vi.fn(), sendAgentFix: vi.fn() }))
 vi.mock('../rpc/logins.js', () => logins)
-const backup = vi.hoisted(() => ({ onBackup: vi.fn(), sendBackUpAs: vi.fn() }))
-vi.mock('../rpc/backup.js', () => backup)
+const onAttention = vi.hoisted(() => vi.fn())
+vi.mock('../rpc/attention.js', () => ({ onAttention }))
 const openPage = vi.hoisted(() => vi.fn())
+const openSettings = vi.hoisted(() => vi.fn())
 vi.mock('../lib/host-services.js', async importOriginal => {
   const actual = await importOriginal<typeof import('../lib/host-services.js')>()
-  return { ...actual, INERT_HOST_SERVICES: { ...actual.INERT_HOST_SERVICES, openPage } }
+  return { ...actual, INERT_HOST_SERVICES: { ...actual.INERT_HOST_SERVICES, openPage, openSettings } }
 })
 // The menu's theme row has its own suite; here it is the row's name.
 vi.mock('./ThemeSubmenu.js', () => ({ ThemeSubmenu: () => <div role="menuitem">Theme</div> }))
@@ -24,7 +25,7 @@ beforeEach(() => {
   accounts.onAgentAccounts.mockResolvedValue({ now: 0, accounts: [] })
   logins.onGitHosts.mockResolvedValue({ hosts: [] })
   logins.onAgentState.mockResolvedValue({ driver: 'claude-code', ready: true })
-  backup.onBackup.mockResolvedValue({ gaps: [] })
+  onAttention.mockResolvedValue({ items: [], whole: true })
 })
 
 afterEach(() => {
@@ -34,7 +35,8 @@ afterEach(() => {
   accounts.onAgentAccounts.mockReset()
   accounts.sendUseAgentAccountFirst.mockReset()
   for (const fn of Object.values(logins)) fn.mockReset()
-  backup.onBackup.mockReset()
+  onAttention.mockReset()
+  openSettings.mockReset()
 })
 
 describe('PersonMenu', () => {
@@ -118,14 +120,13 @@ describe('PersonMenu: what is missing', () => {
     expect(onSettings).not.toHaveBeenCalled()
   })
 
-  test('agent data not backed up: a dot on the picture, and an item that opens Settings › Your agent data to back it up', async () => {
+  test('a module says something on this computer needs setting up: a dot on the picture, and its fix in the menu, here opening its Settings entry', async () => {
     onPerson.mockResolvedValue({ name: 'Ada Lovelace' })
-    backup.onBackup.mockResolvedValue({ gaps: [{ kind: 'personal', address: 'github.com/ada/agent', host: 'github.com', waiting: 2 }] })
-    const onSettings = vi.fn()
-    const { container } = render(<PersonMenu onSettings={onSettings} />)
+    onAttention.mockResolvedValue({ items: [{ kind: 'setup', scope: 'computer', id: 'not-backed-up', words: 'Your agent data is not backed up', fix: { label: 'Back up your agent data…', settings: 'agent-data' }, module: 'store-git-repository' }], whole: true })
+    const { container } = render(<PersonMenu onSettings={vi.fn()} />)
     fireEvent.click(await screen.findByRole('button', { name: 'Ada Lovelace: settings, something is missing' }))
     expect(container.ownerDocument.querySelector('[data-testid="missing-dot"]')).toBeTruthy()
     fireEvent.click(screen.getByRole('menuitem', { name: 'Back up your agent data…' }))
-    expect(onSettings).toHaveBeenCalledWith('agent-data')
+    expect(openSettings).toHaveBeenCalledWith('agent-data')
   })
 })

@@ -1,9 +1,14 @@
 import { useEffect } from 'react'
-import { onBackup, type BackupView } from '../rpc/backup.js'
-import { usePolled } from './use-async.js'
+import { usePolled, useModuleHost } from '@openagt/ui/module'
+import { server, type BackupGap } from './calls.js'
 
-// What is not backed up, read by the foot of the sidebar (an item in the person's menu) and by
-// Settings › Your agent data (the notice that fixes it): one press there changes what both show.
+// What is not backed up, read by Settings › Your agent data's notice, which fixes it: one press
+// there changes what every reader shows. The foot of the sidebar says it through the module's
+// `app.attention` item.
+
+export interface BackupView {
+  gaps: BackupGap[]
+}
 
 /** Read again this often: an account may be added on the Permissions page, or another computer may name one. */
 const EVERY_MS = 60_000
@@ -16,7 +21,8 @@ export function backupChanged(): void {
 }
 
 export function useBackup(): { view: BackupView | null; reload: () => Promise<void> } {
-  const { value: view, reload } = usePolled<BackupView | null>(onBackup, null, EVERY_MS, [], { remember: 'backup' })
+  const host = useModuleHost()
+  const { value: view, reload } = usePolled<BackupView | null>(() => server(host).backup({}), null, EVERY_MS, [host], { remember: 'backup' })
   useEffect(() => {
     const again = (): void => void reload()
     changed.add(again)

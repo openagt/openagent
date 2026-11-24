@@ -7,8 +7,6 @@ import { usePerson } from '../lib/use-person.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.js'
 import { ThemeSubmenu } from './ThemeSubmenu.js'
 import { useMissing } from './Logins.js'
-import { useBackup } from '../lib/use-backup.js'
-import { AGENT_DATA_ENTRY } from './AgentDataSettings.js'
 import { personLetters } from './PersonMark.js'
 import { cn } from '../lib/utils.js'
 import { useMenuActions } from './Places.js'
@@ -19,7 +17,7 @@ import { attentionDetail, attentionKey, useAttentionFixes } from './Attention.js
 // that opens their menu (his pick, over a row of three icons): the theme and
 // Settings, under their whole name. The accounts a run takes are picked where the run is started,
 // beside the message box, for the computer it goes to: the agent's in the agent picker, the git
-// host's after the branch; not here a second time. A dot on the picture says something runs need is missing, or that the agents' data is not backed up; the menu says what fixes it. The gear at the row's end says what the row opens. The name and
+// host's after the branch; not here a second time. A dot on the picture says something runs need is missing, or what a module says needs setting up on this computer (the agents' data not backed up, say); the menu says what fixes it. The gear at the row's end says what the row opens. The name and
 // the picture are the person's own, set in Settings › Profile (`onPerson`); with no picture, the two letters their runs are marked with.
 
 /** The first word of a name: what the row says, the whole name being in the menu. */
@@ -47,12 +45,10 @@ export function PersonMenu({ onSettings }: { onSettings: (entry?: string) => voi
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   const { person } = usePerson()
   const { missing } = useMissing()
-  const { view: backup } = useBackup()
-  const notBackedUp = (backup?.gaps.length ?? 0) > 0
   // What the modules say needs the person on this computer (`app.attention`): listed here, each opening its fix, and the dot on the picture.
   const attention = (useAttention(null) ?? []).filter(item => item.kind === 'setup' && item.scope === 'computer')
   const fixes = useAttentionFixes(undefined)
-  const needs = missing.length > 0 || notBackedUp || attention.length > 0
+  const needs = missing.length > 0 || attention.length > 0
   // What the modules offer in the person's menu (`person.menu`), asked again as it opens.
   const [open, setOpen] = useState(false)
   const offered = useMenuActions('person.menu', NOTHING_ON, undefined, open)
@@ -99,12 +95,6 @@ export function PersonMenu({ onSettings }: { onSettings: (entry?: string) => voi
                 </DropdownMenuItem>
               )
             })}
-            {notBackedUp && (
-              <DropdownMenuItem onClick={() => onSettings(AGENT_DATA_ENTRY)}>
-                <CircleAlert className="size-4 shrink-0 text-warning" aria-hidden />
-                <span className="flex-1">Back up your agent data…</span>
-              </DropdownMenuItem>
-            )}
             <DropdownMenuSeparator />
           </>
         )}

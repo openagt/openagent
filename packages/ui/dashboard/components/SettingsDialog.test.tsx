@@ -5,7 +5,7 @@ import { refreshPreferences } from '../lib/preferences.js'
 import { forgetRemembered } from '../lib/use-async.js'
 
 import { ModulesContext, byMountOrder, mountedOf, type MountedModules, type MountedView } from '../lib/use-modules.js'
-import { CalendarClock, Globe, Puzzle, Ticket, UserRound } from 'lucide-react'
+import { CalendarClock, Database, FolderGit2, Globe, Puzzle, Ticket, UserRound } from 'lucide-react'
 import { checked, choices, closeList, offered, openList, pick, showing } from '../test-controls.js'
 
 // The reads Settings makes, answered as an empty computer: no editors detected, no stored
@@ -30,8 +30,6 @@ const onModels = vi.hoisted(() =>
 vi.mock('../rpc/models.js', () => ({ onModels }))
 // Its own suite reads the accounts; here the entry is its name.
 vi.mock('./RepoSourcesSettings.js', () => ({ REPO_SOURCES_ENTRY: 'repos', RepoSourcesSettings: () => <p>Where repos are found</p> }))
-vi.mock('./AgentDataSettings.js', () => ({ AGENT_DATA_ENTRY: 'agent-data', AgentDataSettings: () => <p>Where the agent data is</p> }))
-vi.mock('./ProjectAgentDataSettings.js', () => ({ PROJECT_AGENT_DATA_ENTRY: 'project-agent-data', ProjectAgentDataSettings: () => <p>Where this project's agent data is</p> }))
 vi.mock('../rpc/reads.js', async importOriginal => ({
   ...(await importOriginal<typeof import('../rpc/reads.js')>()),
   onPreferences: vi.fn(async () => ({})),
@@ -277,6 +275,18 @@ describe('the Settings list', () => {
   const MODULES = mounted([
     PROFILE,
     { place: 'settings.section', id: 'claude-web', title: 'Claude web', icon: Globe, order: 90, View: Given, package: '@openagt/host-claude-web', projects: [], computer: true },
+    { place: 'settings.section', id: 'agent-data', title: 'Your agent data', icon: FolderGit2, order: 50, View: () => <p>Where the agent data is</p>, package: '@openagt/store-git-repository', projects: [], computer: true },
+    {
+      place: 'settings.section',
+      id: 'project-agent-data',
+      title: 'Project agent data',
+      icon: Database,
+      order: 50,
+      pickProject: 'Each project keeps its agent data in one place, your folder or its own repository. Pick a project.',
+      View: ({ projects }) => <p>{`Where ${projects.map(p => p.name).join(', ')}’s agent data is`}</p>,
+      package: '@openagt/store-git-branch',
+      projects: ['p1', 'p2', 'p3'],
+    },
     { place: 'settings.section', id: 'tickets', title: 'Tickets', icon: Ticket, View: Given, package: '@openagt/tickets', projects: ['p1', 'p2', 'gone'] },
     { place: 'settings.section', id: 'scheduler', title: 'Scheduler', icon: CalendarClock, View: Broken, package: '@openagt/scheduled-agents', projects: ['p2'] },
     { place: 'settings.section', id: 'skills', title: 'Skills', icon: Puzzle, order: 10, View: Ticks, package: '@openagt/skills', projects: ['p1', 'p2', 'p3'] },
@@ -361,11 +371,11 @@ describe('the Settings list', () => {
     show('project-agent-data')
     expect(title()).toBe('SettingsAll projectsProject agent data')
     expect(screen.getByText(/your folder or its own repository\. Pick a project\./)).toBeTruthy()
-    expect(screen.queryByText("Where this project's agent data is")).toBeNull()
+    expect(screen.queryByText(/’s agent data is/)).toBeNull()
     // No line says it saves to several.
     expect(screen.queryByText(/^Saved to/)).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'other' }))
-    expect(await screen.findByText("Where this project's agent data is")).toBeTruthy()
+    expect(await screen.findByText('Where other’s agent data is')).toBeTruthy()
     expect(showing(select('Project'))).toBe('other')
     expect(title()).toBe('SettingsotherProject agent data')
   })
@@ -383,7 +393,7 @@ describe('the Settings list', () => {
         <SettingsDialog entry="profile" onEntry={() => {}} onClose={onClose} scope={null} projects={[]} />
       </ModulesContext.Provider>,
     )
-    expect(entries('You and this computer')).toEqual(['Profile', 'Appearance', 'Coding agent', 'Plugins', 'Your agent data', 'Plain', 'Lights', 'Repos', 'Keyboard shortcuts'])
+    expect(entries('You and this computer')).toEqual(['Profile', 'Appearance', 'Coding agent', 'Plugins', 'Plain', 'Lights', 'Repos', 'Keyboard shortcuts'])
   })
 
   test('opened with no entry, a computer shows the first and its address says so; a phone shows the list, whose address is none', () => {

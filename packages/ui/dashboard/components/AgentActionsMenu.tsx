@@ -3,10 +3,8 @@ import { useContext, useEffect, useRef, useState } from 'react'
 import type { GitHostHome, OpenAgentEvent, RepositoryOffer } from '../../src/index.js'
 import { sessionInfo } from '../../src/client.js'
 import { RevealedTitle } from './RevealedTitle.js'
-import { MoreVertical, ChevronDown, FolderOpen, Code, Check, ExternalLink, Square, FolderX, Trash2, Copy, CloudUpload, Database, Info } from 'lucide-react'
+import { MoreVertical, ChevronDown, FolderOpen, Code, Check, ExternalLink, Square, FolderX, Trash2, Copy, CloudUpload, Info } from 'lucide-react'
 import { onGitHostHome, onRepositoryOffer } from '../rpc/reads.js'
-import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
-import { PROJECT_AGENT_DATA_ENTRY } from './ProjectAgentDataSettings.js'
 import {
   sendOpenInApp,
   sendRemoveWorktree,
@@ -83,7 +81,6 @@ export function AgentActionsMenu({
   /** The size on disk of the session's worktree, said beside "Remove worktree". */
   size?: string | undefined
 }) {
-  const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   // Given an agent, this is its page's menu, under the session's name; with none, the ⋮ of a page with no session.
   const session = !!agentId
   const info = sessionInfo(events)
@@ -213,11 +210,6 @@ export function AgentActionsMenu({
           {offer && (
             <DropdownMenuItem onClick={() => setConfirmCreate(true)}>
               <CloudUpload className="h-3.5 w-3.5 shrink-0" /> Create a repository on {offer.name}…
-            </DropdownMenuItem>
-          )}
-          {!session && (
-            <DropdownMenuItem onClick={() => services.openSettings(PROJECT_AGENT_DATA_ENTRY, projectId)}>
-              <Database className="h-3.5 w-3.5 shrink-0" /> Agent data…
             </DropdownMenuItem>
           )}
           {/* Named for what it actually opens (#1195): once a session's worktree is gone this

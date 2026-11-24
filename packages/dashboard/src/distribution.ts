@@ -13,9 +13,10 @@ import type { DashboardDistribution } from '@openagt/ui/cli'
  */
 const DISTRIBUTION: DashboardDistribution = [
   // The store: every module's data in its folder on this computer, the person's own folder synced
-  // with a repository of theirs, and a shared project's on its repository's agent-data branch.
+  // with a repository of theirs (this computer's: the folder is its person's, Settings › Your agent
+  // data), and a shared project's on its repository's agent-data branch.
   { package: '@openagt/store-filesystem' },
-  { package: '@openagt/store-git-repository' },
+  { package: '@openagt/store-git-repository', for: 'computer' },
   { package: '@openagt/store-git-branch' },
   // git-branches: the run's checkout, its branch read back, the checkout reclaimed.
   { package: '@openagt/git-branches' },
