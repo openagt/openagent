@@ -108,6 +108,21 @@ export function formatSince(value: string | undefined): string {
   return ms < 60_000 ? 'now' : formatDuration(ms)
 }
 
+/**
+ * The day of a timestamp, as a heading over a list of runs says it: "Today", "Yesterday", else the
+ * weekday and the date in the browser's own language, with the year when it is another one. Empty
+ * when there is no date to read.
+ */
+export function formatDay(value: string | undefined, now: Date = new Date()): string {
+  const day = parse(value)
+  if (!day) return ''
+  const start = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+  const days = Math.round((start(now) - start(day)) / 86_400_000)
+  if (days === 0) return 'Today'
+  if (days === 1) return 'Yesterday'
+  return day.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric', ...(day.getFullYear() !== now.getFullYear() ? { year: 'numeric' } : {}) })
+}
+
 /** A span of work to the second, as a live count reads it: "9s", then "1m 5s", then "1h 2m". */
 export function formatElapsed(ms: number): string {
   const seconds = Math.max(0, Math.floor(ms / 1000))
