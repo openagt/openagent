@@ -16,6 +16,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   found by the package's `openagent.runs` declaration. A dashboard importing the package
   was the alternative and was not taken: the dashboard names no skill. The executable is
   `logs`. The package ships `SKILL.md`, the agent's instructions.
+- The Logs page lists the runs of the projects it is shown for, and no session with no
+  project: the logs are a project's plugin, and such a session is in no project. It is in
+  the sidebar's Log, with the dashboard's own rows. Picked over listing those sessions on
+  the page with every project showing (#2418), which had the plugin read the dashboard's
+  own list of sessions it is no plugin of.
 - Agents only read. A note an agent leaves on its own run was considered and deferred: the
   record lands on the branch only when the run is over, so a note would need a file of its
   own or a record written at the start.

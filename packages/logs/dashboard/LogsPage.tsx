@@ -5,13 +5,6 @@ import type { RunCard } from '@openagt/agent-driver'
 /** How many runs each project lists: the command's own default page is 20; the page shows more. */
 const LIMIT = 50
 
-/**
- * The sessions with no project, where a run's project stands: `session` is where their address
- * starts and what the dashboard lists them under, and they have no name. No project's records hold
- * them and the logs are no plugin of theirs, so they are shown as the dashboard lists them.
- */
-const NO_PROJECT: UiProject = { id: 'session', name: '', gitHost: false }
-
 /** One run, with the project it was recorded in. */
 export interface RunRow {
   project: UiProject
@@ -168,14 +161,11 @@ function dollars(cost: number): string {
  * (`/logs?status=waiting`). A row opens the run's own page in the dashboard. A project whose read
  * fails is named with its reason, and the other projects still show.
  */
-export function LogsPage({ projects, projectId }: UiPageProps) {
+export function LogsPage({ projects }: UiPageProps) {
   const host = useModuleHost()
-  // With every project showing, the sessions with no project show too: they are in no project's
-  // list, so the page that says every run left them out, the ones waiting on the person among them.
-  const listed = projectId === null ? [...projects, NO_PROJECT] : projects
-  const key = listed.map(p => p.id).join(',')
+  const key = projects.map(p => p.id).join(',')
   const { value: live, state: liveState } = usePolled<LiveRuns[]>(
-    () => Promise.all(listed.map(async project => ({ project, runs: await host.agents(project.id).catch((): ModuleAgent[] => []) }))),
+    () => Promise.all(projects.map(async project => ({ project, runs: await host.agents(project.id).catch((): ModuleAgent[] => []) }))),
     [],
     10_000,
     [key],
@@ -246,13 +236,12 @@ export function LogsPage({ projects, projectId }: UiPageProps) {
   const agents = useCodingAgents()
   const phone = useIsMobile()
   // A project that gave a whole page may have older runs the page does not list.
-  const noProject = read.rows.some(row => row.project.id === NO_PROJECT.id)
   const capped = projects.some(project => recorded.rows.filter(row => row.project.id === project.id).length >= LIMIT)
 
   return (
     <Page
       title="Logs"
-      description={`${capped ? `The last ${LIMIT} runs recorded in ${many ? 'each of these projects' : only}` : `Every run recorded in ${many ? 'these projects' : only}`}${noProject ? ', and the sessions with no project' : ''}, newest first.`}
+      description={capped ? `The last ${LIMIT} runs recorded in ${many ? 'each of these projects' : only}, newest first.` : `Every run recorded in ${many ? 'these projects' : only}, newest first.`}
       // While the runs are read, the chips' track holds its place, and the list waits as a day of runs.
       bar={state === 'unknown' ? <Skeleton className="h-8 w-72 rounded-lg max-md:h-11" /> : <FilterChips chips={counts} total={read.rows.length} picked={status} onPick={pick} />}
     >
