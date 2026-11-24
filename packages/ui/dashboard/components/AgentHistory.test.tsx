@@ -613,6 +613,16 @@ describe('whose run a row is', () => {
     }
   })
 
+  test("a session with no project shows its person as a project's git host knows them on another row: one person, one picture down the list", async () => {
+    onGitHostPeople.mockImplementation(async projectId => (projectId === 'p1' ? [ada] : []))
+    const recent = (projectId: string, id: string, person: string) => ({ projectId, projectName: projectId, agent: agent({ id, title: `${projectId} ${id}`, person }) })
+    renderRail(<AgentHistory projectId={null} scope={null} agents={[]} recentAgents={[recent('p1', 'r1', 'ada@x.dev'), recent('session', 'r2', 'Ada@x.dev'), recent('session', 'r3', 'rom@y.dev')]} selectedAgentId={null} onSelect={() => {}} />)
+    await waitFor(() => expect(row(/^p1 r1/).querySelector('img')?.getAttribute('src')).toBe(ada.avatar))
+    await waitFor(() => expect(row(/^session r2/).querySelector('img')?.getAttribute('src')).toBe(ada.avatar))
+    // Nobody's host knows this one: the letters stay.
+    expect(row(/^session r3/).querySelector('img')).toBeNull()
+  })
+
   test('a run that names nobody has no mark', () => {
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ title: 'Very old' })]} selectedAgentId={null} onSelect={() => {}} />)
     expect(row(/^Very old/).querySelector('[class*="rounded-full"][class*="size-3.5"]')).toBeNull()

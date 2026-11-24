@@ -288,7 +288,16 @@ export function AgentHistory({
   const hasRecents = rows.length > 0 || showOptimistic
 
   // Each row's person, in its own project.
-  const accountOf = useGitHostPeople(rows.map(row => ({ projectId: row.projectId, person: row.agent.person })), onGitHostPeople, 'sidebar:people')
+  const accountIn = useGitHostPeople(rows.map(row => ({ projectId: row.projectId, person: row.agent.person })), onGitHostPeople, 'sidebar:people')
+  // A session with no project has no git host to ask who its person is: they are who a project's
+  // host said they are, on another row of the list, so one person has one picture down the list.
+  // Between two projects nothing is carried over: a project's host may know another person by the address.
+  const knownElsewhere = new Map<string, ModuleHostPerson>()
+  for (const row of rows) {
+    const account = row.agent.person ? accountIn(row.projectId, row.agent.person) : undefined
+    if (account && !knownElsewhere.has(row.agent.person!.toLowerCase())) knownElsewhere.set(row.agent.person!.toLowerCase(), account)
+  }
+  const accountOf = (projectId: string | null, person: string): ModuleHostPerson | undefined => accountIn(projectId, person) ?? (projectId === SESSIONS_ID ? knownElsewhere.get(person.toLowerCase()) : undefined)
   // Your own runs are marked as the sidebar's foot marks you: the letters of your own name, not of
   // your email, and with no git host to ask (a session with no project), your own picture.
   const { person: me } = usePerson()
@@ -1072,7 +1081,8 @@ function AgentHistoryRow({
               <>
                 <PersonMark email={person} name={name} picture={account?.avatar ?? picture} className="size-7" />
                 <span className="flex min-w-0 flex-1 flex-col leading-tight">
-                  <span className="truncate text-sm">{personName(person, name)}</span>
+                  {/* By their first name, as the sidebar's foot calls them: the foot shares its line with the model. */}
+                  <span className="truncate text-sm">{personName(person, name).split(/\s+/)[0]}</span>
                   <span className="truncate text-xs text-muted-foreground">{person}</span>
                 </span>
               </>
