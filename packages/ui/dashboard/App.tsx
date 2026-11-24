@@ -171,7 +171,8 @@ export function App() {
 
   // Every navigation keeps the picked project, and one into another project's page, or into a
   // page in a named project, picks that project: the pages never show a project the select does not name.
-  const scoped = (next: Route): Route => ({ ...next, ...(scope ? { scope: next.scope ?? next.projectId ?? scope } : {}) })
+  // A session's page, which has no project, keeps the project picked: it is listed under it.
+  const scoped = (next: Route): Route => ({ ...next, ...(scope ? { scope: next.scope ?? (next.projectId === SESSIONS_ID ? scope : next.projectId) ?? scope } : {}) })
   const go = (next: Route, options?: { beside?: boolean }) => navigate(scoped(next), options)
   /** Where `go` would take the page: a link's address. */
   const hrefOf = (next: Route) => formatRoute(scoped(next), addresses)
@@ -203,7 +204,8 @@ export function App() {
   // the project by its address, not by its id.
   // Every two seconds on the project's own pages, where a run's status is watched; every ten beside
   // the Overview or a module's page, whose rail only lists them (as every project's rail does).
-  const agentsOf = projectsState !== 'unknown' ? (projectId ?? scope) : null
+  // The list is the picked project's, on a session's page opened from it too.
+  const agentsOf = projectsState !== 'unknown' ? (scope ?? projectId) : null
   const { agents, reload, state: agentsState } = useAgents(agentsOf, agentStart.id !== null && agentStart.projectId === agentsOf ? agentStart.id : null, projectId !== null ? 2000 : 10_000)
   useEffect(() => {
     const startedId = agentStart.id
@@ -291,7 +293,11 @@ export function App() {
   const allShow = scope === null && !scopePending
   const { recentAgents, reload: reloadRecent, state: recentState } = useRecentAgents(allShow, agentStart)
   // The runs this page has read, which the jump finds at once: the picked project's own list, and every project's newest.
-  const pageRuns = useMemo(() => [...(agentsOf !== null ? agents.map(agent => ({ projectId: agentsOf, projectName: labels.get(agentsOf) ?? '', agent })) : []), ...recentAgents], [agents, agentsOf, recentAgents, labels])
+  // A session listed under the picked project is the sessions' own.
+  const pageRuns = useMemo(
+    () => [...(agentsOf !== null ? agents.map(agent => (agent.under ? { projectId: SESSIONS_ID, projectName: '', agent } : { projectId: agentsOf, projectName: labels.get(agentsOf) ?? '', agent })) : []), ...recentAgents],
+    [agents, agentsOf, recentAgents, labels],
+  )
 
   // An agent just started in `inProject`, which is not always the selected one: the onboarding
   // checklist starts one from the Overview, where nothing is selected (#1169).
@@ -450,7 +456,7 @@ export function App() {
     : undefined
   // A session with no record in a list that was read: it was deleted, or never was here. The run
   // just started is exempt only until a list has had it, the beat before its card lands.
-  const sessionGone = agentId !== null && !selectedAgent && agentsState === 'fresh' && (agentId !== agentStart.id || agentStart.listed === true)
+  const sessionGone = agentId !== null && !selectedAgent && agentsState === 'fresh' && agentsOf === projectId && (agentId !== agentStart.id || agentStart.listed === true)
   // Whether the selected run's coding agent started subagents: they get a pane beside the chat.
   const hasSubagents = useMemo(() => callSubagents(events).length > 0, [events])
   // How the calls of its coding agent read, in that pane's transcripts as in its chat.

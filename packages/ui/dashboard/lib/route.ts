@@ -46,13 +46,18 @@ export interface Route {
   /**
    * The one project every page shows (#1513), by id; absent when every project shows. It is the
    * project the address starts with. On a project's agent and "New agent session" pages it is that
-   * project, or absent when `?all` is there: never another one.
+   * project, or absent when `?all` is there: never another one. On a session's page, which has no
+   * project, it is the one picked when the session was opened from that project's list (`?in=`): a
+   * session with no project is listed under each project it has a copy of.
    */
   scope?: string
 }
 
 /** The query parameter, with no value, that says every project shows on a project's own pages. */
 const ALL_PARAM = 'all'
+
+/** The query parameter of a session's page that names the project picked over it. */
+const IN_PARAM = 'in'
 
 /** The query parameter that carries {@link Route.settings}. */
 export const SETTINGS_PARAM = 'settings'
@@ -79,15 +84,21 @@ export function parseRoute(url: string, projects: ProjectAddresses): Route {
   const [second, ...after] = rest
   if (second === OVERVIEW_SEGMENT) return { projectId: null, agentId: null, scope: projectId, ...settings }
   if (second !== undefined && isPageSegment(second)) return { projectId: null, agentId: null, page: second, pagePath: after, scope: projectId, ...settings }
-  // The sessions with no project are no project to show alone: every project shows beside them.
-  return { projectId, agentId: second ?? null, ...(params.has(ALL_PARAM) || projectId === SESSIONS_ID ? {} : { scope: projectId }), ...settings }
+  // The sessions with no project are no project to show alone: every project shows beside them, or the one picked over them.
+  if (projectId === SESSIONS_ID) {
+    const over = params.get(IN_PARAM)
+    const picked = over ? projects.projectOf(over) : undefined
+    return { projectId, agentId: second ?? null, ...(picked !== undefined ? { scope: picked } : {}), ...settings }
+  }
+  return { projectId, agentId: second ?? null, ...(params.has(ALL_PARAM) ? {} : { scope: projectId }), ...settings }
 }
 
 /** The URL for a route, its path and its query — the inverse of {@link parseRoute}. */
 export function formatRoute(route: Route, projects: ProjectAddresses): string {
   const all = !route.page && route.projectId && route.projectId !== SESSIONS_ID && !route.scope ? [ALL_PARAM] : []
+  const over = !route.page && route.projectId === SESSIONS_ID && route.scope ? [`${IN_PARAM}=${encodeURIComponent(projects.addressOf(route.scope))}`] : []
   const settings = route.settings !== undefined ? [`${SETTINGS_PARAM}=${encodeURIComponent(route.settings)}`, ...(route.settingsItem ? [`${SETTINGS_ITEM_PARAM}=${encodeURIComponent(route.settingsItem)}`] : [])] : []
-  const query = [...all, ...settings].join('&')
+  const query = [...all, ...over, ...settings].join('&')
   return formatPath(route, projects) + (query ? `?${query}` : '')
 }
 
@@ -99,7 +110,7 @@ export function formatRoute(route: Route, projects: ProjectAddresses): string {
 export function keepPageQuery(url: string, search: string): string {
   const [path = '', own = ''] = url.split('?')
   const params = new URLSearchParams(search)
-  for (const name of [ALL_PARAM, SETTINGS_PARAM, SETTINGS_ITEM_PARAM, ...new URLSearchParams(own).keys()]) params.delete(name)
+  for (const name of [ALL_PARAM, IN_PARAM, SETTINGS_PARAM, SETTINGS_ITEM_PARAM, ...new URLSearchParams(own).keys()]) params.delete(name)
   const query = [params.toString(), own].filter(Boolean).join('&')
   return query ? `${path}?${query}` : path
 }

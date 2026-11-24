@@ -192,8 +192,8 @@ export function AgentHistory({
 
   // All projects show: the rail pools every project's sessions. One project: just its own.
   const crossProject = scope === null && recentAgents !== undefined
-  // Whose `agents` are: the page's project, else the picked one.
-  const listOf = projectId ?? scope ?? null
+  // Whose `agents` are: the picked project's, on a session's page opened from its list too; else the page's project.
+  const listOf = scope ?? projectId ?? null
   const listed = crossProject ? recentAgents!.map(recent => recent.agent) : agents
 
   // The handover: the row this one stands in for has landed once the list holds the run the start
