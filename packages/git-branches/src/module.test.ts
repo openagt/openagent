@@ -8,6 +8,7 @@ import { RunOrder, type GitBranchesFacts, type ProjectRef, type RunContext, type
 import { fakeApp, fakeRun } from '@openagt/hooks/testing'
 import { gitBranchesModule } from './module.js'
 import { SESSION_FOLDER_STAYS } from './session-folder.js'
+import { PROJECTS_ENV, SESSION_ENV } from './add.js'
 import { worktreePath } from './worktree.js'
 
 // git-branches as a module: its steps, run alone on a real repository, each reading and writing
@@ -24,9 +25,9 @@ async function project(): Promise<ProjectRef> {
   return { id: 'p', name: 'p', dir }
 }
 
-const steps = (): Record<'checkout' | 'branch' | 'reclaim', RunStep> => {
-  const [checkout, branch, reclaim] = gitBranchesModule({ git }).hooks['run.step'] ?? []
-  return { checkout: checkout!, branch: branch!, reclaim: reclaim! }
+const steps = (): Record<'checkout' | 'projects' | 'branch' | 'reclaim', RunStep> => {
+  const [checkout, projects, branch, reclaim] = gitBranchesModule({ git }).hooks['run.step'] ?? []
+  return { checkout: checkout!, projects: projects!, branch: branch!, reclaim: reclaim! }
 }
 
 const exists = (path: string): Promise<boolean> => stat(path).then(() => true, () => false)
@@ -39,6 +40,7 @@ test('its steps stand where a checkout is made, its branch read back, and the ch
     (gitBranchesModule().hooks['run.step'] ?? []).map(step => [step.order, step.name]),
     [
       [RunOrder.WORKSPACE, 'make the checkout'],
+      [RunOrder.CONTEXT, 'hand the agent its projects'],
       [RunOrder.RECORD - 20, 'read the branch back'],
       [RunOrder.CLEANUP, 'reclaim the checkout'],
     ],
@@ -240,4 +242,13 @@ test("a finished run's work left on this machine is what waits on the person: it
     await rm(p.dir, { recursive: true, force: true })
     await rm(origin, { recursive: true, force: true })
   }
+test("a session handed the person's projects has them in its agent's environment, with its id, for its `add` command; one handed none has neither", async () => {
+  const { projects } = steps()
+  const projectsGiven = [{ name: 'shop', dir: '/w/shop' }]
+  const handed: RunContext = fakeRun({ id: 'run9', options: { 'git-branches': { projects: projectsGiven } } })
+  await projects.run(handed)
+  assert.deepEqual(handed.env, { [PROJECTS_ENV]: JSON.stringify(projectsGiven), [SESSION_ENV]: 'run9' })
+  const none: RunContext = fakeRun({ id: 'run10' })
+  await projects.run(none)
+  assert.deepEqual(none.env, {})
 })

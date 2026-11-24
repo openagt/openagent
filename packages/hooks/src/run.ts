@@ -54,6 +54,11 @@ export interface GitBranchesOptions {
   branch?: string
   /** The repos copied into the session's folder, each under its name there: where a run with no project works, beside the checkout of a run in a project. */
   repos?: { name: string; from: string }[]
+  /**
+   * The person's projects the session may bring in itself, each by its name and folder (Auto): its
+   * agent is told their names, and its `add` command copies one into the session's folder.
+   */
+  projects?: { name: string; dir: string }[]
 }
 
 /** skills' slice: which of the project's own skills the run gets. The modules' skills are their plugins' to switch (`PluginsOptions`). */

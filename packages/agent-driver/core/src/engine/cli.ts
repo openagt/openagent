@@ -1,6 +1,7 @@
+import { isAbsolute } from 'node:path'
 import { PLUGINS_WITHOUT_ENV, PROFILE_ENV, PROJECT_SKILLS_ENV } from './names.js'
 import { Refused, UsageError, inRepo, parseCommandArgs, runCommandLine, helpRows, helpText, type Command } from '@openagt/hooks/command'
-import { errorMessage, nodeGitRunner, sessionsHomeOf, projectRoot, sessionRepos } from '@openagt/git-branches'
+import { errorMessage, nodeGitRunner, sessionsHomeOf, projectRoot, sessionRepos, type SessionProject } from '@openagt/git-branches'
 import type { GitRunner } from '@openagt/hooks'
 import { UnknownAgent, agentNames, codingAgents } from '../agents.js'
 import { GIT_ACCOUNT_ENV, detachResume, detachRun, profileLoginFor, readyToRun, resumeProject, runProject, type SpawnedResume } from './runner.js'
@@ -33,6 +34,7 @@ ${helpRows([
   ['--branch <name>', `with --branch, the run works on <name>, a branch that exists, such as a person's pull request's, instead of a fresh one`],
   ['--for <thread>', `with --for, the run's record names what it was started for, a thread's address on the git host, so the next call there finds it`],
   ['--repos <folders>', `with --repos, each git repository among <folders>, one per line, is copied into the session's folder (below)`],
+  ['--projects <json>', `with --projects, a JSON list of { "name", "dir" }, the agent may bring each of those projects into the session itself: \`npx @openagt/git-branches@0.1 add <name>\` copies one into the session's folder`],
 ])}
 
 ${helpText(`In the sessions home (~/.openagent-sessions, or $XDG_CONFIG_HOME/openagent-sessions) a run has no project: it works in a folder of its own there, <home>/<id>, with no git, kept when it ends; its record is kept with the other sessions' in the personal folder, and --base, --pr-base and --branch are refused, as is --publish with no --repos. Each repo given with --repos is a clone in it, <home>/<id>/<repo's folder name>, on a new branch agent-<id>, its origin the repo's own (none when the repo has none); the run's record names them, and a resumed run goes on with the same ones; a resume given --repos with its text adds those, copied as the run goes on, and its prompt is followed by where they are. A run in a project given --repos has the same folder for the copies alone, its own work being in its checkout of the project, and its prompt is followed by where the copies are. The --publish sentence names the copies too: one level holds for the project and for each copy the agent changed.`)}
@@ -81,7 +83,22 @@ const RUN_FLAGS = {
   for: { type: 'string' },
   by: { type: 'string' },
   repos: { type: 'string' },
+  projects: { type: 'string' },
 } as const
+
+/** `--projects`, a JSON list of the projects the session may bring in, each `{ "name", "dir" }`: refused as a usage error when it is not one. */
+function projectsFlag(value: string): SessionProject[] {
+  const list = ((): unknown => {
+    try {
+      return JSON.parse(value)
+    } catch {
+      return undefined
+    }
+  })()
+  const projects = Array.isArray(list) ? list.filter((one): one is SessionProject => one && typeof one === 'object' && typeof one.name === 'string' && one.name.trim() !== '' && typeof one.dir === 'string' && isAbsolute(one.dir)) : []
+  if (!Array.isArray(list) || projects.length !== list.length) throw new UsageError('--projects is a JSON list of projects, each { "name": <its name>, "dir": <its folder> }')
+  return projects
+}
 
 /** `--driver`, refused as a usage error when it names no coding agent of the distribution handed down to this process. */
 async function knownAgent(driver: string | undefined): Promise<void> {
@@ -109,6 +126,7 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
       if (values['pr-base'] !== undefined) throw new UsageError('--resume takes no --pr-base: a run continues into the branch its record names')
       if (values.branch !== undefined) throw new UsageError('--resume takes no --branch: a run continues on its own branch')
       if (values.for !== undefined) throw new UsageError('--resume takes no --for: a run continues for what its record names')
+      if (values.projects !== undefined) throw new UsageError('--resume takes no --projects: a session goes on with the projects its record names')
       if (values.repos !== undefined && positionals[0] === undefined) throw new UsageError('--repos goes with a text on a resume: the repos come into the session with a message')
       if (positionals[0] === undefined && values.answer === undefined) throw new UsageError('a text or --answer is needed to resume a run')
     }
@@ -139,6 +157,7 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
       const line = errorMessage(err)
       throw new Refused({ ok: false, reason: 'not-a-repo', detail: line }, line)
     }) : undefined
+    const projects = values.projects !== undefined ? projectsFlag(values.projects) : undefined
     if (values.started !== undefined && (values.id === undefined || Number.isNaN(Date.parse(values.started)))) throw new UsageError('--started is the time a run spawned with --id was asked for, like 2026-10-09T10:00:00.000Z')
     // The account at the git host picked for this session, by whoever started the run: in the environment ({@link GIT_ACCOUNT_ENV}).
     const gitAccount = process.env[GIT_ACCOUNT_ENV]?.trim() || undefined
@@ -189,6 +208,7 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
       ...(values.branch !== undefined ? { branch: values.branch.trim() } : {}),
       ...(values.for !== undefined ? { for: values.for.trim() } : {}),
       ...(repos !== undefined ? { repos } : {}),
+      ...(projects !== undefined ? { projects } : {}),
     }
     if (values.detach) {
       if (values.id !== undefined) throw new UsageError('--detach takes no --id: the run\'s id is minted and answered')

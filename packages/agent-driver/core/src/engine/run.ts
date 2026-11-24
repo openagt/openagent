@@ -1,4 +1,4 @@
-import { errorMessage, moreRepos, sessionsHomeOf, type SessionRepo } from '@openagt/git-branches'
+import { errorMessage, moreRepos, sessionsHomeOf, type SessionProject, type SessionRepo } from '@openagt/git-branches'
 import { projectId } from '@openagt/projects'
 import { projectNameOf, repositoryAddress, sessionsHome, type GitRunner, continuationPrompt, createHooks, type DistributionEntry, type ProjectRef, type RunFacts, type RunInput, type RunOptions as ModuleOptions } from '@openagt/hooks'
 import { findRun, readDiary } from '../record-store.js'
@@ -81,6 +81,8 @@ export interface RunRequest {
   for?: string
   /** The repos a session has as context (`run --repos`), each copied into its folder; kept on its mark. */
   repos?: SessionRepo[]
+  /** The person's projects the session may bring in itself (`run --projects`), by name and folder; kept on its mark. */
+  projects?: SessionProject[]
 }
 
 /** What the profile a run is on brings each of its legs. */

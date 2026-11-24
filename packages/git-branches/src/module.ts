@@ -13,6 +13,7 @@ import { isCopyName } from './repo-names.js'
 import { checkedRepos, dropUntouchedCopies, openSessionFolder, SESSION_FOLDER_STAYS } from './session-folder.js'
 import { unpublishedItems, unpublishedRuns } from './unpublished.js'
 import { currentBranch, worktreeBranch, worktreePath, type AddedWorktree } from './worktree.js'
+import { PROJECTS_ENV, SESSION_ENV } from './add.js'
 
 /**
  * git-branches, the module (#2394): where a run works, made before anything is linked into it;
@@ -36,6 +37,7 @@ export function gitBranchesModule(deps: GitBranchesDeps = {}): ModuleDefinition 
     hooks: {
       'run.step': [
         { order: RunOrder.WORKSPACE, name: 'make the checkout', run: ctx => makeCheckout(ctx, git) },
+        { order: RunOrder.CONTEXT, name: 'hand the agent its projects', run: handProjects },
         { order: RunOrder.RECORD - 20, name: 'read the branch back', run: ctx => readBranch(ctx, git) },
         { order: RunOrder.CLEANUP, name: 'reclaim the checkout', run: ctx => reclaim(ctx, git) },
       ],
@@ -106,6 +108,17 @@ async function pickedBase(projectId: string, dir: string, settings: Settings, gi
   const pick = (await settings.get(START_FROM).catch(() => ({}) as Record<string, never>))[projectId]
   if (pick?.kind === 'local') return currentBranch(dir, git)
   return pick?.kind === 'published' ? publishedBase(pick.branch) : undefined
+}
+
+/**
+ * The person's projects the session may bring in itself (Auto), handed to its agent's environment
+ * with the session's id: what its `add` command reads.
+ */
+function handProjects(ctx: RunContext): void {
+  const projects = ctx.options['git-branches']?.projects ?? []
+  if (projects.length === 0) return
+  ctx.env[PROJECTS_ENV] = JSON.stringify(projects)
+  ctx.env[SESSION_ENV] = ctx.id
 }
 
 /**

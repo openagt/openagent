@@ -261,6 +261,15 @@ test('--repos is read one folder per line, and handed on to the run\'s process; 
     const repos = [{ name: 'repo', from: repo }, { name: 'other', from: '/x/other' }]
     assert.ok(runArgs({ id: ID, prompt: 'Read', repos }).includes(`--repos=${repo}\n/x/other`))
     assert.ok(resumeArgs({ id: ID, text: 'More', repos: [repo, '/x/other'] }).includes(`--repos=${repo}\n/x/other`), 'a resume hands on the folders its message gives')
+    // The projects the session may bring in go as one JSON argument, and only to a new run: a resume has its record's.
+    const projects = [{ name: 'shop', dir: '/w/shop' }]
+    assert.ok(runArgs({ id: ID, prompt: 'Read', projects }).includes(`--projects=${JSON.stringify(projects)}`))
+    err.length = 0
+    assert.equal(await runCli(['run', '--resume', ID, '--projects', '[]', 'More'], { cwd: home, stdout: () => {}, stderr: line => err.push(line) }), 2)
+    assert.match(err[0] ?? '', /--resume takes no --projects/)
+    err.length = 0
+    assert.equal(await runCli(['run', '--projects', '[{"name":"shop"}]', 'Read'], { cwd: home, stdout: () => {}, stderr: line => err.push(line) }), 2)
+    assert.match(err[0] ?? '', /--projects is a JSON list of projects/)
   } finally {
     await removeRepo(repo)
   }

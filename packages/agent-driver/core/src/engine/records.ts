@@ -2,7 +2,7 @@ import { isSkillName } from './names.js'
 import type { FileBranchWrite } from '@openagt/store-filesystem'
 import { isProfileId, MODULE_NAME, type AgentDriverOptions, type RunOptions } from '@openagt/hooks'
 import type { ProjectSkillsPick } from './profile.js'
-import { publishedBranch, type SessionRepo } from '@openagt/git-branches'
+import { publishedBranch, type SessionProject, type SessionRepo } from '@openagt/git-branches'
 import { deleteRun, writeRun, type RecordDeps } from '../record-store.js'
 import { type AnyDiaryLine, type RunCard } from '../record.js'
 
@@ -67,6 +67,8 @@ export interface Lasting {
   for?: string
   /** The repos a session has as context (`run --repos`), each a copy in its folder. */
   repos?: SessionRepo[]
+  /** The person's projects the session may bring in itself (`run --projects`), by name and folder. */
+  projects?: SessionProject[]
   /** The profile the run is on, by its id (`OPENAGENT_PROFILE`): each leg runs on its options as it stands then; Default when absent. */
   profile?: string
   /** The enabled plugins the run goes without (`OPENAGENT_PLUGINS_WITHOUT`), by name: the session's pick, none of them for an empty list; its profile's when absent. */
@@ -79,6 +81,12 @@ export interface Lasting {
 function reposOf(value: unknown): SessionRepo[] | undefined {
   if (!Array.isArray(value)) return undefined
   return value.flatMap(repo => (repo && typeof repo === 'object' && typeof repo.name === 'string' && typeof repo.from === 'string' ? [{ name: repo.name as string, from: repo.from as string }] : []))
+}
+
+/** The projects a mark names, as far as they are projects: anything else there is left out. */
+function projectsOf(value: unknown): SessionProject[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  return value.flatMap(project => (project && typeof project === 'object' && typeof project.name === 'string' && typeof project.dir === 'string' ? [{ name: project.name as string, dir: project.dir as string }] : []))
 }
 
 /** The mark a card carries, or `undefined` for a run this tool did not start. */
@@ -111,6 +119,7 @@ const pluginsOf = (value: unknown): string[] | undefined => (Array.isArray(value
 /** What `mark` keeps for the run's whole life ({@link Lasting}), as far as each is what it should be: anything else there is left out. */
 export function lasting(mark: { [K in keyof Lasting]?: unknown }): Lasting {
   const repos = reposOf(mark.repos)
+  const projects = projectsOf(mark.projects)
   const pluginsWithout = pluginsOf(mark.pluginsWithout)
   const projectSkills = mark.projectSkills === 'all' || mark.projectSkills === 'none' ? mark.projectSkills : namesOf(mark.projectSkills, isSkillName)
   return {
@@ -121,6 +130,7 @@ export function lasting(mark: { [K in keyof Lasting]?: unknown }): Lasting {
     ...(typeof mark.baseCommit === 'string' ? { baseCommit: mark.baseCommit } : {}),
     ...(typeof mark.for === 'string' ? { for: mark.for } : {}),
     ...(repos !== undefined && repos.length > 0 ? { repos } : {}),
+    ...(projects !== undefined && projects.length > 0 ? { projects } : {}),
     ...(isProfileId(mark.profile) ? { profile: mark.profile } : {}),
     ...(pluginsWithout ? { pluginsWithout } : {}),
     ...(projectSkills !== undefined ? { projectSkills } : {}),
@@ -177,7 +187,7 @@ export function agentAsked(driver: string, model?: string, effort?: string): Age
  * session's picks over it; the profile's own picks are not in them.
  */
 export function markOptions(mark: Lasting): RunOptions {
-  const branches = { ...(mark.base !== undefined ? { base: mark.base } : {}), ...(mark.repos !== undefined ? { repos: mark.repos } : {}) }
+  const branches = { ...(mark.base !== undefined ? { base: mark.base } : {}), ...(mark.repos !== undefined ? { repos: mark.repos } : {}), ...(mark.projects !== undefined ? { projects: mark.projects } : {}) }
   const github = { ...(mark.prBase !== undefined ? { prBase: mark.prBase } : {}), ...(mark.gitAccount !== undefined ? { account: mark.gitAccount } : {}) }
   return {
     ...(mark.publish !== undefined ? { publish: mark.publish } : {}),

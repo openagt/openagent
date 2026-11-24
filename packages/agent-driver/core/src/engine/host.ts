@@ -408,6 +408,7 @@ function asked(options: RunOptions): Omit<AskedRun, 'prompt'> {
     ...(branches.base !== undefined ? { base: branches.base } : {}),
     ...(branches.branch !== undefined ? { branch: branches.branch } : {}),
     ...(branches.repos !== undefined && branches.repos.length > 0 ? { repos: branches.repos } : {}),
+    ...(branches.projects !== undefined && branches.projects.length > 0 ? { projects: branches.projects } : {}),
     ...(options.github?.prBase !== undefined ? { prBase: options.github.prBase } : {}),
   }
 }

@@ -66,6 +66,8 @@ export function runArgs(run: SpawnedRun): string[] {
   if (run.for !== undefined) args.push('--for', run.for)
   // One argument, the folders one per line: the process reads them as the start did.
   if (run.repos !== undefined && run.repos.length > 0) args.push(`--repos=${run.repos.map(repo => repo.from).join('\n')}`)
+  // One argument, the projects as JSON: names may hold anything.
+  if (run.projects !== undefined && run.projects.length > 0) args.push(`--projects=${JSON.stringify(run.projects)}`)
   return args
 }
 

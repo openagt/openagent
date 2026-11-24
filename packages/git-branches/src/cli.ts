@@ -1,9 +1,11 @@
-import { resolve } from 'node:path'
+import { basename, resolve } from 'node:path'
+import { realpath, stat } from 'node:fs/promises'
 import { GIT_FAILED, checkoutRoot, nodeGitRunner } from './git.js'
-import type { GitRunner } from '@openagt/hooks'
+import { sessionsHome, type GitRunner } from '@openagt/hooks'
 import { Refused, UsageError, inRepo, parseCommandArgs, runCommandLine, helpRows, helpText, type Command } from '@openagt/hooks/command'
-import { isSafeAgentId, sessionNameOf } from './branch-names.js'
-import { branchPushed, currentBranch, isWorktreeRoot, projectRoot, worktreeBranch, worktreeClean, worktreeDirEntries, worktreeSize } from './worktree.js'
+import { addProject, addRefusalLine, projectsOf, SESSION_ENV } from './add.js'
+import { agentBranchName, agentIdFromWorktreeDir, isSafeAgentId, sessionNameOf } from './branch-names.js'
+import { branchPushed, currentBranch, isWorktreeRoot, projectRoot, worktreeBranch, worktreeClean, worktreeDirEntries, worktreePath, worktreeSize } from './worktree.js'
 import { nameBranch, type NameBranchRefusal } from './name.js'
 import { createCheckout, attachCheckout } from './checkout.js'
 import { reconcileBranchLinks } from './branch-links.js'
@@ -41,6 +43,7 @@ ${helpRows([
   ['ahead [--from <commit>] <branch>...', 'how many commits of its own each branch has beyond the base, whether it is pushed or was and is gone from origin, whether it is merged, how many paths its checkout left uncommitted: no file lists, every branch in one read'],
   ['push [--branch <b>]', `push this checkout's branch, or branch <b>, to origin; a dirty checkout is refused`],
   ['merge <branch>', `merge branch <branch> into the default branch, in the project's folder, then delete it; a conflict changes nothing and names the files`],
+  ['add <project>', `in a session OpenAgent started, bring in the person's project named <project>, one of the projects handed to the session: a copy of it in the session's folder, on the session's branch, made from origin's default branch; prints where it is (copy), and existing true for a project the session has already`],
   ['bring <branch> [--merge]', `in a session's copy of a repo with no remote: add branch <branch> to the folder the copy was made from, changing nothing else there; with --merge, merge it into that folder's default branch too, as merge does`],
   ['list [--sizes]', 'every agent checkout under .branches/'],
   ['remove <id> [--from <commit>]', `reclaim agent <id>'s checkout, once its branch holds everything in it; the branch stays, nothing is pushed; <commit> is the one its branch started from, in place of the default branch`],
@@ -133,6 +136,13 @@ const COMMANDS: Record<string, Command<[string, GitRunner]>> = {
     if (!outcome.ok) throw new Refused(outcome, mergeRefusalLine(outcome))
     // A link named after a branch that just went is stale from this moment.
     if (outcome.deleted) await reconcileBranchLinks(repo, { git })
+    return outcome
+  },
+
+  async add(args, _cwd, git) {
+    const { positionals } = parseCommandArgs(args, {}, 1)
+    const outcome = await addProject(sessionsHome(), process.env[SESSION_ENV], projectsOf(process.env), positionals[0]!, git)
+    if (!outcome.ok) throw new Refused(outcome, addRefusalLine(outcome))
     return outcome
   },
 

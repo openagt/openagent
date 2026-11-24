@@ -78,3 +78,4 @@ export { CHECKOUT_LOCK_WAIT_MS, checkoutLockPath, withCheckoutLock, withLockFile
 export { NoRemoteAccountError, accountGit, clearRemoteAccount, noAccountSentence, readRemoteAccount, writeRemoteAccount, type RemoteAccount } from './remote-account.js'
 export { listSessionFolders, runsRootOf, sessionFolder, sessionsHomeOf } from './sessions.js'
 export { BRANCHES_DIR, DATA_BRANCH, publishedBase, publishedBranch } from './branch-names.js'
+export { addProject, PROJECTS_ENV, projectsOf, SESSION_ENV, type AddOutcome, type SessionProject } from './add.js'
