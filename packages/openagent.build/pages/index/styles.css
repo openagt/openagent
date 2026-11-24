@@ -190,12 +190,10 @@ html[data-installed] .top-nav {
   }
 }
 
-/* The toggle under the logo and the big Dashboard button: only on a computer with OpenAgent installed (+Head.tsx, ViewToggle). */
+/* The toggle under the logo is hidden for now, here and in the dashboard (its `ViewToggle`), its code kept:
+   to show it again on a computer with OpenAgent installed, `html[data-installed] .view-toggle { display: inline-flex !important }`. */
 .view-toggle {
   display: none !important;
-}
-html[data-installed] .view-toggle {
-  display: inline-flex !important;
 }
 /* The big Dashboard button too: it leads to a dashboard only where there is one. */
 .dashboard-cta {
