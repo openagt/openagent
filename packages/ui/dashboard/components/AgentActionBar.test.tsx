@@ -45,7 +45,9 @@ describe('AgentActionBar', () => {
   test('the run\'s state stands after its name, in the run table\'s word on its soft fill', () => {
     const { container } = render(<AgentActionBar projectId="p1" agentId="run-1" events={AGENTS.running!} label="Dark mode" checkout={DIRTY} status="running" />)
     expect(container.textContent).toBe('[Dark mode ⌄]Working[⋮]')
-    expect(container.querySelector('svg')!.getAttribute('class')).toContain('text-info')
+    // The mark is drawn in the pill's own colour, the state's.
+    expect(container.querySelector('svg')!.getAttribute('class')).toContain('text-current')
+    expect(container.querySelector('svg')!.parentElement!.className).toContain('text-info')
   })
 
   test('the project\'s ⋮ stands where the "New agent session" page has it: past the spacer, just before the panes\' icons, acting on the project', () => {

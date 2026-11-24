@@ -146,7 +146,7 @@ test("each status is the sidebar's mark and word: a waiting run's hexagon waits 
   const mark = (title: string) => screen.getAllByText(title)[0]!.closest('li')!.querySelector('svg')!.getAttribute('class')
   await screen.findAllByText('Asks')
   expect(mark('Asks')).toContain('text-warning')
-  expect(mark('Ended')).toContain('text-success')
+  expect(mark('Ended')).toContain('text-faint-foreground')
   // The Human Queue's two words for a run parked on a question: one word for one state.
   expect(screen.getAllByText('Asks')[0]!.closest('li')!.textContent).toContain('Needs answer')
 })

@@ -11,7 +11,7 @@ export type WorkState = 'working' | 'waiting' | 'queued' | 'done' | 'merged' | '
 const HUE: Record<WorkState, string> = {
   working: 'text-info',
   waiting: 'text-warning',
-  done: 'text-success',
+  done: 'text-faint-foreground',
   merged: 'text-merged',
   failed: 'text-danger',
   queued: 'text-faint-foreground',
@@ -25,31 +25,32 @@ function hexagon(r: number): string {
 }
 
 /**
- * A state's mark, told apart by its shape as well as its colour: working and waiting a core in a faint
- * ring (the ring turns while it works), done a solid cell, failed a solid cell crossed, merged the
- * merge glyph, queued a dashed outline, stopped a small core in an outline, idle an empty outline. 14
- * square; `className` sizes it.
+ * A state's mark. In a list of runs most are done, so colour and motion are kept for the few that
+ * are alive or wrong (his pick, 2026-11-24): working and waiting a solid cell that pulses, blue and
+ * yellow; done a faint outline; failed a solid cell crossed, in red. Merged is the merge glyph,
+ * queued a dashed outline, stopped a small core in an outline, idle an empty outline, a little
+ * smaller than done's. Working and waiting share their shape: the colour tells them apart, and the
+ * word beside the mark (or its label) says which for a reader who cannot see it. 14 square;
+ * `className` sizes it.
  */
 export function StateCell({ state, className }: { state: WorkState; className?: string | undefined }) {
   if (state === 'merged') return <GitMerge aria-hidden strokeWidth={2.5} className={cn('size-3.5 shrink-0', HUE[state], className)} />
-  const ringed = state === 'working' || state === 'waiting'
-  const hollow = state === 'queued' || state === 'idle'
-  const core = ringed ? 3.6 : state === 'stopped' ? 3 : 5.2
+  const alive = state === 'working' || state === 'waiting'
+  const outline = state === 'done' || state === 'queued' || state === 'idle'
   return (
-    <svg viewBox="0 0 16 16" aria-hidden className={cn('size-3.5 shrink-0 overflow-visible', HUE[state], className)}>
-      {(ringed || hollow || state === 'stopped') && (
+    <svg viewBox="0 0 16 16" aria-hidden className={cn('size-3.5 shrink-0 overflow-visible', HUE[state], alive && 'motion-safe:animate-pulse', className)}>
+      {(outline || state === 'stopped') && (
         <polygon
-          points={hexagon(hollow ? 5.6 : 6.9)}
+          points={hexagon(state === 'done' ? 6 : state === 'stopped' ? 6.9 : 5.6)}
           fill="none"
           stroke="currentColor"
           strokeWidth={1.5}
           strokeLinejoin="round"
           strokeDasharray={state === 'queued' ? '2 2' : undefined}
-          opacity={ringed ? 0.4 : 1}
-          className={cn(state === 'working' && 'origin-center motion-safe:animate-spin [animation-duration:2s] [transform-box:fill-box]')}
+          opacity={state === 'done' ? 0.7 : 1}
         />
       )}
-      {!hollow && <polygon points={hexagon(core)} fill="currentColor" stroke="currentColor" strokeWidth={1.6} strokeLinejoin="round" />}
+      {!outline && <polygon points={hexagon(state === 'stopped' ? 3 : 5.2)} fill="currentColor" stroke="currentColor" strokeWidth={1.6} strokeLinejoin="round" />}
       {state === 'failed' && <path d="M5.9 5.9l4.2 4.2M10.1 5.9l-4.2 4.2" className="stroke-card" strokeWidth={1.5} strokeLinecap="round" />}
     </svg>
   )
@@ -70,7 +71,8 @@ const PILL: Record<WorkState, string> = {
 export function StatePill({ state, children, className }: { state: WorkState; children: ReactNode; className?: string }) {
   return (
     <span className={cn('inline-flex h-5.5 shrink-0 items-center gap-1.5 rounded-full pr-2 pl-1.5 text-xs font-medium whitespace-nowrap', PILL[state], className)}>
-      <StateCell state={state} className="size-2.5" />
+      {/* In the pill's own colour: a done pill stays green, where a list's done mark is quiet. */}
+      <StateCell state={state} className="size-2.5 text-current" />
       {children}
     </span>
   )
