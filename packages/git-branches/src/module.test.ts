@@ -258,9 +258,14 @@ test("a session handed the person's projects has them in its agent's environment
 test("a fresh session with no project is told the names of the projects it may bring in, the rule to ask when it cannot tell, and how to add one; a project it has a copy of is not offered; a resume and a run in a project are told nothing", async () => {
   const { projects } = steps()
   const given = { 'git-branches': { projects: [{ name: 'shop', dir: '/w/shop' }, { name: 'blog', dir: '/w/blog' }], repos: [{ name: 'blog', from: '/w/blog' }] } }
-  const fresh: RunContext = fakeRun({ id: 'run11', options: given })
+  const folder = await realpath(await mkdtemp(join(tmpdir(), 'git-branches-folder-')))
+  const fresh: RunContext = fakeRun({ id: 'run11', options: given, workspace: folder })
   await projects.run(fresh)
   assert.deepEqual(fresh.context, [projectsLine(['shop'])])
+  // Its command is linked where the agent starts: `npx @openagt/git-branches@0.1` runs this copy, with nothing asked of npm.
+  assert.equal(await exists(join(folder, 'node_modules', '.bin', 'branches')), true)
+  assert.equal(await exists(join(folder, 'node_modules', '@openagt', 'git-branches', 'package.json')), true)
+  await rm(folder, { recursive: true, force: true })
   assert.equal(
     projectsLine(['shop', 'blog']),
     "Projects you can work on: shop, blog. If the work needs one of them and you cannot tell which, ask the person, with the projects as the choices. To work on one, run `npx @openagt/git-branches@0.1 add <name>`: it copies the project into this session's folder and prints where.",

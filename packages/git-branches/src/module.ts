@@ -14,6 +14,8 @@ import { checkedRepos, dropUntouchedCopies, openSessionFolder, SESSION_FOLDER_ST
 import { unpublishedItems, unpublishedRuns } from './unpublished.js'
 import { currentBranch, worktreeBranch, worktreePath, type AddedWorktree } from './worktree.js'
 import { PROJECTS_ENV, projectsLine, SESSION_ENV, type SessionProject } from './add.js'
+import { linkPackage } from './command-link.js'
+import { OWN_SKILL } from './skill-links.js'
 
 /**
  * git-branches, the module (#2394): where a run works, made before anything is linked into it;
@@ -37,7 +39,7 @@ export function gitBranchesModule(deps: GitBranchesDeps = {}): ModuleDefinition 
     hooks: {
       'run.step': [
         { order: RunOrder.WORKSPACE, name: 'make the checkout', run: ctx => makeCheckout(ctx, git) },
-        { order: RunOrder.CONTEXT, name: 'tell the agent its projects', run: tellProjects },
+        { order: RunOrder.CONTEXT, name: 'tell the agent its projects', run: ctx => tellProjects(ctx, git) },
         { order: RunOrder.RECORD - 20, name: 'read the branch back', run: ctx => readBranch(ctx, git) },
         { order: RunOrder.CLEANUP, name: 'reclaim the checkout', run: ctx => reclaim(ctx, git) },
       ],
@@ -117,8 +119,12 @@ async function pickedBase(projectId: string, dir: string, settings: Settings, gi
  * agent starts from; it finds the one the work needs, asks when it cannot tell, and brings it in.
  * Injected names, not a command that lists them (Rom, 11-24: cheaper). A project the session has a
  * copy of already is not offered; a resume was told them when it began.
+ *
+ * The command is this package's, run by its full name (`npx @openagt/git-branches@0.1`): a checkout
+ * of a project has it linked with this package's skill, and a session's own folder, which gets no
+ * such skill, has it linked here, so the agent runs this copy and npm is never asked.
  */
-async function tellProjects(ctx: RunContext): Promise<void> {
+async function tellProjects(ctx: RunContext, git: GitRunner): Promise<void> {
   const options = ctx.options['git-branches'] ?? {}
   // A session with no project is handed the person's projects (Agent picks): the ones its options
   // name, else the list of projects on this computer, each whose folder is still here.
@@ -126,6 +132,7 @@ async function tellProjects(ctx: RunContext): Promise<void> {
   if (projects.length === 0) return
   ctx.env[PROJECTS_ENV] = JSON.stringify(projects)
   ctx.env[SESSION_ENV] = ctx.id
+  if (!ctx.project && ctx.workspace !== undefined) await linkPackage(ctx.workspace, ctx.workspace, OWN_SKILL.package!, git).catch(() => {})
   if (ctx.project || ctx.resume) return
   const offered = projects.filter(project => !(options.repos ?? []).some(repo => repo.from === project.dir))
   if (offered.length > 0) ctx.context.push(projectsLine(offered.map(project => project.name)))
