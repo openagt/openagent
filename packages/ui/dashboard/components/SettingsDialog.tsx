@@ -1,6 +1,6 @@
 import { useContext, useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
-import { ArrowLeft, Blocks, Bot, ChevronRight, ChevronsUpDown, Database, FolderGit2, Keyboard, Layers, Palette, X, FolderSearch } from 'lucide-react'
+import { ArrowLeft, Blocks, Bot, ChevronRight, ChevronsUpDown, Keyboard, Layers, Palette, X, FolderSearch } from 'lucide-react'
 import { DRIVERS, DRIVER_LABELS, isDriverName } from '../../src/client.js'
 import { driverOptions, useModels } from '../lib/models.js'
 import type { DriverOption } from './DriverModelMenu.js'
@@ -13,12 +13,10 @@ import { inPlace } from '../lib/in-place.js'
 import { useIsMobile } from '../lib/use-mobile.js'
 import { usePreferences, updatePreferences } from '../lib/preferences.js'
 import { AppearanceSettings } from './AppearanceSettings.js'
-import { AGENT_DATA_ENTRY, AgentDataSettings } from './AgentDataSettings.js'
 import { SHORTCUTS_ENTRY, ShortcutList } from './ShortcutList.js'
 import { REPO_SOURCES_ENTRY, RepoSourcesSettings } from './RepoSourcesSettings.js'
 import { PickProject } from './PickProject.js'
 import { ProjectDot } from './ProjectPicker.js'
-import { PROJECT_AGENT_DATA_ENTRY, ProjectAgentDataSettings } from './ProjectAgentDataSettings.js'
 import { COMPUTER_PLUGINS_ENTRY, ComputerPluginsSettings, PLUGINS_ENTRY, ProjectPluginsSettings } from './PluginsSettings.js'
 import { ModuleSlot, projectsHaving } from './ModulePageView.js'
 import { buttonVariants } from './ui/button.js'
@@ -113,11 +111,14 @@ export function SettingsDialog({
       ...(section.order !== undefined ? { order: section.order } : {}),
       title: section.title,
       icon: section.icon,
-      body: (
-        <ModuleSlot package={section.package} label={`${section.title} settings`}>
-          <Body projects={projectsHaving(section.projects, of)} {...(openItem !== undefined && section.id === entry ? { item: openItem } : {})} />
-        </ModuleSlot>
-      ),
+      body:
+        section.pickProject !== undefined && !project ? (
+          <PickProject words={section.pickProject} projects={of.filter(p => section.projects.includes(p.id))} onPick={setPicked} />
+        ) : (
+          <ModuleSlot package={section.package} label={`${section.title} settings`}>
+            <Body projects={projectsHaving(section.projects, of)} {...(openItem !== undefined && section.id === entry ? { item: openItem } : {})} />
+          </ModuleSlot>
+        ),
     }
   }
   // Sorted once more with the dashboard's own: a package's entries are in their order already, and at the same number the dashboard's stands first.
@@ -136,7 +137,6 @@ export function SettingsDialog({
     projects.length > 0
       ? [
           oneProject(PLUGINS_ENTRY, 15, 'Plugins', Blocks, ProjectPluginsSettings, 'Each project switches its plugins on and off. Pick a project.'),
-          oneProject(PROJECT_AGENT_DATA_ENTRY, 50, 'Project agent data', Database, ProjectAgentDataSettings, 'Each project keeps its agent data in one place, your folder or its own repository. Pick a project.'),
         ]
       : []
   const projectEntries = [...ownForProject, ...forProject.map(section => moduleEntry(section, project ? [project] : projects))].sort(byOrder)
@@ -149,7 +149,7 @@ export function SettingsDialog({
   const inProject = projectEntries.includes(current)
   // With every project picked, an entry that changes something says which projects a change goes to.
   const shownSection = inProject && !project ? forProject.find(s => s.id === current.id) : undefined
-  const savedTo = shownSection && shownSection.readOnly !== true ? projectsHaving(shownSection.projects, projects) : []
+  const savedTo = shownSection && shownSection.readOnly !== true && shownSection.pickProject === undefined ? projectsHaving(shownSection.projects, projects) : []
 
   const item = (e: Entry) => {
     const Icon = e.icon
@@ -377,13 +377,6 @@ function useOwnEntries(): Entry[] {
       title: 'Plugins',
       icon: Blocks,
       body: <ComputerPluginsSettings />,
-    },
-    {
-      id: AGENT_DATA_ENTRY,
-      order: 50,
-      title: 'Your agent data',
-      icon: FolderGit2,
-      body: <AgentDataSettings />,
     },
     {
       id: REPO_SOURCES_ENTRY,

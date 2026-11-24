@@ -24,9 +24,6 @@
   "bin": {
     "tickets": "bin/tickets"
   },
-  "openagent": {
-    "tickets": "tickets"
-  },
   "exports": {
     "./package.json": "./package.json",
     ".": {

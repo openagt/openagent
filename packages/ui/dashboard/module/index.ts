@@ -311,7 +311,6 @@ export { Markdown, InlineMarkdown, ModuleBlock } from '../components/Markdown.js
 export { FileLinks, IssueLinks } from '../lib/markdown-links.js'
 export { wordShownAt } from '../lib/use-steady-text.js'
 export { StartAgentButton, StartAgentPress, type StartMenuItem } from '../components/StartAgentButton.js'
-export { UpdateTicketsButton } from '../components/UpdateTicketsButton.js'
 export { ButtonGroup, ButtonGroupSeparator } from '../components/ui/button-group.js'
 export { LinkActions, useLinkActions, type LinkActionOffer, type ProjectLinks, type LinkTargets } from '../components/LinkActions.js'
 export { PersonMark, personName } from '../components/PersonMark.js'
@@ -324,6 +323,14 @@ export { SettingsFoot, SettingsItem, SettingsItems, SettingsSection, SettingsRow
 export { Avatar } from '../components/PersonMenu.js'
 export { usePerson, personChanged } from '../lib/use-person.js'
 export { AgentFix, useAgentState } from '../components/Logins.js'
+// The git hosts and OpenAgent's accounts at them, as the Permissions page reads them: a "Send as"
+// select of a host's accounts, the press that adds one, and a typed repository's address read.
+export { useGitHosts } from '../components/Logins.js'
+export type { GitHostRow } from '../rpc/logins.js'
+export { HostFix } from '../components/AddGitAccount.js'
+export { SendAs, firstSendAs } from '../components/SendAs.js'
+export { typedRepository, type TypedRepository } from '../../src/typed-repository.js'
+export { PathStrip } from '../components/PathStrip.js'
 
 export { Dialog } from '../components/ui/dialog.js'
 export { useCodingAgents, type CodingAgent } from '../lib/models.js'

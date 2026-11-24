@@ -1,54 +1,43 @@
-import { useState, useContext } from 'react'
-import { onProjectAgentData, sendProjectDataAs, type KeptData, type ProjectAgentData } from '../rpc/project-agent-data.js'
-import { sendShareRecords } from '../rpc/projects.js'
-import { usePolled } from '../lib/use-async.js'
-import { useAction } from '../lib/use-action.js'
-import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
-import { ConfirmDialog } from './ui/confirm-dialog.js'
-import { SettingsRowShapes, SettingsSection, SettingsSelectRow, SettingsRow } from './SettingsRows.js'
-import { Slot } from './ui/slot.js'
-import { PathStrip } from './PathStrip.js'
-import { AGENT_DATA_ENTRY } from './AgentDataSettings.js'
-import { SendAs, firstSendAs } from './SendAs.js'
-import { Facts } from './ui/panel.js'
+import { useState } from 'react'
+import { ConfirmDialog, Facts, PathStrip, SendAs, SettingsRow, SettingsRowShapes, SettingsSection, SettingsSelectRow, Slot, firstSendAs, rpcClient, useAction, useModuleHost, usePolled, type ModuleHost, type UiSettingsProps } from '@openagt/ui/module'
+import type { KeptData, ProjectAgentData } from '../src/server.js'
 
-/** The Settings entry's id: the project's own page, beside the person's own folder's `agent-data`. */
-export const PROJECT_AGENT_DATA_ENTRY = 'project-agent-data'
+/** Settings › Your agent data, store-git-repository's: where the person's own folder is. */
+const YOUR_AGENT_DATA = 'agent-data'
+
+const server = (host: Pick<ModuleHost, 'call'>) => rpcClient<typeof import('../src/server.js')>(host)
 
 /** Read again this often while the page is open: agents add runs and tickets as they work. */
 const EVERY_MS = 10_000
 
-/** Each kind of data, as a count reads. */
-const KIND_WORDS: Record<KeptData['kind'], (n: number) => string> = {
-  runs: n => `${n} ${n === 1 ? 'run' : 'runs'}`,
-  tickets: n => `${n} ${n === 1 ? 'ticket' : 'tickets'}`,
-  queue: n => `${n} queued`,
+/** One thing kept, as the list reads: a folder with how many it holds, a file by its name. */
+function keptWords(kept: KeptData): string {
+  return kept.count !== undefined ? `${kept.name} (${kept.count})` : kept.name
 }
 
 /**
  * Settings › Project › Project agent data: where one project's agent data is, the person's own folder or
- * the project's own repository, switched here, and what the skills keep there. Kept in the
+ * the project's own repository, switched here, and what the modules keep there. One project's at a
+ * time: Settings draws it for one (`pickProject`). Kept in the
  * repository, it is sent as one of OpenAgent's own accounts at the remote's host, named here,
  * never as the person's own login.
  */
-export function ProjectAgentDataSettings({ projectId }: { projectId: string }) {
-  const read = usePolled<ProjectAgentData | null>(() => onProjectAgentData(projectId), null, EVERY_MS, [projectId])
-  return (
-    <Slot of={read} shape={<SettingsRowShapes />}>
-      {data =>
-        data ? (
-          <ProjectData projectId={projectId} data={data} reload={read.reload} />
-        ) : (
-          <p className="text-sm text-muted-foreground">This project&rsquo;s agent data is on the computer the project is on.</p>
-        )
-      }
-    </Slot>
-  )
+export function ProjectAgentDataSettings({ projects }: UiSettingsProps) {
+  const projectId = projects[0]?.id
+  return projectId !== undefined ? <ProjectDataRead projectId={projectId} /> : null
+}
+
+/** The project's agent data, read again every few seconds. */
+function ProjectDataRead({ projectId }: { projectId: string }) {
+  const host = useModuleHost()
+  const read = usePolled<ProjectAgentData | null>(() => server(host).data(projectId, {}), null, EVERY_MS, [host, projectId])
+  return <Slot of={read} shape={<SettingsRowShapes />}>{data => data && <ProjectData projectId={projectId} data={data} reload={read.reload} />}</Slot>
 }
 
 /** Where one project's agent data is, the pick that moves it, and what is kept there. */
 function ProjectData({ projectId, data, reload }: { projectId: string; data: ProjectAgentData; reload: () => Promise<void> }) {
-  const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
+  const host = useModuleHost()
+  const calls = server(host)
   const [confirmShare, setConfirmShare] = useState(false)
   const [picked, setPicked] = useState<string | undefined>()
   const { busy, error, run } = useAction()
@@ -56,7 +45,7 @@ function ProjectData({ projectId, data, reload }: { projectId: string; data: Pro
   const folder = (
     <>
       your folder{' '}
-      <button type="button" className="focus-ring rounded-sm align-bottom hover:underline" onClick={() => services.openSettings(AGENT_DATA_ENTRY)}>
+      <button type="button" className="focus-ring rounded-sm align-bottom hover:underline" onClick={() => host.openSettings(YOUR_AGENT_DATA)}>
         <PathStrip path={data.folder.path} className="text-primary" />
       </button>
       {data.folder.remote ? (
@@ -83,7 +72,7 @@ function ProjectData({ projectId, data, reload }: { projectId: string; data: Pro
     ) : (
       <>In {folder}.</>
     )
-  const kept = data.kept.filter(k => k.count > 0)
+  const kept = data.kept.filter(k => k.count !== 0)
   // The account it goes as: the one kept while shared; on the way in, the one picked in the dialog.
   const sendAs = picked !== undefined && data.accounts?.logins.includes(picked) ? picked : firstSendAs(data.accounts, data.account)
   const noAccount = data.accounts !== undefined && sendAs === undefined
@@ -91,11 +80,11 @@ function ProjectData({ projectId, data, reload }: { projectId: string; data: Pro
   const pick = (next: string) => {
     if (next === data.place || busy) return
     if (next === 'repository') setConfirmShare(true)
-    else void run(() => sendShareRecords(projectId, false), 'Could not move the agent data.').then(() => reload())
+    else void run(() => calls.share(projectId, { on: false }), 'Could not move the agent data.').then(() => reload())
   }
 
   return (
-    <SettingsSection description="Where this project’s agent data is, and what the skills keep there.">
+    <SettingsSection description="Where this project’s agent data is, and what the modules keep there.">
       <SettingsSelectRow
         label="Kept in"
         description={where}
@@ -108,13 +97,13 @@ function ProjectData({ projectId, data, reload }: { projectId: string; data: Pro
       />
       {data.place === 'repository' && data.accounts && (
         <div>
-          <SendAs host={data.accounts} value={data.account} disabled={busy} onChange={login => void run(() => sendProjectDataAs(projectId, login), 'Could not change the account.').then(() => reload())} />
+          <SendAs host={data.accounts} value={data.account} disabled={busy} onChange={login => void run(() => calls.sendAs(projectId, { login }), 'Could not change the account.').then(() => reload())} />
         </div>
       )}
       {error && <p className="text-xs text-danger">{error}</p>}
       <SettingsRow
         label="What is kept"
-        description={kept.length > 0 ? <Facts facts={kept.map(k => `${KIND_WORDS[k.kind](k.count)} (${k.skill})`)} /> : 'Nothing yet.'}
+        description={kept.length > 0 ? <Facts facts={kept.map(keptWords)} /> : 'Nothing yet.'}
         control={null}
       />
       <ConfirmDialog
@@ -134,7 +123,7 @@ function ProjectData({ projectId, data, reload }: { projectId: string; data: Pro
         fallbackError="Could not move the agent data."
         destructive={false}
         confirmDisabled={noAccount}
-        onConfirm={() => sendShareRecords(projectId, true, sendAs)}
+        onConfirm={() => calls.share(projectId, { on: true, ...(sendAs !== undefined ? { login: sendAs } : {}) })}
         onSuccess={() => void reload()}
       />
     </SettingsSection>

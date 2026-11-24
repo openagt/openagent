@@ -1,13 +1,9 @@
 import { useState } from 'react'
 import { CircleAlert, Loader2 } from 'lucide-react'
-import { sendBackUpAs, type BackupGap } from '../rpc/backup.js'
-import type { GitHostRow } from '../rpc/logins.js'
-import type { SendAsHost } from '../rpc/personal-folder.js'
-import { backupChanged, useBackup } from '../lib/use-backup.js'
-import { HostFix } from './AddGitAccount.js'
-import { useGitHosts } from './Logins.js'
-import { SendAs, firstSendAs } from './SendAs.js'
-import { Button } from './ui/button.js'
+import { Button, HostFix, SendAs, firstSendAs, useGitHosts, useModuleHost, type GitHostRow } from '@openagt/ui/module'
+import type { HostAccounts } from '@openagt/hooks'
+import { server, type BackupGap } from './calls.js'
+import { backupChanged, useBackup } from './use-backup.js'
 
 // Settings › Your agent data, at its top: the agents' data that is not backed up, and the fix, here
 // (his pick over a trip to the Permissions page): with no account of OpenAgent's at the host, the
@@ -16,7 +12,7 @@ import { Button } from './ui/button.js'
 // account they did not name.
 
 /** OpenAgent's accounts at a host that the host still takes, as a "Back up as" select offers them. */
-export function accountsAt(row: GitHostRow | undefined, host: string): SendAsHost {
+export function accountsAt(row: GitHostRow | undefined, host: string): HostAccounts {
   const accounts = row?.provider?.accounts.filter(account => account.ok) ?? []
   const runs = accounts.find(account => account.runs)?.login
   return { host, logins: accounts.map(account => account.login), ...(runs !== undefined ? { runs } : {}) }
@@ -91,7 +87,8 @@ function GapWords({ gap }: { gap: BackupGap }) {
   )
 }
 
-function GapRow({ gap, at, onChanged }: { gap: BackupGap; at: SendAsHost; onChanged: (() => void) | undefined }) {
+function GapRow({ gap, at, onChanged }: { gap: BackupGap; at: HostAccounts; onChanged: (() => void) | undefined }) {
+  const calls = server(useModuleHost())
   const [picked, setPicked] = useState<string | undefined>()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | undefined>()
@@ -101,7 +98,7 @@ function GapRow({ gap, at, onChanged }: { gap: BackupGap; at: SendAsHost; onChan
     setBusy(true)
     setError(undefined)
     try {
-      const done = await sendBackUpAs(gap.kind === 'project' ? { kind: 'project', projectId: gap.projectId! } : { kind: 'personal' }, login)
+      const done = await calls.backUp(gap.kind === 'project' ? { kind: 'project', projectId: gap.projectId!, login } : { kind: 'personal', login })
       if (!done.ok) setError(done.error)
       backupChanged()
       onChanged?.()

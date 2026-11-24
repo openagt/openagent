@@ -194,7 +194,8 @@ export async function startDemo(options: DemoOptions = {}): Promise<Demo> {
     const added = await call<{ ok: boolean; error?: string }>('sendAddProject', shop)
     if (!added.ok) throw new Error(`could not add the demo project: ${added.error}`)
     // Its records go to its remote, as a team's do.
-    const shared = await call<{ ok: boolean; error?: string }>('sendShareRecords', id, true)
+    const called = await call<{ ok: true; output: { ok: boolean; error?: string } } | { ok: false; error: string }>(`${encodeURIComponent('@openagt/store-git-branch')}/share`, id, { on: true })
+    const shared = called.ok ? called.output : called
     if (!shared.ok) throw new Error(`could not share the demo project's records: ${shared.error}`)
 
     // It has on every plugin with a page of its own, so each page can be walked.

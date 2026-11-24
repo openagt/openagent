@@ -13,7 +13,7 @@ const sendRemoveWorktree = vi.fn(async () => ({ ok: true as const }))
 const sendDeleteAgent = vi.fn(async () => ({ ok: true as const }))
 const sendRemoveProject = vi.fn(async (_projectId: string, _files: boolean) => ({ ok: true }) as unknown)
 vi.mock('../rpc/reads.js', () => ({ onGitHostHome, onRepositoryOffer }))
-vi.mock('../rpc/projects.js', () => ({ sendShareRecords: vi.fn(), sendRemoveProject }))
+vi.mock('../rpc/projects.js', () => ({ sendRemoveProject }))
 const openSettings = vi.hoisted(() => vi.fn())
 vi.mock('../lib/host-services.js', async importOriginal => {
   const actual = await importOriginal<typeof import('../lib/host-services.js')>()
@@ -350,21 +350,6 @@ describe('the editor picker in the menu (#727)', () => {
     render(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} />)
     await openEditorMenu()
     await waitFor(() => expect(screen.getAllByText('mate').length).toBeGreaterThan(0))
-  })
-})
-
-describe('Where the agent data is, in the project\u2019s menu', () => {
-  test('the project\u2019s menu opens the project\u2019s Agent data page; a session\u2019s menu has no such item', async () => {
-    render(<AgentActionsMenu projectId="p1" events={[]} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Project actions' }))
-    fireEvent.click(await screen.findByText('Agent data\u2026'))
-    expect(openSettings).toHaveBeenCalledWith('project-agent-data', 'p1')
-    cleanup()
-
-    render(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} />)
-    fireEvent.click(screen.getByRole('button', { name: /session actions/i }))
-    await waitFor(() => expect(screen.getByText('Open project folder')).toBeTruthy())
-    expect(screen.queryByText('Agent data\u2026')).toBeNull()
   })
 })
 

@@ -3,15 +3,23 @@ import { isRunId } from '../store/index.js'
 import { cachedPrsForBranch, type LinkedPr } from './pull-requests.js'
 import type { Cached } from './cache.js'
 import type { ProjectRef, RunFound, RunQuestion, Settings, InboxLine } from '@openagt/hooks'
+import type { GitAccounts } from '@openagt/hooks'
 import { rpcKind, type MergeLookup, type ModuleOn, type RpcComputerHost, type RpcFunction, type RpcHost, type RpcKind } from '@openagt/hooks/rpc'
 
 // The daemon's side of a module's server part (`@openagt/hooks/rpc`): the host a function is given
-// (the settings; for a project's module, the project's folder and the project, where its runs have
+// (the settings, the registered projects, OpenAgent's accounts at the git hosts; for a project's module, the project's folder and the project, where its runs have
 // their work, the questions they wait on, a line said to one, and what the modules on give its runs) and the one way a function is
 // called. Where a run's work is, is its host's to say; what a module makes of it is its own.
 
+/** What {@link computerHost} reads through. */
+export interface ComputerHostDeps {
+  /** The registered projects, as a hook is given them. */
+  projects: () => Promise<ProjectRef[]>
+  accounts: GitAccounts
+}
+
 /** What {@link serverHost} reads and says through. */
-export interface ServerHostDeps {
+export interface ServerHostDeps extends ComputerHostDeps {
   /** The project the call is in, as a hook is given it; none for a session with no project. */
   project: () => Promise<ProjectRef | undefined>
   /** Where a run of the project has its work, as the run's host says it (`RunHost.find`). */
@@ -27,14 +35,14 @@ export interface ServerHostDeps {
 }
 
 /** The host a function of a module of the computer's is given, called in no project. */
-export function computerHost(settings: Settings): RpcComputerHost {
-  return { settings }
+export function computerHost(settings: Settings, deps: ComputerHostDeps): RpcComputerHost {
+  return { settings, projects: deps.projects, accounts: deps.accounts }
 }
 
 /** The host a function called in the project at `root` is given. A string that is no run's id is never asked about, nor said anything. */
 export function serverHost(root: string, settings: Settings, deps: ServerHostDeps): RpcHost {
   return {
-    settings,
+    ...computerHost(settings, deps),
     root,
     project: deps.project,
     modulesOn: deps.modulesOn,

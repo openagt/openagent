@@ -501,16 +501,13 @@ export function App() {
       if (scopePending) return null
       return (
         <DashboardPage
-          onSelectProject={selectProject}
           onSelectAgent={selectAgentInProject}
-          onAgentStarted={agentStarted}
           waiting={waiting}
           waitingState={waitingState}
           active={activeAgents}
           projects={projects}
           scope={scope}
           onProjectAdded={reloadProjects}
-          listedPages={listedPages}
           start={
             <StartAgentForm
               onOverview

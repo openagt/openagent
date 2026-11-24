@@ -61,12 +61,12 @@ test('a project for which two packages of the distribution provide the same kind
   try {
     for (const name of ['a', 'b']) {
       await mkdir(join(project, 'node_modules', name), { recursive: true })
-      await writeFile(join(project, 'node_modules', name, 'package.json'), JSON.stringify({ name, bin: { [name]: 'cmd.cjs' }, openagent: { tickets: name } }))
+      await writeFile(join(project, 'node_modules', name, 'package.json'), JSON.stringify({ name, bin: { [name]: 'cmd.cjs' }, openagent: { runs: name } }))
       await writeFile(join(project, 'node_modules', name, 'cmd.cjs'), '')
     }
     const read = () => readProjectState({ id: 'p', path: project }, { hooks: saying(() => []), reach: async () => 'origin' })
     await withDistribution(project, ['a', 'b'], async () => {
-      assert.deepEqual((await read()).errors, [{ id: 'provider', title: UNSETTLED_PROVIDER, message: '2 packages of the distribution provide tickets: a, b' }])
+      assert.deepEqual((await read()).errors, [{ id: 'provider', title: UNSETTLED_PROVIDER, message: '2 packages of the distribution provide runs: a, b' }])
     })
     await withDistribution(project, ['b'], async () => {
       assert.deepEqual((await read()).errors, [])

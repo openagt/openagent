@@ -10,6 +10,19 @@ export type { ShownTicket, Ticket, TicketDetail, TicketsMeta }
 /** The prompt behind "Update tickets": the project's `update-tickets` command, which brings the tickets in line with the issue tracker. One wording for every surface that offers it. */
 export const UPDATE_TICKETS_PROMPT = '/update-tickets'
 
+/** The UI part's action that fixes "Populate the tickets" (`attention.fix`): "Update tickets", run in the project the item names. */
+export const POPULATE_ACTION = 'update-tickets'
+
+/** The id of "Populate the tickets", naming the project its fix runs in. */
+export function populateId(projectId: string): string {
+  return `populate:${projectId}`
+}
+
+/** The project an item of "Populate the tickets" names, by its id; none for any other id. */
+export function populatedProject(id: string | undefined): string | undefined {
+  return id?.startsWith('populate:') ? id.slice('populate:'.length) || undefined : undefined
+}
+
 /**
  * The ask for one ticket's plan: `Create tickets/<stem>.plan.md`. The one wording for plan work
  * wherever the module asks for it — the sentence the plan column starts an agent with, and the

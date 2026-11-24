@@ -2,13 +2,13 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { PICKED_PROFILE, PROFILES } from '@openagt/hooks'
 import { rpcKind, type RpcComputerHost } from '@openagt/hooks/rpc'
-import { memorySettings } from '@openagt/hooks/testing'
+import { computerRpcHost } from '@openagt/hooks/testing'
 import { pickProfile, profiles, removeProfile, saveProfile } from './server.js'
 
 // The profiles' functions, against a store kept in memory.
 
 function computer(): RpcComputerHost {
-  return { settings: memorySettings() }
+  return computerRpcHost()
 }
 
 test('the list only reads; every other function changes something', () => {

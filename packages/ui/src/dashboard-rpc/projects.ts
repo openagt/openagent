@@ -1,8 +1,8 @@
 import { contextAddProject, contextHost, contextOtherHosts, contextPrepareStart, contextProjectState, contextProjects, contextRemoveProject, contextStartedIn, resolveProjectPath } from './context.js'
 import { projectRefAt } from '../distribution-hooks.js'
-import { DATA_BRANCH, addressOfRemote, errorMessage, isRepoOwner, originDefaultBranch, readRepoOwners, repositoryAddress, shareProjectData, writeRepoOwners } from '@openagt/agent-data'
+import { DATA_BRANCH, addressOfRemote, errorMessage, isRepoOwner, originDefaultBranch, readRepoOwners, repositoryAddress, writeRepoOwners } from '@openagt/agent-data'
 import { readHosted, refreshHosted, type HostedRepo } from './hosted-repos.js'
-import { cloneAccountFor, originGit, originHost, remoteAccount } from './send-as.js'
+import { cloneAccountFor, originGit } from './send-as.js'
 import type { StartReadiness } from '../start-readiness.js'
 import { SESSIONS_ID } from '../project-address.js'
 import { hasRemote } from '../has-remote.js'
@@ -97,25 +97,6 @@ export async function sendRemoveProject(projectId: string, files: boolean): Prom
   const removeProject = contextRemoveProject()
   if (typeof projectId !== 'string' || !projectId) return { ok: false, error: 'a project id is required' }
   return removeProject(projectId, files === true)
-}
-
-/**
- * The person's switch: share the project's records with its remote, or keep them on this machine.
- * The records move with the switch: on, from the personal folder to the project's branch, sent at
- * once, so a remote that refuses is said at once and the switch goes back to off with the records
- * where they were; off, back to the personal folder. A project with no remote has nothing to
- * share with, and is refused.
- */
-export async function sendShareRecords(projectId: string, on: boolean, login?: string): Promise<{ ok: true } | { ok: false; error: string }> {
-  const cwd = await resolveProjectPath(projectId)
-  if (!cwd) return { ok: false, error: 'this project has no local path on this server' }
-  if (on && !(await hasRemote(cwd))) return { ok: false, error: 'this project has no remote to share with' }
-  if (!on) return shareProjectData(cwd, false, undefined)
-  // Sent as one of OpenAgent's accounts at the remote's host, never the person's own login; a remote in a folder on this disk asks none.
-  const host = await originHost(cwd)
-  const account = host !== undefined ? await remoteAccount(host, login) : undefined
-  if (account && !account.ok) return account
-  return shareProjectData(cwd, true, account?.account)
 }
 
 /**

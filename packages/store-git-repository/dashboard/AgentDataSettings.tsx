@@ -1,20 +1,8 @@
 import { useState } from 'react'
-import { typedRepository } from '../../src/client.js'
-import { onPersonalFolder, sendPersonalFolderAs, sendStopSyncingPersonalFolder, sendSyncPersonalFolder, type PersonalFolderView, type SendAsHost } from '../rpc/personal-folder.js'
-import { usePolled } from '../lib/use-async.js'
-import { useAction } from '../lib/use-action.js'
-import { Button } from './ui/button.js'
-import { Input } from './ui/input.js'
-import { SettingsRow, SettingsRowShapes, SettingsSection } from './SettingsRows.js'
-import { Slot } from './ui/slot.js'
-import { PathStrip } from './PathStrip.js'
-import { SendAs, firstSendAs } from './SendAs.js'
+import { Button, HostFix, Input, PathStrip, SendAs, SettingsRow, SettingsRowShapes, SettingsSection, Slot, firstSendAs, typedRepository, useAction, useGitHosts, useModuleHost, usePolled } from '@openagt/ui/module'
+import type { HostAccounts } from '@openagt/hooks'
+import { server, type PersonalFolderView } from './calls.js'
 import { BackupNotice, accountsAt } from './BackupNotice.js'
-import { HostFix } from './AddGitAccount.js'
-import { useGitHosts } from './Logins.js'
-
-/** The Settings entry's id. */
-export const AGENT_DATA_ENTRY = 'agent-data'
 
 /** Read again this often while the page is open: a sync of another computer's lands in the folder on its own. */
 const EVERY_MS = 10_000
@@ -27,7 +15,8 @@ const EVERY_MS = 10_000
  * person's own login.
  */
 export function AgentDataSettings() {
-  const read = usePolled<PersonalFolderView | null>(onPersonalFolder, null, EVERY_MS, [])
+  const host = useModuleHost()
+  const read = usePolled<PersonalFolderView | null>(() => server(host).folder({}), null, EVERY_MS, [host])
   return (
     <Slot of={read} shape={<SettingsRowShapes rows={1} />}>
       {view => view && <PersonalFolder view={view} reload={read.reload} />}
@@ -41,6 +30,7 @@ function PersonalFolder({ view, reload }: { view: PersonalFolderView; reload: ()
   const [address, setAddress] = useState('')
   const [picked, setPicked] = useState<string | undefined>()
   const { busy, error, reset, run } = useAction()
+  const calls = server(useModuleHost())
   // OpenAgent's accounts, read live: one added here is offered at once.
   const { view: gitHosts, reload: reloadGitHosts } = useGitHosts()
   const personal = view
@@ -48,24 +38,24 @@ function PersonalFolder({ view, reload }: { view: PersonalFolderView; reload: ()
   // The host the typed address is on, and OpenAgent's accounts there; a folder on this disk asks no login.
   const typedHost = typedRepository(address)?.address.split('/')[0]?.toLowerCase()
   const typedRow = typedHost !== undefined ? gitHosts?.hosts.find(row => row.host === typedHost) : undefined
-  const typedAt: SendAsHost | undefined = typedHost !== undefined ? (typedRow ? accountsAt(typedRow, typedHost) : (personal.hosts.find(row => row.host === typedHost) ?? { host: typedHost, logins: [] })) : undefined
+  const typedAt: HostAccounts | undefined = typedHost !== undefined ? (typedRow ? accountsAt(typedRow, typedHost) : (personal.hosts.find(row => row.host === typedHost) ?? { host: typedHost, logins: [] })) : undefined
   const sendAs = picked !== undefined && typedAt?.logins.includes(picked) ? picked : firstSendAs(typedAt)
   const remoteHost = personal.remoteUrl ? personal.remote?.split('/')[0]?.toLowerCase() : undefined
   const remoteAt = remoteHost !== undefined ? personal.hosts.find(row => row.host === remoteHost) : undefined
 
   const sync = () =>
-    void run(() => sendSyncPersonalFolder(address, sendAs), 'Could not sync with that repository.').then(async outcome => {
+    void run(() => calls.sync({ address, ...(sendAs !== undefined ? { login: sendAs } : {}) }), 'Could not sync with that repository.').then(async outcome => {
       if (!outcome.ok) return
       setAsking(false)
       setAddress('')
       await reload()
     })
   const sendAsOther = (login: string) =>
-    void run(() => sendPersonalFolderAs(login), 'Could not change the account.').then(async outcome => {
+    void run(() => calls.sendAs({ login }), 'Could not change the account.').then(async outcome => {
       if (outcome.ok) await reload()
     })
   const stop = () =>
-    void run(() => sendStopSyncingPersonalFolder(), 'Could not stop syncing.').then(async outcome => {
+    void run(() => calls.stopSyncing({}), 'Could not stop syncing.').then(async outcome => {
       if (outcome.ok) await reload()
     })
 

@@ -1,7 +1,8 @@
-import { resolveProjectPath, runHostOf } from './context.js'
+import { contextProjects, resolveProjectPath, runHostOf } from './context.js'
+import { accountsByHost, remoteAccount } from './send-as.js'
 import { findComputerModule, findProjectModule } from '../project-modules.js'
 import { providedDataChanged } from '../store/provided.js'
-import { callModuleFunction, computerHost, functionKind, serverHost, type ModuleCallResult } from '../dashboard/module-host.js'
+import { callModuleFunction, computerHost, functionKind, serverHost, type ComputerHostDeps, type ModuleCallResult } from '../dashboard/module-host.js'
 import { distributionHooks, distributionSettings, projectRefAt, runRefAt } from '../distribution-hooks.js'
 import { SESSIONS_ID } from '../project-address.js'
 
@@ -35,6 +36,7 @@ export async function callModule(projectId: string | null, pkg: string, name: st
   if (!module.server) return { ok: false, error: `${pkg} has no server part` }
   const project = projectOnce(projectId, root)
   const host = serverHost(root, await distributionSettings(), {
+    ...COMPUTER,
     project,
     find: runsFound(projectId, root),
     questions: agentId => runQuestions(root, agentId),
@@ -47,6 +49,12 @@ export async function callModule(projectId: string | null, pkg: string, name: st
     providedDataChanged(root, pkg)
   }
   return result
+}
+
+/** What every function is handed of this computer: its projects, and OpenAgent's accounts at the git hosts, as the Permissions page lists them. */
+const COMPUTER: ComputerHostDeps = {
+  projects: async () => Promise.all((await contextProjects().list()).map(project => projectRefAt(project.id, project.path))),
+  accounts: { hosts: accountsByHost, sendAs: remoteAccount },
 }
 
 /** The project `projectId` at `root`, as a hook is given it, read once for the call and only when asked: a session with no project is none. */
@@ -93,11 +101,16 @@ async function runQuestions(root: string, agentId: string): Promise<RunQuestion[
 /**
  * Call function `name` of the server part of a package that is this computer's, in no project:
  * what such a module keeps is the computer's or the person's (their name and picture), so it is
- * read and changed with no project added, here only. Refused for any other package.
+ * read and changed with no project added, here only. Refused for any other package. After an act,
+ * what was read of every project's data is read anew.
  */
 async function callComputerModule(pkg: string, name: string, input: unknown): Promise<ModuleCallResult> {
   const module = await findComputerModule(pkg).catch(() => undefined)
   if (!module) return { ok: false, error: `${pkg} is not this computer's` }
   if (!module.server) return { ok: false, error: `${pkg} has no server part` }
-  return callModuleFunction(module.server, name, computerHost(await distributionSettings()), input)
+  const kind = await functionKind(module.server, name)
+  const result = await callModuleFunction(module.server, name, computerHost(await distributionSettings(), COMPUTER), input)
+  // What such a module changes may be any project's data, in the person's own folder (what a sync took in): every project's is read anew.
+  if (kind === 'act') for (const project of await contextProjects().list().catch(() => [])) providedDataChanged(project.path)
+  return result
 }

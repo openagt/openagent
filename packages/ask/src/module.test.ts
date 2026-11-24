@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { RunOrder, type AttentionItem, type RunQuestion, type WaitingRun } from '@openagt/hooks'
-import { fakeRun } from '@openagt/hooks/testing'
+import { fakeApp, fakeRun } from '@openagt/hooks/testing'
 import ask, { NEEDS_ANSWER } from './module.js'
 
 // The module: its skill, for an agent with no question tool of its own; its step, which has a run
@@ -34,10 +34,10 @@ test('a run waiting on a question needs an answer: one item per run, by the ques
     { id: 'run-2', questions: [QUESTION] },
     { id: 'run-3', questions: [] },
   ]
-  const items: AttentionItem[] = await attention({ waiting: async () => runs })
+  const items: AttentionItem[] = await attention({ waiting: async () => runs }, fakeApp())
   assert.deepEqual(items, [
     { kind: 'waiting', scope: 'run', run: 'run-1', id: `run-1:${QUESTION.id}`, words: NEEDS_ANSWER, title: 'Pick a database', detail: 'Which database?', mark: 'question', since: '2026-11-19T10:00:01.000Z' },
     { kind: 'waiting', scope: 'run', run: 'run-2', id: `run-2:${QUESTION.id}`, words: NEEDS_ANSWER, title: 'run-2', detail: 'Which database?', mark: 'question' },
   ])
-  assert.deepEqual(await attention({}), [], 'nothing waits where no run is asked about')
+  assert.deepEqual(await attention({}, fakeApp()), [], 'nothing waits where no run is asked about')
 })

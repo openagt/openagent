@@ -66,13 +66,17 @@ async function readPackages(file: string): Promise<OwnPackage[]> {
   return packages
 }
 
-/** The packages of `of` that are on: one with no module, or a core module's, always; a plugin's where its Enabled row is on, in `project` for one kept per project. */
+/**
+ * The packages of `of` that are on: one with no module, or a core module's, always; a plugin's where
+ * its Enabled row is on, in `project` for one kept per project. A plugin that keeps its own row is
+ * there either way: its row is switched on its own Settings entry, which its package brings.
+ */
 async function onPackages(of: OwnPackage['of'], project?: ProjectRef): Promise<OwnPackage[]> {
   const hooks = await distributionHooks()
   const on = new Set(await hooks.on(project))
   return (await distributionPackages()).filter(pkg => {
     const module = hooks.ofPackage(pkg.name)
-    return pkg.of === of && (module === undefined || on.has(module))
+    return pkg.of === of && (module === undefined || module.plugin?.row !== undefined || on.has(module))
   })
 }
 

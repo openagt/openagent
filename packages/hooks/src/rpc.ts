@@ -5,6 +5,7 @@
 // {@link ComputerRpcClient}), so renaming a function on one side is a type error on the other.
 // Whether a function only reads is its own word: after one that changes something, the project's
 // data is taken in from origin again, and what was read of it is read anew.
+import type { GitAccounts } from './account.js'
 import type { InboxLine } from './agent.js'
 import type { ProjectRef } from './project.js'
 import type { RunFound, RunQuestion } from './run.js'
@@ -13,9 +14,12 @@ import type { Settings } from './settings.js'
 /** Where a pull request stands on the git host: still being asked, or answered (with its merge commit when merged, and the last commit of the branch it merged, when the git host says it). */
 export type MergeLookup = { pending: true } | { pending: false; commit?: string; head?: string }
 
-/** What every function is handed: the settings, read and saved through the store. */
+/** What every function is handed: the settings, read and saved through the store, the registered projects, and OpenAgent's accounts at the git hosts. */
 export interface RpcComputerHost {
   readonly settings: Settings
+  /** The projects of this computer's registry, in its order. */
+  projects(): Promise<ProjectRef[]>
+  readonly accounts: GitAccounts
 }
 
 /** What a function of a project's module is handed: also the project it is called in, and where its runs have their work. */

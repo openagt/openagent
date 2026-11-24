@@ -11,7 +11,7 @@ import { useRunOffer, type Offered } from './Places.js'
 
 // What needs the person (`app.attention`), as the shell's own chrome draws it: each item's words,
 // what it is about, and the press that fixes it — one of the module's own actions
-// (`attention.fix`), or a page to open. The shell says nothing of its own here. Where each kind is
+// (`attention.fix`), a page to open, or an entry of Settings. The shell says nothing of its own here. Where each kind is
 // drawn: the onboarding card and the person's menu the `setup` items about this computer, the line
 // above the message box those about the run it would start (`scope: 'run'`, asked with the picks),
 // a project's banner those about the project.
@@ -29,7 +29,7 @@ export function attentionDetail(item: Attention): string | undefined {
 
 /**
  * What fixes the items of a list: for each, what a press does (the module's action the item names,
- * its dialog opened or its run run; or the page it names), or nothing for an item with no fix, or
+ * its dialog opened or its run run; or the page or the Settings entry it names), or nothing for an item with no fix, or
  * whose action no module brings here. `overlay` is drawn where it outlives a menu that closed.
  * `onFixed` is told when a fix is done, so the list is asked again.
  */
@@ -42,6 +42,7 @@ export function useAttentionFixes(projectId: string | undefined, onFixed?: () =>
   const fixOf = (attention: Attention): (() => void) | undefined => {
     const fix = attention.fix
     if (!fix) return undefined
+    if ('settings' in fix) return () => services.openSettings(fix.settings)
     if ('href' in fix) {
       return () => {
         if (!fix.href.startsWith('/')) return void window.open(fix.href, '_blank', 'noreferrer')

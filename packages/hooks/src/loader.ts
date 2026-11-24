@@ -88,7 +88,10 @@ export interface Hooks {
   gitAccess(remote: string): Promise<GitAccess | undefined>
   /** The addresses the modules on answer for callers that are no page of the app's; a second route at a path is left out. */
   routes(): Promise<AppRoute[]>
-  /** What needs the person, every module's items in the distribution's order, and whether every module answered. */
+  /**
+   * What needs the person, every module's items in the distribution's order, and whether every module answered.
+   * With no project, a plugin kept per project is asked where it is on in a project ({@link AppAttention}).
+   */
   attention(args: AttentionArgs): Promise<AttentionRead>
   /**
    * The app started: each module on starts its own work, its signal aborting when the app stops.
@@ -271,13 +274,25 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
       return undefined
     },
     async attention(args) {
+      // Asked about this computer, with no project: a plugin kept per project is asked as the
+      // distribution starts it, and also where it is on in one of the registry's projects.
+      const inSome = async (module: ModuleDefinition): Promise<boolean> =>
+        !args.options?.plugins?.without?.includes(module.name) && (await appContext(module).projects()).length > 0
+      const asked = args.project
+        ? await onModules(args.project, args.options, 'app.attention')
+        : await (async () => {
+            const on = new Set(await onModules(undefined, args.options, 'app.attention'))
+            const filling = modules.filter(module => module.hooks['app.attention'] !== undefined)
+            const flags = await Promise.all(filling.map(module => (on.has(module) || (module.plugin?.scope === 'project' && inSome(module)))))
+            return filling.filter((_, i) => flags[i])
+          })()
       // Every module at once: each reads what it says, a git host among them.
       const said = await Promise.all(
-        (await onModules(args.project, args.options, 'app.attention')).map(async module => {
+        asked.map(async module => {
           const hook = module.hooks['app.attention']
           if (!hook) return []
           try {
-            return (await hook(args)).map(item => ({ ...item, module: module.name }))
+            return (await hook(args, appContext(module))).map(item => ({ ...item, module: module.name }))
           } catch (error) {
             report(module.name, 'app.attention', error)
             return undefined

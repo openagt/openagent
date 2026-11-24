@@ -10,7 +10,6 @@ import {
   PanelRow,
   RunMark,
   StateCell,
-  UpdateTicketsButton,
   cn,
   formatDateTime,
   formatRelative,
@@ -22,6 +21,7 @@ import {
 } from '@openagt/ui/module'
 import { NEW_TICKET, UPDATE_TICKETS_PROMPT, heldBack, type TicketsMeta } from '../src/module.js'
 import { QueuedMark, TicketStartActions, useQueuedAsk } from './TicketStartActions.js'
+import { UpdateTicketsButton } from './UpdateTicketsButton.js'
 import type { WorkspaceTicket } from './lib/types.js'
 import { parsePriority } from './lib/ticket-priority.js'
 import { STAGE_LABEL, STAGE_ORDER, claimStanding, claimWorking, ticketStage, type TicketStageId } from './lib/ticket-stage.js'

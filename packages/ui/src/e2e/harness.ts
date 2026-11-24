@@ -17,7 +17,8 @@ import { worktreePath } from '@openagt/git-branches'
 import { FIXTURE_PLUGINS, makeFixtureRepo } from './fixture.js'
 import { fakeRunHost, STARTS_FILE_ENV, type HostCall } from './fake-runs.js'
 import { tailAgentEvents } from '../dashboard-rpc/events-tail.js'
-import { sendAddProject, sendShareRecords } from '../dashboard-rpc/projects.js'
+import { sendAddProject } from '../dashboard-rpc/projects.js'
+import { callModule } from '../dashboard-rpc/module-calls.js'
 import { sendSwitchPlugin } from '../dashboard-rpc/plugins.js'
 import { sendStart, sendStop } from '../dashboard-rpc/control.js'
 import { onAgents } from '../dashboard-rpc/reads.js'
@@ -30,7 +31,7 @@ export { git } from './fixture.js'
 // Re-home the process-global config home FIRST: the registry, preferences, and daemon state all
 // resolve through $XDG_CONFIG_HOME at call time, and scripts/test-node.mjs gives the whole suite ONE
 // shared throwaway home — so without this, story files running as sibling processes would see
-// each other's registered projects in every cross-project rollup (onProjects, onQueue, onOverview).
+// each other's registered projects in every cross-project rollup (onProjects, onOverview).
 process.env.XDG_CONFIG_HOME = mkdtempSync(join(tmpdir(), 'openagent-e2e-config-'))
 
 /** One registered project inside a {@link StoryWorld}: a real git repo the stories act on. */
@@ -184,7 +185,8 @@ export async function makeWorld(): Promise<StoryWorld> {
       if (!added.ok) throw new Error(`could not register the fixture repo: ${added.error}`)
       const id = projectId(resolve(cwd))
       // Its records go to its remote, as a team's do.
-      const shared = await rpc(sendShareRecords)(id, true)
+      const called = await rpc(callModule)(id, '@openagt/store-git-branch', 'share', { on: true })
+      const shared = called.ok ? (called.output as { ok: boolean; error?: string }) : called
       if (!shared.ok) throw new Error(`could not share the fixture repo's records: ${shared.error}`)
       for (const plugin of FIXTURE_PLUGINS) {
         const switched = await rpc(sendSwitchPlugin)(plugin, true, id)
