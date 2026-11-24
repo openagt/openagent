@@ -284,6 +284,7 @@ const counting = (state: (branch: string, from?: string) => BranchAhead | undefi
     },
     push: unused,
     merge: unused,
+    bring: unused,
     remove: unused,
   })
 }
@@ -368,6 +369,7 @@ test('an unreadable branch state is skipped rather than throwing, and the projec
     },
     push: async () => ({ ok: false, error: 'no' }),
     merge: async () => ({ ok: false, error: 'no' }),
+    bring: async () => ({ ok: false, error: 'no' }),
     remove: async () => ({ ok: false, error: 'no' }),
   })
   const { items, whole } = await build([project('a', '/a')], onlyUnpushed([doneMeta()], failing))

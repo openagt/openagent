@@ -10,7 +10,7 @@ import { IMAGES_PER_MESSAGE } from '../images.js'
 import { findAgent, isRunId, projectRuns, type AgentMeta } from '../store/index.js'
 import { withAgentLock } from '../agent-locks.js'
 import { removeProjectWorktree, deleteProjectAgent } from '../worktrees.js'
-import { mergeAgentPr, openAgentPullRequest, mergeAgentBranch, pushAgentBranch, readRunHandoff, type HandoffResult } from '../dashboard/agent-handoff.js'
+import { bringAgentBranch, mergeAgentPr, openAgentPullRequest, mergeAgentBranch, pushAgentBranch, readRunHandoff, type HandoffResult } from '../dashboard/agent-handoff.js'
 import { copyTarget } from '../dashboard/session-copies.js'
 import { createRepository, type CreateRepositoryResult } from '../store/repository.js'
 import { providedDataChanged } from '../store/provided.js'
@@ -251,6 +251,18 @@ export async function sendMergeBranch(projectId: string, agentId: string): Promi
   if (!target) return { ok: false, error: 'unknown session' }
   if (target.agent.status === 'running') return { ok: false, error: 'that session is still going' }
   return withAgentLock(agentLockKey(target.cwd, agentId), () => mergeAgentBranch(target.cwd, target.agent))
+}
+
+/**
+ * The user's Merge on a copy of a repo with no remote, or its "Only add the branch": the copy's
+ * branch goes to the folder it was copied from, and with `merge` into that folder's default
+ * branch. Under the agent lock, as the push is.
+ */
+export async function sendBringBranch(projectId: string, agentId: string, repo: string, options: { merge?: boolean } = {}): Promise<HandoffResult> {
+  const target = await handoffTargetFor(projectId, agentId, repo)
+  if (!target) return { ok: false, error: 'unknown session' }
+  if (target.agent.status === 'running') return { ok: false, error: 'that session is still going' }
+  return withAgentLock(agentLockKey(target.cwd, agentId), () => bringAgentBranch(target.cwd, target.agent, options))
 }
 
 /**

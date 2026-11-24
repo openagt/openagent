@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { forgetRemembered } from '../lib/use-async.js'
+import { openMenu } from '../test-utils.js'
 
 const onAgentHandoff = vi.fn(async () => null as unknown)
 const onAgentCopies = vi.fn(async () => [] as string[])
@@ -9,8 +10,9 @@ const sendMerge = vi.fn(async () => ({ ok: true }) as unknown)
 const sendPush = vi.fn(async () => ({ ok: true }) as unknown)
 const sendMergeBranch = vi.fn(async () => ({ ok: true }) as unknown)
 const sendMessage = vi.fn(async () => ({ ok: true }) as unknown)
+const sendBringBranch = vi.fn(async () => ({ ok: true }) as unknown)
 vi.mock('../rpc/reads.js', () => ({ onAgentHandoff, onAgentCopies }))
-vi.mock('../rpc/control.js', () => ({ sendOpenPullRequest, sendMerge, sendPush, sendMergeBranch, sendMessage }))
+vi.mock('../rpc/control.js', () => ({ sendOpenPullRequest, sendMerge, sendPush, sendMergeBranch, sendMessage, sendBringBranch }))
 
 const { AgentWorkPanel, CopyWorkRow, ProjectWorkRow, WorkRow, useAgentCopies } = await import('./AgentWorkPanel.js')
 
@@ -109,6 +111,28 @@ describe('the session\'s work panel', () => {
     render(<AgentWorkPanel>{copyRow()}</AgentWorkPanel>)
     expect(await screen.findByText('No remote: the work stays in this copy.')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Merge' })).toBeNull()
+  })
+
+  test("a copy with no remote goes back to the folder it was copied from: Merge merges it into that folder's main, its arrow only adds the branch", async () => {
+    const local = { ...worked, base: 'main', hasRemote: false, gitHost: false, copiedFrom: { path: '/me/app', hasBranch: false } }
+    onAgentHandoff.mockResolvedValue(local)
+    render(<AgentWorkPanel>{copyRow()}</AgentWorkPanel>)
+    expect(await screen.findByText('Not in main yet.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Merge' }))
+    await waitFor(() => expect(sendBringBranch).toHaveBeenCalledWith('p1', 'run-1', 'oa-newuser', { merge: true }))
+    expect(sendMergeBranch).not.toHaveBeenCalled()
+    expect(await screen.findByText('Merged into main in /me/app.')).toBeTruthy()
+    cleanup()
+    forgetRemembered()
+    sendBringBranch.mockClear()
+    render(<AgentWorkPanel>{copyRow()}</AgentWorkPanel>)
+    await openMenu(await screen.findByRole('button', { name: 'Other choices' }))
+    fireEvent.click(await screen.findByText('Only add the branch'))
+    await waitFor(() => expect(sendBringBranch).toHaveBeenCalledWith('p1', 'run-1', 'oa-newuser', {}))
+    // The folder has the branch now: the merge is the one step left.
+    expect(await screen.findByText('In /me/app, not in main yet.')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Merge' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Other choices' })).toBeNull()
   })
 
   test("the session's copies are asked of its folder, by the run", async () => {

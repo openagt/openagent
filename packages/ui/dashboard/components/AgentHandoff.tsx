@@ -1,7 +1,7 @@
 import { useContext, useState, type ReactNode } from 'react'
 import type { AgentHandoff } from '../../src/index.js'
-import { ChevronDown, GitPullRequestDraft, Upload } from 'lucide-react'
-import { sendMerge, sendMergeBranch, sendMessage, sendOpenPullRequest, sendPush } from '../rpc/control.js'
+import { ChevronDown, GitBranchPlus, GitPullRequestDraft, Upload } from 'lucide-react'
+import { sendBringBranch, sendMerge, sendMergeBranch, sendMessage, sendOpenPullRequest, sendPush } from '../rpc/control.js'
 import type { AgentHandoffState } from '../lib/use-agent-handoff.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
 import { cn } from '../lib/utils.js'
@@ -281,12 +281,19 @@ function NextStep({
   if (handoff.empty) return handoff.commits.length > 0 ? <Reason>Nothing to {handoff.hasRemote ? 'publish' : 'merge'}: the commits cancel out.</Reason> : null
   // The main branch already has the work: there is no step left, with a remote or without one.
   // The commits and files stay counted beside it, measured from where the run's work began.
-  if (handoff.merged) return <Reason>Merged into {mainBranchName(handoff.base)}.</Reason>
+  // A copy's main branch is the folder's it came from, which is the one that matters.
+  if (handoff.merged) {
+    const folder = handoff.copiedFrom?.path
+    return <Reason {...(folder ? { title: folder } : {})}>Merged into {mainBranchName(handoff.base)}{folder ? ` in ${folder}` : ''}.</Reason>
+  }
   // No remote: nothing to push to and no pull request to open, so the work reaches the project's
   // own folder by a merge on this machine, and that is the one step offered.
   if (!handoff.hasRemote) {
-    // A copy of a repo with no remote has no way back into the folder it was copied from: its work is in the copy.
-    if (repo !== undefined) return <Reason>No remote: the work stays in this copy.</Reason>
+    if (repo !== undefined) {
+      // A copy names the folder it was copied from; a repository the agent cloned into the session on its own names none, and its work stays there.
+      if (!handoff.copiedFrom) return <Reason>No remote: the work stays in this copy.</Reason>
+      return <CopyBack projectId={projectId} agentId={agentId} repo={repo} handoff={handoff} copiedFrom={handoff.copiedFrom} state={state} press={press} step={step} />
+    }
     return (
       <>
         <Reason>Not in {mainBranchName(handoff.base)} yet.</Reason>
@@ -368,6 +375,68 @@ function NextStep({
             </DropdownMenuContent>
           </DropdownMenu>
       </ButtonGroup>
+    </>
+  )
+}
+
+/**
+ * A copy of a repo with no remote, back to the folder it was copied from: "Merge" brings its
+ * branch there and merges it into the folder's main branch, as a project with no remote merges;
+ * its arrow holds "Only add the branch", for a folder busy on another branch. Once the folder has
+ * the branch, the Merge is the one step left.
+ */
+function CopyBack({ projectId, agentId, repo, handoff, copiedFrom, state, press, step }: {
+  projectId: string
+  agentId: string
+  repo: string
+  handoff: AgentHandoff
+  copiedFrom: NonNullable<AgentHandoff['copiedFrom']>
+  state: AgentHandoffState
+  press: Pressed
+  step: Record<string, unknown>
+}) {
+  const main = mainBranchName(handoff.base)
+  const bring = (merge: boolean) =>
+    press(
+      merge ? 'merge-branch' : 'bring',
+      () => sendBringBranch(projectId, agentId, repo, merge ? { merge: true } : {}),
+      merge ? 'Could not merge the branch.' : 'Could not add the branch.',
+      () => (merge ? { merged: true } : { copiedFrom: { ...copiedFrom, hasBranch: true } }),
+    )
+  const merge = (
+    <Button
+      size="sm"
+      variant="ghost"
+      className={cn(NEXT_STEP, !copiedFrom.hasBranch && 'pr-1.5!')}
+      {...step}
+      title={`Merges ${handoff.branch} into ${main} in ${copiedFrom.path}`}
+      onClick={() => bring(true)}
+    >
+      <Steady words={['Merge', 'Merging…']} now={state.pending === 'merge-branch' ? 1 : 0} />
+    </Button>
+  )
+  return (
+    <>
+      <Reason title={copiedFrom.path}>{copiedFrom.hasBranch ? `In ${copiedFrom.path}, not in ${main} yet.` : `Not in ${main} yet.`}</Reason>
+      {copiedFrom.hasBranch ? (
+        merge
+      ) : (
+        <ButtonGroup>
+          {merge}
+          <ButtonGroupSeparator className="bg-border opacity-100" />
+          <DropdownMenu>
+            <DropdownMenuTrigger type="button" aria-label="Other choices" {...step} className={cn(buttonVariants({ size: 'sm', variant: 'ghost' }), NEXT_STEP, 'px-1 data-[popup-open]:bg-background')}>
+              <ChevronDown className="h-3.5 w-3.5" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[10rem]">
+              <DropdownMenuItem onClick={() => bring(false)}>
+                <GitBranchPlus className="h-3.5 w-3.5" />
+                Only add the branch
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </ButtonGroup>
+      )}
     </>
   )
 }

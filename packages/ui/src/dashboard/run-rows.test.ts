@@ -59,7 +59,7 @@ test('each run with a pull request is marked with how it stands and its title; o
 test('each finished run whose work never left the machine is marked with its commits, by the Human Queue\'s rule; a provider that cannot be read marks none', async () => {
   const run = (id: string, branch: string, over: Partial<AgentMeta> = {}): AgentMeta => ({ id, status: 'done', startedAt: '2026-10-18T13:00:00.000Z', updatedAt: '2026-10-18T13:00:00.000Z', branch, ...over })
   const counts: Record<string, Partial<BranchAhead>> = { 'agent-a': { ahead: 2 }, 'agent-left': { ahead: 0, merged: true, uncommitted: 3 }, 'agent-pushed': { pushed: true }, 'agent-gone': { gone: true }, 'agent-running': {}, 'the-framework/old': { agent: false, ahead: 1173 } }
-  const answering = (ahead: BranchesSource['ahead']): BranchesFor => async () => ({ list: async () => [], show: async () => [], ahead, push: async () => ({ ok: true, pushed: true }), merge: async () => ({ ok: false, error: 'no' }), remove: async () => ({ ok: true }) })
+  const answering = (ahead: BranchesSource['ahead']): BranchesFor => async () => ({ list: async () => [], show: async () => [], ahead, push: async () => ({ ok: true, pushed: true }), merge: async () => ({ ok: false, error: 'no' }), bring: async () => ({ ok: false, error: 'no' }), remove: async () => ({ ok: true }) })
   const branches = answering(async asked =>
     asked.map(branch => ({ branch, exists: true, agent: true, ahead: 1, hasRemote: true, pushed: false, gone: false, merged: false, uncommitted: 0, ...counts[branch] })),
   )

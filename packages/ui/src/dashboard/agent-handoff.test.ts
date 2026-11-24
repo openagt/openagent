@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import { hostname } from 'node:os'
 import assert from 'node:assert/strict'
-import { answeredBefore, readAgentHandoff, readRunHandoff, leftNothing, resolveAgentPr, mergeAgentPr, openAgentPullRequest, pushAgentBranch, mergeAgentBranch } from './agent-handoff.js'
+import { answeredBefore, bringAgentBranch, readAgentHandoff, readRunHandoff, leftNothing, resolveAgentPr, mergeAgentPr, openAgentPullRequest, pushAgentBranch, mergeAgentBranch } from './agent-handoff.js'
 import { pickAgentPr, type LinkedPr } from './pull-requests.js'
 import type { BranchState, BranchesFor, BranchesSource } from '../store/branches.js'
 import type { GitHostFor, GitHostSource } from '../store/git-host.js'
@@ -34,7 +34,7 @@ const state = (over: Partial<BranchState> = {}): BranchState => ({
 /** The two fake providers over one call log: the branches provider's `show` answers from `states` (a branch missing there is not answered) and its `push` as told; the git host's `open` and `merge` answer as told. */
 function fakeBranches(
   states: Record<string, BranchState | undefined>,
-  answers: { push?: Awaited<ReturnType<BranchesSource['push']>>; mergeBranch?: Awaited<ReturnType<BranchesSource['merge']>>; open?: Awaited<ReturnType<GitHostSource['open']>>; merge?: Awaited<ReturnType<GitHostSource['merge']>> } = {},
+  answers: { push?: Awaited<ReturnType<BranchesSource['push']>>; mergeBranch?: Awaited<ReturnType<BranchesSource['merge']>>; bring?: Awaited<ReturnType<BranchesSource['bring']>>; open?: Awaited<ReturnType<GitHostSource['open']>>; merge?: Awaited<ReturnType<GitHostSource['merge']>> } = {},
 ): { branches: BranchesFor; gitHost: GitHostFor; calls: unknown[][] } {
   const calls: unknown[][] = []
   const branches: BranchesFor = async () => ({
@@ -54,6 +54,10 @@ function fakeBranches(
     merge: async branch => {
       calls.push(['merge-branch', branch])
       return answers.mergeBranch ?? { ok: true, into: 'main', commit: 'c'.repeat(40), from: 'b'.repeat(40), deleted: true }
+    },
+    bring: async (branch, opts) => {
+      calls.push(['bring', branch, ...(opts?.merge ? ['--merge'] : [])])
+      return answers.bring ?? { ok: true, folder: '/folder', ...(opts?.merge ? { merged: 'main' } : {}) }
     },
     remove: async () => ({ ok: true }),
   })
@@ -263,6 +267,7 @@ test('a run started from a local branch says what a pull request would carry ove
     show: async (_branches, from) => (asked.push(from), [from === undefined ? overDefault : own]),
     push: async () => ({ ok: true, pushed: true }),
     merge: async () => ({ ok: true, into: 'main', commit: 'c'.repeat(40), from: start, deleted: true }),
+    bring: async () => ({ ok: false, error: 'not here' }),
     remove: async () => ({ ok: true }),
   })
   const run = { id: 'r1', startedAt: '2026-10-01T00:00:00Z', status: 'done' as const, host: hostname(), branch: 'agent-x' }
@@ -479,4 +484,15 @@ test('"Merge into main" merges a finished session\'s branch through the branches
 
   const unrecorded = async () => ({ list: async () => [], show: async () => undefined, remove: async () => ({ ok: true as const }), patch: async () => ({ ok: false as const, error: 'no such run' }) })
   assert.deepEqual(await mergeAgentBranch('/repo', agent(), { branches, runs: unrecorded }), { ok: false, error: 'merged into main, but the record was not updated: no such run' })
+})
+
+test("a copy with no remote is brought back to the folder it was copied from, through the branches provider, merged there when asked; its state names that folder", async () => {
+  const { branches, gitHost, calls } = fakeBranches({ 'openagent/work': state({ hasRemote: false, copiedFrom: { path: '/me/app', hasBranch: false } }) })
+  assert.deepEqual(await bringAgentBranch('/copy', agent(), {}, { branches }), { ok: true })
+  assert.deepEqual(await bringAgentBranch('/copy', agent(), { merge: true }, { branches }), { ok: true })
+  assert.deepEqual(calls, [['bring', 'openagent/work'], ['bring', 'openagent/work', '--merge']])
+  assert.deepEqual((await readAgentHandoff('/copy', 'openagent/work', { branches, gitHost, pr: noPr }))?.copiedFrom, { path: '/me/app', hasBranch: false })
+  const busy = fakeBranches({}, { bring: { ok: false, error: '/me/app is on try-header, not on main; switch it to main, then merge' } })
+  assert.deepEqual(await bringAgentBranch('/copy', agent(), { merge: true }, { branches: busy.branches }), { ok: false, error: '/me/app is on try-header, not on main; switch it to main, then merge' })
+  assert.deepEqual(await bringAgentBranch('/copy', unbranched, {}, { branches }), { ok: false, error: 'this session recorded no branch to bring' })
 })

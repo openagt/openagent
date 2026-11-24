@@ -9,7 +9,7 @@ const sendPush = vi.fn(async () => ({ ok: true }) as unknown)
 const sendMergeBranch = vi.fn(async () => ({ ok: true }) as unknown)
 const sendMessage = vi.fn(async () => ({ ok: true }) as unknown)
 vi.mock('../rpc/reads.js', () => ({ onAgentHandoff }))
-vi.mock('../rpc/control.js', () => ({ sendOpenPullRequest, sendMerge, sendPush, sendMergeBranch, sendMessage }))
+vi.mock('../rpc/control.js', () => ({ sendOpenPullRequest, sendMerge, sendPush, sendMergeBranch, sendMessage, sendBringBranch: vi.fn() }))
 
 const { HandoffActions, HandoffSummary } = await import('./AgentHandoff.js')
 const { handoffSays, useAgentHandoff } = await import('../lib/use-agent-handoff.js')

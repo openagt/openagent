@@ -123,6 +123,11 @@ export interface AgentHandoff {
    * and "a checkout, tree clean" are different answers.
    */
   pendingFiles?: string[]
+  /**
+   * A session's copy of a repo with no remote: the folder it was copied from, where its work goes
+   * back to ({@link bringAgentBranch}), and whether that folder has the branch already.
+   */
+  copiedFrom?: { path: string; hasBranch: boolean }
 }
 
 /** Injectable seams so the reader is unit-testable off disk and off the provider. */
@@ -327,6 +332,7 @@ export async function readAgentHandoff(
     ...(pr.pending ? { prPending: true } : {}),
     ...((await commitsPastPr(cwd, pr.latest, commits, deps.git)) ? { movedPastPr: true } : {}),
     ...(state.pendingFiles ? { pendingFiles: state.pendingFiles } : {}),
+    ...(state.copiedFrom ? { copiedFrom: state.copiedFrom } : {}),
   }
 }
 
@@ -443,6 +449,21 @@ export async function mergeAgentBranch(cwd: string, agent: Pick<AgentMeta, 'id' 
   // The merge is in whatever the record says; a record that could not be written is said, since the page reads the record.
   if (recorded && !recorded.ok) return { ok: false, error: `merged into ${merged.into}, but the record was not updated: ${recorded.error}` }
   return { ok: true }
+}
+
+/**
+ * Bring a session's copy of a repo with no remote back to the folder it was copied from: its
+ * branch added there, and with `merge` merged into that folder's default branch. The branches
+ * provider does it, in the copy; the copy's own default branch then holds the work, so its row
+ * reads it as merged.
+ */
+export async function bringAgentBranch(cwd: string, agent: Pick<AgentMeta, 'id' | 'branch'>, opts: { merge?: boolean } = {}, deps: { branches?: BranchesFor } = {}): Promise<HandoffResult> {
+  const branch = agent.branch
+  if (branch === undefined) return { ok: false, error: 'this session recorded no branch to bring' }
+  const source = await (deps.branches ?? projectBranches)(cwd).catch(() => undefined)
+  if (!source) return { ok: false, error: 'this copy has no branches provider to bring its branch with' }
+  const brought = await source.bring(branch, opts.merge ? { merge: true } : {})
+  return brought.ok ? { ok: true } : { ok: false, error: brought.error }
 }
 
 /**
