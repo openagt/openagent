@@ -21,7 +21,7 @@ import type { AgentWorktree } from '../dashboard/types.js'
 import { crawlRepoFiles } from '../project.js'
 import { contextProjects, resolveProjectPath, resolveAgentPath } from './context.js'
 import type { OpenAgentEvent } from '../events.js'
-import { startedName, withStartedNames } from '../started-names.js'
+import { startedName, withStartedNames } from '@openagt/agent-driver'
 import { forDashboard, recordedRuns, withRowMarks } from '../dashboard/run-rows.js'
 
 // The read model behind the dashboard (#405): the agent history, an agent's replay, and the
@@ -56,7 +56,7 @@ export async function onAgents(projectId: string): Promise<AgentMeta[]> {
 }
 
 /**
- * The name asked for a run just started, answered once it is in (`started-names.ts`): the run's
+ * The name asked for a run just started, answered once it is in (agent-driver's `started-names.ts`): the run's
  * row is not in the list yet when it is, and the page shows it where the row will be. Nothing
  * when no name came.
  */

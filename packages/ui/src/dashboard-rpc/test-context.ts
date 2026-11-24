@@ -4,20 +4,11 @@ import { localHost } from '@openagt/agent-driver'
 import type { RunHost } from '@openagt/hooks'
 import { setDashboardContext, type DashboardContext } from './context.js'
 import { registryPreferencesStore } from '../registry.js'
-import type { QuotaSource } from '../dashboard/quota.js'
 import type { DashboardOptions } from '../dashboard/server.js'
 import { handDownTestDistribution } from '../test-distribution.js'
 
 handDownTestDistribution()
 
-
-/**
- * The usage panel's meter as a test has it: no reading, and none asked for. The daemon's own
- * (`defaultQuotaSource`) starts `claude -p /usage` the moment it is made, the person's real Claude
- * Code with its MCP servers: made in every context, one run of the tests started it 177 times, 60
- * at once.
- */
-export const NO_QUOTA: QuotaSource = { read: async () => ({ windows: [] }), stop: () => {} }
 
 /** What a resume in a test is written down as, one line per resume in the project's {@link RESUMED_FILE}: the run, its text and its answer. */
 export const RESUMED_FILE = 'resumed.txt'
@@ -50,14 +41,11 @@ export function testDashboardContext(over: Partial<DashboardContext> = {}): Dash
     startAgent: () => ({ ok: false, error: 'not wired in this test' }),
     addProject: () => ({ ok: false, error: 'not wired in this test' }),
     startedIn: () => ({ ok: false, error: 'not wired in this test' }),
-    prepareStart: () => {},
     removeProject: () => ({ ok: false, error: 'not wired in this test' }),
     host: testHost(),
     otherHosts: async () => [],
     preferences: registryPreferencesStore(),
-    quota: NO_QUOTA,
-    models: { read: async () => ({ 'claude-code': { models: [] }, codex: { models: [] } }), forget: () => {} },
-    agentUpdates: { read: async () => [], update: async () => ({ ok: false, error: 'not wired in this test' }), openAgent: async () => undefined },
+    openAgentUpdate: { read: async () => undefined },
     projectState: async () => ({ errors: [] }),
     ...over,
   }

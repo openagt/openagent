@@ -59,8 +59,6 @@
     "clean": "rm -rf dist dist-test"
   },
   "dependencies": {
-    "@openagt/agent-driver-claude-code": "workspace:*",
-    "@openagt/agent-driver-codex": "workspace:*",
     "@base-ui/react": "1.9.0",
     "@openagt/agent-data": "workspace:*",
     "@openagt/git-branches": "workspace:*",
@@ -104,6 +102,8 @@
     "@fontsource-variable/source-code-pro": "^5.3.1",
     "@fontsource-variable/source-serif-4": "^5.3.1",
     "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@openagt/agent-driver-claude-code": "workspace:*",
+    "@openagt/agent-driver-codex": "workspace:*",
     "@openagt/ui-pane-changes": "workspace:*",
     "@openagt/ui-pane-files": "workspace:*",
     "@openagt/host-claude-web": "workspace:*",

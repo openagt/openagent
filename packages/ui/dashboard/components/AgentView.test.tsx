@@ -17,8 +17,9 @@ const onGitHostHome = vi.fn(async () => null as unknown)
 const onAgentMainBranch = vi.fn(async () => 'trunk' as string | null)
 // The models each agent lists, with what one of them holds: the daemon's read, stubbed here so the
 // context circle has a window to measure against.
-vi.mock('../rpc/models.js', () => ({
-  onModels: () => Promise.resolve({ 'claude-code': { models: [{ id: 'opus', name: 'Opus 5.5', resolvedId: 'claude-opus-5-5', contextWindow: 200_000 }] }, codex: { models: [] } }),
+vi.mock('../rpc/agents.js', () => ({
+  onCodingAgents: () => Promise.resolve([{ id: 'claude-code', label: 'Claude Code', logo: '<svg/>', models: { models: [{ id: 'opus', name: 'Opus 5.5', resolvedId: 'claude-opus-5-5', contextWindow: 200_000 }] } }, { id: 'codex', label: 'Codex', models: { models: [] } }]),
+  onNamesRuns: () => Promise.resolve(true),
 }))
 vi.mock('../rpc/reads.js', () => ({ onAgent, onRetainedWorktrees, onAgentHandoff, onBridgeQuestion, onBridgeEvents, onBridgeAnswer, onAgentWorktree, onAgentMainBranch, onGitHostHome }))
 const sendMessage = vi.fn(async () => ({ ok: true }) as unknown)
@@ -105,7 +106,7 @@ let queuedIds = 0
 const edited: string[] = []
 const givenBack: string[] = []
 vi.mock('./AgentComposer.js', () => ({
-  AgentComposer: ({ live, asked, model, context, onSending, onQueued, editInBox, giveBack, row, publish, prBase, profile, gitAccount, projectSkills }: { publish?: string; prBase?: string; live: boolean; asked?: boolean; model?: { driver?: string; name?: string; effort?: string }; context?: ReactNode; onSending?: (text: string | null) => void; onQueued?: (message: { id: string; text: string; later: boolean }) => void; editInBox?: { current: ((text: string) => void) | null }; giveBack?: { current: ((text: string) => void) | null }; row?: ReactNode; profile?: string; gitAccount?: string; projectSkills?: 'all' | 'none' | string[] }) => {
+  AgentComposer: ({ live, asked, options, context, onSending, onQueued, editInBox, giveBack, row, publish, prBase, profile, gitAccount, projectSkills }: { publish?: string; prBase?: string; live: boolean; asked?: boolean; options?: object; context?: ReactNode; onSending?: (text: string | null) => void; onQueued?: (message: { id: string; text: string; later: boolean }) => void; editInBox?: { current: ((text: string) => void) | null }; giveBack?: { current: ((text: string) => void) | null }; row?: ReactNode; profile?: string; gitAccount?: string; projectSkills?: 'all' | 'none' | string[] }) => {
     if (editInBox) editInBox.current = text => void edited.push(text)
     if (giveBack) giveBack.current = text => void givenBack.push(text)
     return (
@@ -113,7 +114,7 @@ vi.mock('./AgentComposer.js', () => ({
         {row}
         <button type="button" onClick={() => onQueued?.({ id: `m${++queuedIds}`, text: 'and then this', later: false })}>queue-one</button>
         <button type="button" onClick={() => onSending?.('add a logout button')}>continue-it</button>
-        <span data-testid="composer-model" data-driver={model?.driver ?? ''} data-effort={model?.effort ?? ''}>{model?.name ?? ''}</span>
+        <span data-testid="composer-options">{JSON.stringify(options ?? null)}</span>
         <span data-testid="composer-auto" data-publish={publish ?? ''} data-pr-base={prBase ?? ''} />
         <span data-testid="composer-profile" data-value={profile ?? ''} />
         <span data-testid="composer-account" data-value={gitAccount ?? ''} />
@@ -1122,16 +1123,13 @@ describe('the branch the row says the session started from', () => {
   })
 })
 
-describe('the model under the message box', () => {
-  test('the box is handed the model the agent\'s card names, and none before the card or when it names none', () => {
+describe('the row under the message box', () => {
+  test("the box is handed the run's options as its card keeps them, the coding agent's with them, for its controls to say", () => {
     const { rerender } = render(view({ live: true, events: [] }))
-    expect(screen.getByTestId('composer-model').textContent).toBe('')
-    rerender(view({ live: true, events: [], card: { status: 'running', driver: 'claude-code', model: 'opus' } }))
-    expect(screen.getByTestId('composer-model').textContent).toMatch(/opus/i)
-    // Its coding agent goes with it, for the logo.
-    expect(screen.getByTestId('composer-model').dataset.driver).toBe('claude-code')
-    rerender(view({ live: true, events: [], card: { status: 'running', driver: 'claude-code' } }))
-    expect(screen.getByTestId('composer-model').textContent).toBe('')
+    expect(screen.getByTestId('composer-options').textContent).toBe('null')
+    const options = { 'agent-driver': { driver: 'claude-code', model: 'opus', effort: 'medium' } }
+    rerender(view({ live: true, events: [], card: { status: 'running', driver: 'claude-code', model: 'opus', options } }))
+    expect(JSON.parse(screen.getByTestId('composer-options').textContent!)).toEqual(options)
   })
 
   test('how full the context is shows beside the model, empty until there is a reading, and only when the window is known', async () => {
@@ -1144,16 +1142,6 @@ describe('the model under the message box', () => {
     // A model nobody said a window of draws nothing: a fullness no one can measure is worse than none.
     rerender(view({ live: true, events: [], card: { status: 'running', driver: 'codex', model: 'gpt-5.6-luna', contextTokens: 50_000 } }))
     expect(screen.queryByRole('img', { name: /of the context left/ })).toBeNull()
-  })
-
-  test('how hard the model was told to think is handed to the box with it, in the words the launcher says it in', () => {
-    const { rerender } = render(view({ live: true, events: [], card: { status: 'running', driver: 'claude-code', model: 'opus', effort: 'medium' } }))
-    expect(screen.getByTestId('composer-model').textContent).toMatch(/opus/i)
-    expect(screen.getByTestId('composer-model').dataset.effort).toBe('Medium')
-    // A run on the agent's own effort says the model alone.
-    rerender(view({ live: true, events: [], card: { status: 'running', driver: 'claude-code', model: 'opus' } }))
-    expect(screen.getByTestId('composer-model').textContent).toBe('opus')
-    expect(screen.getByTestId('composer-model').dataset.effort).toBe('')
   })
 })
 

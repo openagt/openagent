@@ -38,11 +38,25 @@ const preferences = vi.hoisted(() => ({ current: {} as Record<string, unknown> }
 const updatePreferences = vi.hoisted(() => vi.fn())
 vi.mock('../lib/preferences.js', async importOriginal => ({ ...(await importOriginal<object>()), usePreferences: () => preferences.current, updatePreferences }))
 
+// The coding agents as each says itself: its name and its mark; and whether this computer names its runs.
+const LOGO = '<svg viewBox="0 0 1 1"><path d="M0 0h1v1z"/></svg>'
+const namesRuns = vi.hoisted(() => ({ current: true }))
+vi.mock('../rpc/agents.js', () => ({
+  onCodingAgents: async () => [
+    { id: 'claude-code', label: 'Claude Code', logo: LOGO, models: { models: [{ id: 'opus', name: 'Opus 5.5' }] } },
+    { id: 'codex', label: 'Codex', logo: LOGO, models: { models: [] } },
+  ],
+  onNamesRuns: async () => namesRuns.current,
+}))
+
 const { AgentHistory } = await import('./AgentHistory.js')
 const { forgetRemembered } = await import('../lib/use-async.js')
 
 afterEach(() => {
   cleanup()
+  forgetRemembered()
+  localStorage.clear()
+  namesRuns.current = true
   preferences.current = {}
   updatePreferences.mockReset()
 })
@@ -180,25 +194,25 @@ describe('AgentHistory (#785)', () => {
     expect(container.querySelector('.motion-safe\\:animate-pulse')).toBeTruthy()
   })
 
-  test('a row is its mark, its name and its age until more is asked for: no person, no logo, no project, and its name still says them', () => {
+  test('a row is its mark, its name and its age until more is asked for: no person, no logo, no project, and its name still says them', async () => {
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'done', driver: 'codex', person: 'ada@x.dev' }), agent({ id: 'r2', status: 'done', driver: 'claude-code', person: 'rom@y.dev' })]} selectedAgentId={null} onSelect={() => {}} />)
     expect(screen.queryByLabelText('Codex')).toBeNull()
     expect(screen.queryByRole('img', { name: 'ada@x.dev' })).toBeNull()
-    expect(screen.getAllByRole('link', { name: /· done ·/ }).map(row => row.getAttribute('aria-label'))).toEqual([expect.stringMatching(/ada@x\.dev · Codex/), expect.stringMatching(/rom@y\.dev · Claude Code/)])
+    await waitFor(() => expect(screen.getAllByRole('link', { name: /· done ·/ }).map(row => row.getAttribute('aria-label'))).toEqual([expect.stringMatching(/ada@x\.dev · Codex/), expect.stringMatching(/rom@y\.dev · Claude Code/)]))
   })
 
-  test('asked for from the menu beside "Log", a row shows which coding agent ran it, and whose run it is; with both, the logo rides on the picture', () => {
+  test('asked for from the menu beside "Log", a row shows which coding agent ran it, and whose run it is; with both, the logo rides on the picture', async () => {
     const agents = [agent({ status: 'done', driver: 'codex', person: 'ada@x.dev', model: 'gpt-5' })]
     preferences.current = { recentsAgent: true }
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={agents} selectedAgentId={null} onSelect={() => {}} />)
-    expect(screen.getByLabelText('Codex · gpt-5').closest('.rounded-full')).toBeNull()
+    expect((await screen.findByLabelText('Codex · gpt-5')).closest('.rounded-full')).toBeNull()
     expect(screen.queryByRole('img', { name: 'ada@x.dev' })).toBeNull()
     cleanup()
     preferences.current = { recentsAgent: true, recentsPerson: true }
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={agents} selectedAgentId={null} onSelect={() => {}} />)
     const person = screen.getByRole('img', { name: 'ada@x.dev' })
     // One mark for the two: the logo on a small disc at the picture's corner.
-    expect(person.parentElement!.contains(screen.getByLabelText('Codex · gpt-5'))).toBe(true)
+    expect(person.parentElement!.contains(await screen.findByLabelText('Codex · gpt-5'))).toBe(true)
     expect(screen.getByLabelText('Codex · gpt-5').parentElement!.className).toContain('absolute')
   })
 
@@ -312,8 +326,8 @@ describe('AgentHistory (#785)', () => {
     expect(standIn().querySelectorAll('.letter-in').length).toBeGreaterThan(0)
   })
 
-  test('with naming turned off the stand-in row prints the prompt: no name is coming to replace it', () => {
-    preferences.current = { nameRuns: false }
+  test('with naming turned off the stand-in row prints the prompt: no name is coming to replace it', async () => {
+    namesRuns.current = false
     const { container, rerender } = renderRail(
       <AgentHistory projectId="p1" scope="p1" agents={[]} selectedAgentId={null} onSelect={() => {}} startTick={0} startIntent="" />,
     )
@@ -323,7 +337,7 @@ describe('AgentHistory (#785)', () => {
       </SidebarProvider>,
     )
     const row = [...container.querySelectorAll('a, button')].find(row => row.hasAttribute('data-stand-in'))!
-    expect(row.querySelector('.rail-title')!.textContent).toBe('add a footer')
+    await waitFor(() => expect(row.querySelector('.rail-title')!.textContent).toBe('add a footer'))
     expect(row.querySelector('.rail-title .animate-pulse')).toBeNull()
   })
 

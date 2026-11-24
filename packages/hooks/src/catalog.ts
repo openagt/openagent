@@ -1,5 +1,5 @@
 import { MODULE_NAME } from './module.js'
-import type { RunOptions } from './run.js'
+import type { AgentDriverOptions, RunOptions } from './run.js'
 import { defineSetting } from './settings.js'
 
 // The catalog (#2394): the settings modules own and other modules read, declared here beside the
@@ -137,8 +137,10 @@ function profileFrom(value: unknown): Profile | undefined {
   const text = (value: unknown): string | undefined => (typeof value === 'string' && value.trim() ? value.trim() : undefined)
   const names = (value: unknown): string[] | undefined => (Array.isArray(value) && value.length > 0 && value.every(one => typeof one === 'string' && one.trim()) ? [...(value as string[])] : undefined)
   const account = text(slice('github')['account'])
-  const claude = names(slice('agent-driver')['claude'])
-  const codex = names(slice('agent-driver')['codex'])
+  const agent = slice('agent-driver')
+  const claude = names(agent['claude'])
+  const codex = names(agent['codex'])
+  const picked = Object.fromEntries((['driver', 'model', 'effort'] as const).flatMap(key => (text(agent[key]) !== undefined ? [[key, text(agent[key])!]] : []))) as AgentPick
   const project = slice('skills')['project']
   const skills = project === 'none' ? 'none' : names(project)
   const without = names(slice('plugins')['without'])?.filter(one => MODULE_NAME.test(one))
@@ -147,12 +149,45 @@ function profileFrom(value: unknown): Profile | undefined {
     name: name.trim(),
     options: {
       ...(account !== undefined ? { github: { account } } : {}),
-      ...(claude || codex ? { 'agent-driver': { ...(claude ? { claude } : {}), ...(codex ? { codex } : {}) } } : {}),
+      ...(claude || codex || Object.keys(picked).length > 0 ? { 'agent-driver': { ...picked, ...(claude ? { claude } : {}), ...(codex ? { codex } : {}) } } : {}),
       ...(skills !== undefined ? { skills: { project: skills } } : {}),
       ...(without !== undefined && without.length > 0 ? { plugins: { without } } : {}),
     },
   }
 }
+
+/** What is picked for every next run of a coding agent's: the agent, its model and how hard it thinks. */
+export type AgentPick = Pick<AgentDriverOptions, 'driver' | 'model' | 'effort'>
+
+/**
+ * agent-driver's: the coding agent, the model and the effort picked under the message box for
+ * every next run on this computer, which a run started here is on where its options name none. A
+ * part that is not valid reads as unset, and the rest stays.
+ */
+export const PICKED_AGENT = defineSetting<AgentPick>({
+  key: 'agent-driver.picked',
+  scope: 'computer',
+  default: {},
+  parse: value => {
+    if (!isMap(value)) return undefined
+    const word = (part: unknown): string | undefined => (typeof part === 'string' && /^[\w.:/-]+$/.test(part) ? part : undefined)
+    const driver = word(value['driver'])
+    const model = word(value['model'])
+    const effort = word(value['effort'])
+    return { ...(driver !== undefined ? { driver } : {}), ...(model !== undefined ? { model } : {}), ...(effort !== undefined ? { effort } : {}) }
+  },
+})
+
+/**
+ * agent-driver's: each run started on this computer is named by a small model, in a few words; off,
+ * a run is listed by what it was asked. A Start that brings a name of its own is named that.
+ */
+export const NAME_RUNS = defineSetting<boolean>({
+  key: 'agent-driver.name-runs',
+  scope: 'computer',
+  default: true,
+  parse: value => (typeof value === 'boolean' ? value : undefined),
+})
 
 /**
  * How often at most a scheduled command starts on a computer, where a person set it there:

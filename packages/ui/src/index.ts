@@ -15,10 +15,8 @@
 
 export type { AgentError, SessionInfo } from './agent-view.js'
 export type { ChoiceRequest, OpenAgentEvent } from './events.js'
-export type { QuotaBoundary } from './quota-boundary.js'
 export type { Preferences, StartFromPick } from './registry.js'
 export type { PublishPick } from './publish-levels.js'
-export type { DriverQuotaWindow } from '@openagt/hooks'
 export type { AgentDoing, AgentMeta, AgentStatus } from './store/agent-store.js'
 export type { Activity } from './dashboard/activity.js'
 export type { AgentHandoff } from './dashboard/agent-handoff.js'
@@ -31,7 +29,6 @@ export type { ActiveAgent, FoundAgent, Overview, RecentAgent } from './dashboard
 export type { ProjectSummary, ProjectionRead } from './dashboard/projects.js'
 export type { ProjectError } from './project-state.js'
 export type { ProjectQueue } from './dashboard/queue.js'
-export type { QuotaView } from './dashboard/quota.js'
 export type { Ticket } from './store/tickets.js'
 export type { AgentWorktree, CleanupReport } from './dashboard/types.js'
 export type { CardPlace, CardWidth, OverviewLayouts } from './overview-layout.js'

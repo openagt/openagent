@@ -246,7 +246,7 @@ export function HostFix({ row, onChanged, size = 'default', variant, label }: { 
   if (p.installed && p.accounts.length > 0 && !p.loggingIn) return adding.dialog
   return (
     <>
-      {/* On a phone a finger's 44, as the coding agent's own fix (AgentFix). */}
+      {/* On a phone a finger's 44, as every fix's press. */}
       <Button size={size} variant={variant} aria-label={`Add a ${p.name} account`} onClick={() => adding.add(row.host)} className={cn(size === 'default' && 'max-md:h-11')}>
         {label ?? `Add a ${p.name} account`}
       </Button>

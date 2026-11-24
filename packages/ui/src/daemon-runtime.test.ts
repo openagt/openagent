@@ -5,10 +5,7 @@ import { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node
 import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createProjectRuntime } from './daemon-runtime.js'
-import { forgetStartedNames, nameStarted, startedName, withStartedNames } from './started-names.js'
-import type { AgentMeta } from './store/index.js'
-import { ReadyNaming, readyPrompt } from '@openagt/agent-driver'
-import type { Hooks, ProjectRef, RunHost, RunOptions, Driver } from '@openagt/hooks'
+import type { Hooks, ProjectRef, RunHost, RunOptions } from '@openagt/hooks'
 import { fakeHost, type FakeHost } from '@openagt/hooks/testing'
 import { OPENAGENT_DIR } from './openagent-dir.js'
 import { addProject, listProjects } from './registry.js'
@@ -51,14 +48,13 @@ test("onStart starts the run on this computer's host, in the project addressed, 
   const host = fakeHost()
   const runtime = createProjectRuntime({ cwd: home, env, host })
   try {
-    assert.deepEqual(await runtime.onStart('/work-queue', { driver: 'codex', model: 'gpt-5', effort: 'high' }), { ok: true, agentId: 'run-1', driver: 'codex' })
+    assert.deepEqual(await runtime.onStart('/work-queue', { options: { 'agent-driver': { driver: 'codex', model: 'gpt-5', effort: 'high' } } }), { ok: true, agentId: 'run-1' })
     assert.deepEqual(lastStart(host), { dir: home, prompt: '/work-queue', options: { 'agent-driver': { driver: 'codex', model: 'gpt-5', effort: 'high' }, publish: 'commit' } })
     // No picks made: the host's own defaults apply, and the answer names the coding agent it is on.
-    assert.deepEqual(await runtime.onStart('Read the docs', {}, record.id), { ok: true, agentId: 'run-2', driver: 'claude-code' })
+    assert.deepEqual(await runtime.onStart('Read the docs', {}, record.id), { ok: true, agentId: 'run-2' })
     assert.deepEqual(lastStart(host), { dir: other, prompt: 'Read the docs', options: { publish: 'commit' } })
     assert.equal(host.requests[1]?.project?.id, record.id)
   } finally {
-    await runtime.dispose()
     await rm(home, { recursive: true, force: true })
     await rm(other, { recursive: true, force: true })
   }
@@ -74,7 +70,6 @@ test('onStart refuses in words: an unknown project, a start the host refuses', a
     assert.deepEqual(await runtime.onStart('x', {}, 'no-such-project'), { ok: false, error: 'unknown project: no-such-project' })
     assert.deepEqual(await runtime.onStart('x'), { ok: false, error: 'Codex is not installed.' })
   } finally {
-    await runtime.dispose()
     await rm(home, { recursive: true, force: true })
   }
 })
@@ -89,11 +84,11 @@ test('a Start picked to run on another host goes to that host, one a module on i
   const otherHosts = async (project?: ProjectRef): Promise<RunHost[]> => (askedIn.push(project?.dir), [actions])
   const runtime = createProjectRuntime({ cwd: home, env, host, otherHosts })
   try {
-    assert.deepEqual(await runtime.onStart('add a --verbose flag', { host: 'actions', model: 'claude-opus-4-8' }), { ok: true, agentId: 'run-1', driver: 'claude-code' })
+    assert.deepEqual(await runtime.onStart('add a --verbose flag', { host: 'actions', options: { 'agent-driver': { model: 'claude-opus-4-8' } } }), { ok: true, agentId: 'run-1' })
     assert.deepEqual(lastStart(actions), { dir: home, prompt: 'add a --verbose flag', options: { host: 'actions', 'agent-driver': { model: 'claude-opus-4-8' }, publish: 'commit' } })
     assert.deepEqual(askedIn, [home], "the hosts are the project's")
     // This computer's own host, by its id, is no other host's: its run's options name none.
-    assert.deepEqual(await runtime.onStart('go', { host: host.id }), { ok: true, agentId: 'run-1', driver: 'claude-code' })
+    assert.deepEqual(await runtime.onStart('go', { host: host.id }), { ok: true, agentId: 'run-1' })
     assert.deepEqual(lastStart(host).options, { publish: 'commit' })
     assert.deepEqual(await runtime.onStart('go', { host: 'claude-web' }), { ok: false, error: 'No host claude-web is on in this project. Pick another place to run.' })
     assert.deepEqual(await runtime.onStart('go', { host: '../actions' }), { ok: false, error: 'A host is named by its id.' })
@@ -105,7 +100,6 @@ test('a Start picked to run on another host goes to that host, one a module on i
     assert.equal(actions.requests.length, 1)
     assert.equal(host.requests.length, 1)
   } finally {
-    await runtime.dispose()
     await rm(home, { recursive: true, force: true })
   }
 })
@@ -119,7 +113,7 @@ test('a Start goes no further than the project can, the commit with no remote, t
   const level = (): unknown => lastStart(host).options?.publish
   try {
     execFileSync('git', ['init', '-q'], { cwd: home })
-    assert.deepEqual(await runtime.onStart('Fix it', { publish: 'merge' }), { ok: true, agentId: 'run-1', driver: 'claude-code' })
+    assert.deepEqual(await runtime.onStart('Fix it', { publish: 'merge' }), { ok: true, agentId: 'run-1' })
     assert.equal(level(), 'commit', 'no remote: the commit')
     // No pick saved: the daemon starts the run at the commit, which pushes nothing.
     await runtime.onStart('Fix it')
@@ -135,7 +129,6 @@ test('a Start goes no further than the project can, the commit with no remote, t
     await runtime.onStart('Fix it', { publish: 'commit' })
     assert.equal(level(), 'commit', 'Commit saved: the commit, the remote or not')
   } finally {
-    await runtime.dispose()
     await rm(home, { recursive: true, force: true })
   }
 })
@@ -156,7 +149,6 @@ test('a Start hands the host the branch to start from, and refuses a word that i
     assert.deepEqual(await runtime.onStart('Fix it', { prBase: '--upload-pack=x' }), { ok: false, error: 'not a branch name: --upload-pack=x' })
     assert.equal(host.requests.length, 2, 'the host was not asked')
   } finally {
-    await runtime.dispose()
     await rm(home, { recursive: true, force: true })
   }
 })
@@ -195,7 +187,6 @@ test("a Start hands the host the session's account at the git host, its profile 
     assert.deepEqual(await runtime.onStart('Fix it', { projectSkills: [] }), notProjectSkills)
     assert.equal(host.requests.length, asked, 'the host was not asked')
   } finally {
-    await runtime.dispose()
     await rm(home, { recursive: true, force: true })
   }
 })
@@ -217,7 +208,7 @@ test("a Start from a branch of origin's hands the host origin's copy; one gone f
     git(home, 'push', '-q', 'origin', 'main', 'main:feature/x')
     // This clone's copy outlives the branch, as it does in any clone: origin is what is asked.
     git(home, 'fetch', '-q', 'origin')
-    assert.deepEqual(await runtime.onStart('Fix it', { base: publishedBase('feature/x') }), { ok: true, agentId: 'run-1', driver: 'claude-code' })
+    assert.deepEqual(await runtime.onStart('Fix it', { base: publishedBase('feature/x') }), { ok: true, agentId: 'run-1' })
     assert.equal(base(), publishedBase('feature/x'))
 
     git(origin, 'update-ref', '-d', 'refs/heads/feature/x')
@@ -230,7 +221,6 @@ test("a Start from a branch of origin's hands the host origin's copy; one gone f
     await runtime.onStart('Fix it', { base: 'main' })
     assert.equal(base(), 'main')
   } finally {
-    await runtime.dispose()
     await rm(home, { recursive: true, force: true })
     await rm(origin, { recursive: true, force: true })
   }
@@ -260,7 +250,6 @@ test('adding a project makes it one, an empty folder included, and tells the mod
     assert.equal(await readSharing(folder), true)
     assert.equal(told.length, 1, 'added again, it was on the list already: the modules are not told twice')
   } finally {
-    await runtime.dispose()
     for (const [key, value] of Object.entries(before)) {
       if (value === undefined) delete process.env[key]
       else process.env[key] = value
@@ -291,7 +280,6 @@ test('starting inside a folder not on the list adds it and leaves the repository
     assert.equal(fresh.ok && fresh.added, true)
     assert.throws(() => execFileSync('git', ['config', '--local', '--get', SHARE_SETTING], { cwd: other, stdio: 'pipe' }))
   } finally {
-    await runtime.dispose()
     for (const [key, value] of Object.entries(before)) {
       if (value === undefined) delete process.env[key]
       else process.env[key] = value
@@ -331,7 +319,6 @@ test('removing a project takes it off the list, tells every module, and deletes 
     // Removed twice: the second time there is no such project.
     assert.deepEqual(await runtime.onRemoveProject(project!.id), { ok: false, error: 'no project with that id is on the list' })
   } finally {
-    await runtime.dispose()
     for (const [key, value] of Object.entries(before)) {
       if (value === undefined) delete process.env[key]
       else process.env[key] = value
@@ -373,7 +360,6 @@ test('a project with an agent at work is not removed, a card left "running" by a
     assert.deepEqual(await runtime.onRemoveProject(project!.id), { ok: true })
     assert.deepEqual(await listProjects(env), [])
   } finally {
-    await runtime.dispose()
     for (const [key, value] of Object.entries(before)) {
       if (value === undefined) delete process.env[key]
       else process.env[key] = value
@@ -444,7 +430,6 @@ test('removing a project with its files: OpenAgent\'s own go, each named; the pe
     assert.doesNotMatch(await readFile(join(folder, '.git', 'info', 'exclude'), 'utf8'), /^\/\.(agent-runner|branches)$/m, 'the rules that hid them went with them')
     assert.equal(git('worktree', 'list', '--porcelain').match(/^worktree /gm)?.length, 1)
   } finally {
-    await runtime.dispose()
     for (const [key, value] of Object.entries(before)) {
       if (value === undefined) delete process.env[key]
       else process.env[key] = value
@@ -497,7 +482,6 @@ test('removing a project with its files keeps what is not OpenAgent\'s to delete
     assert.equal(git('status', '--porcelain').trim(), '', 'what stays is still hidden from git')
     assert.deepEqual((await listProjects(env)).map(listed => listed.path), [second])
   } finally {
-    await runtime.dispose()
     for (const [key, value] of Object.entries(before)) {
       if (value === undefined) delete process.env[key]
       else process.env[key] = value
@@ -533,65 +517,10 @@ test('removing a project with its files while a run of this machine is still ali
     assert.equal(await readFile(join(folder, OPENAGENT_DIR, '.gitignore'), 'utf8').then(() => true, () => false), true, "and so is the dashboard's directory")
     assert.deepEqual((await readdir(join(folder, '.agent-runner', 'runs'))).sort(), ['booting.lock', 'r1.stderr'])
   } finally {
-    await runtime.dispose()
     for (const [key, value] of Object.entries(before)) {
       if (value === undefined) delete process.env[key]
       else process.env[key] = value
     }
     await rm(base, { recursive: true, force: true })
   }
-})
-
-
-/** A naming pool whose sessions answer `title` at once: no coding agent is started. */
-function readyNaming(title: string): ReadyNaming {
-  const driver: Driver = {
-    id: 'claude-code',
-    namingModel: 'haiku',
-    start: async opts => ({
-      id: 'naming',
-      cwd: opts.cwd,
-      prompt: () => Promise.reject(new Error('asked ready only')),
-      ready: () => readyPrompt(async words => ({ text: (await words) && title })),
-      dispose: () => Promise.resolve(),
-    }),
-  }
-  return new ReadyNaming({ setup: async () => ({ key: 'one', driver }) })
-}
-
-test('a Start is named here as the run starts: the page asks for the name, and the host is handed it as it is asked', async () => {
-  const home = await project()
-  const env = { XDG_CONFIG_HOME: join(home, 'cfg') }
-  await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
-  const host = fakeHost()
-  const runtime = createProjectRuntime({ cwd: home, env, naming: readyNaming('Fix flaky login test'), host })
-  try {
-    assert.deepEqual(await runtime.onStart('fix the flaky login test', { driver: 'claude-code' }), { ok: true, agentId: 'run-1', driver: 'claude-code' })
-    assert.equal(await startedName('run-1'), 'Fix flaky login test', 'what the page asks for')
-    const title = host.requests[0]?.title
-    assert.ok(title instanceof Promise)
-    assert.equal(await title, 'Fix flaky login test', 'what the run takes')
-
-    // A bare command is named from its report, by the run: nothing is handed over.
-    await runtime.onStart('/work-queue', { driver: 'claude-code' })
-    assert.equal(host.requests[1]?.title, undefined)
-  } finally {
-    await runtime.dispose()
-    forgetStartedNames()
-    await rm(home, { recursive: true, force: true })
-  }
-})
-
-test('the list shows the name asked at Start on the run\'s row until its record has its own', async () => {
-  nameStarted('run-1', Promise.resolve('Fix flaky login test'))
-  await new Promise(resolve => setImmediate(resolve))
-  const rows = withStartedNames([
-    { id: 'run-1', status: 'running', startedAt: '2026-11-03T18:00:00.000Z', updatedAt: '2026-11-03T18:00:00.000Z' },
-    { id: 'run-2', status: 'running', startedAt: '2026-11-03T18:00:00.000Z', updatedAt: '2026-11-03T18:00:00.000Z' },
-  ] as AgentMeta[])
-  assert.deepEqual(rows.map(row => row.title), ['Fix flaky login test', undefined])
-  // The record's own name, once it has one, is the one shown.
-  assert.equal(withStartedNames([{ id: 'run-1', title: 'Its own', status: 'done', startedAt: '', updatedAt: '' } as AgentMeta])[0]!.title, 'Its own')
-  assert.equal(await startedName('run-unknown'), undefined, 'a run not started here has none')
-  forgetStartedNames()
 })

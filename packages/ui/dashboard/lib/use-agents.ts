@@ -4,7 +4,7 @@ import { STARTING_AT_MOST_MS } from '../../src/client.js'
 import { onAgents, onRecentAgents } from '../rpc/reads.js'
 import { usePolled, type ReadState } from './use-async.js'
 import { runsAgain, useRunsPace } from './runs-changed.js'
-import { usePreferences } from './preferences.js'
+import { useNamesRuns } from './agents.js'
 import { awaitingName } from './agent-label.js'
 
 // The runs the shell lists, polled: the selected project's agents (live + archived), and every
@@ -56,7 +56,7 @@ export function useAgents(projectId: string | null, starting: string | null = nu
     projectId ? { remember: `agents:${projectId}`, stored: true } : undefined,
     runsAgain(projectId ?? undefined),
   )
-  const naming = usePreferences().nameRuns !== false
+  const naming = useNamesRuns()
   const started = starting === null ? undefined : agents.find(agent => agent.id === starting)
   const settingUp =
     projectId !== null && starting !== null && (started === undefined || (started.status === 'running' && started.branch === undefined) || awaitingName(started, naming))
@@ -81,7 +81,7 @@ const NO_RECENTS: RecentAgent[] = []
 export function useRecentAgents(shown: boolean, started: { id: string | null; projectId: string | null; at: number }): { recentAgents: RecentAgent[]; reload: () => Promise<void>; state: ReadState } {
   const [pace, waitFor] = useStartPace(1000, useRunsPace(10_000))
   const { value: recentAgents, reload, state } = usePolled<RecentAgent[]>(shown ? onRecentAgents : null, NO_RECENTS, pace, [shown], { remember: 'recent-agents', stored: true }, runsAgain(undefined))
-  const naming = usePreferences().nameRuns !== false
+  const naming = useNamesRuns()
   const row = started.id === null ? undefined : recentAgents.find(recent => recent.agent.id === started.id && recent.projectId === started.projectId)
   const waited = shown && started.id !== null && Date.now() - started.at < STARTING_AT_MOST_MS && (row === undefined || awaitingName(row.agent, naming))
   useEffect(() => waitFor(waited ? started.at : false), [waited, started.at, waitFor])

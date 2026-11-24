@@ -21,9 +21,6 @@ export interface StartPicks {
   gitAccount?: string
   publish?: string
   prBase?: string
-  driver?: string
-  model?: string
-  effort?: string
   repos?: { name: string; from: string }[]
   /** The profile the run is on, by its id. */
   profile?: string

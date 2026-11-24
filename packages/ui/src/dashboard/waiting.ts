@@ -9,7 +9,7 @@ import { cachedOpenPrs, type PrLister } from './pull-requests.js'
 import { waitingKey } from './keys.js'
 import { needsWord } from './waiting-words.js'
 import { runName } from '../run-name.js'
-import { withStartedNames } from '../started-names.js'
+import { withStartedNames } from '@openagt/agent-driver'
 import { distributionHooks, projectRefAt } from '../distribution-hooks.js'
 import { SESSIONS_ID } from '../project-address.js'
 

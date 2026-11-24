@@ -119,19 +119,27 @@ afterEach(cleanup)
 /** The project's modules bring a host beside this computer: "Run on" offers it. */
 const withHost = () => onRunHosts.mockResolvedValue([{ id: 'actions', label: 'GitHub Actions' }])
 
-// The driver/model trigger names both in its own label (#1143): with no model pinned it is a logo
-// and a chevron, so the name cannot come from the rendered text the way it used to.
-const agentTrigger = () => screen.getByRole('button', { name: /^Coding agent: / })
+/** A module's control at the right of the row under the box: the coding agent's model, say. */
+const ROW_CONTROL: MountedView<'composer.control'> = { place: 'composer.control', id: 'model', at: 'row', package: 'a-module', projects: [], computer: true, View: () => <button type="button">a-model</button> }
+const rowControl = () => screen.getByRole('button', { name: 'a-model' })
+
+/** The composer with {@link ROW_CONTROL} mounted, in a launcher's box. */
+function renderWithRowControl(over: Partial<Parameters<typeof Composer>[0]> = {}) {
+  render(
+    <ModulesContext.Provider value={mountedOf({ views: { 'composer.control': [ROW_CONTROL] } })}>
+      <Composer files={[]} onSubmit={vi.fn()} busy={false} submitLabel="Send" submitBusyLabel="Sending…" controlBox={{ in: 'launcher', options: {}, onChange: () => {}, busy: false }} {...over} />
+    </ModulesContext.Provider>,
+  )
+}
 
 describe('Composer (#721)', () => {
-  test('renders the commands menu, the agent/model select and the submit button; with no host beside this machine, no "Run on"', async () => {
+  test('renders the commands menu and the submit button; with no host beside this machine, no "Run on"', async () => {
     renderComposer({ submitLabel: 'Start session' })
     // Commands have a visible surface (#948): the `/` menu stays the fast path, the button is
     // the discoverable one.
     expect(screen.getByRole('button', { name: 'Commands' })).toBeTruthy()
     await waitFor(() => expect(onRunHosts).toHaveBeenCalledWith('p1'))
     expect(screen.queryByRole('button', { name: /^Run on: / })).toBeNull()
-    expect((await hoverTooltip(agentTrigger())).textContent).toContain('Coding agent: Claude Code')
     // The launcher's send is the session's arrow, named for what it does, shown once the prompt has text.
     expect(screen.queryByRole('button', { name: /Start session/ })).toBeNull()
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'x' } })
@@ -155,11 +163,8 @@ describe('Composer (#721)', () => {
     expect(screen.getByRole('button', { name: /^Run on: / }).textContent).toBe('This machine')
   })
 
-  test('in a session (#831) there is no agent/model select, and the rest of the row stays', () => {
+  test('in a session (#831) the row stays', () => {
     const { onSubmit } = renderComposer({ inAgent: true })
-    // An in-session composer: the session is bound to the agent it started with, so offering the
-    // select there would only ever rewrite the next session's default.
-    expect(screen.queryByRole('button', { name: /^Coding agent: / })).toBeNull()
     expect(screen.getByRole('button', { name: 'Commands' })).toBeTruthy()
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'follow-up' } })
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
@@ -470,13 +475,13 @@ describe('the box', () => {
     expect(cls.filter(c => c.includes('outline') || c.includes('ring') || c.includes('border-primary'))).toEqual([])
   })
 
-  test('it holds the commands menu, the text and the submit: the model and "Run on" are outside it, on rows of their own', async () => {
+  test('it holds the commands menu, the text and the submit: the modules\' row controls and "Run on" are outside it, on rows of their own', async () => {
     withHost()
-    renderComposer()
+    renderWithRowControl()
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'x' } })
     expect(box().contains(screen.getByRole('button', { name: 'Send' }))).toBe(true)
     expect(box().contains(commands())).toBe(true)
-    expect(box().contains(agentTrigger())).toBe(false)
+    expect(box().contains(rowControl())).toBe(false)
     expect(box().contains(await screen.findByRole('button', { name: /^Run on: / }))).toBe(false)
     cleanup()
     renderComposer({ inAgent: true })
@@ -505,21 +510,21 @@ describe('the box', () => {
 const runOn = () => screen.getByRole('button', { name: /^Run on: / })
 
 describe('the rows around the box', () => {
-  test('where the agent starts is a row above the box: "Run on", then the caller\'s words; under it, the gear, then the caller\'s controls, and the model at the right', async () => {
+  test('where the agent starts is a row above the box: "Run on", then the caller\'s words; under it, the gear, then the caller\'s controls, and the modules\' row controls at the right', async () => {
     withHost()
-    renderComposer({ startsAt: <span>a-place</span>, controls: <span>a-control</span>, setup: { said: 'Profile Default · 3 skills', lines: <span>a-line</span> } })
+    renderWithRowControl({ startsAt: <span>a-place</span>, controls: <span>a-control</span>, setup: { said: 'Profile Default · 3 skills', lines: <span>a-line</span> } })
     await screen.findByRole('button', { name: /^Run on: / })
     const above = box().previousElementSibling!
     const under = box().nextElementSibling!
     const place = screen.getByText('a-place')
     const control = screen.getByText('a-control')
     const gear = screen.getByRole('button', { name: 'Session setup' })
-    const select = agentTrigger()
+    const select = rowControl()
     // The gear leads the row, on the box's left edge; its lines are in its menu, not in the row.
     expect(under.contains(gear)).toBe(true)
     expect(gear.parentElement!.firstElementChild).toBe(gear)
     expect(gear.compareDocumentPosition(control) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(screen.queryByText('a-line')).toBeNull()
+    expect(under.contains(screen.getByText('a-line'))).toBe(false)
     expect(above.contains(runOn())).toBe(true)
     expect(above.contains(place)).toBe(true)
     expect(runOn().compareDocumentPosition(place) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
@@ -540,11 +545,11 @@ describe('the rows around the box', () => {
     expect(under.lastElementChild).toBe(select)
   })
 
-  test('with nothing of the caller\'s, the row above still carries "Run on", and the row under the select', async () => {
+  test('with nothing of the caller\'s, the row above still carries "Run on", and the row under the modules\' controls', async () => {
     withHost()
-    renderComposer()
+    renderWithRowControl()
     expect(box().previousElementSibling!.contains(await screen.findByRole('button', { name: /^Run on: / }))).toBe(true)
-    expect(box().nextElementSibling!.contains(agentTrigger())).toBe(true)
+    expect(box().nextElementSibling!.contains(rowControl())).toBe(true)
   })
 
   test("the gear's menu opens above the box, holds the caller's lines under \"This session\", and its hover says them with the menu shut; with no setup there is no gear", async () => {
@@ -560,23 +565,10 @@ describe('the rows around the box', () => {
     expect(screen.queryByRole('button', { name: 'Session setup' })).toBeNull()
   })
 
-  test('in a session the model is said in words where the select would be, as the select says it, and is no button: the logo, the name, and the effort smaller', () => {
-    renderComposer({ inAgent: true, sessionModel: { driver: 'claude-code', name: 'Opus 5.5', effort: 'High' } })
-    const row = box().nextElementSibling!
-    const said = screen.getByText('Opus 5.5')
-    expect(row.contains(said)).toBe(true)
-    expect(said.closest('button')).toBeNull()
-    expect(said.className).toContain('font-medium')
-    expect(said.previousElementSibling!.querySelector('svg')).toBeTruthy()
-    expect(screen.getByText('High').className).toContain('text-xs')
-    expect(screen.queryByRole('button', { name: /^Coding agent: / })).toBeNull()
+  test("a session's words of its own close the row under the box", () => {
+    renderComposer({ inAgent: true, sessionContext: <span>a-context</span> })
+    expect(box().nextElementSibling!.lastElementChild!.textContent).toBe('a-context')
   })
-
-  test('a session whose model is not known says none', () => {
-    renderComposer({ inAgent: true })
-    expect(box().nextElementSibling!.textContent).toBe('')
-  })
-
 })
 
 describe('in a session', () => {

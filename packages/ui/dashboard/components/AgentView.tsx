@@ -27,12 +27,10 @@ import { useMountedModules } from '../lib/use-modules.js'
 import { Committing, HandoffActions, HandoffSummary, isCommitAsk } from './AgentHandoff.js'
 import { AgentDetails, type AgentDetailsCard } from './AgentDetails.js'
 import { usePaneOpeners } from '../lib/reveal-change.js'
-import { modelContextWindow, modelName, useModels } from '../lib/models.js'
+import { agentOf, modelContextWindow, useAgents } from '../lib/agents.js'
 import { ContextCircle } from './ContextCircle.js'
-import { effortLabel } from '../lib/effort.js'
 import { hostOf, useRunHosts } from '../lib/run-hosts.js'
 import { THIS_MACHINE } from './RunOnMenu.js'
-import { driverFromImpl } from '../../src/client.js'
 
 // One session's view, whether it is running or finished (#1026).
 //
@@ -144,17 +142,9 @@ export function AgentView({
   // An agent just started on a host has no card listed yet: the host's name says where it runs.
   const elsewhere = (target !== undefined && target !== 'local') || startedOn !== undefined
   const setup = useMemo(() => ({ workspace, branch, base, driver, model, elsewhere }), [workspace, branch, base, driver, model, elsewhere])
-  // The model by the name its coding agent gives it, for the row under the message box.
-  const picked = driverFromImpl(driver ?? picks?.driver)
-  const models = useModels()
-  const shownModel = model ?? picks?.model
-  const modelLabel = shownModel ? modelName(picked ? models?.[picked] : undefined, shownModel) : undefined
-  // Said as the launcher's model menu says them, the coding agent's logo first.
-  const effort = card?.effort ?? picks?.effort
-  const underBox = modelLabel !== undefined || effort ? { driver: picked, name: modelLabel, effort: effort ? effortLabel(effort) : undefined } : undefined
-  // How full this session's context is: the run's own last reading, against what the agent says
-  // the model holds. Either missing, no circle.
-  const contextWindow = modelContextWindow(models, picked, model)
+  // How full this session's context is: the run's own last reading, against what its agent says
+  // the model holds. Either missing, no circle. The model itself is said by its agent's control.
+  const contextWindow = modelContextWindow(agentOf(useAgents(), driver), model)
   // Where the agent runs, for the row above the message box: a host by its own name. A run another
   // computer started is named by that computer: it did not run here.
   const host = hostOf(target)
@@ -451,7 +441,6 @@ export function AgentView({
             editInBox={editInBox}
             giveBack={giveBack}
             focusBox={focusBox}
-            model={underBox}
             {...(contextWindow !== undefined ? { context: <ContextCircle used={card?.contextTokens ?? 0} size={contextWindow} /> } : {})}
             contextSet={contextSet}
             // A card with no level has none: a message may have taken it away.

@@ -6,6 +6,11 @@ its own: [`@openagt/dashboard`](../dashboard/README.md) is OpenAgent as it ships
 (`pnpm demo`, [`src/e2e/README.md`](./src/e2e/README.md)) is a distribution whose runs are
 scripted.
 
+It names no coding agent either. Each agent's name, mark and models come from its
+`run.agent`. `@openagt/agent-driver` draws the rest in the places the shell keeps for modules:
+the menu under the message box, the usage card, what a run needs before it can start, and the
+agents' updates.
+
 ```ts
 import { runCli } from '@openagt/ui/cli'
 

@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { Check, Copy, Info, MoreHorizontal, Plus } from 'lucide-react'
-import { AgentFix, Button, useAgentState, useAskOn, ClaudeLogo, CodexLogo, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, GaugeFace, Input, Panel, PanelGroup, Skeleton, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, computerRpcClient, useModuleHost, useOpenAgentDown, usePerson, usePolled, type ModuleHost, type UiConnectAgentProps } from '@openagt/ui/module'
+import { Button, useAskOn, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, GaugeFace, Input, Panel, PanelGroup, Skeleton, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, useModuleHost, useOpenAgentDown, usePerson, usePolled, type ModuleHost } from '@openagt/ui/module'
+import { ClaudeLogo, CodexLogo } from './logos.js'
+import { server, useAgentStates } from './reads.js'
+import { InstallAgent } from './setup.js'
 
 // The accounts each coding agent's runs try, in order: how full each one is, whether it is at a
 // limit, adding one: the command's own sign-in, which goes on by itself while the card follows it,
@@ -19,8 +22,6 @@ const ADDING_EVERY_MS = 2_000
 const AGENTS = [
   {
     id: 'claude',
-    /** Its CLI, as the dashboard knows the agent. */
-    driver: 'claude-code',
     name: 'Claude Code',
     /** What the account is, by its service: an account at claude.ai. */
     account: 'Claude',
@@ -35,7 +36,6 @@ const AGENTS = [
   },
   {
     id: 'codex',
-    driver: 'codex',
     name: 'Codex',
     account: 'Codex',
     Logo: CodexLogo,
@@ -48,7 +48,13 @@ const AGENTS = [
   },
 ] as const
 
-type AgentId = (typeof AGENTS)[number]['id']
+/** An agent's list of accounts, as the card knows it: `claude`, `codex`. */
+export type AgentId = (typeof AGENTS)[number]['id']
+
+/** Whether `list` is one the card shows. */
+export function isAccountsList(list: string): list is AgentId {
+  return AGENTS.some(agent => agent.id === list)
+}
 
 /** An account, as `account-rotation list` prints it. */
 interface Account {
@@ -88,9 +94,6 @@ type Read<T, Beside = object> = { ok: true; accounts: Record<AgentId, T[]> & Bes
 
 /** The package's command the card changes the accounts with: the one an agent is taught (`SKILL.md`). */
 const COMMAND = 'account-rotation'
-
-/** The package's server part, which the card reads through: the accounts are this computer's, so it is called in no project. */
-const server =(host: ModuleHost) => computerRpcClient<typeof import('../src/accounts/server.js')>(host)
 
 /** One of the server part's reads, `list` or `usage`, as the card keeps it. */
 async function read<T, Beside = object>(host: ModuleHost, word: 'list' | 'usage'): Promise<Read<T, Beside>> {
@@ -474,7 +477,7 @@ let windowsOpen = 0
  * card does, unless the sign-in has its window on this page already; a press that stands alone does
  * not. So one sign-in never opens two windows on a page.
  */
-function useAddAccount({ adopt, onEnded, taken }: { adopt: boolean; /** A sign-in ended: the accounts may have changed. */ onEnded: () => void; /** The names an agent's accounts go by. */ taken?: (agent: AgentId) => string[] }): {
+export function useAddAccount({ adopt, onEnded, taken }: { adopt: boolean; /** A sign-in ended: the accounts may have changed. */ onEnded: () => void; /** The names an agent's accounts go by. */ taken?: (agent: AgentId) => string[] }): {
   adding: Partial<Record<AgentId, AddingNow>> | undefined
   /** The agent the window is open on. */
   naming: AgentId | undefined
@@ -573,10 +576,25 @@ function useAddAccount({ adopt, onEnded, taken }: { adopt: boolean; /** A sign-i
 }
 
 /**
- * The press that connects one coding agent (`agent.connect`), where a new install is asked for
- * one: the agent's name on it, and the same window the card's "Add" opens.
+ * The press that connects one coding agent, where a new install is asked for one: the agent's
+ * name on it, and the same window the card's "Add" opens.
  */
-export function ConnectAgent({ agent: id, primary, label, small, onConnected }: UiConnectAgentProps) {
+export function ConnectAgent({
+  agent: id,
+  primary,
+  label,
+  small,
+  onConnected,
+}: {
+  agent: AgentId
+  /** It is the page's primary press: the first agent's. */
+  primary?: boolean
+  /** Its words, in place of the agent's mark and name: "Add account". */
+  label?: string
+  small?: boolean
+  /** An account was added, or the window closed: the agent's state may have changed. */
+  onConnected: () => void
+}) {
   const agent = AGENTS.find(each => each.id === id)!
   const press = useRef<HTMLButtonElement>(null)
   const add = useAddAccount({ adopt: false, onEnded: onConnected })
@@ -602,7 +620,8 @@ export function ConnectAgent({ agent: id, primary, label, small, onConnected }: 
  * adds one. Where this computer does not have the agent's program, the press installs it first.
  */
 function NoAccount({ agent, installed, primary, disabled, onAdd }: { agent: (typeof AGENTS)[number]; installed: boolean; /** Whether its press is the page's primary: the first agent's, while no agent has an account. */ primary: boolean; disabled: boolean; /** Told the press, which takes the keyboard back as the window closes. */ onAdd: (press: HTMLElement) => void }) {
-  const { state, reload } = useAgentState(agent.driver, !installed)
+  const { states, reload } = useAgentStates(useModuleHost())
+  const state = installed ? undefined : states?.find(one => one.list === agent.id)
   return (
     <div className="space-y-2 px-4 py-3 text-sm">
       <div className="flex min-w-0 items-center gap-3">
@@ -622,7 +641,7 @@ function NoAccount({ agent, installed, primary, disabled, onAdd }: { agent: (typ
       {/* Its install, with the command it runs, under its name: the two take the row's width. */}
       {!installed && state && (
         <div className="pl-7">
-          <AgentFix state={state} onChanged={() => void reload()} variant="secondary" />
+          <InstallAgent state={state} onChanged={() => void reload()} variant="secondary" />
         </div>
       )}
     </div>

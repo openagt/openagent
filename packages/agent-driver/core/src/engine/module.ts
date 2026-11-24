@@ -7,9 +7,12 @@ import { type AnyDiaryLine, type RunCard } from '../record.js'
 import { errorMessage, sessionFolder, sessionsHome } from '@openagt/agent-data'
 import { defineModule, RunOrder, type RunContext, type RunOutcome } from '@openagt/hooks'
 import { localHost } from './host.js'
+import { agentAttention } from '../attention.js'
+import { endInstalls } from '../setup.js'
+import { handedDownSettings } from './profile.js'
 import { legOf, type EarlierLeg, type Leg } from './leg.js'
 import { hideLiveDir, inboxPath, liveDir, readLiveCard, readLiveDiary } from './live-card.js'
-import { forReaders, markerCard, recordBranchGone, recordRun, writeMarker } from './records.js'
+import { agentAsked, forReaders, markerCard, recordBranchGone, recordRun, writeMarker } from './records.js'
 import { detailOf, effortOf, modelOf, sessionTurns } from './session.js'
 
 /**
@@ -18,11 +21,15 @@ import { detailOf, effortOf, modelOf, sessionTurns } from './session.js'
  * this process runs (`leg.ts`): this process working in the run's environment once the run's
  * accounts are set, and the run's marker pushed; the agent's turns, opening the run's live record
  * first; the record saved from what the session kept, with where the work ended up, as the run's
- * facts say; and the record said again without the branch the reclaim deleted.
+ * facts say; and the record said again without the branch the reclaim deleted. And what the coding
+ * agents need of the person (`attention.ts`), with the installs a press started ended as the app
+ * stops.
  */
 const agentDriver = defineModule({
   name: 'agent-driver',
   hooks: {
+    'app.attention': async args => agentAttention(args, await handedDownSettings()),
+    'app.lifecycle': { stopping: endInstalls },
     'run.host': [localHost()],
     'run.step': [
       { order: RunOrder.ACCOUNTS + 10, name: "work in the run's environment", run: workInEnvironment },
@@ -122,7 +129,7 @@ async function freshCard(leg: Leg, workspace: string, branch: string | undefined
     ...modelOf(leg.model),
     ...effortOf(leg.effort),
     ...(branch !== undefined ? { branch } : {}),
-    caller: { runner: mark, pid: here.pid, host: here.host, ...forReaders(mark), kind: 'prompt', workspace },
+    caller: { runner: mark, pid: here.pid, host: here.host, ...forReaders(mark, agentAsked(leg.driver.id, leg.model, leg.effort)), kind: 'prompt', workspace },
   })
 }
 
@@ -150,7 +157,7 @@ function carried(marked: RunCard | undefined, card: RunCard): RunCard {
 async function reopenedCard(leg: Leg, workspace: string, earlier: EarlierLeg, branchMadeAgain: boolean): Promise<RunCard> {
   const { here, mark } = leg
   await takeInbox(inboxPath(workspace))
-  const running: RunCard = { ...leg.card, status: 'running', caller: { ...leg.card.caller, runner: mark, pid: here.pid, host: here.host, ...forReaders(mark), workspace } }
+  const running: RunCard = { ...leg.card, status: 'running', caller: { ...leg.card.caller, runner: mark, pid: here.pid, host: here.host, ...forReaders(mark, agentAsked(leg.driver.id, leg.model, leg.effort)), workspace } }
   delete running.endedAt
   // A level taken away by this resume is no longer the run's, for its readers either.
   if (mark.publish === undefined) delete running.caller?.['publish']

@@ -1,6 +1,5 @@
 import type { AgentMeta, OpenAgentEvent } from '../../src/index.js'
-import { DRIVER_LABELS, driverFromImpl } from '../../src/client.js'
-import { modelName, useModels } from '../lib/models.js'
+import { agentOf, modelName, useAgents } from '../lib/agents.js'
 import { formatDateTimeShort } from '../lib/format-date.js'
 
 // The session-details strip behind "Show details" in the session's menu (always available now, so the
@@ -36,10 +35,9 @@ function Fact({ label, value }: { label: string; value: string }) {
 }
 
 export function AgentDetails({ events, card, pr }: { events: OpenAgentEvent[]; card?: AgentDetailsCard | undefined; pr?: { number: number; url: string; state: string } | undefined }) {
-  const picked = driverFromImpl(card?.driver)
-  const agent = picked ? DRIVER_LABELS[picked] : card?.driver
-  const models = useModels()
-  const model = card?.model && modelName(picked ? models?.[picked] : undefined, card.model)
+  const ran = agentOf(useAgents(), card?.driver)
+  const agent = ran?.label ?? card?.driver
+  const model = card?.model && modelName(ran, card.model)
   const { costUsd, turns } = spend(events)
 
   return (

@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type Ref } from 'react'
 import { Ellipsis, Loader2, Plus } from 'lucide-react'
-import { onProfilesList, sendRemoveProfile, sendSaveProfile, type Profile, type ProfileAccountChoice, type ProfilesView, type RunOptions } from '../rpc/profiles.js'
+import { onProfilesList, sendRemoveProfile, sendSaveProfile, type Profile, type ProfilesView, type RunOptions } from '../rpc/profiles.js'
 import { DEFAULT_PROFILE } from '../../src/client.js'
 import { holdEntry } from '../lib/use-route.js'
 import { usePolled, type ReadState } from '../lib/use-async.js'
@@ -55,8 +55,8 @@ interface Draft {
   id?: string
   name: string
   github?: string | undefined
-  claude: Set<string>
-  codex: Set<string>
+  /** agent-driver's slice (the coding agent, its model, its accounts), kept as it is: its control is agent-driver's. */
+  agentDriver?: NonNullable<RunOptions['agent-driver']>
   /** The plugins its runs go without. */
   without: Set<string>
   project?: ProjectPick
@@ -69,8 +69,7 @@ function draftOf(profile?: Profile): Draft {
     ...(profile ? { id: profile.id } : {}),
     name: profile?.name ?? '',
     ...(options.github?.account !== undefined ? { github: options.github.account } : {}),
-    claude: new Set(options['agent-driver']?.claude ?? []),
-    codex: new Set(options['agent-driver']?.codex ?? []),
+    ...(options['agent-driver'] !== undefined ? { agentDriver: options['agent-driver'] } : {}),
     without: new Set(options.plugins?.without ?? []),
     ...(project !== undefined ? { project } : {}),
   }
@@ -81,7 +80,7 @@ function optionsOf(draft: Draft, plugins: readonly string[]): RunOptions {
   const without = plugins.filter(name => draft.without.has(name))
   return {
     ...(draft.github !== undefined ? { github: { account: draft.github } } : {}),
-    ...(draft.claude.size > 0 || draft.codex.size > 0 ? { 'agent-driver': { ...(draft.claude.size > 0 ? { claude: [...draft.claude] } : {}), ...(draft.codex.size > 0 ? { codex: [...draft.codex] } : {}) } } : {}),
+    ...(draft.agentDriver !== undefined ? { 'agent-driver': draft.agentDriver } : {}),
     ...(draft.project !== undefined ? { skills: { project: draft.project } } : {}),
     ...(without.length > 0 ? { plugins: { without } } : {}),
   }
@@ -90,7 +89,7 @@ function optionsOf(draft: Draft, plugins: readonly string[]): RunOptions {
 /** Whether two drafts hold the same profile. */
 function sameDraft(a: Draft, b: Draft): boolean {
   const same = (x: Set<string>, y: Set<string>) => x.size === y.size && [...x].every(one => y.has(one))
-  return a.name === b.name && a.github === b.github && JSON.stringify(a.project) === JSON.stringify(b.project) && same(a.claude, b.claude) && same(a.codex, b.codex) && same(a.without, b.without)
+  return a.name === b.name && a.github === b.github && JSON.stringify(a.project) === JSON.stringify(b.project) && JSON.stringify(a.agentDriver) === JSON.stringify(b.agentDriver) && same(a.without, b.without)
 }
 
 /** What a profile says of the project's own skills, in a few words. */
@@ -157,12 +156,10 @@ function ProfileRow({ profile, view, onChanged, onRemoved, editRef }: { profile:
   const [removing, setRemoving] = useState(false)
   const phone = useIsMobile()
   const isDefault = profile.id === DEFAULT_PROFILE
-  const { github, 'agent-driver': driver, skills, plugins } = profile.options
+  const { github, skills, plugins } = profile.options
   const said = projectSaid(skills?.project)
   const facts = [
     github?.account !== undefined ? `@${github.account} on GitHub` : 'GitHub: whatever the computer uses',
-    ...(driver?.claude ? [`Claude: ${driver.claude.map(id => view.claude.find(account => account.id === id)?.name ?? id).join(', ')}`] : []),
-    ...(driver?.codex ? [`Codex: ${driver.codex.map(id => view.codex.find(account => account.id === id)?.name ?? id).join(', ')}`] : []),
     ...(plugins?.without ? [`Without ${inWords(plugins.without)}`] : []),
     `${said.charAt(0).toUpperCase()}${said.slice(1)}`,
   ]
@@ -262,7 +259,7 @@ function ProfileEditor({ profile, view, onAccounts, onDone }: { profile?: Profil
     await onAccounts()
   })
   const isDefault = profile?.id === DEFAULT_PROFILE
-  const tick = (set: 'claude' | 'codex' | 'without', name: string, on: boolean) =>
+  const tick = (set: 'without', name: string, on: boolean) =>
     setDraft(d => {
       const next = new Set(d[set])
       if (on) next.add(name)
@@ -397,8 +394,6 @@ function ProfileEditor({ profile, view, onAccounts, onDone }: { profile?: Profil
             {addingAccount.dialog}
           </div>
         </div>
-        <AccountPicks label="Claude" accounts={view.claude} picked={draft.claude} busy={busy} onTick={(id, on) => tick('claude', id, on)} onAll={() => setDraft(d => ({ ...d, claude: new Set() }))} />
-        <AccountPicks label="Codex" accounts={view.codex} picked={draft.codex} busy={busy} onTick={(id, on) => tick('codex', id, on)} onAll={() => setDraft(d => ({ ...d, codex: new Set() }))} />
         {/* A plugin ticked off is one its runs go without. */}
         <PluginPicks plugins={view.plugins} without={draft.without} busy={busy} onTick={(name, on) => tick('without', name, !on)} />
         {/* A profile set to never pick up the project's own skills; a session can still pick them. */}
@@ -422,37 +417,6 @@ function ProfileEditor({ profile, view, onAccounts, onDone }: { profile?: Profil
         <div aria-hidden className="pointer-events-none sticky bottom-0 -mt-6 h-4 bg-gradient-to-t from-card to-transparent" />
       </form>
     </Dialog>
-  )
-}
-
-/**
- * A coding agent's accounts to pick from: "Every account, also new ones", ticked while none is picked, is every one of this computer's, also one added later; one or more ticked, those alone, where the computer has them.
- * This computer's own login, logged out, is offered only while it is picked, and says so.
- */
-function AccountPicks({ label, accounts: all, picked, busy, onTick, onAll }: { label: string; accounts: readonly ProfileAccountChoice[]; picked: Set<string>; busy: boolean; onTick: (id: string, on: boolean) => void; onAll: () => void }) {
-  const accounts = all.filter(account => !account.loggedOut || picked.has(account.id))
-  if (accounts.length === 0) return null
-  return (
-    <fieldset className="space-y-1.5">
-      <legend className="text-sm font-medium">{`${label} accounts`}</legend>
-      <div className="flex flex-wrap gap-3">
-        {/* Left by ticking an account, as a radio is left by picking another. */}
-        <label className="flex cursor-pointer items-center gap-2 text-sm">
-          <Checkbox checked={picked.size === 0} onCheckedChange={checked => checked === true && onAll()} disabled={busy} aria-label={`Every ${label} account, also new ones`} />
-          Every account, also new ones
-        </label>
-        {accounts.map(account => {
-          const name = account.loggedOut ? `${account.name}, not logged in` : account.name
-          return (
-            <label key={account.id} className="flex cursor-pointer items-center gap-2 text-sm">
-              <Checkbox checked={picked.has(account.id)} onCheckedChange={checked => onTick(account.id, checked === true)} disabled={busy} aria-label={`${label} account ${name}`} />
-              {name}
-            </label>
-          )
-        })}
-      </div>
-      <p className="text-xs text-muted-foreground">{picked.size === 0 ? `All of this computer's ${label} accounts, the next free one taking over at a limit.` : `Only these, where the computer the run goes to has them.`}</p>
-    </fieldset>
   )
 }
 

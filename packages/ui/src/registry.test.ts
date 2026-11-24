@@ -168,11 +168,11 @@ test('removeProject takes one project off the list by its id, answers its record
   const fs = memFs()
   await addProject('/repos/app-a', APP_A.addedAt, ENV, fs)
   await addProject('/repos/app-b', APP_B.addedAt, ENV, fs)
-  await writePreferences({ model: 'opus' }, ENV, fs)
+  await writePreferences({ profile: 'social' }, ENV, fs)
 
   assert.deepEqual(await removeProject(APP_A.id, ENV, fs), APP_A)
   assert.deepEqual(await listProjects(ENV, fs), [APP_B])
-  assert.deepEqual(await readPreferences(ENV, fs), { model: 'opus' })
+  assert.deepEqual(await readPreferences(ENV, fs), { profile: 'social' })
 
   // An id no project has changes nothing and says so.
   const before = fs.files.get(FILE)
@@ -212,11 +212,11 @@ test('readRegistry reads only the object form; a shape it no longer writes is an
 test('readRegistry reads the object form with preferences and drops unknown/non-boolean fields', async () => {
   const raw = JSON.stringify({
     projects: [APP_A],
-    preferences: { onboardingDismissed: true, nameRuns: 'yes', bogus: 1, showThinking: true },
+    preferences: { onboardingDismissed: true, recentsAgent: 'yes', bogus: 1, showThinking: true },
   })
   assert.deepEqual(await readRegistry(ENV, memFs({ [FILE]: raw })), {
     projects: [APP_A],
-    preferences: { onboardingDismissed: true, showThinking: true }, // nameRuns (non-boolean) + bogus dropped
+    preferences: { onboardingDismissed: true, showThinking: true }, // recentsAgent (non-boolean) + bogus dropped
   })
 })
 
@@ -229,7 +229,6 @@ test('every boolean preference survives a save; the sanitizer cannot silently dr
   }[keyof Preferences]
   const allOn: Record<BooleanKey, boolean> = {
     onboardingDismissed: true,
-    nameRuns: true,
     showThinking: true,
     recentsPerson: true,
     recentsAgent: true,
@@ -250,15 +249,13 @@ test('the Overview\'s layouts survive a save, kept only as well-formed', async (
 
 test('sanitizePreferences reads only the current spellings', async () => {
   // A renamed key is an unknown key, and an unknown key is dropped — the same answer the sanitizer
-  // gives junk. `driver` does not read the `agent` D5 renamed, nor the old name of Claude Code
-  // (#1774: the names are agent-driver's own now), and the options only the daemon's own runner
+  // gives junk. The coding agent, its model and whether runs are named are agent-driver's settings now, and the options only the daemon's own runner
   // read are gone: a stored file written before is rewritten by hand, not by code that would then
   // have to stay forever.
   const stored = (preferences: Record<string, unknown>) =>
     readPreferences(ENV, memFs({ [FILE]: JSON.stringify({ projects: [], preferences }) }))
   assert.deepEqual(await stored({ handoff: 'local', vanilla: true, transparent: true, browser: true, target: 'actions', autoPm: true }), {})
-  assert.deepEqual(await stored({ driver: 'claude' }), {})
-  assert.deepEqual(await stored({ driver: 'claude-code' }), { driver: 'claude-code' })
+  assert.deepEqual(await stored({ driver: 'claude-code', model: 'opus', nameRuns: false }), {}, "the coding agent's picks are agent-driver's settings")
   // The profile a run is on, by its id; Default is the absent entry, and a word that is no id is dropped.
   assert.deepEqual(await stored({ profile: 'reviewer' }), { profile: 'reviewer' })
   assert.deepEqual(await stored({ profile: ' social-media ' }), { profile: 'social-media' })
@@ -298,11 +295,11 @@ test('the sidebar\'s order keeps only the orders it offers; the default, by crea
 test('patchPreferences merges only the keys it is given (#1148)', async () => {
   // The dashboard used to send its whole cached object, so a tab that had been open since before
   // someone else's change wrote the old value back over it. A patch touches only what it names.
-  const fs = memFs({ [FILE]: JSON.stringify({ projects: [], preferences: { theme: 'dark', driver: 'codex' } }) })
+  const fs = memFs({ [FILE]: JSON.stringify({ projects: [], preferences: { theme: 'dark', profile: 'social' } }) })
 
   const stored = await patchPreferences({ showThinking: true }, ENV, fs)
 
-  assert.deepEqual(stored, { theme: 'dark', driver: 'codex', showThinking: true })
+  assert.deepEqual(stored, { theme: 'dark', profile: 'social', showThinking: true })
   assert.deepEqual(await readPreferences(ENV, fs), stored)
 })
 
@@ -318,15 +315,15 @@ test('a patched key still clears the way it always has (#1148)', async () => {
 test('patchPreferences sanitizes the merged result, not just the patch (#1148)', async () => {
   // The one rule, applied once to the merge: an unknown key never lands, and a value outside the
   // known set drops the key rather than being stored — the same answer `writePreferences` gives.
-  const fs = memFs({ [FILE]: JSON.stringify({ projects: [], preferences: { theme: 'dark', driver: 'codex' } }) })
-  assert.deepEqual(await patchPreferences({ theme: 'moon', bogus: 3 } as never, ENV, fs), { driver: 'codex' })
+  const fs = memFs({ [FILE]: JSON.stringify({ projects: [], preferences: { theme: 'dark', profile: 'social' } }) })
+  assert.deepEqual(await patchPreferences({ theme: 'moon', bogus: 3 } as never, ENV, fs), { profile: 'social' })
 })
 
 test('the preferences store exposes the patch the dashboard writes through (#1148)', async () => {
   const fs = memFs({ [FILE]: JSON.stringify({ projects: [APP_A], preferences: { theme: 'dark' } }) })
   const store = registryPreferencesStore(ENV, fs)
 
-  assert.deepEqual(await store.patch!({ driver: 'codex' }), { theme: 'dark', driver: 'codex' })
+  assert.deepEqual(await store.patch!({ profile: 'social' }), { theme: 'dark', profile: 'social' })
 })
 
 test('readPreferences on a missing file, or one with no preferences block, is {}', async () => {
@@ -336,40 +333,13 @@ test('readPreferences on a missing file, or one with no preferences block, is {}
 
 test('writePreferences persists sanitized prefs and preserves the project list', async () => {
   const fs = memFs({ [FILE]: JSON.stringify({ projects: [APP_A, APP_B], preferences: {} }) })
-  await writePreferences({ nameRuns: false, showThinking: true, bogus: 3 } as never, ENV, fs)
+  await writePreferences({ recentsAgent: false, showThinking: true, bogus: 3 } as never, ENV, fs)
   assert.deepEqual(JSON.parse(fs.files.get(FILE)!), {
     projects: [APP_A, APP_B],
-    preferences: { nameRuns: false, showThinking: true },
+    preferences: { recentsAgent: false, showThinking: true },
   })
   // The project list still reads back unchanged.
   assert.deepEqual(await listProjects(ENV, fs), [APP_A, APP_B])
-})
-
-test('writePreferences keeps the model string but drops a blank one (#628)', async () => {
-  const fs = memFs({ [FILE]: JSON.stringify({ projects: [APP_A], preferences: {} }) })
-  await writePreferences({ model: '  opus  ' }, ENV, fs)
-  assert.deepEqual(await readPreferences(ENV, fs), { model: 'opus' }) // trimmed
-  await writePreferences({ model: '   ' }, ENV, fs)
-  assert.deepEqual(await readPreferences(ENV, fs), {}) // blank -> no choice, dropped
-})
-
-test('the word "Default" is not a model, however a file came to hold it (#1143)', async () => {
-  // It was a picker label whose stored value was empty. A file carrying it as the *value* would
-  // otherwise reach the CLI as `--model Default` and fail the turn on a word nobody chose.
-  const fs = memFs({ [FILE]: JSON.stringify({ projects: [APP_A], preferences: {} }) })
-  await writePreferences({ model: 'opus' }, ENV, fs)
-  await writePreferences({ model: 'Default' }, ENV, fs)
-  assert.deepEqual(await readPreferences(ENV, fs), {})
-  await writePreferences({ model: ' default ' }, ENV, fs)
-  assert.deepEqual(await readPreferences(ENV, fs), {})
-})
-
-test('writePreferences keeps a known agent and drops an unknown one (#650)', async () => {
-  const fs = memFs({ [FILE]: JSON.stringify({ projects: [APP_A], preferences: {} }) })
-  await writePreferences({ driver: 'codex' }, ENV, fs)
-  assert.deepEqual(await readPreferences(ENV, fs), { driver: 'codex' })
-  await writePreferences({ driver: 'gpt-9000' } as never, ENV, fs) // not in the known set
-  assert.deepEqual(await readPreferences(ENV, fs), {}) // dropped
 })
 
 test('writePreferences trims a preferred editor and drops a blank one (#727)', async () => {
@@ -405,11 +375,11 @@ test('writePreferences keeps a known look, stores the default look as nothing, a
 })
 
 test('addProject preserves existing preferences', async () => {
-  const fs = memFs({ [FILE]: JSON.stringify({ projects: [APP_A], preferences: { nameRuns: false } }) })
+  const fs = memFs({ [FILE]: JSON.stringify({ projects: [APP_A], preferences: { recentsAgent: false } }) })
   await addProject('/repos/app-b', APP_B.addedAt, ENV, fs)
   assert.deepEqual(JSON.parse(fs.files.get(FILE)!), {
     projects: [APP_A, APP_B],
-    preferences: { nameRuns: false },
+    preferences: { recentsAgent: false },
   })
 })
 
@@ -438,14 +408,14 @@ test('the registry file is never written in place, only renamed over (#991)', as
 })
 
 test('a write that dies partway leaves the previous registry intact (#991)', async () => {
-  const stored = JSON.stringify({ projects: [APP_A, APP_B], preferences: { nameRuns: false } })
+  const stored = JSON.stringify({ projects: [APP_A, APP_B], preferences: { recentsAgent: false } })
   // The disk fills between the truncate and the flush. Whatever it truncated must not be the live file.
   const fs = memFs({ [FILE]: stored }, { failWritesTo: `${FILE}.${process.pid}.tmp` })
   await assert.rejects(() => writePreferences({ showThinking: true }, ENV, fs), /ENOSPC/)
   assert.equal(fs.files.get(FILE), stored, 'the live file is untouched by a failed write')
   assert.deepEqual(await readRegistry(ENV, fs), {
     projects: [APP_A, APP_B],
-    preferences: { nameRuns: false },
+    preferences: { recentsAgent: false },
   })
 })
 

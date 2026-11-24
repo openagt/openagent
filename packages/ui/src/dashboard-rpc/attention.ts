@@ -1,4 +1,5 @@
 import type { AttentionRead, ProjectRef, RunOptions } from '@openagt/hooks'
+import { refreshLoginShellPath } from '../shell-path.js'
 import { distributionHooks, projectRefAt } from '../distribution-hooks.js'
 import { SESSIONS_ID } from '../project-address.js'
 import { resolveProjectPath } from './context.js'
@@ -18,5 +19,9 @@ export async function onAttention(projectId: string | null, options?: RunOptions
     const cwd = await resolveProjectPath(projectId)
     if (cwd) project = await projectRefAt(projectId, cwd)
   }
-  return hooks.attention({ ...(project ? { project } : {}), ...(options !== undefined ? { options } : {}) })
+  const read = await hooks.attention({ ...(project ? { project } : {}), ...(options !== undefined ? { options } : {}) })
+  // Something to set up may be a program the person installed since OpenAgent started, or one only
+  // their terminal's PATH has: the PATH is read again from their login shell, so the next read finds it.
+  if (read.items.some(item => item.kind === 'setup')) void refreshLoginShellPath()
+  return read
 }

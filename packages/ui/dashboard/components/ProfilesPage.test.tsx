@@ -5,7 +5,7 @@ import { DaemonDown } from '../lib/use-daemon-health.js'
 
 const rpc = vi.hoisted(() => ({ onProfilesList: vi.fn(), sendSaveProfile: vi.fn(), sendRemoveProfile: vi.fn() }))
 vi.mock('../rpc/profiles.js', () => rpc)
-const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendGitHostLogin: vi.fn(), sendStopGitHostLogin: vi.fn(), sendGitHostInstall: vi.fn(), onAgentState: vi.fn(), sendAgentFix: vi.fn() }))
+const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendGitHostLogin: vi.fn(), sendStopGitHostLogin: vi.fn(), sendGitHostInstall: vi.fn() }))
 vi.mock('../rpc/logins.js', () => logins)
 const route = vi.hoisted(() => ({ openPage: vi.fn() }))
 vi.mock('../lib/host-services.js', async importOriginal => {
@@ -32,8 +32,6 @@ const REVIEWER = { id: 'reviewer', name: 'Reviewer', options: { github: { accoun
 const VIEW = {
   profiles: [DEFAULT, REVIEWER],
   github: { host: 'github.com', accounts: ['octo', 'octo-agent'] },
-  claude: [{ id: 'This computer', name: 'Claude login on Studio' }, { id: 'Dani', name: 'Dani' }],
-  codex: [],
   plugins: ['ask', 'logs', 'tickets'],
 }
 
@@ -83,7 +81,7 @@ describe('the Profiles page', () => {
     const facts = (row: HTMLElement) => row.querySelector('.text-faint-foreground')?.textContent
     expect(facts(rows[0]!)).toBe('GitHub: whatever the computer uses·Every project skill')
     // A profile set to never pick up the project's own skills says so; Default does not.
-    expect(facts(rows[1]!)).toBe('@octo-agent on GitHub·Claude: Dani·No project skills')
+    expect(facts(rows[1]!)).toBe('@octo-agent on GitHub·No project skills')
     // Default is never removed.
     expect(within(rows[0]!).queryByRole('button', { name: 'Remove Default' })).toBeNull()
     expect(within(rows[1]!).getByRole('button', { name: 'Remove Reviewer' })).toBeTruthy()
@@ -93,7 +91,7 @@ describe('the Profiles page', () => {
     rpc.onProfilesList.mockResolvedValue({ ...VIEW, profiles: [DEFAULT, { ...REVIEWER, options: { ...REVIEWER.options, plugins: { without: ['logs', 'tickets'] } } }] })
     render(<ProfilesPage />)
     const rows = await profileRows()
-    expect(rows[1]!.querySelector('.text-faint-foreground')?.textContent).toBe('@octo-agent on GitHub·Claude: Dani·Without logs and tickets·No project skills')
+    expect(rows[1]!.querySelector('.text-faint-foreground')?.textContent).toBe('@octo-agent on GitHub·Without logs and tickets·No project skills')
     fireEvent.click(screen.getByRole('button', { name: 'Edit Reviewer' }))
     const editor = screen.getByRole('dialog', { name: 'Editing Reviewer' })
     expect(['ask', 'logs', 'tickets'].map(name => within(editor).getByRole('checkbox', { name: `Plugin ${name}` }).getAttribute('aria-checked'))).toEqual(['true', 'false', 'false'])
@@ -103,7 +101,7 @@ describe('the Profiles page', () => {
     await waitFor(() => expect(rpc.sendSaveProfile).toHaveBeenCalledWith({ id: 'reviewer', name: 'Reviewer', options: { ...REVIEWER.options, plugins: { without: ['tickets'] } } }))
   })
 
-  test('a new profile: its name, typed at once, its accounts picked, every plugin and every project skill ticked already; saved as the dashboard’s call, and the list read again', async () => {
+  test('a new profile: its name, typed at once, every plugin and every project skill ticked already; saved as the dashboard’s call, and the list read again', async () => {
     render(<ProfilesPage />)
     fireEvent.click(await newProfilePress())
     const editor = screen.getByRole('dialog', { name: 'New profile' })
@@ -112,9 +110,8 @@ describe('the Profiles page', () => {
     expect(within(editor).getByRole('checkbox', { name: 'Project skills' }).getAttribute('aria-checked')).toBe('true')
     expect(within(editor).getAllByRole('checkbox', { name: /^Plugin / }).map(tick => tick.getAttribute('aria-checked'))).toEqual(['true', 'true', 'true'])
     fireEvent.change(within(editor).getByLabelText('Name'), { target: { value: 'Social Media' } })
-    fireEvent.click(within(editor).getByLabelText('Claude account Dani'))
     fireEvent.click(within(editor).getByRole('button', { name: 'Save' }))
-    await waitFor(() => expect(rpc.sendSaveProfile).toHaveBeenCalledWith({ name: 'Social Media', options: { 'agent-driver': { claude: ['Dani'] } } }))
+    await waitFor(() => expect(rpc.sendSaveProfile).toHaveBeenCalledWith({ name: 'Social Media', options: {} }))
     await waitFor(() => expect(rpc.onProfilesList).toHaveBeenCalledTimes(2))
     expect(screen.queryByRole('dialog', { name: 'New profile' })).toBeNull()
   })
@@ -258,35 +255,6 @@ describe('the Profiles page', () => {
     expect(screen.getByRole('dialog', { name: 'Editing Default' }).textContent).toMatch(/Default keeps its name/)
     // A profile that names no account: one plain item, not the computer's account repeated.
     expect(screen.getByLabelText('GitHub account').textContent).toBe('None — whatever the computer uses')
-  })
-
-  test('"All" is ticked while no account of a coding agent is picked; ticking one leaves it, ticking "All" again drops the picks', async () => {
-    render(<ProfilesPage />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Edit Reviewer' }))
-    const editor = screen.getByRole('dialog', { name: 'Editing Reviewer' })
-    const checked = (name: string) => within(editor).getByLabelText(name).getAttribute('aria-checked')
-    expect([checked('Every Claude account, also new ones'), checked('Claude account Dani')]).toEqual(['false', 'true'])
-    fireEvent.click(within(editor).getByLabelText('Every Claude account, also new ones'))
-    expect([checked('Every Claude account, also new ones'), checked('Claude account Dani')]).toEqual(['true', 'false'])
-    fireEvent.click(within(editor).getByLabelText('Claude account Claude login on Studio'))
-    expect([checked('Every Claude account, also new ones'), checked('Claude account Claude login on Studio')]).toEqual(['false', 'true'])
-    fireEvent.click(within(editor).getByLabelText('Every Claude account, also new ones'))
-    fireEvent.click(within(editor).getByRole('button', { name: 'Save' }))
-    await waitFor(() => expect(rpc.sendSaveProfile).toHaveBeenCalledWith({ id: 'reviewer', name: 'Reviewer', options: { github: { account: 'octo-agent' }, skills: { project: 'none' } } }))
-  })
-
-  test('this computer\u2019s own login, logged out, is not offered; a profile that has it picked still shows it, saying it is not logged in', async () => {
-    const claude = [{ id: 'This computer', name: 'Claude login on Studio', loggedOut: true }, { id: 'Dani', name: 'Dani' }]
-    rpc.onProfilesList.mockResolvedValue({ ...VIEW, profiles: [DEFAULT, { ...REVIEWER, options: { 'agent-driver': { claude: ['This computer'] } } }], claude })
-    render(<ProfilesPage />)
-    fireEvent.click(await newProfilePress())
-    const editor = screen.getByRole('dialog', { name: 'New profile' })
-    expect(within(editor).queryByLabelText(/Claude login on Studio/)).toBeNull()
-    expect(within(editor).getByLabelText('Claude account Dani')).toBeTruthy()
-    fireEvent.click(within(editor).getByRole('button', { name: 'Cancel' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Edit Reviewer' }))
-    const edited = screen.getByRole('dialog', { name: 'Editing Reviewer' })
-    expect(within(edited).getByLabelText('Claude account Claude login on Studio, not logged in').getAttribute('aria-checked')).toBe('true')
   })
 
   test('with no GitHub account of OpenAgent\u2019s yet, one is added from the editor, in its dialog, and is then the one picked; what was typed stays', async () => {

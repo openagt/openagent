@@ -63,12 +63,6 @@ export interface StartAgentOptions {
   options?: RunOptions
   /** The images the prompt goes with, by the names the dashboard kept them under (`sendImage`): the agent looks at them with it. Only a run on this computer takes them. */
   images?: string[]
-  /** The model to run on. */
-  model?: string
-  /** How hard that model may think, by the coding agent's own names (`medium`, `high`, …): what the model lists as its efforts. */
-  effort?: string
-  /** Which coding agent the run is on: `claude-code` or `codex`. */
-  driver?: string
   /** The person's saved pick of how far the run takes its work when the agent finishes. Absent, none is saved: the daemon starts the run at `commit`. A saved pick the project is not offered is held to the furthest the project goes with no pull request. */
   publish?: PublishPick
   /**
@@ -117,11 +111,8 @@ export interface StartAgentOptions {
   projectSkills?: 'all' | 'none' | string[]
 }
 
-/**
- * The outcome of a Start attempt (#345): the id of the run the run's host began, or why there is
- * none. `driver` is the coding agent that runs it.
- */
-export type StartAgentResult = { ok: true; agentId: string; driver?: string } | { ok: false; error: string }
+/** The outcome of a Start attempt (#345): the id of the run the run's host began, or why there is none. */
+export type StartAgentResult = { ok: true; agentId: string } | { ok: false; error: string }
 
 /**
  * Where a session is working (#798): its checkout, its branch, and what it is holding. Read by

@@ -2,7 +2,7 @@ import type { OpenAgentEvent } from '../../src/index.js'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 
-vi.mock('../rpc/models.js', () => ({ onModels: () => new Promise(() => {}) }))
+vi.mock('../rpc/agents.js', () => ({ onCodingAgents: () => new Promise(() => {}), onNamesRuns: () => new Promise(() => {}) }))
 
 const { SubagentsPanel } = await import('./SubagentsPanel.js')
 const { forgetRevealedChanges, revealSubagent } = await import('../lib/reveal-change.js')

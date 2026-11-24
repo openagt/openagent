@@ -32,7 +32,7 @@ test('a Start with no project goes to the host with none, and no level, its home
     const host = fakeHost()
     const runtime = createProjectRuntime({ cwd, env, host })
     try {
-      assert.deepEqual(await runtime.onStart('Read the news', {}, SESSIONS_ID), { ok: true, agentId: 'run-1', driver: 'claude-code' })
+      assert.deepEqual(await runtime.onStart('Read the news', {}, SESSIONS_ID), { ok: true, agentId: 'run-1' })
       assert.deepEqual(host.requests.map(request => [request.project, request.prompt, request.options]), [[undefined, 'Read the news', {}]])
       assert.equal((await stat(join(sessionsHome(env), '.openagent'))).isDirectory(), true, 'the home is made for it')
       const refused = { ok: false, error: 'A session with no project runs with no branch and no project skills.' }
@@ -44,7 +44,6 @@ test('a Start with no project goes to the host with none, and no level, its home
       assert.equal((await runtime.onStart('Open an issue', { account: 'octo-agent' }, SESSIONS_ID)).ok, true)
       assert.deepEqual(host.requests[1]!.options, { github: { account: 'octo-agent' } })
     } finally {
-      await runtime.dispose()
       await rm(cwd, { recursive: true, force: true })
     }
   })
@@ -62,7 +61,7 @@ test("a Start hands the host its repos, each under its name in the session's fol
         execFileSync('git', ['init', '-q'], { cwd: join(repos, name) })
       }
       await mkdir(join(repos, 'notes'))
-      assert.deepEqual(await runtime.onStart('Compare', { repos: [join(repos, 'app'), join(repos, 'site')] }, SESSIONS_ID), { ok: true, agentId: 'run-1', driver: 'claude-code' })
+      assert.deepEqual(await runtime.onStart('Compare', { repos: [join(repos, 'app'), join(repos, 'site')] }, SESSIONS_ID), { ok: true, agentId: 'run-1' })
       assert.deepEqual(host.requests[0]?.options['git-branches'], { repos: [{ name: 'app', from: join(repos, 'app') }, { name: 'site', from: join(repos, 'site') }] })
       assert.equal(host.requests[0]?.options.publish, undefined, 'no level sent, none in force')
       assert.equal((await runtime.onStart('Fix both', { repos: [join(repos, 'app')], publish: 'pr' }, SESSIONS_ID)).ok, true)
@@ -77,7 +76,6 @@ test("a Start hands the host its repos, each under its name in the session's fol
       assert.equal(notARepo.ok, false)
       assert.equal(host.requests.length, 3)
     } finally {
-      await runtime.dispose()
       await rm(cwd, { recursive: true, force: true })
       await rm(repos, { recursive: true, force: true })
     }

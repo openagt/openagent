@@ -7,7 +7,7 @@ import { spawn } from 'node:child_process'
 import { appendFileSync } from 'node:fs'
 import { sessionsHomeOf } from '@openagt/agent-data'
 import { localHost, type SpawnedResume, type SpawnedRun } from '@openagt/agent-driver'
-import type { RunHost } from '@openagt/hooks'
+import type { ModuleDefinition, RunHost } from '@openagt/hooks'
 import { FAKE_RUN } from './fixture.js'
 
 /**
@@ -63,4 +63,10 @@ function pick<T extends object, K extends keyof T>(from: T, keys: readonly K[]):
 /** This computer's host with the runs scripted: nothing stands in the way of a run, which needs no coding agent's CLI and no login. */
 export function fakeRunHost(): RunHost {
   return localHost({ spawnRun, spawnResume, ready: async () => ({ problems: [], warnings: [] }), loginFor: async () => undefined })
+}
+
+/** A coding agent's module with its agents scripted as the host's runs are: each can run here, with no CLI and no login to ask. */
+export function readyAgents(module: ModuleDefinition): ModuleDefinition {
+  const agents = module.hooks['run.agent'] ?? []
+  return { ...module, hooks: { ...module.hooks, 'run.agent': agents.map(agent => ({ ...agent, ready: async () => ({ problems: [], warnings: [] }) })) } }
 }

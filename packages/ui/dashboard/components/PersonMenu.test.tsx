@@ -4,9 +4,7 @@ import { forgetRemembered } from '../lib/use-async.js'
 
 const onPerson = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/person.js', () => ({ onPerson }))
-const accounts = vi.hoisted(() => ({ onAgentAccounts: vi.fn(), sendUseAgentAccountFirst: vi.fn() }))
-vi.mock('../rpc/accounts.js', () => accounts)
-const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendUseGitHostAccount: vi.fn(), sendGitHostLogin: vi.fn(), sendGitHostInstall: vi.fn(), onAgentState: vi.fn(), sendAgentFix: vi.fn() }))
+const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendUseGitHostAccount: vi.fn(), sendGitHostLogin: vi.fn(), sendGitHostInstall: vi.fn() }))
 vi.mock('../rpc/logins.js', () => logins)
 const backup = vi.hoisted(() => ({ onBackup: vi.fn(), sendBackUpAs: vi.fn() }))
 vi.mock('../rpc/backup.js', () => backup)
@@ -21,9 +19,7 @@ vi.mock('./ThemeSubmenu.js', () => ({ ThemeSubmenu: () => <div role="menuitem">T
 const { PersonMenu, firstName } = await import('./PersonMenu.js')
 
 beforeEach(() => {
-  accounts.onAgentAccounts.mockResolvedValue({ now: 0, accounts: [] })
   logins.onGitHosts.mockResolvedValue({ hosts: [] })
-  logins.onAgentState.mockResolvedValue({ driver: 'claude-code', ready: true })
   backup.onBackup.mockResolvedValue({ gaps: [] })
 })
 
@@ -31,8 +27,6 @@ afterEach(() => {
   cleanup()
   forgetRemembered()
   onPerson.mockReset()
-  accounts.onAgentAccounts.mockReset()
-  accounts.sendUseAgentAccountFirst.mockReset()
   for (const fn of Object.values(logins)) fn.mockReset()
   backup.onBackup.mockReset()
 })
@@ -56,7 +50,6 @@ describe('PersonMenu', () => {
   test('no accounts are in it: they are picked beside the message box, for the computer the run goes to', async () => {
     onPerson.mockResolvedValue({ name: 'Ada Lovelace', github: 'ada' })
     logins.onGitHosts.mockResolvedValue({ hosts: [GITHUB] })
-    accounts.onAgentAccounts.mockResolvedValue({ now: 0, accounts: [{ id: 'This computer', name: 'Ada', own: true, windows: [{ label: 'week', percent: 22 }] }] })
     render(<PersonMenu onSettings={() => {}} />)
     fireEvent.click(await screen.findByRole('button', { name: 'Ada Lovelace: settings' }))
     await waitFor(() => expect(logins.onGitHosts).toHaveBeenCalled())
@@ -106,14 +99,12 @@ const GITHUB = {
 describe('PersonMenu: what is missing', () => {
   test('something runs need is missing: a dot on the picture, and the menu says first what fixes it, opening where it is fixed', async () => {
     onPerson.mockResolvedValue({ name: 'Ada Lovelace', github: 'ada' })
-    logins.onAgentState.mockResolvedValue({ driver: 'claude-code', ready: false, problem: '`claude` is not logged in.', fix: { kind: 'log-in', command: 'claude auth login' } })
     logins.onGitHosts.mockResolvedValue({ hosts: [{ ...GITHUB, provider: { ...GITHUB.provider, accounts: [{ login: 'octo', terminal: true, runs: true, ok: false }] } }] })
     const onSettings = vi.fn()
     const { container } = render(<PersonMenu onSettings={onSettings} />)
     fireEvent.click(await screen.findByRole('button', { name: 'Ada Lovelace: settings, something is missing' }))
     expect(container.ownerDocument.querySelector('[data-testid="missing-dot"]')).toBeTruthy()
-    expect(await screen.findByRole('menuitem', { name: 'Add your GitHub account again…' })).toBeTruthy()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Add a Claude Code account…' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Add your GitHub account again…' }))
     expect(openPage).toHaveBeenCalledWith('permissions')
     expect(onSettings).not.toHaveBeenCalled()
   })

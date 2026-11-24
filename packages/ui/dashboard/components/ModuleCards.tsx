@@ -110,6 +110,25 @@ export function useModuleCards(projects: ProjectSummary[]): { cards: OverviewCar
   return { cards: [...cards, ...held], line: listed.filter(card => card.line), loaded }
 }
 
+/** The modules' notices (`overview.notice`), each in its slot, given the projects shown that have its package: news of this computer, such as a coding agent's newer version. */
+export function OverviewNotices({ projects }: { projects: ProjectSummary[] }) {
+  const { views } = useMountedModules()
+  return (
+    <>
+      {views['overview.notice'].map(view => {
+        const View = view.View
+        const having = view.computer ? projectsHaving(projects.map(project => project.id), projects) : projectsHaving(view.projects, projects)
+        if (having.length === 0 && !view.computer) return null
+        return (
+          <ModuleSlot key={`${view.package}/${view.id}`} package={view.package} label={`${view.id} notice`}>
+            <View projects={having} />
+          </ModuleSlot>
+        )
+      })}
+    </>
+  )
+}
+
 function readKeptCard(): KeptCard | undefined {
   try {
     const kept: unknown = JSON.parse(globalThis.localStorage?.getItem(NEEDS_YOU_KEY) ?? 'null')

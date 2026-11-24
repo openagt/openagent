@@ -51,7 +51,7 @@ vi.mock('./Composer.js', async () => {
       </button>
       {props.notes}
       <span data-testid="composer-props">
-        {JSON.stringify({ inAgent: props.inAgent, busyLabel: props.submitBusyLabel, placeholder: props.placeholder, sessionModel: props.sessionModel, autoFocus: props.autoFocus })}
+        {JSON.stringify({ inAgent: props.inAgent, busyLabel: props.submitBusyLabel, placeholder: props.placeholder, autoFocus: props.autoFocus })}
       </span>
       {/* The empty-box slot control (#1455), rendered so the Stop/Resume tests can press it. */}
       {props.idleControl}
@@ -74,7 +74,7 @@ function renderComposer(over: Partial<Parameters<typeof AgentComposer>[0]> = {})
   return { onAgentStarted }
 }
 
-const props = (): { inAgent: boolean; busyLabel: string; placeholder: string; sessionModel?: { driver?: string; name?: string; effort?: string }; autoFocus?: boolean } =>
+const props = (): { inAgent: boolean; busyLabel: string; placeholder: string; autoFocus?: boolean } =>
   JSON.parse(screen.getByTestId('composer-props').textContent ?? '{}')
 
 beforeEach(() => {
@@ -162,15 +162,6 @@ describe('AgentComposer box', () => {
     } finally {
       vi.unstubAllGlobals()
     }
-  })
-
-
-  test('the model the session runs on is handed to the box, to be said under it; none when not known', () => {
-    renderComposer({ model: { driver: 'claude-code', name: 'Opus 5.5', effort: 'High' } })
-    expect(props().sessionModel).toEqual({ driver: 'claude-code', name: 'Opus 5.5', effort: 'High' })
-    cleanup()
-    renderComposer()
-    expect(props().sessionModel).toBeUndefined()
   })
 
   test('the box says what sending does, live or ended, in one short line', () => {
@@ -487,7 +478,7 @@ describe('AgentComposer, ended (#720, #1774)', () => {
     expect(onAgentStarted).not.toHaveBeenCalled()
   })
 
-  test('offers no driver/model select and no "Run on", since a session cannot change either (#831)', () => {
+  test('offers no "Run on", since a session cannot change it (#831)', () => {
     renderComposer({ live: false })
     expect(props().inAgent).toBe(true)
   })

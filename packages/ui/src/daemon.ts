@@ -1,11 +1,8 @@
-import { ReadyNaming } from '@openagt/agent-driver'
 import { withLocalBin } from './local-bin.js'
 import { refreshLoginShellPath } from './shell-path.js'
 import { startDashboard, type Dashboard } from './dashboard/server.js'
 import { createProjectRuntime } from './daemon-runtime.js'
-import { defaultQuotaSource } from './dashboard/quota.js'
-import { defaultModelsSource } from './dashboard/models.js'
-import { agentUpdates } from './dashboard/agent-updates.js'
+import { openAgentUpdates } from './dashboard/openagent-update.js'
 import { projectStateReader } from './project-state.js'
 import { resolveDashboardBundle } from './dashboard/bundle.js'
 import { resolveWebsite } from './dashboard/website.js'
@@ -16,7 +13,6 @@ import type { Hooks, ProjectRef, RunHost } from '@openagt/hooks'
 import { sessionsHome } from '@openagt/agent-data'
 import { readSecureAddress, SECURE_PORT, type SecureAddress } from './secure-address.js'
 import type { StartedProject } from './dashboard/types.js'
-import { runningFixes } from './dashboard-rpc/logins.js'
 
 /**
  * The dashboard process (#302). It is a pure projection of files: a run's tool keeps the run's
@@ -90,24 +86,18 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   await refreshLoginShellPath()
   // Everything the dashboard drives per project (a run's start, project install) lives in the
   // runtime, so this body stays about the daemon's own lifecycle.
-  // A run's name is asked of a naming session kept waiting for it (agent-driver's `ReadyNaming`), so
-  // the page has it about a second after Start. A run starts on this computer's host, the
-  // distribution's (#2394).
+  // A run starts on this computer's host, the distribution's (#2394), which names it as it starts.
   const hooks = opts.hooks ?? (await distributionHooks(env))
   const host = await localHostOf(hooks)
   // The hosts beside it, of the modules on in a project (a GitHub Actions runner): a run may be picked to run on one.
   const otherHosts = async (project?: ProjectRef): Promise<RunHost[]> => (await hooks.hosts(project)).filter(other => other.id !== host.id)
   // A project added or removed is told to the modules (`app.lifecycle`): a scheduler starts or stops with it.
-  const runtime = createProjectRuntime({ cwd, env, naming: new ReadyNaming(), host, otherHosts, lifecycle: hooks })
+  const runtime = createProjectRuntime({ cwd, env, host, otherHosts, lifecycle: hooks })
   // The daemon serves the built dashboard bundle (#405/#426): the SPA reads each run's files over
   // `GET /_rpc/events`, so there is no in-process event stream to feed here. The runtime's RPCs reach the browser through the
   // dashboard context the mount is wired with. A missing bundle (a broken install) surfaces as a
   // 503 from the server.
   const clientBundleDir = await resolveDashboardBundle()
-  // The long-lived meter the usage panel draws (#685), owned here so it stops with the daemon.
-  const quota = defaultQuotaSource()
-  // Which models each coding agent offers: asked on the menu's first read, then kept.
-  const models = defaultModelsSource()
   const websiteDir = await resolveWebsite()
   // A secure address that cannot be read is said, and the dashboard comes up on its plain one.
   const secure = await readSecureAddress(env).catch((err: unknown): SecureAddress | undefined => {
@@ -120,14 +110,11 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
       startAgent: runtime.onStart,
       addProject: runtime.onAddProject,
       startedIn: runtime.onStartedIn,
-      prepareStart: runtime.onPrepareStart,
       removeProject: runtime.onRemoveProject,
       host,
       otherHosts,
       preferences: registryPreferencesStore(env),
-      quota,
-      models,
-      agentUpdates: agentUpdates({ models }),
+      openAgentUpdate: openAgentUpdates(),
       // What a project's page and row say of it beside its runs: the modules on in it say what needs setting up.
       projectState: projectStateReader({ hooks: async () => hooks }),
     },
@@ -138,10 +125,7 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
     ...(secure ? { secure: { ...secure, port: SECURE_PORT } } : {}),
     ...(websiteDir ? { websiteDir } : {}),
   }).catch(async (err: unknown) => {
-    // The port is taken (another dashboard runs there, say): what was set up for it stops, or
-    // its timers keep the process alive.
-    quota.stop()
-    await runtime.dispose()
+    // The port is taken (another dashboard runs there, say).
     throw err
   })
 
@@ -184,12 +168,6 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
     // dashboard is gone, while what is left stops behind it.
     step('the dashboard')
     await dashboard.close()
-    runningFixes.end()
-    // Stopped here as well as by the dashboard: a broken install serves 503s without ever taking
-    // ownership of the source we handed in, and that poller would go on reading by itself.
-    quota.stop()
-    step('the naming sessions')
-    await runtime.dispose()
   })
 }
 

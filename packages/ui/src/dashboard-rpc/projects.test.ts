@@ -249,7 +249,6 @@ test('sendRemoveProject hands the project’s id to the daemon, with whether its
 test("the launcher's check is this computer's host's, for the agent picked, and a Start drawing near: the run's naming session is started for its project and agent", async () => {
   const { dir, restore } = await registered()
   try {
-    const near: [string, string | undefined][] = []
     const asked: unknown[] = []
     const host: RunHost = {
       ...fakeHost(),
@@ -259,15 +258,11 @@ test("the launcher's check is this computer's host's, for the agent picked, and 
         return { problems: ['Claude Code is not logged in.'], warnings: [], fix: { kind: 'log-in', command: 'claude login', problem: 'Claude Code is not logged in.' }, ownLoggedOut: true }
       },
     }
-    provideTestContext({ prepareStart: (projectId, driver) => void near.push([projectId, driver]), host })
+    provideTestContext({ host })
     const id = (await listProjects())[0]!.id
     assert.deepEqual(await onStartCheck(id), { problems: ['Claude Code is not logged in.'], warnings: [], fix: { kind: 'log-in', command: 'claude login', problem: 'Claude Code is not logged in.' } })
-    assert.deepEqual(await onStartCheck(id, 'codex'), { problems: [], warnings: ['the check broke'] }, 'a check that breaks is said, and stops nothing')
+    assert.deepEqual(await onStartCheck(id, { 'agent-driver': { driver: 'codex' } }), { problems: [], warnings: ['the check broke'] }, 'a check that breaks is said, and stops nothing')
     assert.deepEqual(asked, [[dir, {}], [dir, { 'agent-driver': { driver: 'codex' } }]])
-    assert.deepEqual(near, [
-      [id, undefined],
-      [id, 'codex'],
-    ])
     provideTestContext({ host: fakeHost() })
     assert.equal(await onStartCheck(id), null, 'a host with no check says nothing')
   } finally {
@@ -288,9 +283,9 @@ test('"Run on" offers the hosts beside this computer of the modules on in a proj
     const id = (await listProjects())[0]!.id
     assert.deepEqual(await onRunHosts(id), [{ id: 'actions', label: 'GitHub Actions' }])
     assert.deepEqual(inProject, [dir])
-    assert.deepEqual(await onStartCheck(id, 'claude-code', 'actions'), { problems: ['Its repository has no workflow openagent-agent.yml yet.'], warnings: [] })
+    assert.deepEqual(await onStartCheck(id, { 'agent-driver': { driver: 'claude-code' } }, 'actions'), { problems: ['Its repository has no workflow openagent-agent.yml yet.'], warnings: [] })
     assert.deepEqual(asked, [[dir, { 'agent-driver': { driver: 'claude-code' } }]])
-    assert.equal(await onStartCheck(id, 'claude-code', 'claude-web'), null, 'a host the project has not says nothing: the Start refuses it')
+    assert.equal(await onStartCheck(id, { 'agent-driver': { driver: 'claude-code' } }, 'claude-web'), null, 'a host the project has not says nothing: the Start refuses it')
     assert.deepEqual(await onRunHosts(SESSIONS_ID), [])
     assert.deepEqual(await onRunHosts('nowhere-1'), [])
     assert.deepEqual(inProject, [dir, dir, dir], 'a session and an unknown project ask for none')

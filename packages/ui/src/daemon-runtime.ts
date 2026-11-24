@@ -1,18 +1,16 @@
 import { isAbsolute, join, resolve, sep } from 'node:path'
 import { hostname } from 'node:os'
 import { stat } from 'node:fs/promises'
-import { hasImage, isImageName, type ReadyNaming } from '@openagt/agent-driver'
+import { hasImage, isImageName } from '@openagt/agent-driver'
 import { IMAGES_PER_MESSAGE } from './images.js'
-import { isDriverName } from './driver-names.js'
-import { isProfileId, MODULE_NAME, type Hooks, type ProjectRef, type RunHost, type RunOptions, type RunRequest } from '@openagt/hooks'
+import { isProfileId, MODULE_NAME, type Hooks, type ProjectRef, type RunHost, type RunOptions } from '@openagt/hooks'
 import { sessionRepos } from '@openagt/git-branches'
-import { nameStarted } from './started-names.js'
 import { findCheckout, isPidAlive, projectBranches, readLiveMetas } from './store/index.js'
 import { OPENAGENT_DIR } from './openagent-dir.js'
 import type { StartAgentOptions, StartAgentResult, AddProjectResult, RemoveProjectResult, StartedInResult } from './dashboard/types.js'
 import { ownRunsWatch } from './dashboard/runs-watch.js'
 import { screenInDiary } from './dashboard/screen.js'
-import { addProject, listProjects, readPreferences, removeProject } from './registry.js'
+import { addProject, listProjects, removeProject } from './registry.js'
 import { errorMessage, fileBranchRepo, installProject, projectKey, sessionsHome, writeSharing, isSkillName, projectId } from '@openagt/agent-data'
 import { publishedBranch } from '@openagt/agent-data/names'
 import { branchesOnOrigin } from './dashboard/start-branch.js'
@@ -30,21 +28,9 @@ import { readySessionsHome } from './sessions-home.js'
  * What the daemon does for a project (#393): start a run, add, find and remove a project. Split
  * from daemon.ts so that file reads as the daemon's lifecycle (ports, boot, shutdown). The daemon
  * runs no agent itself: a Start here goes to this computer's host (`run.host`, #2394), the module
- * of the distribution that gives it, and the run belongs to that module.
+ * of the distribution that gives it, and the run belongs to that module: it names the run, and
+ * puts it on the picks made for every next run where the Start's options name none.
  */
-
-/** The coding agent a Start goes to when none was picked: this computer's host's own default (agent-driver's). */
-const DEFAULT_DRIVER = 'claude-code'
-
-/** A run's name as it is asked while the run starts: what the host is given of it, and what follows once it answered. */
-interface StartName {
-  /** The name being asked, or `false` when runs are not named: the person's setting. */
-  title: Pick<RunRequest, 'title'>
-  /** The host started the run: the name, once in, is shown for it. */
-  started: (agentId: string) => void
-  /** The host started nothing: the name is not asked for any more. */
-  failed: () => void
-}
 
 /**
  * Why a Start's picks are refused before anything is asked of the project, or nothing: only what
@@ -82,8 +68,6 @@ export interface ProjectRuntimeOptions {
   cwd: string
   /** Env for the registry lookups (#393). */
   env: NodeJS.ProcessEnv
-  /** The naming sessions kept waiting for runs started here; without, each run asks for its own name. */
-  naming?: ReadyNaming
   /** This computer's host, the distribution's (`distribution-hooks.ts`): where a run started here runs. */
   host: RunHost
   /** The hosts beside this computer's of the modules on in a project, where a run may be picked to run (`options.host`); none when unsaid. */
@@ -104,20 +88,16 @@ export interface ProjectRuntime {
    */
   onStartedIn: (folder: string) => Promise<StartedInResult>
   onRemoveProject: (projectId: string, files?: boolean) => Promise<RemoveProjectResult>
-  /** A Start is near in a project, on a coding agent: the run's naming session is started for it. */
-  onPrepareStart: (projectId: string, driver?: string) => void
   /** Where the live screen of a run on this computer answers, as its diary names it; nothing when
    *  the run has none: it opened no screen, closed it, or ended. */
   screenOf: (projectId: string, agentId: string) => Promise<string | undefined>
-  /** Let go of the naming sessions kept waiting. */
-  dispose: () => Promise<void>
 }
 
 /**
  * The daemon's per-project runtime (#393). The home `cwd` is the default target: a request with
  * no project id (or the home id) resolves to it without a registry lookup.
  */
-export function createProjectRuntime({ cwd, env, naming, host, otherHosts = async () => [], lifecycle }: ProjectRuntimeOptions): ProjectRuntime {
+export function createProjectRuntime({ cwd, env, host, otherHosts = async () => [], lifecycle }: ProjectRuntimeOptions): ProjectRuntime {
   const homeId = projectId(resolve(cwd))
 
   // A project id resolves to its repo path via the registry; the home id (or none)
@@ -161,7 +141,6 @@ export function createProjectRuntime({ cwd, env, naming, host, otherHosts = asyn
     // A session's repos, each under the name it has in the session's folder: one that is no repository refuses the Start.
     const repos = options.repos !== undefined ? await sessionRepos(options.repos).then(given => ({ given }), (err: unknown) => ({ error: errorMessage(err) })) : undefined
     if (repos && 'error' in repos) return { ok: false, error: repos.error }
-    const driver = options.driver ?? DEFAULT_DRIVER
     const project = noProject ? undefined : await projectRefAt(targetProjectId ?? homeId, projectCwd)
     // The host picked to run it, among the project's: one no module on in the project has refuses the Start.
     const runsOn = options.host === undefined || options.host === host.id ? host : (await otherHosts(project)).find(other => other.id === options.host)
@@ -170,7 +149,6 @@ export function createProjectRuntime({ cwd, env, naming, host, otherHosts = asyn
     const images = options.images ?? []
     if (images.length > 0 && runsOn !== host) return { ok: false, error: `Images stay on this computer: a session with images runs here, not on ${runsOn.label}.` }
     if (!(await Promise.all(images.map(name => hasImage(name, env)))).every(Boolean)) return { ok: false, error: 'An image is no longer on this computer. Take it out and add it again.' }
-    const name = await nameAsStarted(projectCwd, prompt, driver)
     const started = await runsOn
       .start({
         ...(project ? { project } : {}),
@@ -178,7 +156,6 @@ export function createProjectRuntime({ cwd, env, naming, host, otherHosts = asyn
         ...(images.length > 0 ? { images } : {}),
         // A run of another host's says which: its options and its record name it.
         options: { ...(runsOn !== host ? { host: runsOn.id } : {}), ...runOptionsOf(options, publish, repos?.given) },
-        ...name.title,
       })
       .then(({ id }) => ({ ok: true as const, id }), (err: unknown) => ({ ok: false as const, error: errorMessage(err) }))
     // The host made a checkout (or is about to): the project's checkouts are read again on the
@@ -186,29 +163,8 @@ export function createProjectRuntime({ cwd, env, naming, host, otherHosts = asyn
     if (started.ok) {
       projectBranches.changed(projectCwd)
       ownRunsWatch.poke(projectCwd)
-      name.started(started.id)
-    } else name.failed()
-    return started.ok ? { ok: true, agentId: started.id, driver } : { ok: false, error: started.error }
-  }
-
-  // The run's name, asked as the run is started rather than once its process is up: of a naming
-  // session waiting for this project's runs, it is in about a second after Start. The run is
-  // handed a file to find it in, and the page asks for it here (`started-names.ts`). Named unless
-  // the person turned naming off: read here rather than sent from the page, so a run a schedule
-  // starts is named exactly as one a person starts is.
-  const nameAsStarted = async (projectCwd: string, prompt: string, driver: string): Promise<StartName> => {
-    const nameRun = (await readPreferences(env)).nameRuns !== false
-    if (naming === undefined || !nameRun || !isDriverName(driver) || !naming.names(prompt)) return { title: nameRun ? {} : { title: false }, started: () => {}, failed: () => {} }
-    const stop = new AbortController()
-    const name = naming.name(projectCwd, prompt, driver, stop.signal)
-    return {
-      title: { title: name },
-      started: id => {
-        nameStarted(id, name)
-        void name.then(() => ownRunsWatch.poke(projectCwd))
-      },
-      failed: () => stop.abort(),
     }
+    return started.ok ? { ok: true, agentId: started.id } : { ok: false, error: started.error }
   }
 
   // Add a project (#396): install the repo, then register it so it appears in the Projects
@@ -304,24 +260,7 @@ export function createProjectRuntime({ cwd, env, naming, host, otherHosts = asyn
     return checkout ? screenInDiary(join(checkout.path, OPENAGENT_DIR, `${agentId}.jsonl`)) : undefined
   }
 
-  // A Start is near: the launcher opened, or its agent changed. The naming session that run will
-  // take is started now, while the person types, unless one already waits.
-  const onPrepareStart = (targetProjectId: string, driver?: string): void => {
-    if (naming === undefined) return
-    const picked = driver ?? DEFAULT_DRIVER
-    if (!isDriverName(picked)) return
-    void (async () => {
-      if ((await readPreferences(env)).nameRuns === false) return
-      const projectCwd = await resolveProject(targetProjectId)
-      if (projectCwd) await naming.prepare(projectCwd, picked)
-    })()
-  }
-
-  const dispose = async (): Promise<void> => {
-    await naming?.close()
-  }
-
-  return { onStart, onAddProject, onStartedIn, onRemoveProject, onPrepareStart, screenOf, dispose }
+  return { onStart, onAddProject, onStartedIn, onRemoveProject, screenOf }
 }
 
 /** A Start's picks as the run's options: one slice per module that acts on them (#2394). */
@@ -330,7 +269,7 @@ export function createProjectRuntime({ cwd, env, naming, host, otherHosts = asyn
  * the two picks every run has (where it runs, how far it takes its work), each a word. What a
  * slice holds is its module's to check: its steps refuse what they do not take.
  */
-function isRunOptions(value: unknown): value is RunOptions {
+export function isRunOptions(value: unknown): value is RunOptions {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
   return Object.entries(value).every(([key, slice]) =>
     key === 'host' || key === 'publish' ? typeof slice === 'string' : MODULE_NAME.test(key) && typeof slice === 'object' && slice !== null && !Array.isArray(slice),
@@ -353,15 +292,9 @@ function runOptionsOf(options: StartAgentOptions, publish: RunOptions['publish']
 }
 
 function flatOptionsOf(options: StartAgentOptions, publish: RunOptions['publish'], repos: { name: string; from: string }[] | undefined): RunOptions {
-  const agentDriver = {
-    ...(options.driver !== undefined ? { driver: options.driver } : {}),
-    ...(options.model !== undefined ? { model: options.model } : {}),
-    ...(options.effort !== undefined ? { effort: options.effort } : {}),
-  }
   const branches = { ...(options.base !== undefined ? { base: options.base } : {}), ...(repos !== undefined && repos.length > 0 ? { repos } : {}) }
   const github = { ...(options.prBase !== undefined ? { prBase: options.prBase } : {}), ...(options.account !== undefined ? { account: options.account } : {}) }
   return {
-    ...(Object.keys(agentDriver).length > 0 ? { 'agent-driver': agentDriver } : {}),
     ...(publish !== undefined ? { publish } : {}),
     ...(Object.keys(branches).length > 0 ? { 'git-branches': branches } : {}),
     ...(Object.keys(github).length > 0 ? { github } : {}),

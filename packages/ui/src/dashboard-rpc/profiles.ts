@@ -2,8 +2,7 @@ import { isSkillName } from '@openagt/agent-data'
 import { DEFAULT_PROFILE, PROFILES, isProfileId, isProfileName, profileIdOf, profilesIn, type Profile, type RunOptions } from '@openagt/hooks'
 import { distributionSettings } from '../distribution-hooks.js'
 import { distributionPlugins } from '../distribution-packages.js'
-import { onAgentAccounts, type AccountResult, type AccountRow } from './accounts.js'
-import { onGitHosts } from './logins.js'
+import { onGitHosts, type AccountResult } from './logins.js'
 
 
 export type { Profile, RunOptions } from '@openagt/hooks'
@@ -14,8 +13,9 @@ export type { Profile, RunOptions } from '@openagt/hooks'
 // `profiles.saved`), so every computer of theirs has the same profiles. The page lists them, edits
 // them in a dialog, makes new ones and removes them; Default is edited like the others and never
 // removed or renamed. What a profile can name is what this computer knows: OpenAgent's own GitHub
-// accounts here, the Claude and Codex accounts of the Permissions page, and the distribution's
-// plugins its runs go without.
+// accounts here, and the distribution's plugins its runs go without. agent-driver's slice (the
+// coding agent, its model, the Claude and Codex accounts) is its control's, and kept as the
+// catalog reads it: an account a computer does not have does not apply there.
 
 /** The host the GitHub skill answers for, whose accounts a profile names. */
 const GITHUB = 'github.com'
@@ -25,31 +25,17 @@ export interface ProfilesView {
   profiles: Profile[]
   /** OpenAgent's GitHub accounts on this computer, and the host one more is added at. */
   github?: { host: string; accounts: string[] }
-  /** The Claude accounts of the Permissions page, by id and name; this computer's own login says when it is logged out. */
-  claude: ProfileAccountChoice[]
-  /** The Codex accounts, the same way. */
-  codex: ProfileAccountChoice[]
   /** The plugins a profile's runs can go without, by name: the distribution's that give runs a skill or a step, in its order. */
   plugins: string[]
 }
 
-/** A coding agent's account a profile can name. */
-export interface ProfileAccountChoice {
-  id: string
-  name: string
-  /** This computer's own login, and the coding agent is not logged in: no run takes it while another account is there. */
-  loggedOut?: true
-}
-
 /** Every profile, and what one can name. */
 export async function onProfilesList(): Promise<ProfilesView> {
-  const [saved, hosts, claude, codex, plugins] = await Promise.all([savedProfiles(), onGitHosts(), onAgentAccounts('claude'), onAgentAccounts('codex'), distributionPlugins()])
+  const [saved, hosts, plugins] = await Promise.all([savedProfiles(), onGitHosts(), distributionPlugins()])
   const provider = hosts.hosts.find(row => row.host === GITHUB)?.provider
   return {
     profiles: profilesIn(saved),
     ...(provider ? { github: { host: GITHUB, accounts: provider.accounts.filter(account => account.ok).map(account => account.login) } } : {}),
-    claude: claude.accounts.map(accountChoice),
-    codex: codex.accounts.map(accountChoice),
     plugins: plugins.flatMap(({ module }) => (module.hooks['run.skills'] || module.hooks['run.step'] ? [module.name] : [])),
   }
 }
@@ -57,10 +43,6 @@ export async function onProfilesList(): Promise<ProfilesView> {
 /** The profiles the person made, and Default once it was changed: what the store keeps. */
 async function savedProfiles(): Promise<Profile[]> {
   return (await distributionSettings()).get(PROFILES)
-}
-
-function accountChoice(account: AccountRow): ProfileAccountChoice {
-  return { id: account.id, name: account.name, ...(account.loggedOut ? { loggedOut: true } : {}) }
 }
 
 /** What the page sends to save a profile: a new one has no id yet. */
@@ -104,20 +86,14 @@ async function profileOptions(given: RunOptions): Promise<RunOptions | string> {
   const view = await onProfilesList()
   const account = given.github?.account
   if (account !== undefined && (typeof account !== 'string' || !view.github?.accounts.includes(account))) return `OpenAgent has no GitHub account ${String(account)} on this computer.`
-  const driver: { claude?: string[]; codex?: string[] } = {}
-  for (const kind of ['claude', 'codex'] as const) {
-    const picked = given['agent-driver']?.[kind]
-    if (picked === undefined) continue
-    if (!Array.isArray(picked) || picked.some(one => typeof one !== 'string' || !view[kind].some(choice => choice.id === one))) return `That ${kind === 'claude' ? 'Claude' : 'Codex'} account is not on this computer.`
-    if (picked.length > 0) driver[kind] = [...new Set(picked)]
-  }
+  const driver = given['agent-driver']
   const project = given.skills?.project
   if (project !== undefined && project !== 'none' && !(Array.isArray(project) && project.length > 0 && project.every(isSkillName))) return "A profile's project skills are none, or named by their names."
   const without = given.plugins?.without
   if (without !== undefined && !(Array.isArray(without) && without.every(name => typeof name === 'string' && view.plugins.includes(name)))) return 'That plugin is not one a run gets anything from.'
   return {
     ...(account !== undefined ? { github: { account } } : {}),
-    ...(Object.keys(driver).length > 0 ? { 'agent-driver': driver } : {}),
+    ...(typeof driver === 'object' && driver !== null && Object.keys(driver).length > 0 ? { 'agent-driver': driver } : {}),
     ...(project !== undefined ? { skills: { project } } : {}),
     ...(without !== undefined && without.length > 0 ? { plugins: { without: [...new Set(without)] } } : {}),
   }

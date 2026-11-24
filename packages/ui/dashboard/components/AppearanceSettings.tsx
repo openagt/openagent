@@ -10,7 +10,7 @@ import { cn } from '../lib/utils.js'
 import { SettingsRow, SettingsSection, SettingsSelectRow, ToggleRow } from './SettingsRows.js'
 
 // Settings › Appearance: the theme, as three small pictures of the page; then the colours, the
-// primary colour as its swatches, the three fonts, the editor, and the Overview's checklist.
+// primary colour as its swatches, the three fonts, the editor, the coding agent's thoughts, and the Overview's checklist.
 
 const THEMES: { value: ThemePreference; label: string }[] = [
   { value: 'system', label: 'System' },
@@ -71,6 +71,12 @@ export function AppearanceSettings() {
             value={preferences.editor ?? ''}
             options={[{ value: '', label: 'Auto-detect' }, ...editors.map(e => ({ value: e.bin, label: e.label }))]}
             onChange={value => updatePreferences({ editor: value })}
+          />
+          <ToggleRow
+            label="Show what the coding agent thought"
+            description="Inside a run of steps, a row for each thought between them. Off, the panel is the steps the coding agent took and nothing else."
+            checked={preferences.showThinking ?? false}
+            onChange={next => updatePreferences({ showThinking: next })}
           />
           {/* The Overview's checklist hides with its own ✕, and comes back here. */}
           <ToggleRow

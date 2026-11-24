@@ -6,7 +6,7 @@ import { panesPage } from '../lib/panes.js'
 import { revealSubagent, useRevealedSubagent } from '../lib/reveal-change.js'
 import { arrange, subagentRows, subagentTranscript, type SubagentRow } from '../lib/subagents.js'
 import { formatElapsed } from '../lib/format-date.js'
-import { anyModelName, useModels } from '../lib/models.js'
+import { anyModelName, useAgents } from '../lib/agents.js'
 import { runTone, runWord } from '../lib/run-words.js'
 import { useCut } from '../lib/use-cut.js'
 import { FocusHome } from '../lib/focus-home.js'
@@ -194,7 +194,7 @@ const capital = (words: string): string => words.charAt(0).toUpperCase() + words
  * pane's lists (ui/look/spacing.md 3). One that failed is one line too: nothing says why.
  */
 function SubagentItem({ row, open, onPick }: { row: SubagentRow; open: boolean; onPick: (key: string) => void }) {
-  const models = useModels()
+  const models = useAgents()
   const timed = row.working || row.endedAt !== undefined
   const time = useId()
   const model = row.model !== undefined ? `Model ${anyModelName(models, row.model)}` : undefined
@@ -311,7 +311,7 @@ function Shown({ row, events, onClose }: { row: SubagentRow; events: readonly Op
  * How long it has worked is the log's own moving line at its end, as the chat says it.
  */
 function PaneHead({ row }: { row: SubagentRow }) {
-  const models = useModels()
+  const models = useAgents()
   const ended = !row.working && row.status !== 'done'
   return (
     <div className="flex flex-col gap-4 pb-3 font-sans text-sm">

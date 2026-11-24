@@ -4,7 +4,6 @@ import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { projectId } from '@openagt/agent-data'
 import { DEFAULT_PROFILE, isProfileId } from '@openagt/hooks'
 import { isBranchName } from './branch-name.js'
-import { isDriverName } from './driver-names.js'
 import { isPublishPick, type PublishPick } from './publish-levels.js'
 import { nodeFs } from './node-fs.js'
 
@@ -51,16 +50,6 @@ export function startFromPick(value: unknown): StartFromPick | undefined {
  * own default below.
  */
 export interface Preferences {
-  /** The model to run on (#628), e.g. `opus` / `sonnet`, handed to the run. Absent = the coding agent's own default. */
-  model?: string
-  /**
-   * How hard that model may think, by the coding agent's own names (`low`, `medium`, `high`, …),
-   * handed to the run. Absent = the agent's own default. Kept whatever the model:
-   * a model that does not take one simply never shows it, and the pick stays for the one that does.
-   */
-  effort?: string
-  /** Which coding agent a run starts on (#650): `claude-code` or `codex`, handed to the run. Absent = the run's own default, Claude Code. */
-  driver?: string
   /** How far a run started from the dashboard publishes its work: `nothing`, or the level handed to the run, `commit`, `branch`, `pr` or `merge`. The launcher's menu shows it and writes it. Absent = none saved: the daemon decides where a Start goes. */
   publish?: PublishPick
   /**
@@ -74,14 +63,6 @@ export interface Preferences {
    * writes it. **Absent = Default.**
    */
   profile?: string
-  /**
-   * Name each run: a small model is asked for the two to five words a list of runs shows in place
-   * of the first line of the prompt (agent-driver's `engine/title.ts`). It is one short turn of the
-   * cheapest model with no tools, measured at a thirtieth of a cent a run, and it is the only
-   * money OpenAgent spends on something a person only looks at — so it can be turned off, and the
-   * run keeps the person's own words. **Absent = on.**
-   */
-  nameRuns?: boolean
   /**
    * How the sidebar orders its list of runs: `created` (newest started first), `updated` (the one
    * that last did something first, as Claude Code's list does by default) or `name`. **Absent =
@@ -226,7 +207,6 @@ type BooleanPreferenceKey = {
  */
 const BOOLEAN_PREFERENCES: Record<BooleanPreferenceKey, true> = {
   onboardingDismissed: true,
-  nameRuns: true,
   showThinking: true,
   recentsPerson: true,
   recentsAgent: true,
@@ -246,20 +226,6 @@ function sanitizePreferences(value: unknown): Preferences {
   for (const key of PREFERENCE_KEYS) {
     if (typeof input[key] === 'boolean') preferences[key] = input[key] as boolean
   }
-  // `model` (#628) is a free-form string preference; the rest are booleans. A blank string is "no
-  // choice", same as absent, so it is dropped rather than persisted. So is the literal word
-  // "Default": that was a picker *label* whose stored value was empty (#1143), and a file carrying
-  // it as the value — hand-edited, or written by a build that mistook the two — would otherwise be
-  // handed to the CLI as `--model Default` and fail the turn on a word nobody chose.
-  const model = typeof input['model'] === 'string' ? input['model'].trim() : ''
-  if (model && model.toLowerCase() !== 'default') preferences.model = model
-  // `effort` is free-form too: the levels come from the agent's own model list, and a level this
-  // version has never heard of still belongs to the agent that offered it.
-  const effort = typeof input['effort'] === 'string' ? input['effort'].trim() : ''
-  if (effort) preferences.effort = effort.slice(0, 20)
-  // `driver` (#650) is constrained to the known set so junk never reaches the agent; the set is the
-  // shared node-free vocabulary (driver-names.ts).
-  if (isDriverName(input['driver'] as string | undefined)) preferences.driver = input['driver'] as string
   // `publish` is constrained to the picks the launcher's menu lists.
   if (isPublishPick(input['publish'])) preferences.publish = input['publish']
   // `profile` names a profile by its id; Default is the absent entry.

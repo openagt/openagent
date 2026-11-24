@@ -12,7 +12,7 @@ const ATTENTION_MS = 15_000
  * browser per project, so a page opened again says it from its first frame.
  */
 export function useAttention(projectId: string | null, options?: RunOptions): Attention[] | null {
-  const key = `${projectId ?? ''}\n${JSON.stringify(options ?? {})}`
+  const key = `${projectId ?? ''}\n${JSON.stringify(options ?? null)}`
   const read = usePolled<Attention[] | null>(
     async () => (await onAttention(projectId, options)).items,
     null,

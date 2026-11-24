@@ -2,14 +2,14 @@ import type { ActiveAgent, Waiting } from '../../src/index.js'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { flushSync } from 'react-dom'
 import { SlidersHorizontal } from 'lucide-react'
-import { Quota } from './Quota.js'
 import { Button } from './ui/button.js'
 import { updatePreferences, usePreferences, usePreferencesLoaded } from '../lib/preferences.js'
 import { OnboardingChecklist } from './OnboardingChecklist.js'
-import { AgentUpdates } from './AgentUpdates.js'
+import { OpenAgentUpdate } from './OpenAgentUpdate.js'
+import { useNamesRuns } from '../lib/agents.js'
 import { Agents } from './Agents.js'
 import { useRunsDoing } from '../lib/use-doing.js'
-import { useModuleCards, type OverviewCard } from './ModuleCards.js'
+import { OverviewNotices, useModuleCards, type OverviewCard } from './ModuleCards.js'
 import { CardGrid, EditOverview, TakeOffMark, UnderCards, type Under } from './CustomizeOverview.js'
 import { ALL_PROJECTS, arrangeCards } from '../../src/client.js'
 import type { ProjectSummary } from '../../src/index.js'
@@ -30,8 +30,8 @@ const PACKAGES_PLACE = 3
 
 // The Overview landing page (#1139): what a new install can still set up ("Discover OpenAgent") while a step is open,
 // the box that starts a session, then a focused at-a-glance
-// board — what needs a human (the Human Queue, `ui-card-waiting`'s card), then usage and the agents
-// working now, then the other cards the installed packages declare, in two columns (#1818: the
+// board — what needs a human (the Human Queue, `ui-card-waiting`'s card) with the notices under it, then the agents
+// working now and the account's usage, then the other cards the installed packages declare, in two columns (#1818: the
 // queue package's AI Queue, the tickets package's hot tickets, the scheduler package's
 // Automations). A card with nothing to show says so in its middle, a sentence under a quiet glyph ("No agent is at work.").
 // OpenAgent's own cards are projections of the same .openagent files over the shell's own polls
@@ -71,7 +71,7 @@ export function DashboardPage({
   waitingState: ReadState
   /** Every agent going right now, across the projects, and what is known of it. */
   active: { active: ActiveAgent[]; state: ReadState }
-  /** Every registered project. The usage bar is given all of them: usage is the account's, not a project's. */
+  /** Every registered project. */
   projects: ProjectSummary[]
   /** The one project the page shows (#1513), or null for all: the agents at work and the packages' cards show only its, and a card of a package it does not have is not drawn. */
   scope: string | null
@@ -82,7 +82,7 @@ export function DashboardPage({
 }) {
   // Its ✕ hides it (#958), and a switch in Settings › Appearance shows it again.
   const onboardingDismissed = usePreferences().onboardingDismissed ?? false
-  const namesRuns = usePreferences().nameRuns !== false
+  const namesRuns = useNamesRuns()
   const working = active.active.filter(agent => scope === null || agent.projectId === scope)
   const doing = useRunsDoing(working)
   const shownProjects = scope === null ? projects : projects.filter(project => project.id === scope)
@@ -152,7 +152,6 @@ export function DashboardPage({
         </div>
       ),
     },
-    { id: 'usage', label: 'Usage', order: 9, width: '1/2', minWidth: '1/3', node: <Quota projects={projects} /> },
     // The cards the installed packages declare (#1818): a package's own summary of its data, only
     // when one of the projects shown (every registered one, or the picked one alone) has the package.
     ...moduleCards,
@@ -192,8 +191,16 @@ export function DashboardPage({
     updatePreferences({ overviewLayouts: rest })
   }
 
-  // What needs the person leads the cards; the agents' updates come right under it, wherever the layout puts it.
-  const underNeedsYou: Under = { card: needsYou, node: <AgentUpdates /> }
+  // What needs the person leads the cards; the notices come right under it, wherever the layout puts it: OpenAgent's own update, then the modules'.
+  const underNeedsYou: Under = {
+    card: needsYou,
+    node: (
+      <>
+        <OpenAgentUpdate />
+        <OverviewNotices projects={shownProjects} />
+      </>
+    ),
+  }
 
   return (
     <Page

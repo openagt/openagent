@@ -42,6 +42,7 @@ import { projectAddresses, SESSIONS_ID } from '../src/project-address.js'
 import { startedAtFromAgentId } from '../src/agent-id.js'
 import { WaitingContext } from './lib/use-waiting.js'
 import { usePreferences, OpenProjectContext } from './lib/preferences.js'
+import { useNamesRuns } from './lib/agents.js'
 import { useDocumentTitle } from './lib/document-title.js'
 import { projectLabels, ProjectLabelsContext } from './lib/project-labels.js'
 import { useActiveAgents } from './lib/use-working.js'
@@ -276,6 +277,7 @@ export function App() {
 
   // The person's picks: whether runs are named, and what a run starts with.
   const preferences = usePreferences()
+  const namesRuns = useNamesRuns()
 
   // The shared sidebar's recents when all projects show (#shared-shell): the rail pools every
   // project's sessions here.
@@ -303,7 +305,7 @@ export function App() {
     reloadRecent()
     // Its name, the moment the daemon has it: about a second on, before the run's row is in any
     // list (`started-names.ts`). Answered once, when it is in; nothing for a continued run.
-    if (!continued && preferences.nameRuns !== false && inProject !== null)
+    if (!continued && namesRuns && inProject !== null)
       void onStartedName(startedId).then(
         title => {
           if (title !== undefined) setAgentStart(prev => (prev.id === startedId ? { ...prev, title } : prev))
@@ -462,7 +464,6 @@ export function App() {
   const justStarted = agentId === agentStart.id
   // The name the daemon had for the run just started, before the run's record has one.
   const startedTitle = justStarted ? agentStart.title : undefined
-  const namesRuns = preferences.nameRuns !== false
   // What a listed session's page is called, in its heading and its tab.
   const sessionLabel = selectedAgent ? (awaitingName(selectedAgent, namesRuns) ? startedTitle : agentLabel(selectedAgent)) : undefined
   // Before the projects are read, a project's address reads as a page's word. A word no page this
