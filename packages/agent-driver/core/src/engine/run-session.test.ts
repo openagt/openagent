@@ -1,18 +1,19 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { lstat, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { FakeDriver } from '../fake.js'
-import { findRun } from '../record-store.js'
+import { findRun, readDiary } from '../record-store.js'
 import type { Driver } from '@openagt/hooks'
 import { personalFolder, sessionFolder, sessionsHome, SESSIONS_DIR } from '@openagt/agent-data'
 import { readLiveCard } from './live-card.js'
 import { resumeRun, runCommand } from './run.js'
+import { addedLine, PUBLISH_LINES } from './session.js'
 import { markerCard, writeMarker } from './records.js'
 import { sweep } from './sweep.js'
 import { runCli } from './cli.js'
 import { runArgs } from './runner.js'
-import { SESSION_FOLDER_STAYS, sessionRepos } from '@openagt/git-branches'
+import { copiesLine, SESSION_FOLDER_STAYS, sessionRepos, worktreePath } from '@openagt/git-branches'
 import { NOW, testModules } from './run-test-support.js'
 import { git, removeRepo, testRepo } from './test-repo.js'
 
@@ -92,12 +93,33 @@ test('the sweep closes a session whose process died, and leaves its folder', asy
   assert.deepEqual(await sweep(home, { host: 'this-box', isAlive: () => false, now: () => NOW }), { recorded: [], reclaimed: [], kept: [] })
 })
 
-test('a run in the sessions home takes no flag about git', async () => {
+test('a run in the sessions home takes no flag about a branch, and a level only with repos to publish', async () => {
   const home = await freshHome()
   const err: string[] = []
-  const code = await runCli(['run', '--publish', 'pr', 'Read the news'], { cwd: home, stdout: () => {}, stderr: line => err.push(line) })
-  assert.equal(code, 2)
-  assert.match(err[0] ?? '', /--publish is for a run in a project: a session with no project has no git/)
+  assert.equal(await runCli(['run', '--base', 'main', 'Read the news'], { cwd: home, stdout: () => {}, stderr: line => err.push(line) }), 2)
+  assert.match(err[0] ?? '', /--base is for a run in a project: a session with no project has no git/)
+  err.length = 0
+  assert.equal(await runCli(['run', '--publish', 'pr', 'Read the news'], { cwd: home, stdout: () => {}, stderr: line => err.push(line) }), 2)
+  assert.match(err[0] ?? '', /--publish needs --repos in a session with no project/)
+})
+
+test('a session with repos and a level: its agent is told to take each copy it changed that far; one with no repo is told nothing', async () => {
+  const home = await freshHome()
+  const repo = await repoWithoutOrigin()
+  try {
+    const repos = await sessionRepos([repo])
+    const outcome = await runCommand(home, { prompt: 'Fix it', publish: 'pr', driver: writingDriver(), host: 'this-box', pid: 4242, now: () => NOW, modules: testModules(), repos })
+    assert.equal(outcome.status, 'done')
+    const copy = join(sessionFolder(home, ID), 'repo')
+    const line = `${PUBLISH_LINES.pr} That is for each copied repo you changed, on its own branch there: ${copy}.`
+    assert.equal(addedLine('pr', undefined, { folders: [copy], alone: true }), line)
+    assert.equal((await readDiary(home, ID))?.find(entry => entry.kind === 'start')?.['added'], line)
+    assert.equal(addedLine('pr', undefined, { folders: [], alone: true }), undefined, 'no project and no repo: nothing to publish')
+    assert.equal(addedLine('commit', undefined, { folders: ['/s/api', '/s/site'], alone: false }), `${PUBLISH_LINES.commit} Do the same in each copied repo you changed, on its own branch there: /s/api, /s/site.`, "in a project: the project's sentence, then the copies")
+    assert.equal(addedLine('commit', undefined, { folders: [], alone: false }), PUBLISH_LINES.commit, 'a project with no copy: as before')
+  } finally {
+    await removeRepo(repo)
+  }
 })
 
 /** A repo with no remote: one commit on `main`. */
@@ -159,6 +181,47 @@ test('a resumed session keeps its copies as the agent left them, and makes again
   }
 })
 
+test('a run in a project with repos works in its checkout of the project, has a copy of each repo in a session folder beside it, and its agent is told where they are, once', async () => {
+  const home = await freshHome()
+  const project = await testRepo()
+  const other = await repoWithoutOrigin()
+  try {
+    const repos = await sessionRepos([other])
+    const cwds: string[] = []
+    // The agent leaves a file in its copy on its first turn: a copy it never touched would go with the run.
+    const driver = (): Driver => ({
+      id: 'fake',
+      start: async opts => {
+        cwds.push(opts.cwd)
+        const work = join(sessionFolder(home, basename(opts.cwd).replace(/^agent-/, '')), 'repo', 'work.txt')
+        if (cwds.length === 1) await writeFile(work, 'the agent was here\n')
+        return new FakeDriver({ turns: [{ text: 'Done.' }], sessionId: 's-1' }).start(opts)
+      },
+    })
+    const first = await runCommand(project, { prompt: 'Compare them', driver: driver(), host: 'this-box', pid: 4242, now: () => NOW, modules: testModules(), repos })
+    assert.equal(first.status, 'done')
+    assert.equal(cwds[0], worktreePath(project, first.id), 'the agent works in its checkout of the project')
+    const folder = sessionFolder(home, first.id)
+    const copy = join(folder, 'repo')
+    assert.equal(await readFile(join(copy, 'README.md'), 'utf8'), '# t\n', 'the repo is a copy in the session folder')
+    assert.equal(await branchOf(copy), `agent-${first.id}`)
+    assert.equal(await branchOf(other), 'main', "the repo's own folder is left as it was")
+    assert.equal((await git(['branch', '--list', `agent-${first.id}`], other)).trim(), '', 'no branch is made in the repo')
+    assert.deepEqual((await findRun(project, first.id))?.caller?.['repos'], repos, 'the record names the repos')
+    const told = copiesLine(folder, first.id, repos)
+    assert.ok(told.includes(`${copy} (copied from ${other})`), 'the line names the copy and where it came from')
+    assert.equal((await readDiary(project, first.id))?.find(line => line.kind === 'start')?.['attached'], told, 'the agent is handed where the copies are, with its prompt')
+
+    const resumed = await resumeRun(project, { id: first.id, text: 'Go on', driver: driver(), host: 'this-box', pid: 4243, modules: testModules() })
+    assert.equal(resumed.status, 'done')
+    assert.equal(await readFile(join(copy, 'work.txt'), 'utf8'), 'the agent was here\n', 'a resumed run keeps its copy as it is')
+    assert.deepEqual((await readDiary(project, first.id))?.filter(line => line.kind === 'start').map(line => line['attached']), [told, undefined], 'and is not told again of a copy it has')
+  } finally {
+    await removeRepo(project)
+    await removeRepo(other)
+  }
+})
+
 test('repos are given by folders in them, each once, and a folder that is no repo is refused', async () => {
   const repo = await testRepo()
   try {
@@ -171,7 +234,7 @@ test('repos are given by folders in them, each once, and a folder that is no rep
   }
 })
 
-test('--repos is for a session with no project, read one folder per line, and handed on to the run\'s process', async () => {
+test('--repos is read one folder per line, and handed on to the run\'s process; a resume takes none', async () => {
   const home = await freshHome()
   const repo = await testRepo()
   try {
@@ -180,9 +243,6 @@ test('--repos is for a session with no project, read one folder per line, and ha
     assert.equal(await runCli(['run', '--repos', home, 'Read'], { cwd: home, stdout: line => out.push(line), stderr: line => err.push(line) }), 1)
     assert.match(err.at(-1) ?? '', /is not a git repository/)
     assert.equal(JSON.parse(out[0]!).reason, 'not-a-repo')
-    err.length = 0
-    assert.equal(await runCli(['run', '--repos', repo, 'Read'], { cwd: repo, stdout: () => {}, stderr: line => err.push(line) }), 2)
-    assert.match(err[0] ?? '', /--repos is for a session with no project/)
     err.length = 0
     assert.equal(await runCli(['run', '--resume', ID, '--repos', repo, 'More'], { cwd: home, stdout: () => {}, stderr: line => err.push(line) }), 2)
     assert.match(err[0] ?? '', /--resume takes no --repos/)

@@ -58,12 +58,11 @@ vi.mock('../lib/run-hosts.js', async importOriginal => ({
 // The `actions` and `summary` slots of the bar above the message box ARE rendered, so the handoff
 // cluster and the modules' summaries stay reachable.
 vi.mock('./AgentActionBar.js', () => ({
-  AgentActionBar: ({ live, ready, checkout, status, onToggle, onProjectRemoved, onShowWorkBar }: { live?: boolean; ready?: boolean; checkout: unknown; status?: string; onToggle?: () => void; onProjectRemoved?: () => void; onShowWorkBar?: () => void }) => (
+  AgentActionBar: ({ live, ready, checkout, status, onToggle, onProjectRemoved }: { live?: boolean; ready?: boolean; checkout: unknown; status?: string; onToggle?: () => void; onProjectRemoved?: () => void }) => (
     <>
       <span data-testid="bar-status">{String(status)}</span>
       <span data-testid="bar-frame" />
       <span data-testid="bar-live">{String(live)}</span>
-      {onShowWorkBar && <button type="button" onClick={onShowWorkBar}>Show the work bar</button>}
       <button type="button" onClick={onProjectRemoved}>project removed</button>
       <button type="button" onClick={onToggle}>details</button>
       <span data-testid="bar-ready">{String(ready)}</span>
@@ -71,15 +70,19 @@ vi.mock('./AgentActionBar.js', () => ({
     </>
   ),
 }))
-vi.mock('./AgentWorkBar.js', () => ({
-  AgentWorkBar: ({ actions, summary, checkout, show, away, onHide }: { actions?: ReactNode; summary?: ReactNode; checkout: unknown; show: boolean; away: boolean; onHide: () => void }) => (
-    <div data-testid="work-bar" data-show={String(show)} data-away={String(away)}>
-      <button type="button" onClick={onHide}>Hide this bar</button>
+let copies: string[] = []
+// The panel has its own tests: here the project's row says what the view told it, and each copy of a repo its name.
+vi.mock('./AgentWorkPanel.js', () => ({
+  AgentWorkPanel: ({ children }: { children: ReactNode }) => <>{children}</>,
+  ProjectWorkRow: ({ actions, summary, checkout, show, name }: { actions?: ReactNode; summary?: ReactNode; checkout: unknown; show: boolean; name?: string | null }) => (
+    <div data-testid="work-bar" data-show={String(show)} data-name={name ?? ''}>
       <span data-testid="work-checkout">{JSON.stringify(checkout)}</span>
       {summary}
       {actions}
     </div>
   ),
+  CopyWorkRow: ({ repo, ended }: { repo: string; ended: boolean }) => <div data-testid="copy-row" data-ended={String(ended)}>{repo}</div>,
+  useAgentCopies: () => copies,
 }))
 // The row above the box has its own tests: here it says what the view told it, the run's pull requests as their own labels.
 vi.mock('./SessionRow.js', async () => {
@@ -134,6 +137,7 @@ const view = (over: Partial<Parameters<typeof AgentView>[0]> = {}) => (
 
 beforeEach(() => {
   vi.clearAllMocks()
+  copies = []
   onRetainedWorktrees.mockResolvedValue([])
   onAgentHandoff.mockResolvedValue(null)
   onAgentWorktree.mockResolvedValue({ branch: 'agent-x' })
@@ -355,25 +359,14 @@ describe('AgentView: when the bar above the message box is there', () => {
     await waitFor(() => expect(shown()).toBe('true'))
   })
 
-  test('a bar put away is offered back in Session actions, which brings it back, after a reload too', async () => {
+  test('each copy of a repo the session has gets a row of its own after the project\'s, told whether the run has ended', async () => {
+    copies = ['oa-newuser', 'recipe-box']
     onAgent.mockResolvedValue(ARCHIVED)
     onAgentWorktree.mockResolvedValue({ branch: 'agent-w', pr: { number: 4, url: 'https://x/pull/4', state: 'OPEN', title: 'T' } })
     render(view({ agentId: 'run-4' }))
     await waitFor(() => expect(shown()).toBe('true'))
-    expect(screen.queryByRole('button', { name: 'Show the work bar' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Hide this bar' }))
-    expect(screen.getByTestId('work-bar').dataset.away).toBe('true')
-    cleanup()
-    render(view({ agentId: 'run-4' }))
-    await waitFor(() => expect(shown()).toBe('true'))
-    expect(screen.getByTestId('work-bar').dataset.away).toBe('true')
-    fireEvent.click(screen.getByRole('button', { name: 'Show the work bar' }))
-    expect(screen.getByTestId('work-bar').dataset.away).toBe('false')
-    expect(screen.queryByRole('button', { name: 'Show the work bar' })).toBeNull()
-    cleanup()
-    render(view({ agentId: 'run-4' }))
-    await waitFor(() => expect(shown()).toBe('true'))
-    expect(screen.getByTestId('work-bar').dataset.away).toBe('false')
+    await waitFor(() => expect(screen.getAllByTestId('copy-row').map(row => [row.textContent, row.dataset.ended])).toEqual([['oa-newuser', 'true'], ['recipe-box', 'true']]))
+    expect(screen.getByTestId('work-bar').compareDocumentPosition(screen.getAllByTestId('copy-row')[0]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   test('on a first visit, a run whose pull request turns out merged never shows the bar while the request is read', async () => {

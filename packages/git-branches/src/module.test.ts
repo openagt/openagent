@@ -7,7 +7,7 @@ import { nodeGitRunner } from '@openagt/agent-data'
 import { RunOrder, type GitBranchesFacts, type ProjectRef, type RunContext, type RunStep } from '@openagt/hooks'
 import { fakeRun } from '@openagt/hooks/testing'
 import { gitBranchesModule } from './module.js'
-import { SESSION_FOLDER_STAYS } from './session-folder.js'
+import { copiesLine, SESSION_FOLDER_STAYS } from './session-folder.js'
 import { worktreePath } from './worktree.js'
 
 // git-branches as a module: its steps, run alone on a real repository, each reading and writing
@@ -129,6 +129,64 @@ test('a run with no project works in a folder of its own, which stays; a run who
   } finally {
     if (before === undefined) delete process.env.XDG_CONFIG_HOME
     else process.env.XDG_CONFIG_HOME = before
+    await rm(home, { recursive: true, force: true })
+  }
+})
+
+test('a run in a project with repos: its checkout of the project, a copy of each repo in a session folder, and a line for the agent on the copies made now', async () => {
+  const p = await project()
+  const other = await project()
+  const home = await realpath(await mkdtemp(join(tmpdir(), 'git-branches-home-')))
+  const before = process.env.XDG_CONFIG_HOME
+  process.env.XDG_CONFIG_HOME = home
+  try {
+    // The repo has an origin, as a repo on a git host has: its copy's work can be pushed.
+    await git(['init', '-q', '--bare', join(home, 'other-origin.git')], home)
+    await git(['remote', 'add', 'origin', join(home, 'other-origin.git')], other.dir)
+    const { checkout, reclaim } = steps()
+    const repos = [{ name: 'other', from: other.dir }]
+    const ctx: RunContext = fakeRun({ id: 'run1', project: p, options: { 'git-branches': { repos } } })
+    await checkout.run(ctx)
+    assert.equal(ctx.workspace, worktreePath(p.dir, 'run1'), 'the run works in its checkout of the project')
+    const folder = join(home, 'openagent-sessions', 'run1')
+    assert.equal((await git(['branch', '--show-current'], join(folder, 'other'))).trim(), 'agent-run1', 'the copy is on a branch of its own')
+    assert.equal((await git(['branch', '--show-current'], other.dir)).trim(), 'main', "the repo's own folder is left on its branch")
+    assert.deepEqual(ctx.context, [
+      `Context: this session has its own copy of a repo, on the branch agent-run1: ${join(folder, 'other')} (copied from ${other.dir}). Read and change it there, not in the folder copied from.`,
+    ])
+    assert.match(copiesLine(folder, 'run1', [...repos, { name: 'site', from: '/x/site' }]), /its own copies of repos, .*\/other \(copied from .*\), .*\/site \(copied from \/x\/site\)\. Read and change them there, not in the folders copied from\.$/)
+
+    // A resumed run has its copy already: nothing is made, and nothing is said again.
+    const resumed: RunContext = fakeRun({ id: 'run1', project: p, options: { 'git-branches': { repos } }, resume: { text: 'go on' }, facts: ctx.facts })
+    await checkout.run(resumed)
+    assert.deepEqual(resumed.context, [])
+
+    // The run ends with work in its copy: the copy stays. One it never touched goes, and the empty folder with it.
+    await writeFile(join(folder, 'other', 'work.txt'), 'x\n')
+    await git(['add', '-A'], join(folder, 'other'))
+    await git(['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'work'], join(folder, 'other'))
+    resumed.outcome = { status: 'done' }
+    await reclaim.run(resumed)
+    assert.equal(await exists(join(folder, 'other')), true, 'a copy with a commit of its own stays')
+    // Pushed, its work is still its own: the copy stays, where a resumed run goes on and the work bar reads it.
+    await git(['push', '-q', 'origin', 'agent-run1'], join(folder, 'other'))
+    await reclaim.run(resumed)
+    assert.equal(await exists(join(folder, 'other')), true, 'a copy whose commit was pushed stays')
+    const untouched: RunContext = fakeRun({ id: 'run2', project: p, options: { 'git-branches': { repos } } })
+    await checkout.run(untouched)
+    const second = join(home, 'openagent-sessions', 'run2')
+    await writeFile(join(second, 'other', 'scratch.txt'), 'x\n')
+    untouched.outcome = { status: 'done' }
+    await reclaim.run(untouched)
+    assert.equal(await exists(join(second, 'other')), true, 'a copy with a file not committed stays')
+    await rm(join(second, 'other', 'scratch.txt'))
+    await reclaim.run(untouched)
+    assert.deepEqual([await exists(join(second, 'other')), await exists(second)], [false, false], 'an untouched copy goes, and the session folder once it is empty')
+  } finally {
+    if (before === undefined) delete process.env.XDG_CONFIG_HOME
+    else process.env.XDG_CONFIG_HOME = before
+    await rm(p.dir, { recursive: true, force: true })
+    await rm(other.dir, { recursive: true, force: true })
     await rm(home, { recursive: true, force: true })
   }
 })

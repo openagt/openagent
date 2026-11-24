@@ -34,7 +34,8 @@ export interface GithubDeps {
 }
 
 /** Where a run's commits are made, and go as its account: its project's repository, or a session's own folder, with the copies of its repos. */
-export type CommitsIn = { project: string } | { session: string }
+/** Where a run's commits are made: a project's checkouts, and the session's folder too when the run has copies of repos there; or a session's folder alone. */
+export type CommitsIn = { project: string; session?: string } | { session: string }
 
 export function githubModule(deps: GithubDeps = {}): ModuleDefinition {
   const requestOfBranch = deps.requestOfBranch ?? branchRequest
@@ -64,13 +65,15 @@ async function openagentAccount(dir: string, user: string | undefined, commitsIn
 /**
  * The git directories of `commitsIn`, as git's `gitdir:` matches them, by their real path: a
  * project's own (its common directory, its main checkout's) and its worktrees' (in it), the run's
- * among them; or every repository in a session's folder. A repository elsewhere, such as one a
+ * among them, with every repository in the session's folder when the run has copies of repos
+ * there; or every repository in a session's folder alone. A repository elsewhere, such as one a
  * test makes in the temporary folder, is not among them, and commits as its own config says.
  */
 export async function gitDirsOf(commitsIn: CommitsIn): Promise<string[]> {
-  if ('session' in commitsIn) return [`${realPath(sessionFolder(sessionsHome(), commitsIn.session))}/**`]
+  const session = commitsIn.session !== undefined ? [`${realPath(sessionFolder(sessionsHome(), commitsIn.session))}/**`] : []
+  if (!('project' in commitsIn)) return session
   const common = realpathSync((await nodeGitRunner()(['rev-parse', '--path-format=absolute', '--git-common-dir'], commitsIn.project)).trim())
-  return [common, `${common}/**`]
+  return [common, `${common}/**`, ...session]
 }
 
 /** `path` with its links resolved, as far as it exists: a session's folder is made after its account is picked. */
@@ -103,7 +106,7 @@ async function workAsAccount(ctx: RunContext, onGithub: (dir: string) => Promise
   let working: WorkingAs
   try {
     // A session's own folder is made after its account is picked: gh is asked in the person's home folder.
-    working = await workAs(ctx.project?.dir ?? homedir(), picked, ctx.project ? { project: ctx.project.dir } : { session: ctx.id })
+    working = await workAs(ctx.project?.dir ?? homedir(), picked, ctx.project ? { project: ctx.project.dir, ...(ctx.options['git-branches']?.repos?.length ? { session: ctx.id } : {}) } : { session: ctx.id })
   } catch (err) {
     if (!ctx.project && picked === undefined) return
     throw new Error(picked !== undefined ? `This session works as @${picked} on GitHub, and it cannot be used here: ${errorMessage(err)}` : errorMessage(err))

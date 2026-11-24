@@ -167,6 +167,9 @@ test(
     working = runEnv('tok', account, { login: 'octo', id: 42 }, gitEnv, session)
     execFileSync('git', ['clone', '-q', project, join(folder, 'shop')], { env: gitEnv })
     assert.deepEqual([author(join(folder, 'shop')), author(tests)], ['octo <42+octo@users.noreply.github.com>', 'Tester <tester@example.com>'], 'no name: the login')
+    // A run in a project with copies of repos: its commits there are the account's too.
+    working = runEnv('tok', account, facts, gitEnv, await gitDirsOf({ project, session: '2026-11-21T19-02-26-646Z' }))
+    assert.deepEqual([author(join(folder, 'shop')), author(project), author(tests)], [octo, octo, 'Tester <tester@example.com>'])
     rmSync(folder, { recursive: true, force: true })
     // No facts kept, or nowhere given: git signs as it would.
     assert.equal(runEnv('tok', account, undefined, gitEnv, session)['GIT_CONFIG_COUNT'], '4')

@@ -38,7 +38,7 @@ export { nameBranch, isSessionName, type NameBranchOutcome, type NameBranchRefus
 export { createCheckout, attachCheckout, relinkCheckout, type CheckoutSkills } from './checkout.js'
 export { liftSkillRules } from './cleanup.js'
 export { pushCheckout, pushBranchByName, type PushOutcome, type PushRefusal } from './push.js'
-export { openSessionFolder, sessionRepos, SESSION_FOLDER_STAYS, type SessionRepo } from './session-folder.js'
+export { copiesLine, openSessionFolder, sessionRepos, SESSION_FOLDER_STAYS, type SessionRepo } from './session-folder.js'
 export { mergeBranch, type MergeOutcome, type MergeRefusal } from './merge.js'
 export { readBranchStates, parseCommits, parseNumstat, parsePorcelain, type BranchState, type BranchCommit, type BranchFile } from './branch-state.js'
 export { readBranchesAhead, type BranchAhead } from './branch-ahead.js'

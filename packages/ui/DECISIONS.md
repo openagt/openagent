@@ -193,8 +193,8 @@ already made, and lists it in its pull request; for anything else it proposes an
 - A session's top bar has the project's ⋮ where the launcher's has it, and the session's own
   actions stay under the ⌄ on its name. Picked over one menu per page, which left the project's
   actions out of reach on a session's page.
-- The bar above a session's box goes once its pull request is merged or closed. Picked over the
-  bar staying with the request as a label: the labels above the box already say it.
+- The project's row above a session's box goes once its pull request is merged or closed. Picked over the
+  row staying with the request as a label: the labels above the box already say it.
 - The foot of the sidebar is the person: their picture and first name, as one row that opens
   one menu with their whole name, the theme and Settings. The project select stays at the
   top, beside the pages it changes. Picked over a row of three icons, and over the project
@@ -575,14 +575,31 @@ already made, and lists it in its pull request; for anything else it proposes an
   host package answers for: the session may clone, make a repository or read the person's pull
   requests with no project picked, and the account says as whom. A line that came and went with
   the project read as a fault. With no account there the gear has no warning: such a session may
-  need none. "When it finishes" is still a project's alone: a session with no project has no
-  repository of its own to publish. A project's Context is the same menu as with no project,
+  need none. "When it finishes" is a project's, and a session's with no project once it has a
+  repo ticked: its copies of repos are what it publishes. A project's Context is the same menu as with no project,
   repos that are no project among its rows, and the files picked for it over them: before, it
-  listed the projects alone. What a tick does there is unchanged, and the menu's heading says
-  it: the agent is pointed at the repo where it is, and nothing is copied. The menu stands over
+  listed the projects alone. The menu stands over
   the box where the page has the room, under its own button otherwise. A session's own page says its Context in the launcher's
   button and a menu as the launcher's, its repos ticked and not offered: a session keeps them.
   Picked over words with a hover, which read as another control.
+- One "When it finishes" level holds for all a session works in: its project and every copy of
+  a repo its agent changed, each on the copy's own branch. A small line under the gear's line
+  says what the level is for once the session has copies. Picked over a level per repo, which
+  is a list to go through before every Start, and over copies that are only committed with a
+  press per copy to open their pull request; it costs a pull request in a repo where a commit
+  was wanted, which a level of Commit avoids.
+- A session's work is one panel above the message box, a row per repo that has work: the
+  project's first, then each copy of a repo. A row is the repo's name, under it its branch,
+  what the branch holds and its pull request, and at its end the next step as a press (Commit,
+  Open PR, Merge), which acts on that repo. A copy's row is read off the copy's own folder and
+  branch, so a repository the agent cloned into a session's folder on its own has a row too.
+  Before, this was a bar for the project's branch alone, with an ✕ that put it away: a copy's
+  work had no place, and a list of repos is not put away. Picked over a bar per repo stacked,
+  over one bar with a repo to switch, over the project's bar with a label per copy, which
+  gives the project and a copy two looks, and over one bar that opens to the rows. On a phone
+  the press keeps its place at the row's end, as wide as its word: before, it took a line of
+  its own, 44 high and as wide as the bar. A copy of a repo with no remote has no way back
+  into the folder it came from, and its row says so in place of a press.
 - A session with no project may have repos as context, ticked in Context under the box, where
   a project's Context picker is, from the same search: as many as wanted, the button saying how
   many and its hover their names. Context is under the box on both pages, and its menu, like
@@ -590,10 +607,15 @@ already made, and lists it in its pull request; for anything else it proposes an
   per repo, and the row under the box had no Context: two controls for one question, what the
   agent works with. Picked over the chips kept above the box with Context only adding, and over
   the names on the button, both of which run off a phone's width; it costs the names at rest and
-  a second press to take one out. What a tick does differs, and the menu says so: with a project
-  it narrows the agent's focus, with none the repo is copied. Each is a copy in the session's folder, cloned from the repo's folder on a
-  new branch, its origin the repo's own; none is made a project. The agent starts in the
-  session's folder and finds the repos as folders there; the prompt says nothing of them.
+  a second press to take one out. A tick does the same with a project and with none, and the
+  menu's heading says it: the repo is copied. Before, a tick with a project pointed the agent at
+  the repo's folder, and it worked in the person's own checkout there; picked over keeping both,
+  as one menu that does two things reads as a fault. A session in a project says its repos on its
+  own page as one with none does, ticked and not offered, with the files picked for the next
+  message over them: a repo is not added after the start. Each is a copy in the session's folder, cloned from the repo's folder on a
+  new branch, its origin the repo's own; none is made a project. With no project the agent starts in the
+  session's folder and finds the repos as folders there; the prompt says nothing of them. In a
+  project it starts in its checkout, and is told where the copies are.
   The session's record names them, and a resumed session goes on with the same copies.
   Picked over a worktree of each repo, which leaves branches and checkouts in a folder that
   is no project, and over a clone from the repo's address, which needs a login and the

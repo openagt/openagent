@@ -92,17 +92,14 @@ const counted = (count: number): string => `${count} repo${count === 1 ? '' : 's
 // in the row above the box, and over a project's own shorter list): the repos the session works
 // with (Rom's "repos are just context"), ticked on and off, as many as wanted, from the projects
 // of this computer and the repos the picker lists. The button says how many, and its hover their
-// names. What a tick does is the caller's, and the menu's heading says it (`heading`): with no
-// project the run copies the repo into the session's folder, and leaves the repo's own folder as
-// it was; with a project the agent is pointed at it where it is (ContextMenu.tsx), and the files
-// picked for it are listed over the repos (`files`).
+// names. A tick does the same with a project and with none, and the menu's heading says it: the
+// run copies the repo into the session's folder, and leaves the repo's own folder as it was. A
+// project's menu lists the files picked for it over the repos (`files`, ContextMenu.tsx).
 export function ReposMenu({
   picked,
   projects,
   busy,
   onChange,
-  heading = "Repos copied into the session's folder",
-  said = reposSaid,
   without,
   files,
 }: {
@@ -110,10 +107,6 @@ export function ReposMenu({
   projects: readonly ProjectSummary[]
   busy: boolean
   onChange: (picked: PickedRepo[]) => void
-  /** What a tick does, over the list. */
-  heading?: string
-  /** What the button's hover says of the picked ones, by their names. */
-  said?: (names: readonly string[]) => string
   /** A folder left out of the list: the session's own project. */
   without?: string | undefined
   /** The files picked beside the repos: how many, said on the button, and their list. */
@@ -180,7 +173,7 @@ export function ReposMenu({
             />
           }
         />
-        <TooltipContent>{said(picked.map(repo => repo.name))}</TooltipContent>
+        <TooltipContent>{reposSaid(picked.map(repo => repo.name))}</TooltipContent>
       </Tooltip>
       <Combobox.Portal>
         <Combobox.Positioner {...position} {...(above ? { anchor: box, side: 'top' as const } : {})} sideOffset={6} align="start" className="z-50 outline-none">
@@ -192,10 +185,10 @@ export function ReposMenu({
             </div>
             <ScrollArea viewportClassName="h-[min(20rem,calc(var(--available-height)-5rem))]">
               <div className={MENU_BODY_CLASS}>
-                {/* What a tick does: it differs with and without a project. */}
+                {/* What a tick does. */}
                 {/* The picked files first: under some sixty repos they would be out of sight. */}
                 {files && files.count > 0 && filesPart(files.list, 'first')}
-                <p className="px-2 pt-1 pb-0.5 text-xs text-muted-foreground">{heading}</p>
+                <p className="px-2 pt-1 pb-0.5 text-xs text-muted-foreground">Repos copied into the session's folder</p>
                 <Combobox.Empty className="px-2 py-1.5 text-xs text-muted-foreground empty:hidden">{repos === null ? '' : 'No repo by that name.'}</Combobox.Empty>
                 <Combobox.List>
                   {(group: Group) => (
@@ -244,26 +237,29 @@ export function ReposMenu({
 }
 
 /**
- * The Context of a session with no project on its own page: the launcher's button in the launcher's
- * place, and a menu above the box as the launcher's is (his pick, over words with a hover: the
- * same control on both pages). It lists the repos the session started with, each ticked, with
- * where it was copied from. A session keeps them, so the rows are said, not offered, and the
- * menu's heading says so.
+ * The Context of a session on its own page: the launcher's button in the launcher's place, and a
+ * menu above the box as the launcher's is (his pick, over words with a hover: the same control on
+ * both pages). It lists the repos the session started with, each ticked, with where it was copied
+ * from. A session keeps them, so the rows are said, not offered, and the menu's heading says so.
+ * A session in a project has the files picked for its next message too (`files`), counted on the
+ * button and listed as the launcher lists them.
  */
-export function SessionReposSaid({ repos }: { repos: readonly { name: string; from: string }[] }) {
+export function SessionReposSaid({ repos, files }: { repos: readonly { name: string; from: string }[]; files?: { count: number; list: ReactNode } | undefined }) {
   const box = useContext(BoxOfRow)
+  const counts = [repos.length > 0 ? counted(repos.length) : null, files && files.count > 0 ? `${files.count} file${files.count === 1 ? '' : 's'}` : null].filter(Boolean).join(' · ')
   return (
     <DropdownMenu>
       <Tooltip>
-        <TooltipTrigger render={<DropdownMenuTrigger type="button" aria-label={repos.length > 0 ? `Context: ${counted(repos.length)}` : 'Context'} className={rowButtonClass} />}>
+        <TooltipTrigger render={<DropdownMenuTrigger type="button" aria-label={counts ? `Context: ${counts}` : 'Context'} className={rowButtonClass} />}>
           <Layers className="size-4 shrink-0" aria-hidden />
           <span className="truncate">
-            Context{repos.length > 0 && <span className="text-primary"> · {counted(repos.length)}</span>}
+            Context{counts && <span className="text-primary"> · {counts}</span>}
           </span>
         </TooltipTrigger>
         <TooltipContent>{repos.length === 0 ? 'This session started with no repo' : `Copies in this session's folder: ${repos.map(repo => repo.name).join(', ')}`}</TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="start" {...(box ? { anchor: box, side: 'top' as const } : {})} className="w-[24rem] max-w-[var(--available-width)]">
+        {files && files.count > 0 && filesPart(files.list, 'first')}
         <DropdownMenuGroup>
           <DropdownMenuLabel className="font-normal">Repos copied into this session's folder when it started</DropdownMenuLabel>
           {repos.length === 0 ? (
@@ -287,6 +283,7 @@ export function SessionReposSaid({ repos }: { repos: readonly { name: string; fr
             ))
           )}
         </DropdownMenuGroup>
+        {files && files.count === 0 && filesPart(files.list, 'last')}
       </DropdownMenuContent>
     </DropdownMenu>
   )

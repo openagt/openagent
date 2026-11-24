@@ -80,7 +80,7 @@ export interface RunRequest {
   branch?: string
   /** What the run is started for (`run --for`), kept on its mark: a thread on the git host, by its address. */
   for?: string
-  /** The repos a session with no project has as context (`run --repos`), each copied into its folder; kept on its mark. */
+  /** The repos a session has as context (`run --repos`), each copied into its folder; kept on its mark. */
   repos?: SessionRepo[]
 }
 

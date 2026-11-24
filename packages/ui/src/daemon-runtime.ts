@@ -18,7 +18,7 @@ import { publishedBranch } from '@openagt/agent-data/names'
 import { branchesOnOrigin } from './dashboard/start-branch.js'
 import { removeProjectFiles } from './remove-files.js'
 import { projectRefAt } from './distribution-hooks.js'
-import { publishLevelOf, publishPickIn } from './publish-levels.js'
+import { isPublishPick, publishLevelOf, publishPickIn } from './publish-levels.js'
 import { isBranchName } from './branch-name.js'
 import { hasRemote } from './has-remote.js'
 import { projectGitHost } from './store/git-host.js'
@@ -51,11 +51,12 @@ interface StartName {
  * reads as the thing it names goes on to the host.
  */
 function refusedPicks(options: StartAgentOptions, noProject: boolean): string | undefined {
-  // A session with no project: with no branch, and nothing committed or published; the repos it
-  // has are copied into its folder. Its git host account goes with it: it may reach the host all the same.
-  if (noProject && (options.base !== undefined || options.prBase !== undefined || options.publish !== undefined || options.projectSkills !== undefined)) {
-    return 'A session with no project runs with no branch, nothing to publish and no project skills.'
+  // A session with no project: with no branch; the repos it has are copied into its folder, and are
+  // what it publishes. Its git host account goes with it: it may reach the host all the same.
+  if (noProject && (options.base !== undefined || options.prBase !== undefined || options.projectSkills !== undefined)) {
+    return 'A session with no project runs with no branch and no project skills.'
   }
+  if (noProject && options.publish !== undefined && !(Array.isArray(options.repos) && options.repos.length > 0)) return 'A session with no project and no repo has nothing to publish.'
   if (options.images !== undefined && !(Array.isArray(options.images) && options.images.length <= IMAGES_PER_MESSAGE && options.images.every(isImageName))) return 'Images are named by the names the dashboard kept them under.'
   // Another host runs a project's run, on a machine of its own.
   if (options.host !== undefined && (typeof options.host !== 'string' || !MODULE_NAME.test(options.host))) return 'A host is named by its id.'
@@ -67,7 +68,6 @@ function refusedPicks(options: StartAgentOptions, noProject: boolean): string | 
   const skillList = (value: unknown): value is string[] => Array.isArray(value) && value.length > 0 && value.every(isSkillName)
   if (options.pluginsWithout !== undefined && !(Array.isArray(options.pluginsWithout) && options.pluginsWithout.every(name => typeof name === 'string' && MODULE_NAME.test(name)))) return 'Plugins are named by their names.'
   if (options.projectSkills !== undefined && options.projectSkills !== 'all' && options.projectSkills !== 'none' && !skillList(options.projectSkills)) return 'Project skills are all, none, or named by their names.'
-  if (!noProject && options.repos !== undefined) return 'Repos are added to a session with no project: a project works in its own checkout.'
   // A repo is a whole path, and the run's process is handed them one per line.
   if (options.repos !== undefined && !(Array.isArray(options.repos) && options.repos.every(folder => typeof folder === 'string' && isAbsolute(folder) && !folder.includes('\n')))) {
     return 'A repo is named by the path of its folder on this computer.'
@@ -153,7 +153,10 @@ export function createProjectRuntime({ cwd, env, naming, host, otherHosts = asyn
     // with none saved the run commits and pushes nothing, and with one the project is not offered
     // it goes as far as the project does with no pull request: its branch pushed, or its work
     // committed where there is no remote.
-    const publish = noProject ? undefined : publishLevelOf(publishPickIn(options.publish, (await projectGitHost(projectCwd).catch(() => undefined)) !== undefined, await hasRemote(projectCwd)))
+    // With no project the level is for the session's copies of repos, whatever host each is on: the pick as sent, and none with no repo.
+    const publish = noProject
+      ? options.publish !== undefined && isPublishPick(options.publish) ? publishLevelOf(options.publish) : undefined
+      : publishLevelOf(publishPickIn(options.publish, (await projectGitHost(projectCwd).catch(() => undefined)) !== undefined, await hasRemote(projectCwd)))
     // A session's repos, each under the name it has in the session's folder: one that is no repository refuses the Start.
     const repos = options.repos !== undefined ? await sessionRepos(options.repos).then(given => ({ given }), (err: unknown) => ({ error: errorMessage(err) })) : undefined
     if (repos && 'error' in repos) return { ok: false, error: repos.error }

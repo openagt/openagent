@@ -16,7 +16,7 @@ import { Button } from './ui/button.js'
 // past, the project's ⋮, and the icons of the page's panes (Panes), the ⋮ and the icons where the "New
 // agent session" page has them. It says nothing of its tree: where it runs and its project are in
 // the row above the message box (SessionRow), and its
-// branch, what the branch holds and the next step in the bar above that (AgentWorkBar). One bar for
+// branch, what the branch holds and the next step in the panel above that (AgentWorkPanel). One bar for
 // the session whether running or finished (AgentView), so the controls stay put when an agent
 // reaches Done.
 export function AgentActionBar({
@@ -34,7 +34,6 @@ export function AgentActionBar({
   onToggle,
   ready = true,
   checkout,
-  onShowWorkBar,
   status,
   onBack,
 }: {
@@ -69,8 +68,6 @@ export function AgentActionBar({
   ready?: boolean
   /** The agent's checkout as the page read it (`null`: not answered yet), read once for this bar and the one above the message box. */
   checkout: AgentWorktree | null
-  /** Given while the bar above the message box is put away: the session's menu brings it back. */
-  onShowWorkBar?: (() => void) | undefined
   /** The run's state as the run table names it (`shownStatus`), once it is known. */
   status?: string | undefined
   /** Given, a phone's bar starts with a back arrow that calls it: a phone's session page has no bar of pages. */
@@ -104,7 +101,6 @@ export function AgentActionBar({
           onDeleted={onDeleted}
           {...(onToggle ? { details: { open: expanded, onToggle } } : {})}
           size={size}
-          showWorkBar={onShowWorkBar}
         />
         {/* The run's state after its name on a desktop; a phone's bar keeps its width for the name, and
             the first screenful shows the state (the failed end, the commits and their press, the question): a screen reader still hears it here. */}

@@ -94,6 +94,8 @@ export function Committing() {
 export function HandoffActions(props: {
   projectId: string
   agentId: string
+  /** One of the session's copies of repos, by its name: the presses act on it, in place of the project. */
+  repo?: string | undefined
   state: AgentHandoffState
   /** The Commit button's ask is on its way to the agent (`null`: it did not go through), so the page shows it at once. */
   onAsked?: ((text: string | null) => void) | undefined
@@ -157,6 +159,7 @@ function keepFocusIn(bar: HTMLElement | null): void {
 function NextStep({
   projectId,
   agentId,
+  repo,
   state,
   onAsked,
   press,
@@ -164,6 +167,7 @@ function NextStep({
 }: {
   projectId: string
   agentId: string
+  repo?: string | undefined
   state: AgentHandoffState
   onAsked?: ((text: string | null) => void) | undefined
   press: Pressed
@@ -220,7 +224,7 @@ function NextStep({
     )
   }
   const pushed = handoff.gitHost ? { text: 'Pushed.' } : { text: 'Pushed. Pull requests need a remote on GitHub.', title: 'Another git host needs a module of its own in OpenAgent' }
-  const push = () => press('push', () => sendPush(projectId, agentId), 'Could not push the branch.', () => ({ pushed: true }), () => pushed)
+  const push = () => press('push', () => (repo !== undefined ? sendPush(projectId, agentId, repo) : sendPush(projectId, agentId)), 'Could not push the branch.', () => ({ pushed: true }), () => pushed)
   // Once a PR exists the bar links it and the needs-you queue (#632) has it: offering to open one
   // again is the single mistake this must not make. What is still worth offering is the Merge
   // (#1391): an open, unmerged PR takes one human click to land. An agent asked for more after its
@@ -254,7 +258,7 @@ function NextStep({
         onClick={() =>
           press(
             'merge',
-            () => sendMerge(projectId, agentId),
+            () => (repo !== undefined ? sendMerge(projectId, agentId, repo) : sendMerge(projectId, agentId)),
             'Could not merge the pull request.',
             done => (done.merge === 'merged' ? { pr: { ...pr, state: 'MERGED' } } : done.merge === 'auto-armed' ? { pr: { ...pr, armed: true } } : undefined),
             done => ({ text: done.merge === 'merged' ? `Merged PR #${pr.number}.` : mergesLater(pr.number) }),
@@ -281,6 +285,8 @@ function NextStep({
   // No remote: nothing to push to and no pull request to open, so the work reaches the project's
   // own folder by a merge on this machine, and that is the one step offered.
   if (!handoff.hasRemote) {
+    // A copy of a repo with no remote has no way back into the folder it was copied from: its work is in the copy.
+    if (repo !== undefined) return <Reason>No remote: the work stays in this copy.</Reason>
     return (
       <>
         <Reason>Not in {mainBranchName(handoff.base)} yet.</Reason>
@@ -314,7 +320,7 @@ function NextStep({
   const openPr = (draft: boolean) =>
     press(
       'pr',
-      () => sendOpenPullRequest(projectId, agentId, { draft }),
+      () => sendOpenPullRequest(projectId, agentId, { draft, ...(repo !== undefined ? { repo } : {}) }),
       'Could not open the pull request.',
       opened => (opened.number !== undefined && opened.url !== undefined ? { pushed: true, pr: { number: opened.number, url: opened.url, state: 'OPEN', title: '' } } : undefined),
       // The bar names the pull request from here on.

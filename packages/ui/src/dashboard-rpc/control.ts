@@ -10,7 +10,8 @@ import { IMAGES_PER_MESSAGE } from '../images.js'
 import { findAgent, isRunId, projectRuns, type AgentMeta } from '../store/index.js'
 import { withAgentLock } from '../agent-locks.js'
 import { removeProjectWorktree, deleteProjectAgent } from '../worktrees.js'
-import { mergeAgentPr, openAgentPullRequest, mergeAgentBranch, pushAgentBranch, type HandoffResult } from '../dashboard/agent-handoff.js'
+import { mergeAgentPr, openAgentPullRequest, mergeAgentBranch, pushAgentBranch, readRunHandoff, type HandoffResult } from '../dashboard/agent-handoff.js'
+import { copyTarget } from '../dashboard/session-copies.js'
 import { createRepository, type CreateRepositoryResult } from '../store/repository.js'
 import { providedDataChanged } from '../store/provided.js'
 import type {
@@ -175,10 +176,16 @@ export async function sendOpenInApp(projectId: string, target: OpenTarget, agent
 async function handoffTargetFor(
   projectId: string,
   agentId: string,
+  repo?: string,
 ): Promise<{ cwd: string; agent: AgentMeta; checkout: string } | undefined> {
   const cwd = await resolveProjectPath(projectId)
   if (!cwd || !isRunId(agentId)) return undefined
   const agent = await findAgent(cwd, agentId).catch(() => undefined)
+  // One of the session's copies of repos (`session-copies.ts`): its own folder and the branch it is on.
+  if (repo !== undefined) {
+    const copy = agent && (await copyTarget(agent, repo))
+    return copy ? { ...copy, checkout: copy.cwd } : undefined
+  }
   // The branch is read from the project repo; the tree the agent edited is its own checkout (#453),
   // and for a session that has not committed, that is the only place its work exists.
   const checkout = (await resolveAgentPath(projectId, agentId)) ?? cwd
@@ -193,8 +200,8 @@ async function handoffTargetFor(
  * work with and the intent the user asked for. Nothing new is invented and nothing extra is asked
  * of the user, which is the point of "offer the next step rather than describe it".
  */
-export async function sendOpenPullRequest(projectId: string, agentId: string, options: { draft?: boolean } = {}): Promise<HandoffResult> {
-  const target = await handoffTargetFor(projectId, agentId)
+export async function sendOpenPullRequest(projectId: string, agentId: string, options: { draft?: boolean; repo?: string } = {}): Promise<HandoffResult> {
+  const target = await handoffTargetFor(projectId, agentId, options.repo)
   if (!target) return { ok: false, error: 'unknown session' }
   // Under the agent lock, so the provider's push inside `openAgentPullRequest` cannot race a
   // Remove of the same checkout.
@@ -203,7 +210,8 @@ export async function sendOpenPullRequest(projectId: string, agentId: string, op
   // process is gone by now, so there is no event stream to carry the fact — but it is the same
   // fact, and every surface reads it from the same place either way rather than re-deriving it
   // from branch names. No provider: there is no record to carry it, and the PR is still open.
-  if (opened.ok && opened.number !== undefined && opened.url) {
+  // A copy's request is not the run's: the record names the project's alone, and the copy's is read off its branch.
+  if (options.repo === undefined && opened.ok && opened.number !== undefined && opened.url) {
     await (await projectRuns(target.cwd).catch(() => undefined))?.patch(agentId, { pr: { number: opened.number, url: opened.url } })
   }
   return opened
@@ -213,8 +221,8 @@ export async function sendOpenPullRequest(projectId: string, agentId: string, op
  * The user's Publish branch action (#1820): push a finished run's branch and open no pull request,
  * the last step where the project has no git host package. Under the agent lock, as Open PR is, so the push cannot race a Remove.
  */
-export async function sendPush(projectId: string, agentId: string): Promise<HandoffResult> {
-  const target = await handoffTargetFor(projectId, agentId)
+export async function sendPush(projectId: string, agentId: string, repo?: string): Promise<HandoffResult> {
+  const target = await handoffTargetFor(projectId, agentId, repo)
   if (!target) return { ok: false, error: 'unknown session' }
   if (target.agent.status === 'running') return { ok: false, error: 'that session is still going' }
   return withAgentLock(agentLockKey(target.cwd, agentId), () => pushAgentBranch(target.cwd, target.agent))
@@ -250,9 +258,12 @@ export async function sendMergeBranch(projectId: string, agentId: string): Promi
  * that is still working has no Merge: its agent is still writing its branch, and the button comes
  * with the ended view.
  */
-export async function sendMerge(projectId: string, agentId: string): Promise<HandoffResult> {
-  const target = await handoffTargetFor(projectId, agentId)
+export async function sendMerge(projectId: string, agentId: string, repo?: string): Promise<HandoffResult> {
+  const target = await handoffTargetFor(projectId, agentId, repo)
   if (!target) return { ok: false, error: 'unknown session' }
   if (target.agent.status === 'running') return { ok: false, error: 'that session is still going' }
-  return mergeAgentPr(target.cwd, target.agent)
+  if (repo === undefined) return mergeAgentPr(target.cwd, target.agent)
+  // A copy's request is on no record: the one its branch has is the one to merge.
+  const pr = (await readRunHandoff(target.cwd, target.agent).catch(() => undefined))?.pr
+  return mergeAgentPr(target.cwd, { id: agentId, ...(target.agent.branch !== undefined ? { branch: target.agent.branch } : {}), ...(pr ? { pr: { number: pr.number, url: pr.url } } : {}) })
 }

@@ -13,12 +13,12 @@ import { useLoaded } from '../lib/use-async.js'
 
 import { promptWithContext } from '../lib/use-context-set.js'
 import { keepDraft, keepDraftImages, stashPendingDraft } from '../lib/draft-handoff.js'
-import { AutoMenu, autoSaid } from './AutoMenu.js'
-import { ProjectContextMenu } from './ContextMenu.js'
+import { AutoMenu, autoCovers, autoSaid } from './AutoMenu.js'
+import { ProjectContextMenu, isRepoPath } from './ContextMenu.js'
 import { Composer, type ComposerHandle } from './Composer.js'
 import { StartFromMenu, prTargetBranch, startFromBase } from './StartFromMenu.js'
 import { ProjectPicker } from './ProjectPicker.js'
-import { ReposMenu, type PickedRepo } from './SessionRepos.js'
+import { ReposMenu, folderName, type PickedRepo } from './SessionRepos.js'
 import { Dots } from './ToolCalls.js'
 import { AgentFix, agentWords, useAgentState } from './Logins.js'
 import { profilePicks, SkillsMenu, useSkillCount, type SkillPicks } from './SkillsMenu.js'
@@ -45,8 +45,9 @@ const STARTING_SAID_AFTER_MS = 300
 // line a press fixes is said with its press inside: logging the agent in here. All of it is said
 // above the box, over the page, where the Start's own line is: the box does not move when it
 // comes or goes.
-// The Context picker (#439/#314) narrows the run's focus to other projects and to files: the
-// picked paths ride the prompt as one `Context:` line at its end.
+// The Context picker (#439/#314) gives the run files to look at and other repos to work with: the
+// picked files ride the prompt as one `Context:` line at its end, and the repos go with the Start,
+// which copies them for the session.
 // The row above the box says where the Start goes: the "Run on" pick, which the Composer draws
 // first, then the project's name, then the branch the agent starts from.
 // That branch is a menu: the project's main branch (origin's default branch, fetched fresh), "My
@@ -72,7 +73,8 @@ const STARTING_SAID_AFTER_MS = 300
 // With no project (`SESSIONS_ID`), the run starts in a folder of its own on this computer: the row
 // says "No project", and nothing about a repository is offered, no branch, no Auto level, no
 // project skills. It has its git host account all the same: it may reach the host with no project. Its Context, under the box where a project's is, is the repos the session
-// works with (SessionRepos.tsx): each is copied into the session's folder, and none is made a project.
+// works with (SessionRepos.tsx): each is copied into the session's folder, and none is made a project. A repo
+// ticked in a project's Context is copied the same way, beside the run's checkout of the project.
 export function StartAgentForm({
   projectId,
   projectName,
@@ -153,7 +155,9 @@ export function StartAgentForm({
   const gitHost = launcher?.gitHost ?? true
   // A project with no remote can publish nothing: its picks stop at the commit.
   const remote = launcher?.remote ?? true
-  const publishPick = publishPickIn(preferences.publish, gitHost, remote)
+  // With no project the level is for the session's copies of repos, whatever host each is on: every pick is offered.
+  const publishPicks = noProject ? offeredPublishPicks(true, true) : offeredPublishPicks(gitHost, remote)
+  const publishPick = noProject ? publishPickIn(preferences.publish, true, true) : publishPickIn(preferences.publish, gitHost, remote)
   // The branches every project's menu lists, where the pick is offered at all.
   const startFrom = launcher?.startFrom
   const startFromPick = preferences.startFrom?.[projectId]
@@ -215,11 +219,15 @@ export function StartAgentForm({
   // has its account too, and no Auto level: it has no repository of its own to publish.
   const gitAccount = useGitAccountSetup(remote ? address : undefined, pickedAccount ?? onProfile?.options.github?.account, setPickedAccount, noProject)
   const skillCount = useSkillCount(noProject ? undefined : projectId, skillPicks)
+  // A project's Context holds files, said at the prompt's end, and repos, which the run copies as it does with no project.
+  const ticked = noProject ? repos : [...context].filter(isRepoPath).map(path => ({ path, name: folderName(path) }))
+  // What a level acts on: the project, or with none the copies of repos, once one is ticked.
+  const publishes = !noProject || ticked.length > 0
   const setupSaid = [
     onProfile && `Profile ${onProfile.name}`,
     skillCount !== undefined && `${skillCount} skill${skillCount === 1 ? '' : 's'}`,
     gitAccount.said,
-    !noProject && autoSaid(publishPick, prTarget),
+    publishes && autoSaid(publishPick, prTarget),
   ]
     .filter(Boolean)
     .join(' · ')
@@ -228,13 +236,15 @@ export function StartAgentForm({
     setNote(STARTING)
     const { publish: _publish, ...unpublished } = startPicks(preferences)
     const withImages = images.length > 0 ? { images } : {}
-    const result = await start(projectId, promptWithContext(text, context), {
+    const result = await start(projectId, promptWithContext(text, [...context].filter(path => !isRepoPath(path))), {
       ...withImages,
-      ...(noProject ? unpublished : startPicks(preferences)),
+      // A project's Start carries the saved pick alone, and the daemon holds it to what the project is offered; with no
+      // project the pick in force goes with the repos it is for, and none with no repo.
+      ...(noProject ? (publishes ? { ...unpublished, publish: publishPick } : unpublished) : startPicks(preferences)),
       ...(startFrom ? startFromBase(startFromPick, startFrom.main, startFrom.local) : {}),
       ...(prInto !== undefined ? { prBase: prInto } : {}),
       ...(host ? { host: host.id } : {}),
-      ...(noProject && repos.length > 0 ? { repos: repos.map(repo => repo.path) } : {}),
+      ...(ticked.length > 0 ? { repos: ticked.map(repo => repo.path) } : {}),
       ...((noProject || remote) && account !== undefined ? { account } : {}),
       ...(profileId !== undefined ? { profile: profileId } : {}),
       ...pickedSkills,
@@ -255,13 +265,13 @@ export function StartAgentForm({
           ...((noProject || remote) && account !== undefined ? { gitAccount: account } : {}),
           ...(profileId !== undefined ? { profile: profileId } : {}),
           ...pickedSkills,
-          ...(noProject ? {} : { publish: publishPick }),
+          ...(publishes ? { publish: publishPick } : {}),
           ...(prInto !== undefined ? { prBase: prInto } : {}),
           ...(preferences.driver ? { driver: preferences.driver } : {}),
           ...(preferences.model ? { model: preferences.model } : {}),
           ...(preferences.effort ? { effort: preferences.effort } : {}),
           ...withImages,
-          ...(noProject && repos.length > 0 ? { repos: repos.map(repo => ({ name: repo.name, from: repo.path })) } : {}),
+          ...(ticked.length > 0 ? { repos: ticked.map(repo => ({ name: repo.name, from: repo.path })) } : {}),
         }) // select the run we just started (#761)
       }).finally(() => composerRef.current?.clear())
       setRepos([])
@@ -312,7 +322,7 @@ export function StartAgentForm({
               <ProfileMenu profiles={profilesView?.profiles} picked={onProfile?.id} onPick={id => updatePreferences({ profile: id === DEFAULT_PROFILE ? '' : id })} />
               <SkillsMenu projectId={noProject ? undefined : projectId} picks={skillPicks} onChange={setSkillPicks} />
               {gitAccount.line}
-              {!noProject && <AutoMenu publish={publishPick} picks={offeredPublishPicks(gitHost, remote)} onPublish={pick => updatePreferences({ publish: pick })} target={prTarget} />}
+              {publishes && <AutoMenu publish={publishPick} picks={publishPicks} onPublish={pick => updatePreferences({ publish: pick })} target={prTarget} covers={autoCovers(noProject ? null : projectName, ticked.length)} />}
             </>
           ),
         }}

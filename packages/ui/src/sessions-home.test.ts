@@ -35,8 +35,8 @@ test('a Start with no project goes to the host with none, and no level, its home
       assert.deepEqual(await runtime.onStart('Read the news', {}, SESSIONS_ID), { ok: true, agentId: 'run-1', driver: 'claude-code' })
       assert.deepEqual(host.requests.map(request => [request.project, request.prompt, request.options]), [[undefined, 'Read the news', {}]])
       assert.equal((await stat(join(sessionsHome(env), '.openagent'))).isDirectory(), true, 'the home is made for it')
-      const refused = { ok: false, error: 'A session with no project runs with no branch, nothing to publish and no project skills.' }
-      assert.deepEqual(await runtime.onStart('x', { publish: 'pr' }, SESSIONS_ID), refused)
+      const refused = { ok: false, error: 'A session with no project runs with no branch and no project skills.' }
+      assert.deepEqual(await runtime.onStart('x', { publish: 'pr' }, SESSIONS_ID), { ok: false, error: 'A session with no project and no repo has nothing to publish.' })
       assert.deepEqual(await runtime.onStart('x', { base: 'main' }, SESSIONS_ID), refused)
       assert.deepEqual(await runtime.onStart('x', { projectSkills: 'none' }, SESSIONS_ID), refused)
       assert.equal(host.requests.length, 1)
@@ -50,7 +50,7 @@ test('a Start with no project goes to the host with none, and no level, its home
   })
 })
 
-test("a Start with no project hands the host its repos, each under its name in the session's folder; repos for a project, a repo that is no whole path, or a folder that is no repository, are refused", async () => {
+test("a Start hands the host its repos, each under its name in the session's folder, with no project and in one; a repo that is no whole path, or a folder that is no repository, is refused", async () => {
   await withConfigHome(async env => {
     const cwd = await realpath(await mkdtemp(join(tmpdir(), 'openagent-daemon-cwd-')))
     const repos = await realpath(await mkdtemp(join(tmpdir(), 'openagent-session-repos-')))
@@ -64,14 +64,18 @@ test("a Start with no project hands the host its repos, each under its name in t
       await mkdir(join(repos, 'notes'))
       assert.deepEqual(await runtime.onStart('Compare', { repos: [join(repos, 'app'), join(repos, 'site')] }, SESSIONS_ID), { ok: true, agentId: 'run-1', driver: 'claude-code' })
       assert.deepEqual(host.requests[0]?.options['git-branches'], { repos: [{ name: 'app', from: join(repos, 'app') }, { name: 'site', from: join(repos, 'site') }] })
-      assert.deepEqual(await runtime.onStart('x', { repos: [join(repos, 'app')] }), { ok: false, error: 'Repos are added to a session with no project: a project works in its own checkout.' })
+      assert.equal(host.requests[0]?.options.publish, undefined, 'no level sent, none in force')
+      assert.equal((await runtime.onStart('Fix both', { repos: [join(repos, 'app')], publish: 'pr' }, SESSIONS_ID)).ok, true)
+      assert.equal(host.requests[1]?.options.publish, 'pr', 'a level goes with the repos it is for')
+      assert.equal((await runtime.onStart('x', { repos: [join(repos, 'app')] })).ok, true)
+      assert.deepEqual(host.requests[2]?.options['git-branches'], { repos: [{ name: 'app', from: join(repos, 'app') }] }, 'a run in a project has its repos copied too')
       const notAPath = { ok: false, error: 'A repo is named by the path of its folder on this computer.' }
       assert.deepEqual(await runtime.onStart('x', { repos: ['app'] }, SESSIONS_ID), notAPath)
       assert.deepEqual(await runtime.onStart('x', { repos: ['/a\n/b'] }, SESSIONS_ID), notAPath)
       assert.deepEqual(await runtime.onStart('x', { repos: 'app' as unknown as string[] }, SESSIONS_ID), notAPath)
       const notARepo = await runtime.onStart('x', { repos: [join(repos, 'notes')] }, SESSIONS_ID)
       assert.equal(notARepo.ok, false)
-      assert.equal(host.requests.length, 1)
+      assert.equal(host.requests.length, 3)
     } finally {
       await runtime.dispose()
       await rm(cwd, { recursive: true, force: true })

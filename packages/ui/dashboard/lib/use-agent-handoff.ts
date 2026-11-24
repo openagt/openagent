@@ -87,8 +87,10 @@ export function handoffSays(handoff: AgentHandoff | null): boolean {
  * `saving`: the run's clean-up is still going (its card says saving); the branch is read again the
  * moment it is done, since the clean-up may have deleted an empty branch or pushed one.
  * `working`: the run works, so the answer read before it did is no longer what its branch holds.
+ * `repo`: one of the session's copies of repos, by its name, in place of the project: the same
+ * read and the same presses, of the copy's own branch.
  */
-export function useAgentHandoff(projectId: string, agentId: string | null | undefined, enabled = true, saving = false, working = false): AgentHandoffState {
+export function useAgentHandoff(projectId: string, agentId: string | null | undefined, enabled = true, saving = false, working = false, repo?: string): AgentHandoffState {
   // Polled rather than read once: a push or a PR opened from here (or from a terminal) changes
   // what to offer, and `reload` makes the bar's own actions land immediately. Not read while the
   // run is live (#1026): a branch still being written to has nothing to hand off yet.
@@ -96,7 +98,7 @@ export function useAgentHandoff(projectId: string, agentId: string | null | unde
   // holds the Open PR offer back, so that one is worth asking again for straight away.
   // A run that works again writes to its branch: the answer remembered from before is not the
   // one shown when the run ends, which would put the last step back for a moment.
-  const key = agentId ? `handoff:${projectId}:${agentId}` : undefined
+  const key = agentId ? `handoff:${projectId}:${agentId}${repo !== undefined ? `:${repo}` : ''}` : undefined
   useEffect(() => {
     if (working && key !== undefined) forgetRemembered(key)
   }, [working, key])
@@ -104,10 +106,10 @@ export function useAgentHandoff(projectId: string, agentId: string | null | unde
   // the pull request lookup is out, every fifteen seconds at rest.
   const [everyMs, setEveryMs] = useState(REST_MS)
   const { value: handoff, reload, refresh, state } = usePolled<AgentHandoff | null>(
-    enabled && agentId ? () => onAgentHandoff(projectId, agentId) : null,
+    enabled && agentId ? () => (repo !== undefined ? onAgentHandoff(projectId, agentId, repo) : onAgentHandoff(projectId, agentId)) : null,
     null,
     everyMs,
-    [projectId, agentId, enabled],
+    [projectId, agentId, enabled, repo],
     // Remembered per run, in this browser too: going back to a run, or loading it again, shows its
     // last answer at once while it is read again. Another run's answer is never shown.
     key !== undefined ? { remember: key, stored: true } : undefined,

@@ -35,11 +35,14 @@ export function autoSaid(publish: PublishPick, target?: PrTarget | undefined): s
 // the agent publishes its work when it finishes (the Auto level) and, where a level opens a pull
 // request and more than one branch can take it, which branch it goes into. The line reads the
 // picks themselves ("Open PR → login-page"), as the gear's hover does with the menu shut.
+// One level holds for all the session works in (his pick, over a level per repo): with copies of
+// repos, a small line under it says what the level is for (`covers`).
 export function AutoMenu({
   publish,
   picks,
   onPublish,
   target,
+  covers,
 }: {
   /** The publish pick in force. */
   publish: PublishPick
@@ -48,6 +51,8 @@ export function AutoMenu({
   onPublish: (pick: PublishPick) => void
   /** Absent where the pull request goes into the default branch with no say. */
   target?: PrTarget | undefined
+  /** What the level is for, when the session has copies of repos: said under the line. */
+  covers?: string | undefined
 }) {
   // Only the levels that open a pull request have one to name.
   const opensRequest = publish === 'pr' || publish === 'merge'
@@ -84,6 +89,13 @@ export function AutoMenu({
           </>
         )}
       </SetupLine>
+      {covers !== undefined && <p className="px-2 pb-1 pl-8 text-xs text-muted-foreground">{covers}</p>}
     </>
   )
+}
+
+/** What a level is for in a session with copies of repos: its project and them, or them alone. Nothing to say with no copy. */
+export function autoCovers(project: string | null | undefined, copies: number): string | undefined {
+  if (copies === 0) return undefined
+  return project ? `For ${project} and each copied repo it changed` : 'For each copied repo it changed'
 }
