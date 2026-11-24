@@ -238,7 +238,7 @@ export function useAddGitAccount(onAdded?: (login: string, host: string) => void
 }
 
 /** The press for a host with no account, or no tool: it opens the dialog that adds one. Nothing for a host that has one. */
-export function HostFix({ row, onChanged, size = 'default', variant }: { row: GitHostRow; onChanged: () => Promise<void>; size?: 'default' | 'sm' | undefined; variant?: FixVariant }) {
+export function HostFix({ row, onChanged, size = 'default', variant, label }: { row: GitHostRow; onChanged: () => Promise<void>; size?: 'default' | 'sm' | undefined; variant?: FixVariant; /** What the press says, where the host's name stands beside it already. */ label?: string }) {
   const adding = useAddGitAccount(onChanged)
   const p = row.provider
   if (!p) return null
@@ -247,8 +247,8 @@ export function HostFix({ row, onChanged, size = 'default', variant }: { row: Gi
   return (
     <>
       {/* On a phone a finger's 44, as the coding agent's own fix (AgentFix). */}
-      <Button size={size} variant={variant} onClick={() => adding.add(row.host)} className={cn(size === 'default' && 'max-md:h-11')}>
-        {`Add a ${p.name} account`}
+      <Button size={size} variant={variant} aria-label={`Add a ${p.name} account`} onClick={() => adding.add(row.host)} className={cn(size === 'default' && 'max-md:h-11')}>
+        {label ?? `Add a ${p.name} account`}
       </Button>
       {adding.dialog}
     </>

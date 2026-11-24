@@ -142,6 +142,20 @@ export interface UiUsageLineProps {
   Bar: ComponentType<{ offset?: number; onChangeOffset?: (points: number) => void }>
 }
 
+/** What the press that connects a coding agent is given. */
+export interface UiConnectAgentProps {
+  /** The agent it connects. */
+  agent: 'claude' | 'codex'
+  /** Whether it is the page's one primary press. */
+  primary: boolean
+  /** What it says, where the agent's name stands beside it already ("Add account"); the agent's mark and name when unsaid. */
+  label?: string
+  /** A smaller press, for a line of a form. */
+  small?: boolean
+  /** An account was added, or a sign-in ended without one: what the page knows of the agent is read again. */
+  onConnected: () => void
+}
+
 /**
  * The view places, by name: what an entry says of itself there (`entry`), and what its
  * component is given (`props`).
@@ -181,7 +195,7 @@ export interface ViewPlaces {
       /** Its place among every module's cards, lower first; 50 when unsaid, ties by package name. */
       order?: number
       /**
-       * It is the card of what needs the person: the first steps a new install still has to take
+       * It is the card of what needs the person: the coding agents' updates
        * stand right under it, wherever the layout puts it, and no card after it is drawn until
        * what waits on the person was first read. The first module's card that says so.
        */
@@ -259,6 +273,8 @@ export interface ViewPlaces {
   }
   /** The line on the usage bar where the module's unattended work stops; the first module's that has one. */
   'usage.line': { entry: { id: string }; props: UiUsageLineProps }
+  /** The press that connects a coding agent, where a new install is asked for one: the agent's name on it, and its sign-in in a window of its own. The first module's that has one. */
+  'agent.connect': { entry: { id: string }; props: UiConnectAgentProps }
 }
 
 export type ViewPlace = keyof ViewPlaces

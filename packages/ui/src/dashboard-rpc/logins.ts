@@ -45,8 +45,8 @@ export const loginsWiring: {
   /** Where a git host's package is asked when no project is on its host: the person's home folder. */
   home: () => string
   ready: (driver: DriverName) => Promise<DriverReadiness>
-  /** Run a fix's command to its end, or until `stop` aborts it; `said` hears the first web address it prints. Rejects with its last lines. */
-  fix: (command: string, stop: AbortSignal, said: (url: string) => void) => Promise<void>
+  /** Run an install's command to its end. Rejects with its last lines. */
+  fix: (command: string) => Promise<void>
   driver: () => Promise<DriverName>
 } = {
   origin: root => originUrl(root),
@@ -240,20 +240,16 @@ export interface AgentState {
   problem?: string
   /** What a press does about it, when the agent's package declared a command for it. */
   fix?: DriverFix
-  /** The fix is no press: it is typed in a terminal on this computer, which has no browser to say yes in. */
-  typed?: true
   /** The agent's own login is out, and runs use an added account: the own login is no account to show. */
   ownLoggedOut?: true
-  /** A press's fix going on. */
-  fixing?: DriverFix['kind']
+  /** The install a press started, going on. */
+  fixing?: 'install'
   /** Why the last press's fix failed. */
   failed?: string
-  /** The address the fix going on said to open: its sign-in page, for a browser that did not open by itself. */
-  url?: string
 }
 
-/** The fixes under way, each with what stops it and the address it said, and the last one that failed, by agent. */
-const fixes = new Map<DriverName, { fixing?: DriverFix['kind']; stop?: AbortController; url?: string; failed?: string }>()
+/** The installs under way, and the last one that failed, by agent. */
+const fixes = new Map<DriverName, { fixing?: 'install'; failed?: string }>()
 
 /** The coding agent picked in Settings, or `driver`: installed, logged in, and what a press fixes. */
 export async function onAgentState(driver?: string): Promise<AgentState> {
@@ -265,62 +261,37 @@ export async function onAgentState(driver?: string): Promise<AgentState> {
     ready = await loginsWiring.ready(name)
   }
   const press = fixes.get(name)
-  // A computer with no browser cannot log its agent in by a press: the command is typed there.
-  const noPress = ready.fix?.kind === 'log-in' && accountsWiring.headless()
   const fix = ready.fix
   return {
     driver: name,
     ready: ready.problems.length === 0,
     ...(ready.problems[0] !== undefined ? { problem: ready.problems[0] } : {}),
     ...(fix ? { fix } : {}),
-    ...(fix && noPress ? { typed: true as const } : {}),
     ...(ready.ownLoggedOut ? { ownLoggedOut: true as const } : {}),
     ...(press?.fixing ? { fixing: press.fixing } : {}),
-    ...(press?.fixing && press.url !== undefined ? { url: press.url } : {}),
     ...(press?.failed !== undefined && ready.problems.length > 0 ? { failed: press.failed } : {}),
   }
 }
 
 /**
- * Fix what is in the way of `driver`: the command its package declared for it, run here, the
- * install to its end, the login until the browser said yes. Answers at once; the page follows it
- * in {@link onAgentState}.
+ * Install `driver`'s program, with the command its package declared, run here to its end. Answers
+ * at once; the page follows it in {@link onAgentState}. An agent that is installed and has no
+ * account gets one in its own package's window, not here.
  */
 export async function sendAgentFix(driver: string): Promise<AccountResult> {
   if (!isDriverName(driver)) return { ok: false, error: `No coding agent ${driver}.` }
-  if (fixes.get(driver)?.fixing) return { ok: false, error: 'It is being fixed: wait for it to end.' }
+  if (fixes.get(driver)?.fixing) return { ok: false, error: 'It is being installed: wait for it to end.' }
   const fix = (await loginsWiring.ready(driver)).fix
-  if (!fix) return { ok: false, error: 'Nothing to fix by a press: see the line it says.' }
-  const stop = new AbortController()
-  fixes.set(driver, { fixing: fix.kind, stop })
-  // Only while this fix is the one going on: a fix the person stopped is out of the table, so its late end
-  // says nothing, and takes nothing from a fix pressed after it.
-  const mine = (): boolean => fixes.get(driver)?.stop === stop
-  void loginsWiring
-    .fix(fix.command, stop.signal, url => {
-      if (mine()) fixes.set(driver, { fixing: fix.kind, stop, url })
-    })
-    .then(
-      () => {
-        if (mine()) fixes.delete(driver)
-      },
-      (err: unknown) => {
-        if (mine()) fixes.set(driver, { failed: err instanceof Error ? err.message : String(err) })
-      },
-    )
+  if (fix?.kind !== 'install') return { ok: false, error: 'Nothing to install: see the line it says.' }
+  fixes.set(driver, { fixing: 'install' })
+  void loginsWiring.fix(fix.command).then(
+    () => void fixes.delete(driver),
+    (err: unknown) => void fixes.set(driver, { failed: err instanceof Error ? err.message : String(err) }),
+  )
   return { ok: true }
 }
 
-/** Stop the fix of `driver` going on, and what it started: a login whose yes the person will not give. */
-export async function sendStopAgentFix(driver: string): Promise<AccountResult> {
-  if (!isDriverName(driver)) return { ok: false, error: `No coding agent ${driver}.` }
-  const going = fixes.get(driver)
-  going?.stop?.abort()
-  fixes.delete(driver)
-  return { ok: true }
-}
-
-/** How long a fix may take: an install's download, or the person's yes in the browser. */
+/** How long an install may take. */
 const FIX_MS = 10 * 60_000
 
 /** The process groups of the fixes running now. */
@@ -341,31 +312,24 @@ function endGroup(group: number, signal: NodeJS.Signals): void {
   }
 }
 
-/** A fix's command in a shell, to its end, its own group ended with it on a timeout or when `stop` aborts. An installer is a download piped to a shell: `pipefail`, so a failed download fails the install, in bash where it is on the PATH (an `sh` may lack the option), else in an `sh` that has it. */
-function runFix(command: string, stop: AbortSignal, saidUrl: (url: string) => void): Promise<void> {
+/** An install's command in a shell, to its end, its own group ended with it on a timeout. An installer is a download piped to a shell: `pipefail`, so a failed download fails the install, in bash where it is on the PATH (an `sh` may lack the option), else in an `sh` that has it. */
+function runFix(command: string): Promise<void> {
   return new Promise((resolve, reject) => {
     // `command` keeps an `sh` without `pipefail` running: a special built-in's error would end it.
     const script = `command -v bash >/dev/null && exec bash -o pipefail -c "$1"\ncommand set -o pipefail 2>/dev/null\neval "$1"`
     const child = spawn('sh', ['-c', script, 'sh', command], { stdio: ['ignore', 'pipe', 'pipe'], detached: true })
     const group = child.pid
     if (group !== undefined) fixGroups.add(group)
-    const end = (): void => endGroup(group!, 'SIGTERM')
-    stop.addEventListener('abort', end, { once: true })
     let said = ''
-    let url: string | undefined
     const keep = (chunk: Buffer): void => {
       said = (said + chunk.toString('utf8')).slice(-4096)
-      if (url !== undefined) return
-      url = /https?:\/\/\S+/.exec(said)?.[0]
-      if (url !== undefined) saidUrl(url)
     }
     child.stdout.on('data', keep)
     child.stderr.on('data', keep)
     const timer = setTimeout(() => endGroup(group!, 'SIGKILL'), FIX_MS)
-    child.once('error', err => (clearTimeout(timer), stop.removeEventListener('abort', end), reject(err)))
+    child.once('error', err => (clearTimeout(timer), reject(err)))
     child.once('close', code => {
       clearTimeout(timer)
-      stop.removeEventListener('abort', end)
       if (group !== undefined) fixGroups.delete(group)
       if (code === 0) resolve()
       else reject(new Error(said.trim().split('\n').slice(-3).join('\n') || (code === null ? 'It took too long, and was stopped.' : `It ended with ${code}.`)))

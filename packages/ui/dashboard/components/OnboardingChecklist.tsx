@@ -1,11 +1,13 @@
-import { useContext, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useContext, useState, type ReactNode } from 'react'
 import type { DashboardData, ProjectSummary } from '../../src/index.js'
 import { Check, Info, X } from 'lucide-react'
 import { onDashboard } from '../rpc/reads.js'
 import { usePolled } from '../lib/use-async.js'
-import { usePerson } from '../lib/use-person.js'
 import { cn } from '../lib/utils.js'
 import { Button, buttonVariants } from './ui/button.js'
+import { useMountedModules } from '../lib/use-modules.js'
+import { useAgentAccounts } from './AgentAccounts.js'
+import { ModuleSlot } from './ModulePageView.js'
 import { inPlace } from '../lib/in-place.js'
 import { Facts, Panel, PanelGroup, StepNumber } from './ui/panel.js'
 import { Skeleton } from './ui/skeleton.js'
@@ -15,14 +17,13 @@ import { AddProjectEffects } from './AddProjectEffects.js'
 import { ProjectPicker } from './ProjectPicker.js'
 import { UpdateTicketsButton, UPDATE_TICKETS_PROMPT } from './UpdateTicketsButton.js'
 import { HostFix } from './AddGitAccount.js'
-import { hostLoginState, hostWords, useMissing } from './Logins.js'
-import { firstName } from './PersonMenu.js'
+import { AgentFix, agentLoginState, hostLoginState, hostWords, useAgentState, useGitHosts } from './Logins.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import type { ListedPage } from '../lib/use-modules.js'
 
-// The Overview's first steps (#958): what a new install needs, each with the state it is actually
-// in rather than a static list to read past.
+// "Discover OpenAgent", the Overview's first steps (#958): what a new install can set up, each with
+// the state it is actually in rather than a static list to read past.
 //
 // Every "done" is derived from a real fact — a login, a registered project, a non-empty queue, a
 // ticket on disk — so a step cannot be ticked by clicking it, and a step done outside the dashboard
@@ -34,17 +35,19 @@ import type { ListedPage } from '../lib/use-modules.js'
 // each a press from open. A step stays once shown, done or not, so the count never moves under a
 // person: "Connect GitHub" turns into a ✓, it does not vanish.
 //
-// It renders on the Overview under what needs the person, greeting them by the time of day. Its ✕ hides it,
-// and the "Onboarding on the Overview" switch in Settings › Appearance brings it back: what the ✕
-// promises. With every step a session needs done, it says so, and its button starts the first one.
+// It is the Overview's first part, above the box that starts a session, while a step is open (his
+// pick). With every step done it is gone: the box is how a session starts. Its ✕ hides it, and the
+// "Discover OpenAgent on the Overview" switch in Settings › Appearance brings it back: what the ✕
+// promises.
 
 /** What the ✕ says it does. */
 const HIDE = 'Hide; Settings › Appearance brings it back'
 
-/** The greeting for an hour of the day: morning until noon, afternoon until six, then evening. */
-export function greeting(hour: number): string {
-  return hour >= 5 && hour < 12 ? 'Good morning' : hour >= 12 && hour < 18 ? 'Good afternoon' : 'Good evening'
-}
+/** The coding agents a session can run on: each one's CLI, its list of accounts, and its name on the press that connects it. */
+const AGENTS = [
+  { driver: 'claude-code', list: 'claude', name: 'Claude' },
+  { driver: 'codex', list: 'codex', name: 'Codex' },
+] as const
 
 /** One step: what it is, whether it is done, and what to do about it. */
 interface Step {
@@ -71,7 +74,6 @@ export function OnboardingChecklist({
   onAgentStarted,
   onSelectProject,
   onProjectAdded,
-  onRead,
   listedPages,
 }: {
   /** The projects as the app read them: the picker sees one it added land, and closes on it. */
@@ -81,12 +83,10 @@ export function OnboardingChecklist({
    * travels with it: this renders on the Overview, which has none selected. Required, so a new mounting surface cannot quietly drop the navigation.
    */
   onAgentStarted: (projectId: string, intent: string, agentId: string) => void
-  /** Where "Configure first, then run" and "Start your first session" land (#1507): the launcher of the project the steps act on. */
+  /** Where "Configure first, then run" lands (#1507): the launcher of the project the steps act on. */
   onSelectProject: (id: string) => void
   /** A project was added here: the app reads its projects again. */
   onProjectAdded: () => void
-  /** Told once the steps stand where their reads say, before that frame is drawn: what the page holds back under them can come. */
-  onRead: () => void
   /** The modules' pages as the sidebar lists them, null where none is known yet: which projects have the Queue and the Tickets. */
   listedPages: readonly ListedPage[] | null
 }) {
@@ -96,12 +96,17 @@ export function OnboardingChecklist({
   const { value: data, reload, state } = usePolled<DashboardData | null>(onDashboard, null, 10_000, [], { remember: 'onboarding:dashboard', stored: true })
   const preferences = usePreferences()
   const { start, busy: starting, error: startError } = useStartAgent()
-  const { person } = usePerson()
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
-  // What runs need on this computer: the coding agent's login, and an account at each git host.
-  const { missing, hosts, loaded: missingLoaded, reload: reloadMissing } = useMissing()
-  // The steps shown once stay, done or not: the coding agent's is there only once it was missing.
-  const seen = useRef(new Set<string>())
+  // What sessions need on this computer: a coding agent with an account, and an account at each git host.
+  const claude = useAgentState('claude-code')
+  const codex = useAgentState('codex')
+  const accounts = { claude: useAgentAccounts('claude').view, codex: useAgentAccounts('codex').view }
+  const { view: hosts, reload: reloadHosts } = useGitHosts()
+  const agents = AGENTS.map(agent => ({ ...agent, ...(agent.driver === 'claude-code' ? claude : codex) }))
+  const reloadAgents = (): void => void Promise.all(agents.map(agent => agent.reload()))
+  // The press that connects an agent is its package's (`agent.connect`): the window the Permissions page adds an account in.
+  const { views, loaded: modulesLoaded } = useMountedModules()
+  const connect = views['agent.connect'][0]
   // The step the person opened; by default, the first one not done.
   const [picked, setPicked] = useState<string | undefined>()
 
@@ -120,11 +125,34 @@ export function OnboardingChecklist({
     if (started) onAgentStarted(targetProjectId, UPDATE_TICKETS_PROMPT, started.agentId)
   }
 
-  const agentMissing = missing.find(item => item.key === 'agent')
-  if (agentMissing) seen.current.add('agent')
-  const agentStep: Step[] = seen.current.has('agent')
-    ? [{ key: 'agent', label: `Set up ${agentMissing?.name ?? 'your coding agent'}`, description: agentMissing?.words, done: !agentMissing, doneNote: 'Ready', ...(agentMissing ? { action: agentMissing.fix } : {}) }]
-    : []
+  const connected = agents.filter(agent => agent.state?.ready)
+  // One connected: which, and whose account. Both: which.
+  const whose = connected.length === 1 ? accounts[connected[0]!.list]?.accounts.find(account => !account.loggedOut)?.name : undefined
+  const agentStep: Step = {
+    key: 'agent',
+    label: 'Connect a coding agent',
+    description: 'Sessions run on Claude Code or Codex, with your own account. One is enough; add the other any time.',
+    done: connected.length > 0,
+    doneNote: [connected.map(agent => agent.name).join(', '), whose].filter(Boolean).join(' · '),
+    // A press an agent, Claude's the primary: the agent sessions start on unless a person picks another. An agent whose
+    // program this computer does not have is installed first.
+    action: (
+      <div className="flex max-w-full flex-wrap items-center gap-2">
+        {agents.map((agent, at) =>
+          agent.state && agentLoginState(agent.state) === 'not-installed' ? (
+            <AgentFix key={agent.driver} state={agent.state} onChanged={reloadAgents} {...(at === 0 ? {} : { variant: 'secondary' as const })} />
+          ) : connect ? (
+            <ModuleSlot key={agent.driver} package={connect.package} label={`connect ${agent.name}`}>
+              <connect.View agent={agent.list} primary={at === 0} onConnected={reloadAgents} />
+            </ModuleSlot>
+          ) : (
+            // Until the agents' package is in, its press's shape holds its place: nothing in the row moves when it comes.
+            !modulesLoaded && <Skeleton key={agent.driver} className="h-8 w-22 max-md:h-11" />
+          ),
+        )}
+      </div>
+    ),
+  }
   const hostSteps: Step[] = (hosts?.hosts ?? []).flatMap(row => {
     const p = row.provider
     if (!p) return []
@@ -137,13 +165,13 @@ export function OnboardingChecklist({
         description: p.installed && p.accounts.length === 0 ? `OpenAgent pushes and opens ${p.requestWord}s with an account of its own, never your own login.` : hostWords(row),
         done,
         ...(runs ? { doneNote: `@${runs}` } : {}),
-        action: <HostFix row={row} onChanged={reloadMissing} size="default" />,
+        action: <HostFix row={row} onChanged={reloadHosts} size="default" />,
       },
     ]
   })
 
   const steps: Step[] = [
-    ...agentStep,
+    agentStep,
     ...hostSteps,
     {
       key: 'project',
@@ -218,13 +246,9 @@ export function OnboardingChecklist({
   ]
 
   // No step before its reads have said where it stands: an unread project count is not "no project".
-  const reading = state === 'unknown' || !missingLoaded
-  useLayoutEffect(() => {
-    if (!reading) onRead()
-  }, [reading, onRead])
+  const loginsRead = claude.state !== undefined && codex.state !== undefined && hosts !== undefined
+  const reading = state === 'unknown' || !loginsRead
   const open = picked !== undefined && steps.some(step => step.key === picked && !step.done) ? picked : steps.find(step => !step.done)?.key
-  const ready = !reading && steps.every(step => step.done || step.optional)
-  const name = person ? `, ${firstName(person.name)}` : ''
 
   const doneCount = steps.filter(step => step.done).length
   // While the projects are not read: the queue's and the tickets' steps hold their places at the end exactly where the
@@ -236,10 +260,13 @@ export function OnboardingChecklist({
     ...steps.map(step => ({ key: step.key, label: step.label, description: step.description, done: step.done })),
     ...(data === null ? coming : []),
   ]
+  // Every step done: nothing to discover, and the box under it is how a session starts. The same while the steps are
+  // read, where every one known so far is done: no frame is drawn that the answer would take away.
+  if ((reading ? frame : steps).every(step => step.done)) return null
   return (
     <PanelGroup
       bare
-      title={ready ? `You're all set${name}` : `${greeting(new Date().getHours())}${name}`}
+      title="Discover OpenAgent"
       // Where the steps stand, in words: the numbers below say which is which.
       count={
         reading ? (
@@ -251,16 +278,6 @@ export function OnboardingChecklist({
       }
       action={
         <>
-          {ready && targetProjectId && (
-            <Button
-              onClick={() => {
-                updatePreferences({ onboardingDismissed: true })
-                onSelectProject(targetProjectId)
-              }}
-            >
-              Start your first session
-            </Button>
-          )}
           {/* Pulled out by its own padding, so its ✕ ends on the column's edge. */}
           <Tooltip>
             <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={() => updatePreferences({ onboardingDismissed: true })} aria-label={HIDE} className="-mr-1.5 text-muted-foreground" />}>
@@ -275,13 +292,13 @@ export function OnboardingChecklist({
         <>
           <p className="sr-only">Loading…</p>
           {/* The steps as they will stand once read, so nothing in them moves when the answer comes: each its mark and its
-              title, the open step its words under its name (read with the coding agent and the git hosts, or fixed) and
+              title, the open step its words under its name (read with the git hosts, or fixed) and
               its presses' shapes at the row's end, centred on the row; the steps only the projects' read can add (the
               queue's, the tickets') hold their places as shapes. Only once the coding agent and the git hosts are read
               (each can add a step at the top, which would push the rows drawn), and the sidebar's pages are known where
               the projects' read is not in (they say which places to hold): nothing under the steps is drawn before they
               are, so the frame coming late pushes nothing. */}
-          {missingLoaded && (data !== null || listedPages !== null) && (
+          {loginsRead && (data !== null || listedPages !== null) && (
             <Panel ordered aria-hidden>
               {frame.map((step, at) => (
                 <li key={step.key} className={STEP_ROW}>
@@ -297,9 +314,15 @@ export function OnboardingChecklist({
                         {typeof step.description === 'string' ? <p className="text-xs text-muted-foreground">{step.description}</p> : step.description}
                       </div>
                       <div className="flex max-w-full shrink-0 flex-wrap items-center gap-3">
-                        <Skeleton className="h-8 w-36" />
-                        {/* The coding agent's press comes with the command that does the same in a terminal. */}
-                        {step.key === 'agent' && <Skeleton className="h-7 w-92 max-w-full max-md:h-11" />}
+                        {/* The coding agent's step has a press an agent. */}
+                        {step.key === 'agent' ? (
+                          <>
+                            <Skeleton className="h-8 w-22 max-md:h-11" />
+                            <Skeleton className="h-8 w-22 max-md:h-11" />
+                          </>
+                        ) : (
+                          <Skeleton className="h-8 w-36" />
+                        )}
                       </div>
                     </div>
                   ) : (

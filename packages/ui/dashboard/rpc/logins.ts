@@ -12,4 +12,3 @@ export const sendStopGitHostLogin = rpc<typeof impl.sendStopGitHostLogin>('sendS
 export const sendGitHostInstall = rpc<typeof impl.sendGitHostInstall>('sendGitHostInstall')
 export const onAgentState = rpc<typeof impl.onAgentState>('onAgentState')
 export const sendAgentFix = rpc<typeof impl.sendAgentFix>('sendAgentFix')
-export const sendStopAgentFix = rpc<typeof impl.sendStopAgentFix>('sendStopAgentFix')

@@ -113,7 +113,7 @@ describe('PersonMenu: what is missing', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Ada Lovelace: settings, something is missing' }))
     expect(container.ownerDocument.querySelector('[data-testid="missing-dot"]')).toBeTruthy()
     expect(await screen.findByRole('menuitem', { name: 'Add your GitHub account again…' })).toBeTruthy()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Log Claude Code in…' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Add a Claude Code account…' }))
     expect(openPage).toHaveBeenCalledWith('permissions')
     expect(onSettings).not.toHaveBeenCalled()
   })

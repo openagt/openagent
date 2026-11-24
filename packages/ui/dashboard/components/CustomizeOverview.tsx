@@ -34,7 +34,7 @@ const FLEX: Record<CardWidth, string> = {
   '1': 'basis-full grow-[12]',
 }
 
-/** What is no card but stands among them, full width, right under the card `card`, or first when that card is not on the page or there is none: the first steps, under what needs the person. */
+/** What is no card but stands among them, full width, right under the card `card`, or first when that card is not on the page or there is none: the coding agents' updates, under what needs the person. */
 export interface Under {
   card: string | undefined
   node: ReactNode

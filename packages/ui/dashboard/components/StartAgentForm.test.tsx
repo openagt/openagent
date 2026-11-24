@@ -701,27 +701,45 @@ describe('StartAgentForm (#1774)', () => {
     expect(start.mock.lastCall![2]).toMatchObject({ profile: 'lean', pluginsWithout: [] })
   })
 
-  test('a problem a press fixes has its button on the red line, with the command it runs; once fixed, the check is asked again and the line goes', async () => {
+  test('a problem a press fixes has its button on the red line: an agent with no account gets one from there; once fixed, the check is asked again and the line goes', async () => {
     onCommands.mockResolvedValue({ commands: [], gitHost: true })
     const line = '`claude` is not logged in. Run `claude auth login`, then start again.'
     onStartCheck.mockResolvedValue({ problems: [line], warnings: [], fix: { kind: 'log-in', command: 'claude auth login', problem: line } })
     let ready = false
     logins.onAgentState.mockImplementation(async () => (ready ? { driver: 'claude-code', ready: true } : { driver: 'claude-code', ready: false, problem: line, fix: { kind: 'log-in', command: 'claude auth login' } }))
-    logins.sendAgentFix.mockImplementation(async () => {
-      ready = true
-      return { ok: true }
-    })
-    render(<StartAgentForm {...props} />)
-    const press = await screen.findByRole('button', { name: 'Log this computer in to Claude Code' })
+    // The agents' package's press: here it adds the account at once.
+    const connect = {
+      place: 'agent.connect' as const,
+      id: 'connect',
+      package: 'an-agents-module',
+      projects: [],
+      computer: true as const,
+      View: ({ label, onConnected }: { label?: string; onConnected: () => void }) => (
+        <button
+          type="button"
+          onClick={() => {
+            ready = true
+            onConnected()
+          }}
+        >
+          {label}
+        </button>
+      ),
+    }
+    render(
+      <ModulesContext.Provider value={mountedOf({ views: { 'agent.connect': [connect] } })}>
+        <StartAgentForm {...props} />
+      </ModulesContext.Provider>,
+    )
+    const press = await screen.findByRole('button', { name: 'Add account' })
     // The press is inside the red line, which says it in the agent's own words.
     const refusal = screen.getByRole('alert')
     expect(refusal.contains(press)).toBe(true)
     expect(within(refusal).getByText('Claude Code is not logged in.')).toBeTruthy()
     expect(refusal.textContent).not.toContain('Run `claude auth login`')
-    fireEvent.click(press)
-    expect(screen.getByText('claude auth login')).toBeTruthy()
-    await waitFor(() => expect(logins.sendAgentFix).toHaveBeenCalledWith('claude-code'))
     onStartCheck.mockResolvedValue({ problems: [], warnings: [] })
+    fireEvent.click(press)
+    expect(logins.sendAgentFix).not.toHaveBeenCalled()
     await waitFor(() => expect(screen.queryByRole('alert')).toBeNull(), { timeout: 3000 })
   })
 

@@ -13,11 +13,12 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem,
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
 import { SetupLine, SetupPress, SetupSaid } from './SessionSetup.js'
 
-// The git hosts of the Permissions page: one card, "Git host accounts", with a section for each
-// host the projects' remotes are on and the host of the git host package OpenAgent brings, drawn
+// The git hosts of the Permissions page: one card, "Git host accounts", with the accounts of each
+// host the projects' remotes are on and of the host of the git host package OpenAgent brings, drawn
 // from what the host's package answers (its name and logo, its tool, OpenAgent's own accounts
-// there, the one runs use), so a host added later is one more section. Its rows are as the coding
-// agents' accounts are, each with where it works under it. The accounts are
+// there, the one runs use). Its rows are as the coding agents' accounts are, and a host with no
+// account is a row that adds one (his pick). With one host the rows stand alone; with more, each
+// host's stand under its name, so a host added later is one more section. The accounts are
 // OpenAgent's, added here: the person's own tool and its logins are never used. A host no package
 // answers for is one line; a project with no remote, none.
 
@@ -28,10 +29,9 @@ const NO_REMOTE = 'None of your projects has a remote yet. A project pushed to a
 export function GitHostsCard() {
   const { view, state, reload } = useGitHosts()
   const adding = useAddGitAccount(reload)
-  // The hosts an account can be added at: the ones a package answers for. With no account at any, the
-  // press is the one in the host's own section, where what is missing is said: not a second one here.
+  // The hosts an account can be added at: the ones a package answers for, whose tool this computer has.
   const withPackage = (view?.hosts ?? []).filter(row => row.provider)
-  const hosts = withPackage.some(row => row.provider!.installed && row.provider!.accounts.length > 0) ? withPackage : []
+  const hosts = withPackage.filter(row => row.provider!.installed)
   return (
     <PanelGroup
       bare
@@ -66,7 +66,6 @@ export function GitHostsCard() {
         </>
       }
     >
-      <p className="mb-2 text-sm text-muted-foreground">Runs push with the one in use at each host, never your own login.</p>
       {/* Waits in the room of its emptiest answer, the sentence that says no project has a remote. */}
       <Slot
         of={{ value: view, state }}
@@ -81,7 +80,7 @@ export function GitHostsCard() {
           view && view.hosts.length === 0 ? (
             <p className="text-sm text-muted-foreground">{NO_REMOTE}</p>
           ) : (
-            (view?.hosts ?? []).map(row => (row.provider ? <HostAccounts key={row.host} row={row} onChanged={reload} /> : <NoPackage key={row.host} row={row} />))
+            (view?.hosts ?? []).map(row => (row.provider ? <HostAccounts key={row.host} row={row} named={withPackage.length > 1} onChanged={reload} /> : <NoPackage key={row.host} row={row} />))
           )
         }
       </Slot>
@@ -103,7 +102,7 @@ function NoPackage({ row }: { row: GitHostRow }) {
   )
 }
 
-function HostAccounts({ row, onChanged }: { row: GitHostRow; onChanged: () => Promise<void> }) {
+function HostAccounts({ row, named, onChanged }: { row: GitHostRow; /** Its name stands over its accounts: there is more than one host. */ named: boolean; onChanged: () => Promise<void> }) {
   const p = row.provider!
   const [error, setError] = useState<string | undefined>()
   // The account whose removal waits for the person's yes, and the press under way: its words say so until the answer.
@@ -124,12 +123,14 @@ function HostAccounts({ row, onChanged }: { row: GitHostRow; onChanged: () => Pr
   const empty = !p.installed || p.accounts.length === 0
   return (
     <FocusHome as="section" aria-label={p.name}>
-      {/* The host by its logo and name, on the cards' edge, and what uses it; its accounts a card of rows under it. */}
-      <header className="mb-2 flex min-w-0 items-center gap-2">
-        <PackageLogo svg={p.logo} />
-        <h3 className="text-sm font-medium">{p.name}</h3>
-        <span className="min-w-0 flex-1 truncate text-xs text-faint-foreground">{usedBy(row)}</span>
-      </header>
+      {/* With more than one host, each by its logo and name, on the cards' edge, and what uses it; its accounts a card of rows under it. */}
+      {named && (
+        <header className="mb-2 flex min-w-0 items-center gap-2">
+          <PackageLogo svg={p.logo} />
+          <h3 className="text-sm font-medium">{p.name}</h3>
+          <span className="min-w-0 flex-1 truncate text-xs text-faint-foreground">{usedBy(row)}</span>
+        </header>
+      )}
       {p.accounts.length > 0 && (
         <Panel>
           {p.accounts.map(account => {
@@ -188,13 +189,10 @@ function HostAccounts({ row, onChanged }: { row: GitHostRow; onChanged: () => Pr
         </Panel>
       )}
       {empty && (
-        // The sentence grows from the left, its press at the cards' right edge, under it on a phone.
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <p className="min-w-0 grow basis-60 text-sm text-muted-foreground">{hostWords(row)}</p>
-          <div className="shrink-0">
-            <HostFix row={row} variant="secondary" onChanged={onChanged} />
-          </div>
-        </div>
+        // A host with no account keeps its place, as a row that adds one: its mark and name, what is missing, the press.
+        <Panel>
+          <PanelRow aria-label={p.name} state={<PackageLogo svg={p.logo} />} title={p.name} meta={[p.installed ? 'No account' : hostWords(row)]} actionsAtRest actions={<HostFix row={row} label="Add account" variant="secondary" onChanged={onChanged} />} />
+        </Panel>
       )}
       {error !== undefined && (
         <p role="alert" className="mt-2 text-xs text-danger">
