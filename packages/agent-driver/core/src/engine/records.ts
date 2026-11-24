@@ -1,5 +1,5 @@
 import { isSkillName, type FileBranchWrite } from '@openagt/agent-data'
-import { isProfileId, MODULE_NAME } from '@openagt/hooks'
+import { isProfileId, MODULE_NAME, type RunOptions } from '@openagt/hooks'
 import type { ProjectSkillsPick } from './profile.js'
 import { publishedBranch } from '@openagt/agent-data/names'
 import { deleteRun, writeRun, type RecordDeps } from '../record-store.js'
@@ -148,8 +148,11 @@ export function markerCard(run: { id: string; startedAt: string; prompt: string;
  * change, and what it was started for, which a git host's check reads to find the run a thread has,
  * and the repos a session with no project has, which its page shows.
  */
-export function forReaders(mark: Lasting): Lasting {
+export function forReaders(mark: Lasting): Lasting & { options?: RunOptions } {
+  // The run's options, one slice per module, as the run was asked them: what its box's controls say.
+  const options = markOptions(mark)
   return {
+    ...(Object.keys(options).length > 0 ? { options } : {}),
     ...(mark.base !== undefined ? { base: publishedBranch(mark.base) ?? mark.base } : {}),
     ...(mark.prBase !== undefined ? { prBase: mark.prBase } : {}),
     ...(mark.gitAccount !== undefined ? { gitAccount: mark.gitAccount } : {}),
@@ -160,6 +163,24 @@ export function forReaders(mark: Lasting): Lasting {
     ...(mark.profile !== undefined ? { profile: mark.profile } : {}),
     ...(mark.pluginsWithout !== undefined ? { pluginsWithout: mark.pluginsWithout } : {}),
     ...(mark.projectSkills !== undefined ? { projectSkills: mark.projectSkills } : {}),
+  }
+}
+
+/**
+ * The run's options, one slice per module, as its mark keeps what it was asked: where it starts and
+ * where its pull request goes, the account it works as, the repos it has, its profile and the
+ * session's picks over it; the profile's own picks are not in them.
+ */
+export function markOptions(mark: Lasting): RunOptions {
+  const branches = { ...(mark.base !== undefined ? { base: mark.base } : {}), ...(mark.repos !== undefined ? { repos: mark.repos } : {}) }
+  const github = { ...(mark.prBase !== undefined ? { prBase: mark.prBase } : {}), ...(mark.gitAccount !== undefined ? { account: mark.gitAccount } : {}) }
+  return {
+    ...(mark.publish !== undefined ? { publish: mark.publish } : {}),
+    ...(Object.keys(branches).length > 0 ? { 'git-branches': branches } : {}),
+    ...(Object.keys(github).length > 0 ? { github } : {}),
+    ...(mark.projectSkills !== undefined ? { skills: { project: mark.projectSkills } } : {}),
+    ...(mark.pluginsWithout !== undefined ? { plugins: { without: mark.pluginsWithout } } : {}),
+    ...(mark.profile !== undefined ? { profiles: { profile: mark.profile } } : {}),
   }
 }
 

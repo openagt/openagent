@@ -5,7 +5,7 @@ import { type RunCard, type RunStatus } from '../record.js'
 import { createHooks, type DistributionEntry, type ProjectRef, type RunFacts, type RunInput, type RunOptions as ModuleOptions } from '@openagt/hooks'
 import type { SessionRepo } from '@openagt/git-branches'
 import { runProcess, withLeg, type Leg, type RunDeps } from './leg.js'
-import { earlierPrs, lasting, markerCard, runnerMark, type Publish, type RunnerMark } from './records.js'
+import { earlierPrs, lasting, markOptions, markerCard, runnerMark, type Publish, type RunnerMark } from './records.js'
 import type { ProjectSkillsPick } from './profile.js'
 import { withRunLock } from './run-lock.js'
 import { askName, isBareCommand, type AskedName } from './title.js'
@@ -288,17 +288,14 @@ function recordedFacts(card: RunCard, mark: RunnerMark): RunFacts {
  * the driver is made on them, and the account at the git host is the record's.)
  */
 function optionsOf(mark: RunnerMark, branch: string | undefined, profile: ModuleOptions = {}): ModuleOptions {
-  const branches = { ...(mark.base !== undefined ? { base: mark.base } : {}), ...(branch !== undefined ? { branch } : {}), ...(mark.repos !== undefined ? { repos: mark.repos } : {}) }
-  const github = { ...(mark.prBase !== undefined ? { prBase: mark.prBase } : {}), ...(mark.gitAccount !== undefined ? { account: mark.gitAccount } : {}) }
-  const without = mark.pluginsWithout ?? profile.plugins?.without
-  const project = mark.projectSkills ?? profile.skills?.project
+  const asked = markOptions(mark)
+  const without = asked.plugins?.without ?? profile.plugins?.without
+  const project = asked.skills?.project ?? profile.skills?.project
   return {
-    ...(mark.publish !== undefined ? { publish: mark.publish } : {}),
-    ...(Object.keys(branches).length > 0 ? { 'git-branches': branches } : {}),
-    ...(Object.keys(github).length > 0 ? { github } : {}),
+    ...asked,
+    ...(branch !== undefined ? { 'git-branches': { ...asked['git-branches'], branch } } : {}),
     ...(project !== undefined ? { skills: { project } } : {}),
     ...(without !== undefined ? { plugins: { without } } : {}),
-    ...(mark.profile !== undefined ? { profiles: { profile: mark.profile } } : {}),
   }
 }
 
