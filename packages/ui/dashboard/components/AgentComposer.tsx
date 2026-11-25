@@ -11,7 +11,6 @@ import { keepDraft, keepDraftImages, keptDraft, keptDraftImages } from '../lib/d
 import { DaemonDown } from '../lib/use-daemon-health.js'
 import { Button } from './ui/button.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
-import { ContextMenu } from './ContextMenu.js'
 import { AutoMenu, autoCovers, autoSaid, useAutoLevels } from './AutoMenu.js'
 import { isPublishPick, type PublishPick } from '../../src/client.js'
 import { useProjectLauncher } from '../lib/use-project-launcher.js'
@@ -306,7 +305,7 @@ export function AgentComposer({
         {...(contextSet ? { addContext: contextSet.add, removeContext: contextSet.remove } : {})}
         // The launcher's gear, line for line in its places: the modules' lines, as the session's record
         // keeps its options; then, set apart and still a pick, "When it finishes". After the
-        // gear, in a project, Context: the files picked for the next message; then the modules' controls there.
+        // gear, the modules' controls there. The files picked for the next message are chips in the box.
         controlBox={controlBox}
         setup={{
           said: setupSaid,
@@ -316,7 +315,7 @@ export function AgentComposer({
             </>
           ),
         }}
-        controls={!noProject && contextSet && <ContextMenu files={[...contextSet.context]} busy={busy} onRemove={contextSet.toggle} />}
+        {...(!noProject && contextSet ? { attached: [...contextSet.context], onDetach: contextSet.toggle } : {})}
         idleControl={idleControl}
         notes={
           <>

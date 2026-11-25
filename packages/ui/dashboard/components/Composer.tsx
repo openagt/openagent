@@ -1,6 +1,6 @@
 import { createContext, forwardRef, useContext, useEffect, useImperativeHandle, useRef, useState, type ClipboardEvent, type DragEvent, type FormEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowUp, Loader2 } from 'lucide-react'
+import { ArrowUp, FileText, Loader2, X } from 'lucide-react'
 import type { ProjectSummary } from '../../src/index.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
 import { useActiveProjectId } from '../lib/preferences.js'
@@ -104,8 +104,12 @@ export const Composer = forwardRef<ComposerHandle, {
    * controls under the box (the project, the repos, the branch), and at that row's right.
    */
   controlBox?: ControlBox | undefined
-  /** The caller's controls in the row under the box, after the gear: the Context picker. */
+  /** The caller's controls in the row under the box, after the gear. */
   controls?: ReactNode
+  /** The files of the project that go with the message (its Context), as chips in the box, above its text: a `#` or the Files pane adds one. */
+  attached?: readonly string[] | undefined
+  /** Take a file off the message, by its chip's ×. */
+  onDetach?: ((path: string) => void) | undefined
   /** Inside a session: how full its context is, at the right of the row under the box, after the controls there. */
   sessionContext?: ReactNode
   /** Run the composed text; `later` when it was sent with Cmd/Ctrl+Enter, which a working agent reads after its turn; `images`, the names of the images it goes with. */
@@ -139,7 +143,7 @@ export const Composer = forwardRef<ComposerHandle, {
   /** The box takes the caret when it opens. */
   autoFocus?: boolean | undefined
 }>(function Composer(
-  { files, addContext, removeContext, setup, controlBox, controls, sessionContext, onSubmit, onPromptChange, onLoaded, busy, submitLabel, submitBusyLabel, placeholder, inAgent = false, sessionRow, idleControl, notes, notesUnder = false, draftKey, autoFocus = false },
+  { files, addContext, removeContext, setup, controlBox, controls, attached, onDetach, sessionContext, onSubmit, onPromptChange, onLoaded, busy, submitLabel, submitBusyLabel, placeholder, inAgent = false, sessionRow, idleControl, notes, notesUnder = false, draftKey, autoFocus = false },
   ref,
 ) {
   const [prompt, setPrompt] = useState('')
@@ -241,6 +245,10 @@ export const Composer = forwardRef<ComposerHandle, {
     onLoaded?.(label, replaced)
   }
 
+  // The files a `#` chip in the text points at: said there already, so the chips above the text are the others' (the Files pane's).
+  const [inText, setInText] = useState<ReadonlySet<string>>(new Set())
+  const shownAttached = attached?.filter(path => !inText.has(path))
+
   const onPromptEdit = (value: string) => {
     setPrompt(value)
     if (draftKey !== undefined) keepDraft(draftKey, value)
@@ -292,8 +300,8 @@ export const Composer = forwardRef<ComposerHandle, {
       onChange={onPromptEdit}
       onSubmit={later => submit(undefined, later)}
       {...(onLoaded ? { onLoaded } : {})}
-      {...(addContext ? { onMentionProject: addContext, onMentionFile: addContext } : {})}
-      {...(removeContext ? { onMentionRemoved: removeContext } : {})}
+      {...(addContext ? { onMentionProject: addContext, onMentionFile: (path: string) => (setInText(was => new Set(was).add(path)), addContext(path)) } : {})}
+      {...(removeContext ? { onMentionRemoved: (path: string) => (setInText(was => withOut(was, path)), removeContext(path)) } : {})}
       projects={projects}
       files={files}
       commands={readyCommands(commands)}
@@ -311,6 +319,10 @@ export const Composer = forwardRef<ComposerHandle, {
 
   // Commands and saved prompts get a visible surface (#948): load, save and delete in one menu,
   // instead of loading only behind typing `/`.
+  // `+` is also where anything goes with the message, as Claude Code on the web's: files or photos from this
+  // computer (the images a module keeps), and a file of the project (its `#` menu).
+  const imageInput = useRef<HTMLInputElement>(null)
+  const projectName = projects.find(project => project.id === activeProjectId)?.name
   const commandsEl = (
     <CommandsMenu
       commands={commands}
@@ -319,6 +331,8 @@ export const Composer = forwardRef<ComposerHandle, {
       onLoad={loadFromMenu}
       onNew={savePrompt}
       onDelete={prompt => void prompts.remove(prompt)}
+      onAddImages={takesImages ? () => imageInput.current?.click() : undefined}
+      onAddFile={addContext && files.length > 0 ? { project: projectName ?? 'this project', add: () => setTimeout(() => editorRef.current?.type('#'), 0) } : undefined}
     />
   )
   // Where the next run starts (#2394): this machine, or a host the project's modules bring.
@@ -412,11 +426,39 @@ export const Composer = forwardRef<ComposerHandle, {
           onDropCapture={onDrop}
         >
           <ImageTiles tiles={images.images.map(image => ({ key: image.key, src: image.src, going: image.name === undefined && image.error === undefined, error: image.error }))} onRemove={images.remove} className="px-2 pt-2" />
+          {/* The files that go with it, a chip each, as the images do: seen without opening a menu. */}
+          {shownAttached && shownAttached.length > 0 && (
+            <ul aria-label="Files" className="flex flex-wrap gap-1.5 px-2 pt-2">
+              {shownAttached.map(path => (
+                <li key={path} title={path} className="flex max-w-[16rem] items-center gap-1 rounded-md border border-border bg-background py-0.5 pr-0.5 pl-1.5 text-xs">
+                  <FileText className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                  <span className="truncate">{path.split('/').pop()}</span>
+                  {onDetach && (
+                    <button type="button" aria-label={`Take ${path} off`} onClick={() => onDetach(path)} className="focus-ring flex size-4 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground">
+                      <X className="size-3" aria-hidden />
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
           <div className="flex items-end">
             <div className="-mr-2 flex shrink-0 items-center p-1 pointer-coarse:p-1.5 pointer-coarse:pr-1">{commandsEl}</div>
             <div className="min-w-0 flex-1">{editorEl}</div>
             <div className="flex shrink-0 items-center p-1 pointer-coarse:p-1.5 pointer-coarse:pl-1">{slotEl}</div>
           </div>
+          <input
+            ref={imageInput}
+            type="file"
+            accept="image/*"
+            multiple
+            hidden
+            onChange={event => {
+              const picked = [...(event.target.files ?? [])]
+              event.target.value = ''
+              if (picked.length > 0) addImages(picked)
+            }}
+          />
         </div>
 
         {/* How it runs, under the box (his pick): the gear and the caller's controls at the left, the
@@ -459,3 +501,10 @@ export const Composer = forwardRef<ComposerHandle, {
     </>
   )
 })
+
+/** `set` without `item`. */
+function withOut(set: ReadonlySet<string>, item: string): ReadonlySet<string> {
+  const next = new Set(set)
+  next.delete(item)
+  return next
+}

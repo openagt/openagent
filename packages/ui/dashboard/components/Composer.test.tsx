@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createRef } from 'react'
 import type { Preferences } from '../../src/index.js'
 import { resetRunHostsForTest } from '../lib/run-hosts.js'
@@ -494,6 +494,18 @@ const box = (): HTMLElement => {
 const commands = () => screen.getByRole('button', { name: 'Commands' })
 
 describe('the box', () => {
+  test("the files that go with the message are chips in the box, above its text, each by its name with its path in its hover, and its × takes it off; + offers a file of the project where the box points at files", async () => {
+    const onDetach = vi.fn()
+    renderComposer({ files: ['src/app.ts', 'README.md'], addContext: () => {}, attached: ['src/app.ts'], onDetach })
+    const chips = within(screen.getByRole('list', { name: 'Files' })).getAllByRole('listitem')
+    expect(chips.map(chip => [chip.textContent, chip.title])).toEqual([['app.ts', 'src/app.ts']])
+    expect(box().contains(chips[0]!)).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Take src/app.ts off' }))
+    expect(onDetach).toHaveBeenCalledWith('src/app.ts')
+    await openMenu(commands())
+    expect(await screen.findByRole('menuitem', { name: /^File from / })).toBeTruthy()
+  })
+
   test('with the keyboard in it, or in the menu its + opened, its hairline is a step brighter and its shadow a step deeper: no ring, and no colour', () => {
     renderComposer()
     const cls = box().className.split(' ')

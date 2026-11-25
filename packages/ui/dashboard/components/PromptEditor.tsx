@@ -36,6 +36,8 @@ export interface PromptEditorHandle {
   loadTemplate: (text: string, focus?: boolean) => boolean
   /** Add a text after the draft's last line, as lines of its own: the caret, the chips and the scroll stay as they are, and one undo takes it out. */
   append: (text: string) => void
+  /** Type `#` or `/` at the caret, after a space where a word ends there, as a person would: its menu opens. */
+  type: (trigger: '#' | '/') => void
 }
 
 interface PromptEditorProps {
@@ -346,6 +348,12 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
     },
     focus: () => editor?.commands.focus('end'),
     loadTemplate: (text: string, focus?: boolean) => (editor ? loadTemplateInto(editor, text, focus) : false),
+    type: trigger => {
+      if (!editor) return
+      const before = editor.state.selection.$from.nodeBefore?.text ?? ''
+      // As text, not markdown: a `#` parsed would make the line a heading.
+      editor.chain().focus().insertContent({ type: 'text', text: before !== '' && !/\s$/.test(before) ? ` ${trigger}` : trigger }).run()
+    },
     append: (text: string) => {
       if (!editor) return
       if (editor.isEmpty) return void loadTemplateInto(editor, text, false)

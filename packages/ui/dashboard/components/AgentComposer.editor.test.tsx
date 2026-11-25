@@ -17,11 +17,13 @@ vi.mock('../lib/editors.js', () => ({ useDetectedEditors: () => [] }))
 vi.mock('../rpc/projects.js', () => ({ onProjects: () => Promise.resolve([]), onCommands: vi.fn(async () => ({ commands: [] })) }))
 vi.mock('../lib/use-project-launcher.js', async importOriginal => ({ ...(await importOriginal<object>()), useProjectLauncher: () => ({ gitHost: true, remote: true }) }))
 vi.mock('./AutoMenu.js', () => ({ AutoMenu: () => null, autoSaid: () => '', autoCovers: () => undefined, useAutoLevels: () => [] }))
-vi.mock('./ContextMenu.js', () => ({ ContextMenu: ({ files }: { files: readonly string[] }) => <span data-testid="context">{files.join(', ')}</span> }))
 vi.mock('./ProfileMenu.js', () => ({ ProfileOff: () => null }))
 import { keptDraft } from '../lib/draft-handoff.js'
 
 const { AgentComposer } = await import('./AgentComposer.js')
+
+/** The files the box goes with, as its chips name them (each by its path in its title). */
+const filesSaid = () => [...screen.getByRole('list', { name: 'Files' }).querySelectorAll('li')].map(chip => chip.title).join(', ')
 const { useContextSet } = await import('../lib/use-context-set.js')
 
 beforeEach(() => {
@@ -47,7 +49,7 @@ test('a refused message comes back as the same draft, its picked file a chip aga
   // The `#` picker's pick: a chip in the box, and the file in the Context.
   act(() => void box.editor.commands.insertContent([{ type: 'text', text: 'look at ' }, { type: 'token', attrs: { kind: 'file', label: '#README.md', text: '#README.md' } }]))
   act(() => context.add('README.md'))
-  await waitFor(() => expect(screen.getByTestId('context').textContent).toBe('README.md'))
+  await waitFor(() => expect(filesSaid()).toBe('README.md'))
   fireEvent.keyDown(box, { key: 'Enter' })
   await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('p1', 'look at #README.md\n\nContext: README.md', 'run-1'))
   // Typed while the message went.
@@ -55,7 +57,7 @@ test('a refused message comes back as the same draft, its picked file a chip aga
   await act(async () => answer({ ok: false, error: 'resume refused' }))
   expect(box.editor.storage.markdown.getMarkdown()).toBe('and then\n\nlook at #README.md')
   expect(box.querySelectorAll('[data-token]').length).toBe(1)
-  expect(screen.getByTestId('context').textContent).toBe('README.md')
+  expect(filesSaid()).toBe('README.md')
 })
 
 test('a message refused once its session page closed waits in that session\'s draft, and leaves the shell\'s Context alone', async () => {
@@ -105,7 +107,7 @@ test('a file picked while a message went keeps its Context once that message lan
   act(() => void box.editor.commands.insertContent([{ type: 'text', text: 'then ' }, { type: 'token', attrs: { kind: 'file', label: '#src/b.ts', text: '#src/b.ts' } }]))
   act(() => context.add('src/b.ts'))
   await act(async () => answer({ ok: true }))
-  expect(screen.getByTestId('context').textContent).toBe('src/b.ts')
+  expect(filesSaid()).toBe('src/b.ts')
   fireEvent.keyDown(box, { key: 'Enter' })
   await waitFor(() => expect(sendMessage).toHaveBeenLastCalledWith('p1', 'then #src/b.ts\n\nContext: src/b.ts', 'run-1'))
 })
@@ -125,7 +127,7 @@ test('repicking the same file while sending keeps its Context', async () => {
   pick()
   await act(async () => answer({ ok: true }))
   expect(box.querySelectorAll('[data-token]').length).toBe(1)
-  expect(screen.getByTestId('context').textContent).toBe('README.md')
+  expect(filesSaid()).toBe('README.md')
 })
 
 test('a click on Send hands the box back at once, for the next message', async () => {

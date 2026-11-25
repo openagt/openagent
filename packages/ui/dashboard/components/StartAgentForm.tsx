@@ -14,7 +14,6 @@ import { useLoaded } from '../lib/use-async.js'
 import { promptWithContext } from '../lib/use-context-set.js'
 import { keepDraft, keepDraftImages, stashPendingDraft } from '../lib/draft-handoff.js'
 import { AutoMenu, autoCovers, autoPickIn, autoSaid, useAutoLevels } from './AutoMenu.js'
-import { ContextMenu } from './ContextMenu.js'
 import { Composer, type ComposerHandle } from './Composer.js'
 import { Dots } from './ToolCalls.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
@@ -206,8 +205,8 @@ export function StartAgentForm({
             </>
           ),
         }}
-        // After the gear, a project's Context: the files picked for the message.
-        controls={noProject ? undefined : <ContextMenu files={[...context]} busy={busy} onRemove={toggleContext} />}
+        // The files picked for the message (a `#`, the Files pane), as chips in the box.
+        {...(noProject ? {} : { attached: [...context], onDetach: toggleContext })}
         onSubmit={submit}
         onPromptChange={value => {
           typed.current = value
