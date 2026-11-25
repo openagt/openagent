@@ -1,20 +1,22 @@
-import { readRepoOwners } from '@openagt/agent-data'
-import { gitHostPackages } from './logins.js'
-import { accountsByHost } from './send-as.js'
+import { isRepoOwner, readRepoOwners, writeRepoOwners } from '@openagt/agent-data'
+import { HOST } from './accounts.js'
+import { cliAnswer, hostAccounts } from './host-accounts.js'
 
-// The repositories at the git hosts the project picker lists beside the ones on this computer
-// (Rom's design: "GitHub users/orgs, and the OA accounts' repos"): each of OpenAgent's accounts
-// lists its own, as itself, and each user or organization the person named (Settings › Repos) is
-// listed as the account runs use. A host's package answers (`<command> repos`). The lists are
-// read in the background and kept, so the picker never waits on a host but the first time.
+// The repositories on GitHub the project picker lists beside the ones on this computer (Rom's
+// design: "GitHub users/orgs, and the OA accounts' repos", `composer.where`): each of OpenAgent's
+// accounts lists its own, as itself, and each user or organization the person named (Settings ›
+// GitHub) is listed as the account runs use (`github repos`). The lists are read in the background
+// and kept, so the picker never waits on GitHub but the first time.
 
-/** A repository at a git host, not looked for on this computer. */
+/** A repository on GitHub, not looked for on this computer. */
 export interface HostedRepo {
-  /** `<host>/<owner>/<name>`: what a clone is asked for. */
+  /** `github.com/<owner>/<name>`: what a clone is asked for. */
   address: string
   url: string
   private: boolean
   description?: string
+  /** When it was last pushed to, ISO. */
+  pushedAt?: string
   /** Why it is listed: the account it is one of, or the owner the person named. */
   from: string
 }
@@ -33,10 +35,10 @@ export interface HostedRead {
   unreached?: true
 }
 
-/** What a listing is asked through: the host's package, and OpenAgent's accounts and the person's owners. */
+/** What a listing is asked through: the package's own command, and OpenAgent's accounts and the person's owners. */
 export const hostedWiring = {
-  run: (host: string, args: string[]) => gitHostPackages.run(host, args),
-  hosts: () => accountsByHost(),
+  run: (_host: string, args: string[]) => cliAnswer(args),
+  hosts: () => hostAccounts(),
   owners: () => readRepoOwners(),
   now: () => Date.now(),
 }
@@ -62,9 +64,9 @@ async function listHosted(): Promise<Listed> {
     }
     const listed = ((said.output ?? {}) as { repos?: unknown }).repos
     for (const row of Array.isArray(listed) ? listed : []) {
-      const { address, url, private: hidden, description } = (row ?? {}) as Record<string, unknown>
+      const { address, url, private: hidden, description, pushedAt } = (row ?? {}) as Record<string, unknown>
       if (typeof address !== 'string' || typeof url !== 'string' || repos.has(address.toLowerCase())) continue
-      repos.set(address.toLowerCase(), { address, url, private: hidden === true, ...(typeof description === 'string' && description ? { description } : {}), from: ask.from })
+      repos.set(address.toLowerCase(), { address, url, private: hidden === true, ...(typeof description === 'string' && description ? { description } : {}), ...(typeof pushedAt === 'string' ? { pushedAt } : {}), from: ask.from })
     }
   }
   return { repos: [...repos.values()], ...(unreached ? { unreached } : {}) }
@@ -110,4 +112,34 @@ export function refreshHosted(): Promise<HostedRepo[]> {
 export function forgetHosted(): void {
   kept = undefined
   running = undefined
+}
+
+/** The users and organizations on GitHub the person named, by name, kept in their own folder: the same on each of their computers. */
+export async function readOwners(): Promise<string[]> {
+  return (await hostedWiring.owners()).filter(owner => owner.startsWith(`${HOST}/`)).map(owner => owner.slice(HOST.length + 1))
+}
+
+/** List one more user's or organization's repositories, as a person types it: `vikejs`, `@vikejs`, `github.com/vikejs` or its page's address. */
+export async function addOwner(typed: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const said = typeof typed === 'string' ? typed.trim().replace(/^https?:\/\//, '').replace(/\/+$/, '') : ''
+  const named = said.toLowerCase().startsWith(`${HOST}/`) ? said.slice(HOST.length + 1) : said.replace(/^@/, '')
+  const owner = `${HOST}/${named}`
+  if (!isRepoOwner(owner)) return { ok: false, error: `"${said.slice(0, 80)}" is not a GitHub user or organization. One looks like vikejs, or github.com/vikejs.` }
+  const owners = await readRepoOwners()
+  if (owners.some(one => one.toLowerCase() === owner.toLowerCase())) return { ok: true }
+  const written = await writeRepoOwners([...owners, owner])
+  if (!written.ok) return { ok: false, error: written.error }
+  void refreshHosted()
+  return { ok: true }
+}
+
+/** Stop listing an owner's repositories, by its name. */
+export async function removeOwner(name: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const owners = await readRepoOwners()
+  const owner = `${HOST}/${name}`
+  if (!owners.includes(owner)) return { ok: true }
+  const written = await writeRepoOwners(owners.filter(one => one !== owner))
+  if (!written.ok) return { ok: false, error: written.error }
+  void refreshHosted()
+  return { ok: true }
 }

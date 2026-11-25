@@ -123,40 +123,18 @@ test('a Start goes no further than the project can, the commit with no remote, t
   }
 })
 
-test('a Start hands the host the branch a pull request goes into, and refuses a word that is no branch name before the host is asked', async () => {
+test("a Start hands the host its controls' run options as they are: the account the run works as and the branch its pull request goes into among them", async () => {
   const home = await project()
   const env = { ...process.env, XDG_CONFIG_HOME: join(home, 'cfg') }
   await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
   const host = fakeHost()
   const runtime = createProjectRuntime({ cwd: home, env, host })
   try {
-    await runtime.onStart('Fix it', { prBase: 'develop' })
-    assert.deepEqual(lastStart(host).options?.github, { prBase: 'develop' })
-    assert.deepEqual(await runtime.onStart('Fix it', { prBase: '--upload-pack=x' }), { ok: false, error: 'not a branch name: --upload-pack=x' })
-    assert.equal(host.requests.length, 1, 'the host was not asked')
-  } finally {
-    await rm(home, { recursive: true, force: true })
-  }
-})
-
-test("a Start hands the host the session's account at the git host and its controls' run options, and refuses what is no login before the host is asked", async () => {
-  const home = await project()
-  const env = { ...process.env, XDG_CONFIG_HOME: join(home, 'cfg') }
-  await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
-  const host = fakeHost()
-  const runtime = createProjectRuntime({ cwd: home, env, host })
-  try {
-    await runtime.onStart('Fix it', { account: 'octo-agent', options: { plugins: { without: ['ask', 'tickets'] }, skills: { project: ['deploy', 'lint'] } } })
+    await runtime.onStart('Fix it', { options: { github: { account: 'octo-agent', prBase: 'develop' }, plugins: { without: ['ask', 'tickets'] }, skills: { project: ['deploy', 'lint'] } } })
     const { options } = lastStart(host)
-    assert.deepEqual([options?.github, options?.plugins, options?.skills], [{ account: 'octo-agent' }, { without: ['ask', 'tickets'] }, { project: ['deploy', 'lint'] }])
+    assert.deepEqual([options?.github, options?.plugins, options?.skills], [{ account: 'octo-agent', prBase: 'develop' }, { without: ['ask', 'tickets'] }, { project: ['deploy', 'lint'] }])
     await runtime.onStart('Fix it')
-    assert.deepEqual(lastStart(host).options, { publish: 'commit' }, "no pick: the run goes as the computer's account, on the profile picked for every next run")
-    const asked = host.requests.length
-    const notALogin = { ok: false, error: 'An account is named by its login.' }
-    assert.deepEqual(await runtime.onStart('Fix it', { account: 'octo agent' }), notALogin)
-    assert.deepEqual(await runtime.onStart('Fix it', { account: '' }), notALogin)
-    assert.deepEqual(await runtime.onStart('Fix it', { account: 42 as unknown as string }), notALogin)
-    assert.equal(host.requests.length, asked, 'the host was not asked')
+    assert.deepEqual(lastStart(host).options, { publish: 'commit' }, "no pick: the run goes as github's pick for every next run, on the profile picked for every next run")
   } finally {
     await rm(home, { recursive: true, force: true })
   }

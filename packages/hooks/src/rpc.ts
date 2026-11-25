@@ -9,7 +9,7 @@ import type { GitAccess, GitAccounts } from './account.js'
 import type { InboxLine } from './agent.js'
 import type { ProjectsLifecycle } from './app.js'
 import type { ProjectRef } from './project.js'
-import type { RunFound, RunQuestion } from './run.js'
+import type { PullRequest, PullRequestRead, RunFound, RunQuestion } from './run.js'
 import type { Settings } from './settings.js'
 
 /** Where a pull request stands on the git host: still being asked, or answered (with its merge commit when merged, and the last commit of the branch it merged, when the git host says it). */
@@ -41,7 +41,7 @@ export interface RpcHost extends RpcComputerHost {
   project(): Promise<ProjectRef | undefined>
   /** Where one run of the project has its work, as the run's host says (`RunHost.find`); undefined when the id names no run. */
   run(agentId: string): Promise<RunFound | undefined>
-  /** The commit pull request `number` of `branch` merged as, as the project's git host says. */
+  /** The commit pull request `number` of `branch` merged as, as the module answering for the project's git host says (`account.access`): not merged, as far as anyone can tell, where none does. */
   mergeCommit(branch: string, number: number): Promise<MergeLookup>
   /** The questions one run of the project still waits on, in the order asked: none for a run waiting on none, or an id that names no run. */
   questions(agentId: string): Promise<RunQuestion[]>
@@ -58,6 +58,14 @@ export interface RpcHost extends RpcComputerHost {
    * for the person, where the record cannot be written.
    */
   landed(agentId: string, landed: { commit: string; from: string }): Promise<void>
+  /**
+   * Write down on a run's record the pull request a press opened for its work once the run had
+   * ended: every surface reads a run's request off its record. Throws, in words for the person,
+   * where the record cannot be written.
+   */
+  pullRequest(agentId: string, pr: PullRequest): Promise<void>
+  /** Say how pull requests stand, as the module just read them at its git host: the lists of runs mark each run's requests by it. */
+  pullRequestsRead(prs: readonly PullRequestRead[]): void
   /**
    * The modules on in the project, in the distribution's order, each with what it gives the
    * project's runs; for a session with no project, the ones it has as the distribution starts them.

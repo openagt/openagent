@@ -25,7 +25,6 @@ import { ChatNote, ChatPane } from './ChatPane.js'
 import { LostStreamNotice } from './LostStreamNotice.js'
 import { ModuleSlot } from './ModulePageView.js'
 import { useMountedModules } from '../lib/use-modules.js'
-import { HandoffActions } from './AgentHandoff.js'
 import { AgentDetails, type AgentDetailsCard } from './AgentDetails.js'
 import { usePaneOpeners } from '../lib/reveal-change.js'
 import { agentOf, modelContextWindow, useAgents } from '../lib/agents.js'
@@ -80,7 +79,7 @@ export function AgentView({
   /** Whether the agent is still running; `null` while the daemon's list of agents has not been read, so it is not known yet. */
   live: boolean | null
   /** What the run's card says, off the runs poll: what the feed cannot carry (the details strip's facts, how the agent was set up, whether its record is being saved). Absent until the card is listed. */
-  card?: (AgentDetailsCard & Pick<AgentMeta, 'status' | 'intent' | 'saving' | 'workspace' | 'resumeCommand' | 'branch' | 'base' | 'baseCommit' | 'host' | 'otherHost' | 'publish' | 'prBase' | 'gitAccount' | 'earlierPrs' | 'pr' | 'prState' | 'repos' | 'options'> & Partial<Pick<AgentMeta, 'endedAt' | 'updatedAt'>>) | undefined
+  card?: (AgentDetailsCard & Pick<AgentMeta, 'status' | 'intent' | 'saving' | 'workspace' | 'resumeCommand' | 'branch' | 'base' | 'baseCommit' | 'host' | 'otherHost' | 'publish' | 'prBase' | 'earlierPrs' | 'pr' | 'prState' | 'repos' | 'options'> & Partial<Pick<AgentMeta, 'endedAt' | 'updatedAt'>>) | undefined
   /** What the launcher said about this run as it started it: shown until the run's record says it. */
   picks?: StartPicks | undefined
   /** The session's own name — the same label the rail shows (#1030). It leads the action bar as
@@ -185,7 +184,7 @@ export function AgentView({
   // for a branch with commits of its own, which the clean-up keeps.
   const read = useAgentHandoff(projectId, agentId, live === false && !going, card?.saving === true, going)
   const kept = read.handoff !== null && read.handoff.exists && !read.handoff.empty
-  const handoff = card?.saving && !kept ? { ...read, handoff: null, state: 'unknown' as const } : read
+  const handoff = card?.saving && !kept ? { handoff: null, state: 'unknown' as const } : read
   const branchKnown = handoff.state !== 'unknown'
   // How the agent ended (#948), read once for the Resume offer below:
   // its events say it, and until they are read (or when they hold no ending) its card does, so
@@ -206,9 +205,7 @@ export function AgentView({
     const timer = setTimeout(() => setWaitedFor(agentId), READY_WAIT_MS)
     return () => clearTimeout(timer)
   }, [agentId])
-  // The branch's answer counts once its pull request lookup is in too: the bar offers nothing
-  // while it is out, so showing the facts before it would add them in two steps.
-  const branchRead = card?.saving === true || (branchKnown && !handoff.handoff?.prPending)
+  const branchRead = card?.saving === true || branchKnown
   const ready = working || waitedFor === agentId || (archived !== null && branchRead)
   // Whether the feed shows this agent yet. On a first visit it would otherwise pass through what
   // each read still out has to say: "Waiting for the session to start…" while the list of agents
@@ -229,22 +226,25 @@ export function AgentView({
 
   // The agent has ended: the next step is offered from here on.
   const ended = ready && live === false && !going
-  // The bar's branch and pull request: the checkout's read, and where it has none, the branch's.
+  // The bar's branch and pull request: the checkout's read, and where it has none, the branch's;
+  // the request is the one the run's record names, as the list of runs marks it.
   // The checkout's read answers without them for the moment its folder is being removed, and a bar
   // with no branch went away until the next read.
   const onBranch = handoff.handoff
+  const listedPr = card?.pr
+  const listedState = card?.prState
   const barCheckout = useMemo<AgentWorktree | null>(() => {
     const branch = checkout?.branch ?? onBranch?.branch
-    const pr = checkout?.pr ?? onBranch?.pr
+    const pr = checkout?.pr ?? (listedPr ? { ...listedPr, ...(listedState ? { state: listedState } : {}) } : undefined)
     return branch === undefined ? checkout : { ...checkout, branch, ...(pr ? { pr } : {}) }
-  }, [checkout, onBranch])
+  }, [checkout, onBranch, listedPr, listedState])
   const pr = barCheckout?.pr
   // The run's state after its name. The list of runs already says how an ended run ended and
   // whether its pull request merged, as its row in the sidebar shows, so the bar says that from
   // the first frame and never waits for this page's own reads: waiting for them, a switch to a
   // merged run showed nothing, then "Done", then "Merged". Once the reads are in, the chat's own
   // events say a question waits or how the last turn ended.
-  const merged = pr?.state === 'MERGED' || card?.prState === 'merged'
+  const merged = pr?.state === 'merged' || card?.prState === 'merged'
   const status = ready
     ? shownStatus(live === null && !feedLive ? null : feedLive, feedLive && pendingChoices(shown).length > 0, outcome, merged)
     : live === false && card
@@ -256,7 +256,7 @@ export function AgentView({
   const over =
     live === false &&
     (onBranch?.landed === true ||
-      ((onBranch?.merged === true || pr?.state === 'MERGED' || pr?.state === 'CLOSED') && !onBranch?.pendingFiles?.length && onBranch?.movedPastPr !== true))
+      ((onBranch?.merged === true || pr?.state === 'merged' || pr?.state === 'closed') && !onBranch?.pendingFiles?.length))
   // Whether the bar above the message box has something to say: a pull request, a commit going
   // on, uncommitted changes while the agent works, or, once it has ended and its branch is read,
   // what the branch holds. An agent that changed nothing has no bar. A bar that is there stays
@@ -269,19 +269,11 @@ export function AgentView({
   // next read. The read itself now comes a second later rather than fifteen (`SETTLING_MS`).
   const lastSay = useRef<{ agentId: string | null; say: boolean }>({ agentId: null, say: false })
   const held = lastSay.current.agentId === agentId && lastSay.current.say
-  // Whether the run's pull request is merged is not known until the git host has answered, and
-  // until then the read calls the request open: a bar shown on that word, on a first visit, went
-  // again the moment the request turned out merged. So a bar not up yet waits for the answer; one
-  // already up stays while its request is read again. A run with no request waits for nothing.
-  // The same for the branch's read of an ended run: its request, and with it the next step, is
-  // still being looked up, and a bar shown before came up without them and grew them a moment later.
-  const prUnknown = !held && ((checkout?.pr !== undefined && checkout.prPending === true) || (live === false && onBranch?.prPending === true))
   // An ended run's bar comes up once its branch is read, all of it at once: shown on the pull
   // request alone, it came up with the request's number and grew the work and the next step a
   // moment later. So does a run not known yet to be going or ended, until the list of runs says.
   const say =
     !over &&
-    !prUnknown &&
     (live === false
       ? branchKnown
         ? pr !== undefined || handoffSays(onBranch) || held
@@ -290,22 +282,6 @@ export function AgentView({
         ? pr !== undefined || checkout?.checkout?.dirty === true || held
         : held)
   lastSay.current = { agentId, say }
-  // Every pull request the run opened, for the row above the message box: the ones before, then the one it is on.
-  const earlierPrs = card?.earlierPrs
-  // How the request it is on stands is the git host's to say, and until it has answered the
-  // page's read calls the request open: a merged request's label said "open" for a second, then
-  // "merged", and pushed the labels beside it over. The list of runs has the git host's last word
-  // already, as the run's row shows, so the label says that until this page's read is in, and
-  // from the first frame, before the read has named the request at all.
-  const prStateOut = checkout?.prPending === true || onBranch?.prPending === true
-  const listedPr = card?.pr
-  const listedState = card?.prState
-  const labelPr = useMemo(() => {
-    if (pr === undefined) return listedPr ? { ...listedPr, state: listedState } : undefined
-    if (!prStateOut) return pr
-    return { number: pr.number, url: pr.url, state: listedPr?.number === pr.number ? listedState : undefined }
-  }, [pr, prStateOut, listedPr, listedState])
-  const prs = useMemo(() => [...(earlierPrs ?? []), ...(labelPr && !earlierPrs?.some(earlier => earlier.url === labelPr.url) ? [labelPr] : [])], [earlierPrs, labelPr])
   // Where the session started, right above the message box, as the "New agent session" page has it. It is
   // there whatever stands in the box's place.
   const sessionBox = useMemo(() => ({ in: 'session' as const, projectId, agentId, options: card?.options ?? picks?.options ?? {}, onChange: () => {}, busy: false }), [projectId, agentId, card?.options, picks?.options])
@@ -315,7 +291,6 @@ export function AgentView({
       target={target}
       elsewhere={elsewhere || card?.otherHost === true}
       projectName={projectName}
-      prs={prs}
       box={sessionBox}
       run={{ projectId, agentId, working }}
     />
@@ -371,16 +346,10 @@ export function AgentView({
                   ))
               }
               actions={
-                // A run that is working is still writing its branch; the next step is offered once it has ended.
-                // Keyed: what a press said, and a merge it armed, are that session's alone.
-                ended ? (
-                  <>
-                    <HandoffActions key={`${projectId}/${agentId}`} projectId={projectId} agentId={agentId} state={handoff} />
-                    <HandoffOffers projectId={projectId} agentId={agentId} again={card?.updatedAt} />
-                  </>
-                ) : undefined
+                // A run that is working is still writing its branch; the next step is offered once it has ended:
+                // the modules' (`chat.handoff`), asked again as its record changes.
+                ended ? <HandoffOffers projectId={projectId} agentId={agentId} again={card?.updatedAt} /> : undefined
               }
-              error={ready && showHandoff ? handoff.error : undefined}
               show={say}
             />
             {/* The session's copies of repos: a row each, after the project's (git-branches'). */}
@@ -414,11 +383,8 @@ export function AgentView({
             contextSet={contextSet}
             // A card with no level has none: a message may have taken it away.
             publish={card ? card.publish : picks?.publish}
-            prBase={card?.prBase ?? picks?.prBase}
             row={row}
             repos={card?.repos ?? picks?.repos}
-            gitHost={gitHostHome}
-            gitAccount={card?.gitAccount ?? picks?.gitAccount}
             // The options as the record keeps them; the launcher's until it is there.
             options={card ? card.options : picks?.options}
           />

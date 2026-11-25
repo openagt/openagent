@@ -34,6 +34,9 @@ const inCheckout = (path: string, record?: { baseCommit?: string }): RpcHost =>
   mergeCommit: async () => ({ pending: false }),
 })
 
+/** The record less its request, which it keeps with its address. */
+const withoutPr = <T extends { pr?: unknown }>({ pr: _pr, ...rest }: T): Omit<T, 'pr'> => rest
+
 /** A pull request on a run's branch, as the git host answers it. */
 type Pr = { number: number; mergeCommit?: string } & Record<string, unknown>
 
@@ -47,7 +50,8 @@ function deps(agent: { status?: string; host?: string; branch?: string; pr?: { n
     settings: SETTINGS,
     root,
     run: async () => ({
-      record: agent,
+      // A record keeps its request's address beside its number.
+      record: { ...withoutPr(agent), ...(agent.pr ? { pr: { ...agent.pr, url: `https://github.com/o/r/pull/${agent.pr.number}` } } : {}) },
       changedNothing: !agent.pr && agent.landed === undefined && (agent.status === 'done' || agent.status === 'failed' || agent.status === 'stopped') && agent.host === 'this-machine',
     }),
     mergeCommit: async (_branch, number) => {

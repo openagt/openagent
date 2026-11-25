@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { RunOrder, type GithubFacts, type ProjectRef, type PullRequest, type RunContext, type RunFacts } from '@openagt/hooks'
 import { fakeRun } from '@openagt/hooks/testing'
 import { homedir } from 'node:os'
-import { githubModule, type GithubDeps } from './module.js'
+import { githubModule, requestsWaiting, type GithubDeps } from './module.js'
 
 // github as a module: the account a run works as, and the pull request a run's branch has, read
 // back into the run's facts.
@@ -141,4 +141,22 @@ test('git work outside a run reaches a repository on GitHub as the account runs 
   assert.deepEqual(await git('git@github.com:me/shop.git'), access)
   assert.equal(await git('https://gitlab.com/me/shop.git'), undefined)
   assert.equal(await githubModule({ reach: async () => undefined }).hooks['account.access']?.git?.('https://github.com/me/shop.git'), undefined)
+})
+
+test("the project's open requests wait on the person to merge them: a run's goes to the run, by the request its record names or its branch; one opened by hand opens on GitHub; a draft opened by hand is not asking", () => {
+  const pr = (number: number, over: Record<string, unknown> = {}) => ({ number, title: `Request ${number}`, url: `https://github.com/o/r/pull/${number}`, isDraft: false, createdAt: '2026-08-21T10:00:00Z', ...over })
+  const runs = [
+    { id: 'r1', name: 'Fix the login', pr: { number: 1, url: 'https://github.com/o/r/pull/1' } },
+    { id: 'r2', branch: 'agent/dark-mode' },
+  ]
+  const items = requestsWaiting([pr(1), pr(2, { isDraft: true, headRefName: 'agent/dark-mode' }), pr(3), pr(4, { isDraft: true, headRefName: 'mine' })], runs)
+  assert.deepEqual(
+    items.map(item => [item.id, item.scope, item.run, item.title]),
+    [
+      ['https://github.com/o/r/pull/1', 'run', 'r1', 'Fix the login'],
+      ['https://github.com/o/r/pull/2', 'run', 'r2', 'Request 2'],
+      ['https://github.com/o/r/pull/3', 'project', undefined, 'Request 3'],
+    ],
+  )
+  assert.deepEqual(items[2], { kind: 'waiting', scope: 'project', id: 'https://github.com/o/r/pull/3', words: 'Needs merge', title: 'Request 3', detail: '#3', mark: 'pull-request', since: '2026-08-21T10:00:00Z', fix: { label: 'Open PR #3', href: 'https://github.com/o/r/pull/3' } })
 })

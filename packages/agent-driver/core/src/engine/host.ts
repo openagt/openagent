@@ -4,7 +4,7 @@ import { appendInbox, imagesOf, promptLines, takeInbox } from '../inbox.js'
 import { deleteRun, findRun, patchRun } from '../record-store.js'
 import { isRunId, type RunCard, type RunPatch } from '../record.js'
 import { PLUGINS_WITHOUT_ENV, PROFILE_ENV, PROJECT_SKILLS_ENV, isSkillName, sessionFolder, sessionsHome, sessionsHomeOf } from '@openagt/agent-data'
-import { LOCAL_HOST, MODULE_NAME, NAME_RUNS, PICKED_AGENT, PICKED_PROFILE, isProfileId, type AgentPick, type ProjectRef, type Settings, type RunFacts, type RunFound, type RunHost, type RunInput, type RunOptions, type RunReadiness, type RunRef, type RunRequest, type InboxLine, type PromptLine, type RunAgent } from '@openagt/hooks'
+import { LOCAL_HOST, MODULE_NAME, isBranchName, NAME_RUNS, PICKED_AGENT, PICKED_PROFILE, isProfileId, type AgentPick, type ProjectRef, type Settings, type RunFacts, type RunFound, type RunHost, type RunInput, type RunOptions, type RunReadiness, type RunRef, type RunRequest, type InboxLine, type PromptLine, type RunAgent } from '@openagt/hooks'
 import { discardWorktree, worktreePath } from '@openagt/git-branches'
 import { listedRuns, liveCard, ownFolder, runEvents, standing, type RunReadsDeps } from '../reads/run-reads.js'
 import { handedDownSettings, runProfile } from './profile.js'
@@ -247,11 +247,18 @@ function foundOf(card: Partial<RunCard>, checkout: { path: string; branch: strin
   const baseCommit = text('baseCommit')
   const landed = text('landed')
   const branch = checkout?.branch ?? card.branch
+  const options = isMap(caller['options']) ? (caller['options'] as RunOptions) : undefined
+  const earlierPrs = Array.isArray(caller['earlierPrs']) ? (caller['earlierPrs'] as unknown[]).filter(isPullRequest) : undefined
   const record = card.status === undefined ? undefined : {
     status: card.status,
+    ...(card.startedAt !== undefined ? { startedAt: card.startedAt } : {}),
+    ...(card.endedAt !== undefined ? { endedAt: card.endedAt } : {}),
+    ...(card.intent !== undefined ? { prompt: card.intent } : {}),
+    ...(options ? { options } : {}),
     ...(host !== undefined ? { host } : {}),
     ...(branch !== undefined ? { branch } : {}),
-    ...(card.pr ? { pr: { number: card.pr.number } } : {}),
+    ...(card.pr ? { pr: { number: card.pr.number, url: card.pr.url } } : {}),
+    ...(earlierPrs?.length ? { earlierPrs } : {}),
     ...(base !== undefined ? { base } : {}),
     ...(baseCommit !== undefined ? { baseCommit } : {}),
     ...(landed !== undefined ? { landed } : {}),
@@ -262,6 +269,15 @@ function foundOf(card: Partial<RunCard>, checkout: { path: string; branch: strin
     ...(record ? { record } : {}),
     changedNothing: !card.pr && landed === undefined && ended && host === here,
   }
+}
+
+function isMap(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** A pull request as a record keeps it: its number and its address. */
+function isPullRequest(value: unknown): value is { number: number; url: string } {
+  return isMap(value) && typeof value['number'] === 'number' && typeof value['url'] === 'string'
 }
 
 /** Where a run of `project` is started and found: the project's folder, or the sessions home for a session with no project. */
@@ -339,6 +355,8 @@ function refuse(project: ProjectRef | undefined, options: RunOptions): void {
   if (!project && options.publish !== undefined && !branches.repos?.length) throw new Error('A session with no project and no repo has nothing to publish.')
   if (branches.branch !== undefined && branches.base !== undefined) throw new Error('A run given a branch to work on starts from no other.')
   if (options.github?.account !== undefined && !/^\S+$/.test(options.github.account)) throw new Error('An account is named by its login.')
+  // The branch a pull request goes into ends up on the run's command line: only a branch name goes there.
+  if (options.github?.prBase !== undefined && !isBranchName(options.github.prBase)) throw new Error(`not a branch name: ${String(options.github.prBase)}`)
   const profile = options.profiles?.profile
   if (profile !== undefined && !isProfileId(profile)) throw new Error('A profile is named by its id.')
   const kept = options.skills?.project

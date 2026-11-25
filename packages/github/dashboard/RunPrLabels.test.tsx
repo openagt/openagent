@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
-import { hoverTooltip } from '../test-utils.js'
+import { hoverTooltip } from '@openagt/ui/module/testing'
 import { RunPrLabels } from './RunPrLabels.js'
 
 afterEach(cleanup)
@@ -9,7 +9,7 @@ describe('the run\'s pull requests above its box', () => {
   test('one label each, oldest first: its mark in the colour of how it stands and its number, a link to the request; the state\'s word is in its name and its hover, not drawn', async () => {
     render(<RunPrLabels prs={[{ number: 4, url: 'https://x/pull/4', state: 'merged' }, { number: 5, url: 'https://x/pull/5', state: 'OPEN' }]} />)
     const links = screen.getAllByRole('link')
-    expect(links.map(link => link.getAttribute('aria-label'))).toEqual(['PR #4 merged, on the git host', 'PR #5 open, on the git host'])
+    expect(links.map(link => link.getAttribute('aria-label'))).toEqual(['PR #4 merged, on GitHub', 'PR #5 open, on GitHub'])
     expect(links.map(link => link.textContent)).toEqual(['#4', '#5'])
     expect(links[0]!.getAttribute('href')).toBe('https://x/pull/4')
     expect(links[0]!.getAttribute('target')).toBe('_blank')
@@ -22,7 +22,7 @@ describe('the run\'s pull requests above its box', () => {
     render(<RunPrLabels prs={[{ number: 7, url: 'https://x/pull/7', state: 'UNKNOWN' }, { number: 8, url: 'https://x/pull/8' }]} />)
     const links = screen.getAllByRole('link')
     expect(links.map(link => link.textContent)).toEqual(['#7', '#8'])
-    expect(links.map(link => link.getAttribute('aria-label'))).toEqual(['PR #7, on the git host', 'PR #8, on the git host'])
+    expect(links.map(link => link.getAttribute('aria-label'))).toEqual(['PR #7, on GitHub', 'PR #8, on GitHub'])
     expect((await hoverTooltip(links[1]!)).textContent).toBe('PR #8')
   })
 

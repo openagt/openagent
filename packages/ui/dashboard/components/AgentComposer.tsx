@@ -1,5 +1,4 @@
 import { SESSIONS_ID } from '../../src/project-address.js'
-import type { GitHostHome } from '../../src/index.js'
 import { useContext, useEffect, useRef, useState, type MutableRefObject, type ReactNode } from 'react'
 import { Loader2 } from 'lucide-react'
 import { cn } from '../lib/utils.js'
@@ -15,7 +14,6 @@ import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { SessionContextMenu } from './ContextMenu.js'
 import { SessionReposSaid } from './SessionRepos.js'
 import { AutoMenu, autoCovers, autoSaid, useAutoLevels } from './AutoMenu.js'
-import { GitHostOff } from './GitHosts.js'
 import { isPublishPick, type PublishPick } from '../../src/client.js'
 import { useProjectLauncher } from '../lib/use-project-launcher.js'
 import { promptWithContext, type ContextSet } from '../lib/use-context-set.js'
@@ -66,11 +64,8 @@ export function AgentComposer({
   context,
   contextSet,
   publish,
-  prBase,
   row,
   repos,
-  gitHost,
-  gitAccount,
   options,
 }: {
   projectId: string
@@ -100,16 +95,10 @@ export function AgentComposer({
   contextSet?: ContextSet | undefined
   /** How far the run takes its work, as its record says (`commit`, `branch`, `pr`, `merge`); absent, none. The "Auto" menu shows it and changes it from the next message on. */
   publish?: string | undefined
-  /** The branch the run's pull request goes into, as its record says; absent, the repository's default branch. */
-  prBase?: string | undefined
   /** The row above the box: where the session started. */
   row?: ReactNode
   /** The repos the session has as copies, as its record says. */
   repos?: readonly { name: string; from: string }[] | undefined
-  /** The project's page on its git host, when it has one. */
-  gitHost?: GitHostHome | null | undefined
-  /** The account the run worked as there, as its record says. */
-  gitAccount?: string | undefined
   /** The session's run options, as its record keeps them: what its box's controls say (`composer.control`). */
   options?: RunOptions | undefined
 }) {
@@ -163,7 +152,7 @@ export function AgentComposer({
   const launcher = useProjectLauncher(projectId)
   // The levels offered, as the launcher's: every one with no project, the session's copies of repos being wherever each is.
   const autoProject = projectId !== SESSIONS_ID && launcher ? { id: projectId, name: projectId, ...(launcher.remote ? { remote: launcher.address ?? 'origin' } : {}) } : undefined
-  const levels = useAutoLevels(projectId, autoProject, projectId === SESSIONS_ID || (launcher?.gitHost ?? true))
+  const levels = useAutoLevels(projectId, autoProject)
   const recorded: PublishPick = isPublishPick(publish) ? publish : 'nothing'
   const [picked, setPicked] = useState<PublishPick | null>(null)
   useEffect(() => setPicked(null), [agentId])
@@ -292,13 +281,7 @@ export function AgentComposer({
   const noProject = projectId === SESSIONS_ID
   // What a level acts on: the project, or with none the session's copies of repos.
   const publishes = !noProject || (repos?.length ?? 0) > 0
-  const autoTarget = prBase !== undefined ? { into: prBase } : undefined
-  const setupSaid = [
-    gitAccount !== undefined && `@${gitAccount}`,
-    publishes && autoSaid(picked ?? recorded, levels, autoTarget),
-  ]
-    .filter(Boolean)
-    .join(' · ')
+  const setupSaid = publishes ? autoSaid(picked ?? recorded, levels) : ''
 
   return (
     // The box stands on the chat's 16 inset at every width, as the chat's cards do, so on a desktop its
@@ -321,7 +304,7 @@ export function AgentComposer({
         sessionContext={context}
         {...(contextSet ? { addContext: contextSet.add, removeContext: contextSet.remove } : {})}
         // The launcher's gear, line for line in its places: the modules' lines, as the session's record
-        // keeps its options; the account the run worked as; then, set apart and still a pick, "When it finishes". After the
+        // keeps its options; then, set apart and still a pick, "When it finishes". After the
         // gear, Context: the repos the session started with, said, and in a project the files picked for the next message; for a session with no project,
         // no git to take its work further with.
         controlBox={controlBox}
@@ -329,8 +312,7 @@ export function AgentComposer({
           said: setupSaid,
           lines: (
             <>
-              <GitHostOff home={gitHost ?? null} account={gitAccount} />
-              {publishes && <AutoMenu publish={picked ?? recorded} levels={levels} onPublish={pick => setPicked(pick === recorded ? null : pick)} covers={autoCovers(noProject ? null : 'the project', repos?.length ?? 0)} target={autoTarget} />}
+              {publishes && <AutoMenu publish={picked ?? recorded} levels={levels} onPublish={pick => setPicked(pick === recorded ? null : pick)} covers={autoCovers(noProject ? null : 'the project', repos?.length ?? 0)} />}
             </>
           ),
         }}

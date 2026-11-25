@@ -1,5 +1,5 @@
 import { ownRunsWatch } from '../dashboard/runs-watch.js'
-import { onPrMoved } from '../dashboard/pull-requests.js'
+import { onPrMoved } from '../dashboard/pr-states.js'
 import { contextProjects } from './context.js'
 import { SESSIONS_ID } from '../project-address.js'
 

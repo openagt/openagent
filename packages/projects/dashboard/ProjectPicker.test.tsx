@@ -154,20 +154,20 @@ describe('ProjectPicker', () => {
   test("another module's repos follow the ones on this computer, under its own heading; one only at an address is listed once, by its folder where this computer has it; picked, it is cloned the way a typed address is", async () => {
     cloneTargetFor.mockResolvedValue({ ok: true, address: 'github.com/vikejs/bati', path: '/home/me/projects/bati' })
     const hosted: UiWhereRepo[] = [
-      { address: 'github.com/octo-agent/shop', label: 'octo-agent/shop', detail: 'Private·Not on this computer·@octo-agent' },
-      { address: 'github.com/vikejs/bati', label: 'vikejs/bati', detail: 'Scaffolder·Not on this computer·vikejs' },
-      { address: 'github.com/vikejs/vike', label: 'vikejs/vike', detail: 'Not on this computer·vikejs' },
+      { address: 'github.com/octo-agent/shop', label: 'octo-agent/shop', private: true, why: '@octo-agent' },
+      { address: 'github.com/vikejs/bati', label: 'vikejs/bati', detail: 'Scaffolder', why: 'vikejs' },
+      { address: 'github.com/vikejs/vike', label: 'vikejs/vike', why: 'vikejs' },
     ]
     renderPicker({ where: [GITHUB(hosted)] })
     await openMenu(trigger())
     await screen.findByRole('option', { name: /bati/ })
-    expect(options()).toEqual(['No project', 'alpha', 'vikegithub.com/vikejs/vike', 'notes/home/me/notes', 'octo-agent/shopPrivate·Not on this computer·@octo-agent', 'vikejs/batiScaffolder·Not on this computer·vikejs'])
+    expect(options()).toEqual(['No project', 'alpha', 'vikegithub.com/vikejs/vike', 'notes/home/me/notes', 'octo-agent/shopPrivate·Not on this computer·@octo-agent', 'vikejs/batiNot on this computer·vikejs'])
     expect(screen.getByText('On GitHub')).toBeTruthy()
-    // Found by its detail too; its address is no "Add" row.
+    // Found by its description too; its address is no "Add" row.
     fireEvent.change(search(), { target: { value: 'scaffold' } })
-    expect(options()).toEqual(['vikejs/batiScaffolder·Not on this computer·vikejs'])
+    expect(options()).toEqual(['vikejs/batiNot on this computer·vikejs'])
     fireEvent.change(search(), { target: { value: 'github.com/vikejs/bati' } })
-    expect(options()).toEqual(['vikejs/batiScaffolder·Not on this computer·vikejs'])
+    expect(options()).toEqual(['vikejs/batiNot on this computer·vikejs'])
     fireEvent.click(screen.getByRole('option', { name: /vikejs\/bati/ }))
     expect(await screen.findByText('Do you trust this repository?')).toBeTruthy()
     await waitFor(() => expect(cloneTargetFor).toHaveBeenCalledWith('github.com/vikejs/bati'))
@@ -188,10 +188,10 @@ describe('ProjectPicker', () => {
     await openMenu(trigger())
     expect(await screen.findByText('Asking GitHub for repos…')).toBeTruthy()
     const before = asked.mock.calls.length
-    asked.mockResolvedValue({ repos: [{ address: 'github.com/octo/app', label: 'octo/app', detail: 'Not on this computer·@octo' }], loading: false })
+    asked.mockResolvedValue({ repos: [{ address: 'github.com/octo/app', label: 'octo/app', why: '@octo' }], loading: false })
     await waitFor(() => expect(asked.mock.calls.length).toBeGreaterThan(before), { timeout: 4000 })
     expect(await screen.findByRole('option', { name: /octo\/app/ })).toBeTruthy()
-    expect(screen.queryByText('Asking GitHub for repos…')).toBeNull()
+    expect(screen.queryByText('Asking for the repos on GitHub…')).toBeNull()
   })
 
   test('while the look through this computer is still on its way, the menu says so and asks again', async () => {

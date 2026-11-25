@@ -1,4 +1,3 @@
-import { PERMISSIONS_PAGE } from '../lib/use-route.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import { useState, useContext } from 'react'
 import { CircleAlert, Settings } from 'lucide-react'
@@ -6,7 +5,6 @@ import type { Person } from '../rpc/person.js'
 import { usePerson } from '../lib/use-person.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.js'
 import { ThemeSubmenu } from './ThemeSubmenu.js'
-import { useMissing } from './Logins.js'
 import { personLetters } from './PersonMark.js'
 import { cn } from '../lib/utils.js'
 import { useMenuActions } from './Places.js'
@@ -44,11 +42,10 @@ export function Avatar({ person, dot = false, size = 'size-5 text-xs', className
 export function PersonMenu({ onSettings }: { onSettings: (entry?: string) => void }) {
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   const { person } = usePerson()
-  const { missing } = useMissing()
   // What the modules say needs the person on this computer (`app.attention`): listed here, each opening its fix, and the dot on the picture.
   const attention = (useAttention(null) ?? []).filter(item => item.kind === 'setup' && item.scope === 'computer')
   const fixes = useAttentionFixes(undefined)
-  const needs = missing.length > 0 || attention.length > 0
+  const needs = attention.length > 0
   // What the modules offer in the person's menu (`person.menu`), asked again as it opens.
   const [open, setOpen] = useState(false)
   const offered = useMenuActions('person.menu', NOTHING_ON, undefined, open)
@@ -80,12 +77,6 @@ export function PersonMenu({ onSettings }: { onSettings: (entry?: string) => voi
         )}
         {needs && (
           <>
-            {missing.map(item => (
-              <DropdownMenuItem key={item.key} onClick={() => services.openPage(PERMISSIONS_PAGE)}>
-                <CircleAlert className="size-4 shrink-0 text-warning" aria-hidden />
-                <span className="flex-1">{item.action}</span>
-              </DropdownMenuItem>
-            ))}
             {attention.map(item => {
               const fix = fixes.fixOf(item)
               return (

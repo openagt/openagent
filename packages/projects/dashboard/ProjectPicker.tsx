@@ -3,6 +3,7 @@ import { Check, Cloud, Folder, FolderGit2, FolderSearch, Layers, Plus, Search } 
 import {
   cn,
   Combobox,
+  Facts,
   MENU_BODY_CLASS,
   MENU_ITEM_CLASS,
   MENU_POPUP_CLASS,
@@ -161,6 +162,15 @@ function ProjectLine({ project, label }: { project: ProjectSummary; label: strin
 
 
 /**
+ * What a module's repo says after its name: one on this computer its own words; one only at an
+ * address whether only some can see it, that it is not on this computer, and why it is listed.
+ */
+function detailOf(repo: UiWhereRepo): ReactNode {
+  if (repo.folder !== undefined) return repo.detail
+  return <Facts facts={[repo.private ? 'Private' : undefined, 'Not on this computer', repo.why]} />
+}
+
+/**
  * The repos every module offers (`composer.where`): read as the picker is drawn, each time its menu
  * opens or `again` changes, and again shortly while the menu is open and one is still being read.
  * A module whose read fails lists nothing, and says it could not be read.
@@ -287,7 +297,7 @@ export function ProjectPicker({
           (repo): Row => ({
             value: repo.folder !== undefined ? `repo:${repo.folder}` : `where:${repo.address}`,
             label: repo.label,
-            ...(repo.detail !== undefined ? { detail: repo.detail } : {}),
+            ...(detailOf(repo) !== undefined ? { detail: detailOf(repo) } : {}),
             pick: repo.folder !== undefined ? { kind: 'repo', path: repo.folder } : { kind: 'where', address: repo.address ?? '' },
             search: `${repo.folder ?? ''}\n${repo.address ?? ''}\n${repo.detail ?? ''}`,
           }),

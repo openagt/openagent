@@ -15,7 +15,7 @@ export function providedDataChanged(root: string, pkg?: string): void {
 }
 
 /** The kinds of OpenAgent's data a project's package may provide, one reader each (`git-host` is `git-host.ts`). */
-export const PROVIDED_KINDS = ['branches', 'git-host', 'repository'] as const
+export const PROVIDED_KINDS = ['branches', 'git-host'] as const
 
 /**
  * Why a kind of the project's data has no provider although packages declare it (#1820): two or

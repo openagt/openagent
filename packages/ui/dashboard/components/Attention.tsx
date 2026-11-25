@@ -63,6 +63,25 @@ export function useAttentionFixes(projectId: string | undefined, onFixed?: (resu
 }
 
 /**
+ * A module's press that fixes something (`attention.fix`), drawn by another module's part: the
+ * account a host has none of, added where it is missing (`HostAccounts.add`). Nothing where no
+ * module brings that action here.
+ */
+export function ModuleFixPress({ fix, onFixed }: { fix: { module: string; action: string; label: string }; onFixed?: (() => void) | undefined }) {
+  const { fixOf, pending, overlay } = useAttentionFixes(undefined, onFixed && (() => onFixed()))
+  const press = fixOf({ module: fix.module, kind: 'setup', scope: 'computer', id: `${fix.module}:${fix.action}`, words: fix.label, fix: { label: fix.label, action: fix.action } })
+  if (!press) return null
+  return (
+    <>
+      <Button size="sm" variant="secondary" disabled={pending} onClick={press}>
+        {fix.label}
+      </Button>
+      {overlay}
+    </>
+  )
+}
+
+/**
  * The `setup` items about the run a box would start (`scope: 'run'`), in the line above it: what
  * stops that run, as the modules say it for the picks made there, each with its fix, over the page.
  */

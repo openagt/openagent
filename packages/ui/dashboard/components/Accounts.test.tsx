@@ -1,29 +1,21 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, describe, expect, test } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import { forgetRemembered } from '../lib/use-async.js'
-
-const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendGitHostInstall: vi.fn(), sendGitHostLogin: vi.fn(), sendUseGitHostAccount: vi.fn() }))
-vi.mock('../rpc/logins.js', () => logins)
 
 const { AccountsList } = await import('./Accounts.js')
 const { ModulesContext, mountedOf } = await import('../lib/use-modules.js')
 
-beforeEach(() => {
-  logins.onGitHosts.mockResolvedValue({ hosts: [] })
-})
-
 afterEach(() => {
   cleanup()
   forgetRemembered()
-  for (const fn of Object.values(logins)) fn.mockReset()
 })
 
 describe('the Permissions page', () => {
-  test('it has no part of its own for a coding agent: what an agent needs is its module\'s part', async () => {
-    render(<AccountsList />)
-    expect(await screen.findByText('Git host accounts')).toBeTruthy()
+  test("it has no part of its own: a coding agent's and a git host's accounts are their modules' parts", () => {
+    const { container } = render(<AccountsList />)
     expect(screen.queryByRole('region', { name: 'Claude Code' })).toBeNull()
-    expect(screen.queryByRole('region', { name: 'Codex' })).toBeNull()
+    expect(screen.queryByText('Git host accounts')).toBeNull()
+    expect(container.textContent).toBe('')
   })
 
   test("it draws the modules' parts; with none, the rest of the page", async () => {
@@ -48,7 +40,6 @@ describe('the Permissions page', () => {
         <AccountsList />
       </ModulesContext.Provider>,
     )
-    expect(await screen.findByText('Git host accounts')).toBeTruthy()
     expect(screen.queryByText("The module's part")).toBeNull()
   })
 })

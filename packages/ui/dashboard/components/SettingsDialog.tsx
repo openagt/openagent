@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
-import { ArrowLeft, Blocks, ChevronRight, ChevronsUpDown, Keyboard, Layers, Palette, X, FolderSearch } from 'lucide-react'
+import { ArrowLeft, Blocks, ChevronRight, ChevronsUpDown, Keyboard, Layers, Palette, X } from 'lucide-react'
 import type { ProjectSummary } from '../../src/index.js'
 import { DEFAULT_ORDER, useMountedModules, type MountedView } from '../lib/use-modules.js'
 
 import { useIsMobile } from '../lib/use-mobile.js'
 import { AppearanceSettings } from './AppearanceSettings.js'
 import { SHORTCUTS_ENTRY, ShortcutList } from './ShortcutList.js'
-import { REPO_OWNERS_ENTRY, RepoOwnersSettings } from './RepoOwnersSettings.js'
 import { PickProject } from './PickProject.js'
 import { ProjectDot } from './SidebarProjectPicker.js'
 import { COMPUTER_PLUGINS_ENTRY, ComputerPluginsSettings, PLUGINS_ENTRY, ProjectPluginsSettings } from './PluginsSettings.js'
@@ -309,13 +308,6 @@ function useOwnEntries(): Entry[] {
       title: 'Plugins',
       icon: Blocks,
       body: <ComputerPluginsSettings />,
-    },
-    {
-      id: REPO_OWNERS_ENTRY,
-      order: 61,
-      title: 'Repos on GitHub',
-      icon: FolderSearch,
-      body: <RepoOwnersSettings />,
     },
     {
       id: SHORTCUTS_ENTRY,

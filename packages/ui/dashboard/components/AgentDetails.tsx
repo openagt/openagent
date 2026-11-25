@@ -35,7 +35,7 @@ function Fact({ label, value }: { label: string; value: string }) {
   )
 }
 
-export function AgentDetails({ events, card, pr }: { events: RunEvent[]; card?: AgentDetailsCard | undefined; pr?: { number: number; url: string; state: string } | undefined }) {
+export function AgentDetails({ events, card, pr }: { events: RunEvent[]; card?: AgentDetailsCard | undefined; pr?: { number: number; url: string; state?: string | undefined } | undefined }) {
   const ran = agentOf(useAgents(), card?.driver)
   const agent = ran?.label ?? card?.driver
   const model = card?.model && modelName(ran, card.model)
@@ -54,7 +54,7 @@ export function AgentDetails({ events, card, pr }: { events: RunEvent[]; card?: 
           <a href={pr.url} target="_blank" rel="noreferrer" className="text-primary hover:underline">
             #{pr.number}
           </a>
-          <span className="text-muted-foreground/70">{pr.state.toLowerCase()}</span>
+          {pr.state !== undefined && <span className="text-muted-foreground/70">{pr.state.toLowerCase()}</span>}
         </span>
       )}
       {costUsd === undefined && turns === 0 && <span className="text-muted-foreground/70">No spend reported yet</span>}

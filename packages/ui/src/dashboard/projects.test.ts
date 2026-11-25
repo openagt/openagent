@@ -10,7 +10,7 @@ function deps(over: SummarizeDeps): SummarizeDeps {
   return {
     isActivated: async () => true,
     readAgents: async () => [],
-    gitHost: async () => undefined,
+    takesRequests: async () => false,
     ...over,
   }
 }
@@ -31,13 +31,15 @@ test("summarizeProject names the project as its repository is named, and one wit
   assert.equal(summary.path, '/repos/app-a')
 })
 
-test('gitHost says whether a package provides the project a git host; a lookup that fails reads as none', async () => {
+test("gitHost says whether a pull request is a next step at the project's remote; a lookup that fails reads as none", async () => {
   assert.equal((await summarizeProject(RECORD, deps({}))).gitHost, false)
-  const source = {} as NonNullable<Awaited<ReturnType<NonNullable<SummarizeDeps['gitHost']>>>>
-  assert.equal((await summarizeProject(RECORD, deps({ gitHost: async () => source }))).gitHost, true)
+  const asked: (string | undefined)[] = []
+  const takes = deps({ remote: async () => 'github.com/o/r', takesRequests: async remote => (asked.push(remote), true) })
+  assert.equal((await summarizeProject(RECORD, takes)).gitHost, true)
+  assert.deepEqual(asked, ['github.com/o/r'])
   const failing = deps({
-    gitHost: async () => {
-      throw new Error('package.json unreadable')
+    takesRequests: async () => {
+      throw new Error('no accounts read')
     },
   })
   assert.equal((await summarizeProject(RECORD, failing)).gitHost, false)

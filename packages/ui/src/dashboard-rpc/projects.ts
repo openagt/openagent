@@ -1,14 +1,12 @@
 import { contextHost, contextOtherHosts, contextProjectState, contextProjects, contextStartedIn, resolveProjectPath } from './context.js'
 import { projectRefAt } from '../distribution-hooks.js'
-import { errorMessage, isRepoOwner, readRepoOwners, repositoryAddress, writeRepoOwners } from '@openagt/agent-data'
-import { readHosted, refreshHosted, type HostedRead } from './hosted-repos.js'
+import { errorMessage, repositoryAddress } from '@openagt/agent-data'
 import type { StartReadiness } from '../start-readiness.js'
 import type { RunOptions } from '@openagt/hooks'
 import { isRunOptions } from '../daemon-runtime.js'
 import { SESSIONS_ID } from '../project-address.js'
 import { hasRemote } from '../has-remote.js'
 import { openagentVersion } from '../version.js'
-import { projectGitHost } from '../store/git-host.js'
 import type { ProjectSummary } from '../dashboard/projects.js'
 import type { StartedInResult } from '../dashboard/types.js'
 
@@ -46,59 +44,20 @@ export async function sendStartedAgain(folder: string | null): Promise<{ version
   return project ? { version, project } : { version }
 }
 
-/**
- * The repositories at the git hosts the project picker lists beside this computer's: the accounts'
- * and those of the owners Settings › Repos on GitHub names, as kept, while one still being read
- * says so. The shell's own `composer.where` (`shell-where.ts`) until the github module offers them.
- */
-export async function onHostedRepos(): Promise<HostedRead> {
-  return readHosted()
-}
-
-/** Settings › Repos on GitHub: the users and organizations at a git host whose repositories are listed, as `<host>/<name>`. */
-export async function onRepoOwners(): Promise<string[]> {
-  return readRepoOwners()
-}
-
-/** List one more user's or organization's repositories: `vikejs`, `github.com/vikejs` or its page's address. GitHub when no host is named. */
-export async function sendAddRepoOwner(typed: string): Promise<{ ok: true } | { ok: false; error: string }> {
-  const said = typeof typed === 'string' ? typed.trim().replace(/^https?:\/\//, '').replace(/\/+$/, '') : ''
-  const owner = said.includes('/') ? said.replace(/^([^/]+)/, host => host.toLowerCase()) : `github.com/${said.replace(/^@/, '')}`
-  if (!isRepoOwner(owner)) return { ok: false, error: `"${said.slice(0, 80)}" is not a user or organization. One looks like vikejs, or github.com/vikejs.` }
-  const owners = await readRepoOwners()
-  if (owners.some(one => one.toLowerCase() === owner.toLowerCase())) return { ok: true }
-  const written = await writeRepoOwners([...owners, owner])
-  if (!written.ok) return { ok: false, error: written.error }
-  void refreshHosted()
-  return { ok: true }
-}
-
-/** Stop listing an owner's repositories. */
-export async function sendRemoveRepoOwner(owner: string): Promise<{ ok: true } | { ok: false; error: string }> {
-  const owners = await readRepoOwners()
-  if (!owners.includes(owner)) return { ok: true }
-  const written = await writeRepoOwners(owners.filter(one => one !== owner))
-  if (!written.ok) return { ok: false, error: written.error }
-  void refreshHosted()
-  return { ok: true }
-}
-
 /** What the launcher offers for a project: how far its runs can go. */
 export interface ProjectLauncher {
-  /** Whether one of the project's packages provides a git host; without one no pull request can be opened, so the publish menu stops at the branch. */
-  gitHost: boolean
   /** Whether the project's repository has an `origin` remote; without one nothing can be published, so the publish menu stops at the commit. */
   remote: boolean
   /** The address the project's repository was cloned from (`github.com/acme/shop`): its host is the git host a session pushes to, as the account it picks there. */
   address?: string
 }
 
-/** What the launcher offers for a project: whether it has a git host and a remote. `null` when the project is unknown here. */
+/** What the launcher offers for a project: whether it has a remote, and its address. `null` when the project is unknown here. */
 export async function onCommands(projectId: string): Promise<ProjectLauncher | null> {
   const cwd = await resolveProjectPath(projectId)
   if (!cwd) return null
-  const [gitHost, remote, address] = await Promise.all([projectGitHost(cwd).catch(() => undefined), hasRemote(cwd), repositoryAddress(cwd)])
-  return { gitHost: gitHost !== undefined, remote, ...(address ? { address } : {}) }
+  const [remote, address] = await Promise.all([hasRemote(cwd), repositoryAddress(cwd)])
+  return { remote, ...(address ? { address } : {}) }
 }
 
 /** A host a run may be picked to run on beside this computer's (`run.host`, #2394): its id, and its name in the "Run on" menu. */

@@ -1,3 +1,5 @@
+import type { MergeLookup } from './rpc.js'
+
 /** What git work outside a run takes to reach a remote as an account: cloning a project, listing a remote's branches, a git store's push. */
 export interface GitAccess {
   /** Variables for git's environment: its credential settings, and who commits. */
@@ -8,6 +10,15 @@ export interface GitAccess {
 export interface AccountAccess {
   /** How to reach `remote`, an https address, as the account this computer picked; none when no account of the module's is for it. */
   git?(remote: string): Promise<GitAccess | undefined>
+  /** OpenAgent's accounts at each git host the module answers for, none there too: what a "Send as" offers, and what tells a host a module answers for. */
+  hosts?(): Promise<HostAccounts[]>
+  /**
+   * What a repository at `host` keeps to be sent as `login`, one of the module's accounts there; in
+   * words why not, for no login or one it cannot send as. None for a host the module does not answer for.
+   */
+  sendAs?(host: string, login?: string): Promise<{ ok: true; account: RepositoryAccount } | { ok: false; error: string } | undefined>
+  /** The commit pull request `number` of `branch` merged as, in the repository at `dir`, read at its host; none for a repository the module does not answer for. */
+  mergeCommit?(dir: string, branch: string, number: number): Promise<MergeLookup | undefined>
 }
 
 /** What a repository keeps to be sent as one of OpenAgent's accounts: the account, its host, and the git settings that make git go as it, as `[key, value]`, in order. */
@@ -24,15 +35,20 @@ export interface HostAccounts {
   logins: string[]
   /** The one runs use, picked first where none is named yet. */
   runs?: string
+  /** The module's press that adds an account there (its `attention.fix` action `action`), drawn where there is none: the module's name, the action's id, its words. */
+  add?: { module: string; action: string; label: string }
 }
 
 /**
- * OpenAgent's accounts at the git hosts, as a module's server part asks for them outside a run: a
- * git store sends the data it keeps in a repository as one of them, never as the person's own login.
+ * OpenAgent's accounts at the git hosts, as a module's server part asks for them outside a run, the
+ * modules' `account.access` together: a git store sends the data it keeps in a repository as one of
+ * them, never as the person's own login.
  */
 export interface GitAccounts {
-  /** OpenAgent's accounts at each host the git hosts' packages answer for. */
+  /** OpenAgent's accounts at each host a module answers for, none there too. */
   hosts(): Promise<HostAccounts[]>
-  /** What a repository at `host` keeps to be sent as `login`; in words why not, for no login or one the host's package cannot send as. */
+  /** What a repository at `host` keeps to be sent as `login`; in words why not, for no login, one the host's module cannot send as, or a host no module answers for. */
   sendAs(host: string, login?: string): Promise<{ ok: true; account: RepositoryAccount } | { ok: false; error: string }>
+  /** The commit pull request `number` of `branch` merged as, in the repository at `dir`, as the first module answering for its host says; not merged where none does. */
+  mergeCommit(dir: string, branch: string, number: number): Promise<MergeLookup>
 }

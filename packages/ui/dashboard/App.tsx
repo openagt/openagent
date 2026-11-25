@@ -44,7 +44,6 @@ import { useNamesRuns } from './lib/agents.js'
 import { useDocumentTitle } from './lib/document-title.js'
 import { projectLabels, ProjectLabelsContext } from './lib/project-labels.js'
 import { onProjectsChanged, ShellProjectsContext, type ProjectsChange } from './lib/shell-projects.js'
-import { withShellWhere } from './lib/shell-where.js'
 import { useActiveAgents } from './lib/use-working.js'
 import { useFavicon } from './lib/favicon.js'
 import { DaemonDown, INSTALLED_RESTARTS, useDaemonHealth } from './lib/use-daemon-health.js'
@@ -127,9 +126,7 @@ export function App() {
   // Kept for the next visit too: the Overview's cards are drawn for the projects before they are read again.
   const { value: projects, state: projectsState } = usePolled<ProjectSummary[]>(onProjects, EMPTY_PROJECTS, 30_000, [projectsKey], { remember: 'projects', stored: true })
   // Read again when a project is added or removed: which project has which module changes then.
-  // The shell's own repos at the git hosts are among the project picker's (`shell-where.ts`).
-  const mounted = useModules(projectsKey)
-  const modules = useMemo(() => withShellWhere(mounted), [mounted])
+  const modules = useModules(projectsKey)
   const { loaded: modulesLoaded } = modules
   const modulePages = modules.views['app.page']
   // A project's address is its name unless another project or a page has it: what the address

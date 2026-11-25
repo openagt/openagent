@@ -3,7 +3,6 @@ import type { AgentMeta } from '../../src/index.js'
 import { hostOf } from '../lib/run-hosts.js'
 import { HOST_ICON, RunOnWords } from './RunOnMenu.js'
 import { RowAboveBox, RowSaid } from './ui/row-item.js'
-import { RunPrLabels } from './RunPrLabels.js'
 import { ComposerControls, ViewsAt, type ControlBox } from './Places.js'
 import type { UiRunProps } from '../module/index.js'
 
@@ -15,15 +14,15 @@ function runsOnIcon(target: AgentMeta['target']): LucideIcon {
 // A session's row above the message box: the "New agent session" page's row, in its place, each item
 // said in words rather than offered as a menu, since a session keeps where it started. Where it
 // runs, the project, then the modules' controls there (`composer.control` at `start`: git-branches
-// says the branch it started from); at its right end, the run's pull requests (RunPrLabels). The
-// setup and the model are under the box, as on "New agent session". The row's height is fixed, and
-// each item lands in place. A session with no project says its repos under the box, as Context.
+// says the branch it started from); at its right end, the modules' labels (`chat.labels`: github
+// draws the run's pull requests). The setup and the model are under the box, as on "New agent
+// session". The row's height is fixed, and each item lands in place. A session with no project
+// says its repos under the box, as Context.
 export function SessionRow({
   runsOn,
   target,
   elsewhere,
   projectName,
-  prs = [],
   box,
   run,
 }: {
@@ -37,18 +36,9 @@ export function SessionRow({
   /** Whether that is not this computer. */
   elsewhere: boolean
   projectName?: string | null | undefined
-  /** The run's pull requests, oldest first. */
-  prs?: readonly { number: number; url: string; state?: string | undefined }[] | undefined
 }) {
   return (
-    <RowAboveBox
-      end={
-        <>
-          <RunPrLabels prs={prs} />
-          {run && <ViewsAt place="chat.labels" projectId={run.projectId} props={run} label="session labels" />}
-        </>
-      }
-    >
+    <RowAboveBox end={run && <ViewsAt place="chat.labels" projectId={run.projectId} props={run} label="session labels" />}>
       <RowSaid tip={`Runs on — ${runsOn}`}>
         <RunOnWords icon={runsOnIcon(target)} elsewhere={elsewhere} label={runsOn} />
       </RowSaid>

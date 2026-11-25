@@ -1,15 +1,12 @@
 import { SESSIONS_ID } from '../../src/project-address.js'
 import { useContext, useEffect, useRef, useState } from 'react'
-import type { GitHostHome, RepositoryOffer } from '../../src/index.js'
 import type { RunEvent } from '@openagt/hooks'
 import { sessionInfo } from '../../src/client.js'
 import { RevealedTitle } from './RevealedTitle.js'
-import { MoreVertical, ChevronDown, FolderOpen, Code, Check, ExternalLink, Square, Trash2, Copy, CloudUpload, Info } from 'lucide-react'
-import { onGitHostHome, onRepositoryOffer } from '../rpc/reads.js'
+import { MoreVertical, ChevronDown, FolderOpen, Code, Check, ExternalLink, Square, Trash2, Copy, Info } from 'lucide-react'
 import {
   sendOpenInApp,
   sendDeleteAgent,
-  sendCreateRepository,
 } from '../rpc/control.js'
 import { useLoaded } from '../lib/use-async.js'
 import { buttonVariants } from './ui/button.js'
@@ -36,11 +33,11 @@ import {
 // The menus of a page's top bar.
 //
 // Given an agent, the agent's name is its button: the name with a small ⌄, opening to the session's
-// details, its folder, its editor, the project's page on its git host, its session link, the command
-// that resumes it, the modules' items (git-branches' Remove worktree), and Stop, Delete.
+// details, its folder, its editor, its session link, the command that resumes it, the modules'
+// items (git-branches' Remove worktree, github's Open on GitHub), and Stop, Delete.
 //
-// Given none, a ⋮ holds all of the project's: its git host page, its skills, the offer of a
-// repository, where the agents' records go, its folder, its editor. It stands in the same place on
+// Given none, a ⋮ holds all of the project's: its skills, where the agents' records go, its
+// folder, its editor, and the modules' items (github's Open on GitHub and Create a repository). It stands in the same place on
 // the "New agent session" page and on an agent's page (ProjectMenu).
 //
 // The handoff's Push / Open PR are not here: they move the work forward, and sit in the bar above
@@ -99,15 +96,6 @@ export function AgentActionsMenu({
       copiedTimer.current = setTimeout(() => setCopied(false), 1500)
     })
   }
-  // Remembered per project, under the key a session's page reads: a run started here finds it there at once.
-  // Asked again after a repository is created: the project has a page on its git host from then on.
-  const [created, setCreated] = useState(0)
-  const home = useLoaded<GitHostHome | null>(() => onGitHostHome(projectId), null, [projectId, created], { remember: `git-host-home:${projectId}` })
-  // A project that lives on this machine only may be offered a repository on a host; the project's
-  // menu offers it, a session's does not. Creating one puts the project's code on a server under
-  // the person's account, so it is asked once more before it happens.
-  const offer = useLoaded<RepositoryOffer | null>(session ? null : () => onRepositoryOffer(projectId), null, [projectId, session, created])
-  const [confirmCreate, setConfirmCreate] = useState(false)
   // Removing a project takes it off the dashboard's list and deletes nothing in its folder; it is
   // asked once more, and the question says what stays.
 
@@ -132,13 +120,6 @@ export function AgentActionsMenu({
   // What the button is called: the menu acts on one session, or, with none, on the project.
   const title = session ? 'Session actions' : 'Project actions'
   const deletable = !!onDeleted && !live && !!agentId
-  // The project's page on its git host: the first item of the project's menu, and in a session's
-  // menu after what opens the session's own.
-  const homeItem = home && (
-    <DropdownMenuItem render={<a href={home.url} target="_blank" rel="noreferrer" />}>
-      <ExternalLink className="h-3.5 w-3.5 shrink-0" /> Open on {home.name}
-    </DropdownMenuItem>
-  )
   // What the modules offer in the session's menu (`chat.menu`), or in the project's (`project.menu`), asked again as it opens.
   const [open, setOpen] = useState(false)
   const offered = useMenuActions(session ? 'chat.menu' : 'project.menu', session ? { projectId, agentId: agentId! } : projectId !== SESSIONS_ID ? { projectId } : null, projectId, open)
@@ -185,12 +166,6 @@ export function AgentActionsMenu({
               <Info className="h-3.5 w-3.5 shrink-0" /> {details.open ? 'Hide details' : 'Show details'}
             </DropdownMenuItem>
           )}
-          {!session && homeItem}
-          {offer && (
-            <DropdownMenuItem onClick={() => setConfirmCreate(true)}>
-              <CloudUpload className="h-3.5 w-3.5 shrink-0" /> Create a repository on {offer.name}…
-            </DropdownMenuItem>
-          )}
           {/* Named for what it actually opens (#1195): once a session's worktree is gone this
               resolves to the project root, and calling that "the session's folder" was a lie the
               user could not see. */}
@@ -218,7 +193,6 @@ export function AgentActionsMenu({
               <PreferredEditorItems busy={busy} />
             </DropdownMenuSubContent>
           </DropdownMenuSub>
-          {session && homeItem}
           {sessionLink && (
             <DropdownMenuItem render={<a href={sessionLink.href} target="_blank" rel="noreferrer" />}>
               <ExternalLink className="h-3.5 w-3.5 shrink-0" /> {sessionLink.label.replace(' ↗', '')}
@@ -266,25 +240,6 @@ export function AgentActionsMenu({
       </DropdownMenu>
 
       {offered.overlay}
-      {offer && (
-        <ConfirmDialog
-          open={confirmCreate}
-          onOpenChange={setConfirmCreate}
-          title={`Create a private repository on ${offer.name}?`}
-          body={
-            <>
-              This creates the private repository <span className="font-medium text-foreground">{offer.repository}</span> on your{' '}
-              {offer.name} account and pushes this project to it. The project&rsquo;s code leaves this machine.
-            </>
-          }
-          confirmLabel="Create and push"
-          confirmBusyLabel="Creating…"
-          fallbackError="Could not create the repository."
-          destructive={false}
-          onConfirm={() => sendCreateRepository(projectId)}
-          onSuccess={() => setCreated(n => n + 1)}
-        />
-      )}
       {onDeleted && agentId && (
         <ConfirmDialog
           open={confirmDelete}

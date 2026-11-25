@@ -1,7 +1,7 @@
 import { hostname } from 'node:os'
+import { repositoryAddress } from '@openagt/agent-data'
 import type { AgentMeta, BranchesFor } from '../store/index.js'
-import { cachedOpenPrs, cachedPrStates, type PrStates } from './pull-requests.js'
-import { projectGitHost } from '../store/git-host.js'
+import { pullRequestState, requestedBranches, takesRequests } from './pr-states.js'
 import { unpublishedRuns, type Unpublished } from './unpublished.js'
 
 // A run's row, as the dashboard's lists show it (dashboard-rpc/reads.ts): the run as its host says
@@ -14,17 +14,19 @@ import { unpublishedRuns, type Unpublished } from './unpublished.js'
  * together: how its pull request stands, and the work it left on this machine.
  */
 export async function withRowMarks(cwd: string, agents: AgentMeta[]): Promise<AgentMeta[]> {
-  return withUnpublished(cwd, await withPrStates(cwd, agents))
+  return withUnpublished(cwd, withPrStates(agents))
 }
+
+/** How a request stands, as the modules last read it (`pr-states.ts`). */
+type PrStates = { get(url: string): { state: NonNullable<AgentMeta['prState']>; title?: string } | undefined }
 
 /**
  * Each run that has a pull request, marked with how the request stands, so its row can show it, and
- * with its title, so the jump finds the run by it: from one cached listing of the project's
- * requests, read only when one of the runs has a request.
+ * with its title, so the jump finds the run by it: as the modules last read the requests at their
+ * git host.
  */
-export async function withPrStates(cwd: string, agents: AgentMeta[], states: (cwd: string) => Promise<PrStates> = cachedPrStates): Promise<AgentMeta[]> {
+export function withPrStates(agents: AgentMeta[], known: PrStates = { get: pullRequestState }): AgentMeta[] {
   if (!agents.some(agent => agent.pr !== undefined || agent.earlierPrs?.length)) return agents
-  const known = await states(cwd)
   return agents.map(agent => {
     const listed = agent.pr && known.get(agent.pr.url)
     const earlierPrs = agent.earlierPrs?.map(pr => {
@@ -41,7 +43,8 @@ export async function withPrStates(cwd: string, agents: AgentMeta[], states: (cw
  * rule, {@link unpublishedRuns}. A provider that cannot be read marks nothing.
  */
 export async function withUnpublished(cwd: string, agents: AgentMeta[], branches?: BranchesFor): Promise<AgentMeta[]> {
-  const requested = async () => ((await projectGitHost(cwd)) ? new Set((await cachedOpenPrs(cwd)).map(pr => pr.headRefName)) : undefined)
+  // A branch with an open request is published, as the modules last read the requests.
+  const requested = async () => ((await takesRequests(await repositoryAddress(cwd).catch(() => undefined))) ? requestedBranches() : undefined)
   const found = await unpublishedRuns(cwd, agents, branches, requested).catch(() => new Map<string, Unpublished>())
   if (found.size === 0) return agents
   return agents.map(agent => {

@@ -7,7 +7,6 @@ import type { RunOptions } from '@openagt/hooks'
 export interface StartPicks {
   /** What the modules' controls picked for the run (`composer.control`). */
   options?: RunOptions
-  gitAccount?: string
   publish?: string
   prBase?: string
   repos?: { name: string; from: string }[]

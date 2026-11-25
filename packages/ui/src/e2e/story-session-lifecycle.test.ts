@@ -4,7 +4,6 @@ import { readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { makeWorld, waitFor, release, git } from './harness.js'
 import { onAgent, onAgents, onAgentHandoff, onAgentWorktree, onRetainedWorktrees, onActivity, onRecentAgents } from '../dashboard-rpc/reads.js'
-import { onCommands } from '../dashboard-rpc/projects.js'
 import { sendStart } from '../dashboard-rpc/control.js'
 import { callModule } from '../dashboard-rpc/module-calls.js'
 
@@ -184,9 +183,6 @@ test("a start the host refuses says why, and nothing is started", async () => {
   const rpc = world.rpc
   try {
     const project = await world.addProject()
-    // The launcher reads whether a pull request can be opened here, for its publish menu.
-    assert.equal((await rpc(onCommands)(project.id))?.gitHost, false)
-
     // The host's own refusal is what the person reads.
     assert.deepEqual(await rpc(sendStart)(project.id, 'refuse this one'), { ok: false, error: 'the project has no such command' })
     assert.deepEqual(await rpc(onAgents)(project.id), [], 'nothing was started')

@@ -1,15 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
-// The ⋮ menu holds the git host / folder / editor / Stop / Remove / Delete actions, so it pulls
+// The ⋮ menu holds the folder / editor / Stop / Delete actions, so it pulls
 // their RPC + editor reads; stub them.
-const onGitHostHome = vi.fn(async () => ({ url: 'https://github.com/o/r', name: 'GitHub' }) as { url: string; name: string } | null)
-const onRepositoryOffer = vi.fn(async () => null as { repository: string; name: string } | null)
-const sendCreateRepository = vi.fn(async () => ({ ok: true, url: 'https://github.com/me/shop' }) as unknown)
 const sendOpenInApp = vi.fn(async () => ({ ok: true as const }))
 const sendStop = vi.fn(async (): Promise<{ ok: true } | { ok: false; error: string }> => ({ ok: true }))
 const sendDeleteAgent = vi.fn(async () => ({ ok: true as const }))
-vi.mock('../rpc/reads.js', () => ({ onGitHostHome, onRepositoryOffer }))
 const openSettings = vi.hoisted(() => vi.fn())
 vi.mock('../lib/host-services.js', async importOriginal => {
   const actual = await importOriginal<typeof import('../lib/host-services.js')>()
@@ -19,7 +15,6 @@ vi.mock('../rpc/control.js', () => ({
   sendOpenInApp,
   sendStop,
   sendDeleteAgent,
-  sendCreateRepository,
 }))
 // The editor picker (#727) lives in the menu's editor submenu; stub the preference store and the
 // detected-editors read so the tests drive a fixed set.
@@ -30,6 +25,8 @@ vi.mock('../lib/preferences.js', () => ({ usePreferences: () => prefs, updatePre
 vi.mock('../lib/editors.js', () => ({ useDetectedEditors: () => detectedEditors }))
 
 const { AgentActionsMenu } = await import('./AgentActionsMenu.js')
+const { ModulesContext, mountedOf } = await import('../lib/use-modules.js')
+type MountedAction<P extends import('@openagt/hooks/ui').ActionPlace> = import('../lib/use-modules.js').MountedAction<P>
 const { useStop } = await import('../lib/use-stop.js')
 
 const openMenu = () => fireEvent.click(screen.getByRole('button', { name: /session actions/i }))
@@ -37,10 +34,6 @@ const openMenu = () => fireEvent.click(screen.getByRole('button', { name: /sessi
 beforeEach(() => {
   sendOpenInApp.mockClear()
   sendDeleteAgent.mockClear()
-  sendCreateRepository.mockClear()
-  sendCreateRepository.mockResolvedValue({ ok: true, url: 'https://github.com/me/shop' })
-  onRepositoryOffer.mockClear()
-  onRepositoryOffer.mockResolvedValue(null)
   updatePreferences.mockClear()
   prefs = {}
   detectedEditors = []
@@ -48,24 +41,17 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('AgentActionsMenu (#toolbar-menu)', () => {
-  test('the session\'s menu holds what belongs to the session, and the project\'s page on its git host after what opens the session\'s own', async () => {
-    render(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} label="my session" onDeleted={vi.fn()} />)
+  test("the session's menu holds what belongs to the session, and the modules' items after what opens the session's own", async () => {
+    const home: MountedAction<'chat.menu'> = { place: 'chat.menu', id: 'open-on-github', label: 'Open on GitHub', offer: () => ({ href: 'https://github.com/o/r' }), package: '@openagt/github', module: 'github', projects: ['p1'] }
+    render(
+      <ModulesContext.Provider value={mountedOf({ actions: { 'chat.menu': [home] } })}>
+        <AgentActionsMenu projectId="p1" agentId="run-1" events={[]} label="my session" onDeleted={vi.fn()} />
+      </ModulesContext.Provider>,
+    )
     openMenu()
     // No retained worktree here, so the folder item names the project root it will actually open.
     await waitFor(() => expect(screen.getByText('Open on GitHub')).toBeTruthy())
     expect(screen.getAllByRole('menuitem').map(item => item.textContent!.trim())).toEqual(['Open project folder', 'Open in editor', 'Open on GitHub', 'Delete session…'])
-    expect(screen.getByText('Open on GitHub').closest('a')!.getAttribute('href')).toBe('https://github.com/o/r')
-    // The offer of a repository is the project's own page's.
-    expect(onRepositoryOffer).not.toHaveBeenCalled()
-  })
-
-  test('a project with no page on a git host adds no item to the session\'s menu', async () => {
-    onGitHostHome.mockResolvedValueOnce(null)
-    render(<AgentActionsMenu projectId="p-none" agentId="run-1" events={[]} onDeleted={vi.fn()} />)
-    openMenu()
-    await waitFor(() => expect(onGitHostHome).toHaveBeenCalledWith('p-none'))
-    await screen.findByText('Open project folder')
-    expect(screen.queryByText(/^Open on /)).toBeNull()
   })
 
   test('opening the folder addresses this session, whichever checkout it resolves to', async () => {
@@ -274,8 +260,7 @@ describe('the menu with no session: the project home (#809)', () => {
     render(<AgentActionsMenu projectId="p1" events={[]} />)
     expect(screen.queryByRole('button', { name: /session actions/i })).toBeNull()
     openProjectMenu()
-    expect(await screen.findByText('Open on GitHub')).toBeTruthy()
-    fireEvent.click(screen.getByText('Open folder'))
+    fireEvent.click(await screen.findByText('Open folder'))
     await waitFor(() => expect(sendOpenInApp).toHaveBeenCalledWith('p1', 'files', undefined))
   })
 
@@ -344,50 +329,6 @@ describe('the editor picker in the menu (#727)', () => {
     render(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} />)
     await openEditorMenu()
     await waitFor(() => expect(screen.getAllByText('mate').length).toBeGreaterThan(0))
-  })
-})
-
-describe('Create a repository, for a project that lives on this machine only', () => {
-  const openProjectMenu = () => fireEvent.click(screen.getByRole('button', { name: 'Project actions' }))
-
-  test('the project menu offers it only when the project is offered a repository, and asks before creating', async () => {
-    onRepositoryOffer.mockResolvedValue({ repository: 'me/shop', name: 'GitHub' })
-    render(<AgentActionsMenu projectId="p1" events={[]} />)
-    openProjectMenu()
-    fireEvent.click(await screen.findByText('Create a repository on GitHub…'))
-    await waitFor(() => expect(screen.getByText('Create a private repository on GitHub?')).toBeTruthy())
-    expect(screen.getByText('me/shop')).toBeTruthy()
-    expect(sendCreateRepository).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: 'Create and push' }))
-    await waitFor(() => expect(sendCreateRepository).toHaveBeenCalledWith('p1'))
-    // The project is asked again: it has a page on its git host now, and nothing left to create.
-    await waitFor(() => expect(onRepositoryOffer.mock.calls.length).toBeGreaterThan(1))
-  })
-
-  test('a refusal stays in the dialog in the provider\'s words; no offer, no item; a session\'s menu never offers it', async () => {
-    onRepositoryOffer.mockResolvedValue({ repository: 'me/shop', name: 'GitHub' })
-    sendCreateRepository.mockResolvedValue({ ok: false, error: 'the repository could not be created: Name already exists on this account' })
-    render(<AgentActionsMenu projectId="p1" events={[]} />)
-    openProjectMenu()
-    fireEvent.click(await screen.findByText('Create a repository on GitHub…'))
-    fireEvent.click(await screen.findByRole('button', { name: 'Create and push' }))
-    await waitFor(() => expect(screen.getByText(/Name already exists on this account/)).toBeTruthy())
-    cleanup()
-
-    onRepositoryOffer.mockResolvedValue(null)
-    render(<AgentActionsMenu projectId="p1" events={[]} />)
-    openProjectMenu()
-    await waitFor(() => expect(screen.getByText('Open folder')).toBeTruthy())
-    expect(screen.queryByText(/Create a repository/)).toBeNull()
-    cleanup()
-
-    onRepositoryOffer.mockClear()
-    onRepositoryOffer.mockResolvedValue({ repository: 'me/shop', name: 'GitHub' })
-    render(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} />)
-    fireEvent.click(screen.getByRole('button', { name: /session actions/i }))
-    await waitFor(() => expect(screen.getByText('Open project folder')).toBeTruthy())
-    expect(screen.queryByText(/Create a repository/)).toBeNull()
-    expect(onRepositoryOffer).not.toHaveBeenCalled()
   })
 })
 

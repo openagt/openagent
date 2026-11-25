@@ -1,18 +1,22 @@
 import { strict as assert } from 'node:assert'
-import { test } from 'node:test'
+import { beforeEach, test } from 'node:test'
 import { createHooks, defineModule, type AttentionItem, type Hooks, type WaitingRun } from '@openagt/hooks'
 import { memoryStore } from '@openagt/hooks/testing'
 import ask from '@openagt/ask/module'
 import { buildWaiting, waitingKey, type Waiting, type WaitingDeps } from './waiting.js'
+import { forgetPullRequestStates } from './pr-states.js'
 import { pendingChoices } from '../open-choices.js'
 import { eventsOf, type AnyDiaryLine } from '@openagt/agent-driver'
-import type { OpenPr } from './pull-requests.js'
+import { githubModule, type OpenPr } from '@openagt/github/module'
 import type { BranchAhead, BranchesFor } from '../store/branches.js'
 import type { ProjectSummary } from './projects.js'
 import type { AgentMeta } from '../store/index.js'
 import type { RunEvent } from '@openagt/hooks'
 
 const project = (id: string, path: string): ProjectSummary => ({ id, path, name: id, activated: true, gitHost: false })
+
+// What a test's modules read of pull requests is that test's alone.
+beforeEach(forgetPullRequestStates)
 
 /** A distribution with no module that says anything waits: only the shell's own sources. */
 const noModules = async (): Promise<Hooks> => createHooks([])
@@ -23,28 +27,44 @@ const withAsk = async (): Promise<Hooks> => createHooks([{ module: defineModule(
 /**
  * A project's runs as a test has them, by the project's folder: the ones at work in a checkout
  * (`liveAgents`) and the recorded ones (`agents`), the first winning for a run that is both, as
- * a host says a run that works again. A run's events by the project's folder too.
+ * a host says a run that works again. A run's events by the project's folder too. With `prs`, the
+ * projects' open pull requests by their folder, github's on, its projects all on GitHub.
  */
 type TestDeps = Omit<WaitingDeps, 'agents' | 'events'> & {
   liveAgents?: (cwd: string) => Promise<AgentMeta[]>
   agents?: (cwd: string) => Promise<AgentMeta[]>
   events?: (cwd: string, agentId: string) => Promise<RunEvent[] | undefined>
+  prs?: (cwd: string) => Promise<OpenPr[]>
 }
 
 /** The folder of the sessions with no project, in these tests. */
 const SESSIONS = '/sessions'
 
 /** The deps a test gives, as {@link buildWaiting} takes them. */
-function waitingDeps({ liveAgents, agents, events, ...deps }: TestDeps): WaitingDeps {
+function waitingDeps({ liveAgents, agents, events, prs, ...deps }: TestDeps): WaitingDeps {
   const runs = async (project: ProjectSummary | undefined): Promise<AgentMeta[]> => {
     const cwd = project?.path ?? SESSIONS
     const [live, recorded] = await Promise.all([(liveAgents ?? noAgents)(cwd), (agents ?? noAgents)(cwd)])
     return [...live, ...recorded.filter(run => !live.some(other => other.id === run.id))]
   }
-  return { ...deps, agents: runs, ...(events ? { events: (project, agentId) => events(project?.path ?? SESSIONS, agentId) } : {}) }
+  return { ...deps, ...(prs ? { hooks: withGithub(prs, deps.hooks) } : {}), agents: runs, ...(events ? { events: (project, agentId) => events(project?.path ?? SESSIONS, agentId) } : {}) }
 }
 
-/** What waits on the person in `projects`, with the modules of `deps.hooks`, none unless said. */
+/**
+ * The modules of `base`, with github's on, its projects all on GitHub, their open pull requests
+ * `prs`'s: what waits on a pull request is its to say.
+ */
+const withGithub = (prs: (cwd: string) => Promise<OpenPr[]>, base: () => Promise<Hooks> = noModules) => async (): Promise<Hooks> =>
+  createHooks(
+    [
+      // A plugin of `base` stays on; github is a core module, on with no row.
+      ...(await base()).modules.map(module => (module.plugin ? { module, on: true } : { module })),
+      { module: githubModule({ onGithub: async () => true, openRequests: prs, requestStates: async () => undefined, accounts: async () => ({ installed: true, accounts: [] }) }) },
+    ],
+    { onError: () => {} },
+  )
+
+/** What waits on the person in `projects`, with the modules of `deps.hooks`, none unless said, and github's with `deps.prs`. */
 const build = (projects: ProjectSummary[], deps: TestDeps = {}) => buildWaiting(projects, { hooks: noModules, ...waitingDeps(deps) })
 
 /** No paused run anywhere — keeps the PR-only tests hermetic (no disk read). */

@@ -1,53 +1,10 @@
-import { useEffect, useState } from 'react'
-import { onGitHosts, type GitHostRow, type GitHostsView } from '../rpc/logins.js'
-import { useAskOn, usePolled, type ReadState } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
 import { CopyButton } from './ui/copy-button.js'
 
-// What runs push with, and what is missing for them to (#2194's accounts, a step further): the
-// tool of each git host the projects are on, drawn from its own package's answers; a press runs
-// the command that package declared. An account at a git host is added in a dialog of its own
-// (`AddGitAccount.tsx`). Three places show it: the cards of the Permissions page, the Overview's
-// "Discover OpenAgent" steps, and the dot on the person's picture. The coding agents' own setup is
-// agent-driver's, said through `app.attention`.
-
-
-/** How often a page asks again: often while something is under way (an install, the browser's yes), less while something is missing, seldom once all is there. */
-const BUSY_MS = 2_000
-const MISSING_MS = 8_000
-const SELDOM_MS = 30_000
-
-/**
- * A read asked again at the pace its last answer calls for. Its answer is kept under `key`, in this
- * browser too: a place that opens later (the person's menu, the next load's Permissions) shows it
- * from its first frame, never empty while the same question is asked again.
- */
-function usePaced<T>(key: string, load: (() => Promise<T>) | null, pace: (value: T | undefined) => number, deps: unknown[]): { value: T | undefined; state: ReadState; reload: () => Promise<void> } {
-  const [every, setEvery] = useState(SELDOM_MS)
-  const { value, state, reload, refresh } = usePolled<T | undefined>(load, undefined, every, deps, { remember: key, stored: true })
-  useAskOn(every, refresh)
-  const next = pace(value)
-  useEffect(() => {
-    if (next !== every) setEvery(next)
-  }, [next, every])
-  return { value, state, reload }
-}
-
-export function useGitHosts(): { view: GitHostsView | undefined; state: ReadState; reload: () => Promise<void> } {
-  const { value, state, reload } = usePaced('git-hosts', onGitHosts, view => (view?.hosts.some(h => h.provider?.installing || h.provider?.loggingIn) ? BUSY_MS : view?.hosts.some(h => hostLoginState(h) === 'step' || hostLoginState(h) === 'not-installed') ? MISSING_MS : SELDOM_MS), [])
-  return { view: value, state, reload }
-}
-
-/** A login's state, said by its colour: green when there is nothing to do, amber for a step to take, grey for a tool that is not here. */
-export type LoginState = 'connected' | 'step' | 'not-installed'
-
-export function hostLoginState(row: GitHostRow): LoginState | undefined {
-  const p = row.provider
-  if (!p) return undefined
-  if (!p.installed) return 'not-installed'
-  return p.accounts.length > 0 && p.accounts.every(a => a.ok) ? 'connected' : 'step'
-}
+// The pieces a press that fixes a login is drawn with, the same wherever a module draws one: a
+// package's logo, the command a press runs, the press with what it is doing and why it failed, and
+// a program's words with their addresses as links.
 
 /** A package's logo, an SVG it gave: drawn as a mask in the text's colour, never put in the page as markup. */
 export function PackageLogo({ svg, className }: { svg: string | undefined; className?: string }) {
@@ -68,12 +25,6 @@ export function CommandLine({ command }: { command: string }) {
       <CopyButton text={command} label="Copy the command" className="justify-center md:size-6 max-md:size-11" />
     </div>
   )
-}
-
-/** What is missing at a host, in words. */
-export function hostWords(row: GitHostRow): string {
-  const p = row.provider!
-  return !p.installed ? `${p.tool}, the tool for ${p.name}, is not installed.` : p.accounts.length === 0 ? `OpenAgent has no ${p.name} account yet.` : `${p.name} no longer takes a login: add it again.`
 }
 
 /** How a fix's press is drawn: the page's primary by default, or a quieter press beside another's. */
@@ -116,32 +67,4 @@ export function Linked({ text }: { text: string }) {
       part
     ),
   )
-}
-
-/** One thing missing before runs can start; the Permissions page shows it whole. */
-export interface Missing {
-  key: string
-  /** What it is: "GitHub". */
-  name: string
-  /** What is missing, in words. */
-  words: string
-  /** What fixes it, as a menu item that leads there says it: "Install gh…". */
-  action: string
-}
-
-/** What is missing at the git hosts. Nothing while it is not read yet, and `loaded` once it is. With it, the git hosts as read, for a place that shows them too. */
-export function useMissing(): { missing: Missing[]; loaded: boolean; reload: () => Promise<void>; hosts: GitHostsView | undefined } {
-  const { view, reload } = useGitHosts()
-  const missing: Missing[] = []
-  for (const row of view?.hosts ?? []) {
-    const p = row.provider
-    if (!p || hostLoginState(row) === 'connected') continue
-    missing.push({
-      key: `host:${row.host}`,
-      name: p.name,
-      words: hostWords(row),
-      action: !p.installed ? `Install ${p.tool}…` : p.accounts.length === 0 ? `Add a ${p.name} account…` : `Add your ${p.name} account again…`,
-    })
-  }
-  return { missing, loaded: view !== undefined, reload, hosts: view }
 }

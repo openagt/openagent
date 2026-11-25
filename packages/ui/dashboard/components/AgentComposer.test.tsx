@@ -24,8 +24,6 @@ vi.mock('../lib/use-project-launcher.js', () => ({ useProjectLauncher: () => ({ 
 vi.mock('./ContextMenu.js', () => ({
   SessionContextMenu: ({ context, repos }: { context: Set<string>; repos: readonly { name: string }[] }) => <span>Context · {[...repos.map(repo => repo.name), ...context].join(', ')}</span>,
 }))
-// The launcher's other items, each tested on its own: stand-ins that say what they were given.
-vi.mock('./GitHosts.js', () => ({ GitHostOff: ({ home, account }: { home: { name: string } | null; account?: string }) => (home ? <span>Account · {account ?? home.name}</span> : null) }))
 
 // The Composer is exercised by its own tests; here it only has to hand back a submit and report
 // the props this component sets on it.
@@ -102,10 +100,10 @@ describe('AgentComposer row', () => {
 })
 
 describe('AgentComposer row under the box', () => {
-  test('the launcher\'s gear, line for line in its places, the session\'s own said and not offered: the account the run worked as, then Auto; after the gear, Context alone', () => {
+  test('the launcher\'s gear, line for line in its places, the session\'s own said and not offered: Auto; after the gear, Context alone', () => {
     const contextSet = { context: new Set(['src/app.ts']), add: vi.fn(), remove: vi.fn(), toggle: vi.fn(), reset: vi.fn() }
-    renderComposer({ gitHost: { url: 'https://github.com/o/r', name: 'GitHub' }, gitAccount: 'octo-agent', publish: 'pr', contextSet })
-    expect(screen.getByTestId('composer-setup').textContent).toBe('Account · octo-agentAuto: prpick Open PRpick Commit')
+    renderComposer({ publish: 'pr', contextSet })
+    expect(screen.getByTestId('composer-setup').textContent).toBe('Auto: prpick Open PRpick Commit')
     expect(screen.getByTestId('composer-controls').textContent).toBe('Context · src/app.ts')
   })
 
@@ -128,9 +126,9 @@ describe('AgentComposer row under the box', () => {
     expect(within(screen.getByTestId('composer-controls')).getByRole('button', { name: 'Context' }).textContent).toBe('Context')
   })
 
-  test("the gear's hover says the setup with its menu shut: the account, the level and where its pull request goes", () => {
-    renderComposer({ gitAccount: 'octo-agent', publish: 'pr', prBase: 'login-page' })
-    expect(screen.getByTestId('composer-setup').dataset.said).toBe('@octo-agent · auto pr → login-page')
+  test("the gear's hover says the setup with its menu shut: the level", () => {
+    renderComposer({ publish: 'pr' })
+    expect(screen.getByTestId('composer-setup').dataset.said).toBe('auto pr')
     cleanup()
     renderComposer()
     expect(screen.getByTestId('composer-setup').dataset.said).toBe('auto nothing')

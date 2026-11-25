@@ -1,5 +1,4 @@
 import { contextProjects, resolveProjectPath, runHostOf } from './context.js'
-import { accountsByHost, remoteAccount } from './send-as.js'
 import { findComputerModule, findProjectModule } from '../project-modules.js'
 import { providedDataChanged } from '../store/provided.js'
 import { callModuleFunction, computerHost, functionKind, serverHost, type ComputerHostDeps, type ModuleCallResult } from '../dashboard/module-host.js'
@@ -7,7 +6,7 @@ import { distributionHooks, projectRefAt, runRefAt } from '../distribution-hooks
 import { SESSIONS_ID } from '../project-address.js'
 
 import { pullProjectData } from '@openagt/agent-data'
-import type { ProjectRef, RunFound, RunQuestion, RunRef } from '@openagt/hooks'
+import type { ProjectRef, RunFacts, RunFound, RunQuestion, RunRef } from '@openagt/hooks'
 import type { ModuleOn } from '@openagt/hooks/rpc'
 import { readRunEvents } from '../store/index.js'
 import { pendingChoices } from '../open-choices.js'
@@ -41,7 +40,8 @@ export async function callModule(projectId: string | null, pkg: string, name: st
     find: runsFound(projectId, root),
     questions: agentId => runQuestions(projectId, root, agentId),
     say: (agentId, line) => sayForModule(projectId, root, agentId, line),
-    landed: (agentId, landed) => landedFor(projectId, root, agentId, landed),
+    landed: (agentId, landed) => recordFor(projectId, root, agentId, { 'git-branches': { landed: landed.commit, baseCommit: landed.from } }),
+    pullRequest: (agentId, pr) => recordFor(projectId, root, agentId, { github: { pr } }),
     modulesOn: async opts => modulesOn(await project(), opts?.every === true),
   })
   const result = await callModuleFunction(module.server, name, host, input)
@@ -52,10 +52,14 @@ export async function callModule(projectId: string | null, pkg: string, name: st
   return result
 }
 
-/** What every function is handed of this computer: its projects, and OpenAgent's accounts at the git hosts, as the Permissions page lists them. */
+/** What every function is handed of this computer: its projects, and OpenAgent's accounts at the git hosts, as the modules' `account.access` answers for them. */
 const COMPUTER: ComputerHostDeps = {
   projects: async () => Promise.all((await contextProjects().list()).map(project => projectRefAt(project.id, project.path))),
-  accounts: { hosts: accountsByHost, sendAs: remoteAccount },
+  accounts: {
+    hosts: async () => (await distributionHooks()).gitAccounts.hosts(),
+    sendAs: async (host, login) => (await distributionHooks()).gitAccounts.sendAs(host, login),
+    mergeCommit: async (dir, branch, number) => (await distributionHooks()).gitAccounts.mergeCommit(dir, branch, number),
+  },
 }
 
 /** The project `projectId` at `root`, as a hook is given it, read once for the call and only when asked: a session with no project is none. */
@@ -95,14 +99,15 @@ function runsFound(projectId: string, root: string): (agentId: string) => Promis
 }
 
 /**
- * Write down on run `agentId`'s record, in the project at `root`, that its work was landed, through
- * the run's host (`RunHost.record`): the record is what its page reads once the branch is gone.
+ * Write `facts` down on run `agentId`'s record, in the project at `root`, through the run's host
+ * (`RunHost.record`): its work landed, or the pull request a press opened for it. The record is
+ * what its page reads once the branch is gone.
  */
-async function landedFor(projectId: string, root: string, agentId: string, landed: { commit: string; from: string }): Promise<void> {
+async function recordFor(projectId: string, root: string, agentId: string, facts: RunFacts): Promise<void> {
   const run = await runRefAt(projectId, root, agentId)
   const host = await runHostOf(run)
   if (!host.record) throw new Error(`A session on ${host.label} keeps no record here.`)
-  await host.record(run, { 'git-branches': { landed: landed.commit, baseCommit: landed.from } })
+  await host.record(run, facts)
 }
 
 /** The questions run `agentId` of the project at `root` still waits on, read off its events (as its host says them) by the rule every surface reads them by. */

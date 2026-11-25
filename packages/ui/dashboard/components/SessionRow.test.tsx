@@ -10,6 +10,7 @@ vi.mock('./ui/tooltip.js', () => ({
 }))
 
 const { SessionRow } = await import('./SessionRow.js')
+const { fakeHost, mountedOf, renderWithHost } = await import('../module/testing.js')
 
 afterEach(cleanup)
 
@@ -26,10 +27,25 @@ describe('a session\'s row above the box', () => {
     for (const item of container.querySelectorAll<HTMLElement>('[data-hover]')) expect(item.tabIndex).toBe(0)
   })
 
-  test("the run's pull requests stand at the row's right end, after the side that gives way, so the last one ends on the box's edge and stays whole in a narrow box; none, nothing there", () => {
-    const { container, rerender } = render(<SessionRow {...facts} prs={[{ number: 4, url: 'https://x/pull/4', state: 'merged' }, { number: 5, url: 'https://x/pull/5', state: 'OPEN' }]} />)
-    const row = container.firstElementChild!
-    const links = screen.getAllByRole('link')
+  test("the modules' labels of the run (`chat.labels`: github's pull requests) stand at the row's right end, after the side that gives way, so the last one ends on the box's edge and stays whole in a narrow box; none, nothing there", async () => {
+    const labels = {
+      place: 'chat.labels' as const,
+      id: 'prs',
+      package: 'a-labels-module',
+      projects: [],
+      computer: true as const,
+      View: ({ agentId }: { agentId: string }) => (
+        // Whole at every width, as github's labels keep themselves.
+        <span className="flex shrink-0">
+          <a href="https://x/pull/4">#4</a>
+          <a href={`https://x/pull/${agentId}`}>#5</a>
+        </span>
+      ),
+    }
+    const run = { projectId: 'p1', agentId: '5', working: false }
+    const { container, rerender } = renderWithHost(<SessionRow {...facts} run={run} />, fakeHost('a-labels-module'), mountedOf({ views: { 'chat.labels': [labels] } }))
+    const links = await screen.findAllByRole('link')
+    const row = container.querySelector('[data-hover]')!.parentElement!.parentElement!
     expect(links.map(link => link.textContent)).toEqual(['#4', '#5'])
     expect(row.lastElementChild!.contains(links[1]!)).toBe(true)
     expect(row.lastElementChild!.className.split(' ')).toContain('shrink-0')
@@ -38,7 +54,7 @@ describe('a session\'s row above the box', () => {
     expect(row.firstElementChild!.textContent).toContain('site')
     rerender(<SessionRow {...facts} />)
     expect(screen.queryByRole('link')).toBeNull()
-    expect(container.firstElementChild!.childElementCount).toBe(1)
+    expect(row.childElementCount).toBe(1)
   })
 
   test('a session with no project says where it runs alone: its repos are under the box, as Context', () => {

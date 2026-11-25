@@ -113,6 +113,19 @@ export interface PullRequest {
   url: string
 }
 
+/** How a pull request stands: a draft is open, and not asking for review yet. */
+export type PullRequestState = 'open' | 'draft' | 'merged' | 'closed'
+
+/** What a module read of a pull request at its git host: the lists mark a run's request by it. */
+export interface PullRequestRead {
+  url: string
+  state: PullRequestState
+  /** Its title, which the jump finds the run by. */
+  title?: string
+  /** The branch it is from: a branch with an open request is published, and waits on no push. */
+  branch?: string
+}
+
 /** github's facts: the run's pull request, and the ones it opened before it. */
 export interface GithubFacts {
   /** The login of the GitHub account the run works as, kept on its record: a resume goes on as it. */
@@ -311,11 +324,20 @@ export interface RunFound {
   /** The run's record, when its host keeps one for it. */
   record?: {
     status?: string
+    /** When it started, and when it ended, ISO. */
+    startedAt?: string
+    endedAt?: string
+    /** What it was asked to do. */
+    prompt?: string
+    /** The options it was started with, as its record keeps them: the account it works as at its git host among them. */
+    options?: RunOptions
     /** The machine the run ran on. */
     host?: string
     /** The branch the run left its work on, by its last recorded name. */
     branch?: string
-    pr?: { number: number }
+    pr?: PullRequest
+    /** The pull requests it opened before that one. */
+    earlierPrs?: PullRequest[]
     /** The branch the run was told to start from, by its name; absent on a run that started from origin's default branch. */
     base?: string
     /** The commit the run's own work begins at, for a run that made its own branch: what its changes are measured from when the default branch cannot tell them. */

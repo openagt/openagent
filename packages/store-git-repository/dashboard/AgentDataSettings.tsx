@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button, HostFix, Input, PathStrip, SendAs, SettingsRow, SettingsRowShapes, SettingsSection, Slot, firstSendAs, typedRepository, useAction, useGitHosts, useModuleHost, usePolled } from '@openagt/ui/module'
+import { Button, Input, ModuleFixPress, PathStrip, SendAs, SettingsRow, SettingsRowShapes, SettingsSection, Slot, firstSendAs, typedRepository, useAction, useModuleHost, usePolled } from '@openagt/ui/module'
 import type { HostAccounts } from '@openagt/hooks'
 import { server, type PersonalFolderView } from './calls.js'
 import { BackupNotice, accountsAt } from './BackupNotice.js'
@@ -31,14 +31,11 @@ function PersonalFolder({ view, reload }: { view: PersonalFolderView; reload: ()
   const [picked, setPicked] = useState<string | undefined>()
   const { busy, error, reset, run } = useAction()
   const calls = server(useModuleHost())
-  // OpenAgent's accounts, read live: one added here is offered at once.
-  const { view: gitHosts, reload: reloadGitHosts } = useGitHosts()
   const personal = view
 
   // The host the typed address is on, and OpenAgent's accounts there; a folder on this disk asks no login.
   const typedHost = typedRepository(address)?.address.split('/')[0]?.toLowerCase()
-  const typedRow = typedHost !== undefined ? gitHosts?.hosts.find(row => row.host === typedHost) : undefined
-  const typedAt: HostAccounts | undefined = typedHost !== undefined ? (typedRow ? accountsAt(typedRow, typedHost) : (personal.hosts.find(row => row.host === typedHost) ?? { host: typedHost, logins: [] })) : undefined
+  const typedAt: HostAccounts | undefined = typedHost !== undefined ? accountsAt(personal.hosts, typedHost) : undefined
   const sendAs = picked !== undefined && typedAt?.logins.includes(picked) ? picked : firstSendAs(typedAt)
   const remoteHost = personal.remoteUrl ? personal.remote?.split('/')[0]?.toLowerCase() : undefined
   const remoteAt = remoteHost !== undefined ? personal.hosts.find(row => row.host === remoteHost) : undefined
@@ -157,11 +154,11 @@ function PersonalFolder({ view, reload }: { view: PersonalFolderView; reload: ()
               </Button>
             </div>
             {typedAt &&
-              (typedAt.logins.length === 0 && typedRow ? (
-                // No account of OpenAgent's there: one is added here, in its dialog.
+              (typedAt.logins.length === 0 && typedAt.add ? (
+                // No account of OpenAgent's there: one is added here, by the press of the module answering for the host.
                 <div className="space-y-1.5">
-                  <p className="text-xs text-muted-foreground">{`OpenAgent backs up to ${typedRow.provider?.name ?? typedAt.host} with an account of its own, never your own login. It has none there yet.`}</p>
-                  <HostFix row={typedRow} onChanged={reloadGitHosts} size="sm" />
+                  <p className="text-xs text-muted-foreground">{`OpenAgent backs up to ${typedAt.host} with an account of its own, never your own login. It has none there yet.`}</p>
+                  <ModuleFixPress fix={typedAt.add} onFixed={() => void reload()} />
                 </div>
               ) : (
                 <SendAs host={typedAt} value={sendAs} onChange={setPicked} disabled={busy} label="Back up as" />

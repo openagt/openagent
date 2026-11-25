@@ -3,10 +3,9 @@ import { stat } from 'node:fs/promises'
 import { originDefaultBranch } from '@openagt/agent-data'
 import { moduleAgents, type ModuleAgent, type ModuleAgentsWanted } from '../dashboard/module-agents.js'
 import { join } from 'node:path'
-import { doingOf, readRunEvents, readRuns, type AgentDoing, startedAtFromAgentId, type AgentMeta, isRunId, projectBranches } from '../store/index.js'
+import { doingOf, readRunEvents, readRuns, type AgentDoing, type AgentMeta, isRunId, projectBranches } from '../store/index.js'
 import { listProjectWorktrees } from '../worktrees.js'
 import { projectGitHost, type GitHostHome } from '../store/git-host.js'
-import { repositoryOffer, type RepositoryOffer } from '../store/repository.js'
 import { readDocs, type WorkspaceDoc } from '../dashboard/docs.js'
 import { buildOverview, buildRecentAgents, type FoundAgent, type Overview, type RecentAgent } from '../dashboard/overview.js'
 import { buildWaiting, type Waiting } from '../dashboard/waiting.js'
@@ -14,7 +13,8 @@ import type { ProjectionRead, ProjectSummary } from '../dashboard/projects.js'
 import { buildActivity, type Activity } from '../dashboard/activity.js'
 import { buildDashboard, type DashboardData } from '../dashboard/dashboard.js'
 import { readGitStatus } from '../dashboard/git-status.js'
-import { readRunHandoff, resolveAgentPr, type AgentHandoff } from '../dashboard/agent-handoff.js'
+import { readRunHandoff, type AgentHandoff } from '../dashboard/agent-handoff.js'
+import { pullRequestState } from '../dashboard/pr-states.js'
 import { copyTarget } from '../dashboard/session-copies.js'
 import type { AgentWorktree } from '../dashboard/types.js'
 import { crawlRepoFiles } from '../project.js'
@@ -100,25 +100,20 @@ export async function onAgentWorktree(projectId: string, agentId: string): Promi
   const run = await runRefOf(projectId, agentId)
   const found = run ? await (await runHostOf(run)).find(run).catch(() => undefined) : undefined
   const checkout = found?.checkout !== undefined ? { path: found.checkout } : undefined
-  // Since-filtered like every run-scoped PR read (#1255): the checkout's branch is the agent's,
-  // but a reused pinned branch has a predecessor's PR history.
-  const since = startedAtFromAgentId(agentId)
   // Read only while the checkout's own `.git` is there: without it git reads the project's
   // checkout the run's folder sits in, and answered with the person's branch as the run's.
   const linked = checkout ? await stat(join(checkout.path, '.git')).then(() => true, () => false) : false
-  const status = checkout && linked ? await readGitStatus(checkout.path, { prRoot: root, ...(since !== undefined ? { since } : {}) }).catch(() => undefined) : undefined
+  const status = checkout && linked ? await readGitStatus(checkout.path).catch(() => undefined) : undefined
+  // The run's pull request is the one its record names, as its git host module last read it.
+  const agent = await contextRun(projectId, agentId).catch(() => undefined)
+  const state = agent?.pr ? pullRequestState(agent.pr.url)?.state : undefined
+  const pr = agent?.pr ? { ...agent.pr, ...(state ? { state } : {}) } : undefined
   if (!checkout || !status) {
     // The checkout's branch was the agent's; with no checkout the record is the only witness. So
     // it is for a checkout git cannot read: the run's clean-up is removing it, and an answer
     // without its branch put the bar above the message box away until the next read.
-    const agent = await contextRun(projectId, agentId).catch(() => undefined)
     if (!agent) return null
-    const pr = await resolveAgentPr(root, agent).catch(() => ({ value: undefined, pending: false }))
-    return {
-      ...(agent.branch ? { branch: agent.branch } : {}),
-      ...(pr.value ? { pr: pr.value } : {}),
-      ...(pr.pending ? { prPending: true } : {}),
-    }
+    return { ...(agent.branch ? { branch: agent.branch } : {}), ...(pr ? { pr } : {}) }
   }
   // Size is only read for a checkout nothing is writing to: a live agent's tree changes under the
   // poll, and a size over a build directory mid-build is a cost with no answer worth having. The
@@ -130,9 +125,7 @@ export async function onAgentWorktree(projectId: string, agentId: string): Promi
     branch: status.branch,
     // A session's branch is exactly the thing that has a PR (#809), so the bar can show it
     // like the project's does.
-    ...(status.pr ? { pr: status.pr } : {}),
-    // Still being looked up rather than absent (#1028), so the bar can ask again shortly.
-    ...(status.prPending ? { prPending: true } : {}),
+    ...(pr ? { pr } : {}),
   }
 }
 
@@ -264,14 +257,6 @@ export async function onGitHostHome(projectId: string): Promise<GitHostHome | nu
   const gitHost = await projectGitHost(cwd).catch(() => undefined)
   return (await gitHost?.home()) ?? null
 }
-
-/** The repository the project's provider offers to create for it (a project with no remote), or null: no provider, a remote already there, or the host out of reach. */
-export async function onRepositoryOffer(projectId: string): Promise<RepositoryOffer | null> {
-  const cwd = await resolveProjectPath(projectId)
-  if (!cwd) return null
-  return (await repositoryOffer(cwd)) ?? null
-}
-
 
 /**
  * The end-of-session handoff (#799): the branch a finished session left its work on, what it

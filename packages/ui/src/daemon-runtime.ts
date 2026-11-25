@@ -1,6 +1,6 @@
 import { basename, isAbsolute, resolve } from 'node:path'
 import { stat } from 'node:fs/promises'
-import { MODULE_NAME, isBranchName, type Hooks, type ProjectRef, type RunHost, type RunOptions } from '@openagt/hooks'
+import { MODULE_NAME, type Hooks, type ProjectRef, type RunHost, type RunOptions } from '@openagt/hooks'
 import { sessionRepos } from '@openagt/git-branches'
 import { projectBranches, readRunEvents } from './store/index.js'
 import type { StartAgentOptions, StartAgentResult, StartedInResult } from './dashboard/types.js'
@@ -10,7 +10,7 @@ import { errorMessage, sessionsHome, projectId } from '@openagt/agent-data'
 import { listProjects, projectRefAt } from './distribution-hooks.js'
 import { isPublishPick, publishLevelOf, publishPickIn } from './publish-levels.js'
 import { hasRemote } from './has-remote.js'
-import { projectGitHost } from './store/git-host.js'
+import { takesRequests } from './dashboard/pr-states.js'
 import { projectAddresses, SESSIONS_ID } from './project-address.js'
 import { readySessionsHome } from './sessions-home.js'
 
@@ -29,15 +29,11 @@ import { readySessionsHome } from './sessions-home.js'
  */
 function refusedPicks(options: StartAgentOptions, noProject: boolean): string | undefined {
   if (options.options !== undefined && !isRunOptions(options.options)) return 'The run options are one object per module.'
-  // A session with no project: with no branch; the repos it has are copied into its folder, and are
-  // what it publishes. Its git host account goes with it: it may reach the host all the same.
-  if (noProject && options.prBase !== undefined) return 'A session with no project runs with no branch.'
+  // A session with no project: the repos it has are copied into its folder, and are what it publishes.
   if (noProject && options.publish !== undefined && !(Array.isArray(options.repos) && options.repos.length > 0)) return 'A session with no project and no repo has nothing to publish.'
   // Another host runs a project's run, on a machine of its own.
   if (options.host !== undefined && (typeof options.host !== 'string' || !MODULE_NAME.test(options.host))) return 'A host is named by its id.'
   if (noProject && options.host !== undefined) return 'A session with no project runs on this computer.'
-  // A login is one word.
-  if (options.account !== undefined && !(typeof options.account === 'string' && /^\S+$/.test(options.account))) return 'An account is named by its login.'
   // A repo is a whole path, and the run's process is handed them one per line.
   if (options.repos !== undefined && !(Array.isArray(options.repos) && options.repos.every(folder => typeof folder === 'string' && isAbsolute(folder) && !folder.includes('\n')))) {
     return 'A repo is named by the path of its folder on this computer.'
@@ -99,16 +95,14 @@ export function createProjectRuntime({ cwd, env, host, otherHosts = async () => 
     if (refused !== undefined) return { ok: false, error: refused }
     const projectCwd = noProject ? await readySessionsHome(sessionsHome(env)) : await resolveProject(targetProjectId)
     if (!projectCwd) return { ok: false, error: `unknown project: ${targetProjectId}` }
-    // The branch a pull request goes into ends up on the run's command line: only a branch name goes there.
-    if (options.prBase !== undefined && !isBranchName(options.prBase)) return { ok: false, error: `not a branch name: ${String(options.prBase)}` }
     // The pick in force is decided here, so every Start goes the same way whichever page sent it:
     // with none saved the run commits and pushes nothing, and with one the project is not offered
-    // it goes as far as the project does with no pull request: its branch pushed, or its work
-    // committed where there is no remote.
+    // it goes as far as the project does with no pull request: its branch pushed where OpenAgent
+    // has no account at its remote's host to open one as, or its work committed where there is no remote.
     // With no project the level is for the session's copies of repos, whatever host each is on: the pick as sent, and none with no repo.
     const publish = noProject
       ? options.publish !== undefined && isPublishPick(options.publish) ? publishLevelOf(options.publish) : undefined
-      : publishLevelOf(publishPickIn(options.publish, (await projectGitHost(projectCwd).catch(() => undefined)) !== undefined, await hasRemote(projectCwd)))
+      : publishLevelOf(publishPickIn(options.publish, await takesRequests((await projectRefAt(targetProjectId ?? homeId, projectCwd).catch(() => undefined))?.remote), await hasRemote(projectCwd)))
     // A session's repos, each under the name it has in the session's folder: one that is no repository refuses the Start.
     const repos = options.repos !== undefined ? await sessionRepos(options.repos).then(given => ({ given }), (err: unknown) => ({ error: errorMessage(err) })) : undefined
     if (repos && 'error' in repos) return { ok: false, error: repos.error }
@@ -198,10 +192,8 @@ function runOptionsOf(options: StartAgentOptions, publish: RunOptions['publish']
 
 function flatOptionsOf(options: StartAgentOptions, publish: RunOptions['publish'], repos: { name: string; from: string }[] | undefined): RunOptions {
   const branches = repos !== undefined && repos.length > 0 ? { repos } : {}
-  const github = { ...(options.prBase !== undefined ? { prBase: options.prBase } : {}), ...(options.account !== undefined ? { account: options.account } : {}) }
   return {
     ...(publish !== undefined ? { publish } : {}),
     ...(Object.keys(branches).length > 0 ? { 'git-branches': branches } : {}),
-    ...(Object.keys(github).length > 0 ? { github } : {}),
   }
 }

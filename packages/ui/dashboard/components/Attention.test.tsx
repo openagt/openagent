@@ -9,7 +9,7 @@ import { ModulesContext, mountedOf, type MountedAction } from '../lib/use-module
 
 const attention = vi.hoisted(() => ({ onAttention: vi.fn() }))
 vi.mock('../rpc/attention.js', () => attention)
-const { ProjectItemsLine } = await import('./Attention.js')
+const { ModuleFixPress, ProjectItemsLine } = await import('./Attention.js')
 
 afterEach(() => {
   cleanup()
@@ -53,4 +53,26 @@ test('a fix that fails says its words, and the line stays', async () => {
   fireEvent.click(await screen.findByRole('button', { name: 'Update folder' }))
   expect((await screen.findByRole('alert')).textContent).toContain('fatal: Not possible to fast-forward, aborting.')
   expect(screen.getByText('The folder is 2 commits behind main.')).toBeTruthy()
+})
+
+test("a module's fix drawn by another module's part (an account added where a host has none) runs that module's action, and says it is done; with no module bringing it here, nothing is drawn", async () => {
+  const run = vi.fn(async () => ({ ok: true as const }))
+  const add: MountedAction<'attention.fix'> = { place: 'attention.fix', id: 'add-account', label: 'Add a GitHub account', run, package: '@me/github', module: 'github', projects: [], computer: true }
+  const fixed = vi.fn()
+  const fix = { module: 'github', action: 'add-account', label: 'Add a GitHub account' }
+  const { unmount } = render(
+    <ModulesContext.Provider value={mountedOf({ actions: { 'attention.fix': [add] } })}>
+      <ModuleFixPress fix={fix} onFixed={fixed} />
+    </ModulesContext.Provider>,
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Add a GitHub account' }))
+  await waitFor(() => expect(fixed).toHaveBeenCalled())
+  expect(run).toHaveBeenCalled()
+  unmount()
+  const { container } = render(
+    <ModulesContext.Provider value={mountedOf()}>
+      <ModuleFixPress fix={fix} />
+    </ModulesContext.Provider>,
+  )
+  expect(container.textContent).toBe('')
 })

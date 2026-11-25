@@ -1,17 +1,11 @@
 import { agentLockKey, sayToRun, startedElsewhere, type SteerResult } from '../dashboard/run-inbox.js'
 export type { SteerResult }
 import { openInApp, type OpenTarget, type OpenResult } from '../dashboard/open-in-app.js'
-import { contextPreferences, contextRun, contextStartAgent, resolveProjectPath, resolveAgentPath, runHostOf } from './context.js'
+import { contextPreferences, contextStartAgent, resolveProjectPath, resolveAgentPath, runHostOf } from './context.js'
 import { runRefAt } from '../distribution-hooks.js'
 import { errorMessage } from '@openagt/agent-data'
-import { patchRun } from '@openagt/agent-driver'
-
-import { isRunId, projectBranches, type AgentMeta } from '../store/index.js'
+import { isRunId, projectBranches } from '../store/index.js'
 import { withAgentLock } from '../agent-locks.js'
-import { mergeAgentPr, openAgentPullRequest, pushAgentBranch, readRunHandoff, type HandoffResult } from '../dashboard/agent-handoff.js'
-import { copyTarget } from '../dashboard/session-copies.js'
-import { createRepository, type CreateRepositoryResult } from '../store/repository.js'
-import { providedDataChanged } from '../store/provided.js'
 import type {
   DeleteAgentResult,
   StartAgentOptions,
@@ -95,9 +89,8 @@ export async function sendNow(projectId: string, agentId: string): Promise<Steer
 async function withWorktreeRemoval<T>(projectId: string, agentId: string, remove: (cwd: string) => Promise<T>): Promise<T | { ok: false; error: string }> {
   const cwd = await resolveProjectPath(projectId)
   if (!cwd) return { ok: false, error: 'this project has no local path on this server' }
-  // Under the agent lock: a Delete and an Open PR on the same finished run each run their
-  // own git in its checkout; serialized, whichever runs second finds the state the first one left
-  // and acts on that.
+  // Under the run's lock: a second Delete of the same run, pressed while the first is at work,
+  // finds what the first left and acts on that.
   return withAgentLock(agentLockKey(cwd, agentId), () => remove(cwd))
 }
 
@@ -152,91 +145,4 @@ export async function sendOpenInApp(projectId: string, target: OpenTarget, agent
   const editor =
     target === 'editor' ? (await contextPreferences().read().catch((): Preferences => ({}))).editor : undefined
   return openInApp(cwd, target, undefined, editor)
-}
-
-/**
- * The session's own branch, or undefined when the run/project is unknown. Shared by the two
- * handoff actions so they address exactly what {@link onAgentHandoff} reports on.
- */
-async function handoffTargetFor(
-  projectId: string,
-  agentId: string,
-  repo?: string,
-): Promise<{ cwd: string; agent: AgentMeta; checkout: string } | undefined> {
-  const cwd = await resolveProjectPath(projectId)
-  if (!cwd || !isRunId(agentId)) return undefined
-  const agent = await contextRun(projectId, agentId).catch(() => undefined)
-  // One of the session's copies of repos (`session-copies.ts`): its own folder and the branch it is on.
-  if (repo !== undefined) {
-    const copy = agent && (await copyTarget(agent, repo))
-    return copy ? { ...copy, checkout: copy.cwd } : undefined
-  }
-  // The branch is read from the project repo; the tree the agent edited is its own checkout (#453),
-  // and for a session that has not committed, that is the only place its work exists.
-  const checkout = (await resolveAgentPath(projectId, agentId)) ?? cwd
-  return agent ? { cwd, agent, checkout } : undefined
-}
-
-/**
- * Open a PR for a finished session's branch (#799): the project's branches provider pushes it
- * first if the remote lacks it (#1774).
- *
- * The title and body come from what the agent already recorded: the branch the agent named its
- * work with and the intent the user asked for. Nothing new is invented and nothing extra is asked
- * of the user, which is the point of "offer the next step rather than describe it".
- */
-export async function sendOpenPullRequest(projectId: string, agentId: string, options: { draft?: boolean; repo?: string } = {}): Promise<HandoffResult> {
-  const target = await handoffTargetFor(projectId, agentId, options.repo)
-  if (!target) return { ok: false, error: 'unknown session' }
-  // Under the agent lock, so the provider's push inside `openAgentPullRequest` cannot race a
-  // Remove of the same checkout.
-  const opened = await withAgentLock(agentLockKey(target.cwd, agentId), () => openAgentPullRequest(target.cwd, target.agent, options.draft === true ? { draft: true } : {}))
-  // Record it on the finished run (E6), on its record. The session's own process is gone by now,
-  // so there is no event stream to carry the fact — but it is the same fact, and every surface
-  // reads it from the same place either way rather than re-deriving it from branch names. No
-  // record: there is none to carry it, and the PR is still open.
-  // A copy's request is not the run's: the record names the project's alone, and the copy's is read off its branch.
-  if (options.repo === undefined && opened.ok && opened.number !== undefined && opened.url) {
-    await patchRun(target.cwd, agentId, { pr: { number: opened.number, url: opened.url } }).catch(() => false)
-  }
-  return opened
-}
-
-/**
- * The user's Publish branch action (#1820): push a finished run's branch and open no pull request,
- * the last step where the project has no git host package. Under the agent lock, as Open PR is, so the push cannot race a Remove.
- */
-export async function sendPush(projectId: string, agentId: string, repo?: string): Promise<HandoffResult> {
-  const target = await handoffTargetFor(projectId, agentId, repo)
-  if (!target) return { ok: false, error: 'unknown session' }
-  if (target.agent.status === 'running') return { ok: false, error: 'that session is still going' }
-  return withAgentLock(agentLockKey(target.cwd, agentId), () => pushAgentBranch(target.cwd, target.agent))
-}
-
-/**
- * The user's "Create a repository" action, for a project with no remote: the project's repository
- * provider creates it private, sets it as the origin and pushes. The git host is looked up again
- * afterwards: the project has a page there now.
- */
-export async function sendCreateRepository(projectId: string): Promise<CreateRepositoryResult> {
-  const cwd = await resolveProjectPath(projectId)
-  if (!cwd) return { ok: false, error: 'this project has no local path on this server' }
-  const created = await createRepository(cwd)
-  if (created.ok) providedDataChanged(cwd)
-  return created
-}
-
-/**
- * The user's Merge action (#1391): merge a finished run's open pull request, directly. A run
- * that is still working has no Merge: its agent is still writing its branch, and the button comes
- * with the ended view.
- */
-export async function sendMerge(projectId: string, agentId: string, repo?: string): Promise<HandoffResult> {
-  const target = await handoffTargetFor(projectId, agentId, repo)
-  if (!target) return { ok: false, error: 'unknown session' }
-  if (target.agent.status === 'running') return { ok: false, error: 'that session is still going' }
-  if (repo === undefined) return mergeAgentPr(target.cwd, target.agent)
-  // A copy's request is on no record: the one its branch has is the one to merge.
-  const pr = (await readRunHandoff(target.cwd, target.agent).catch(() => undefined))?.pr
-  return mergeAgentPr(target.cwd, { id: agentId, ...(target.agent.branch !== undefined ? { branch: target.agent.branch } : {}), ...(pr ? { pr: { number: pr.number, url: pr.url } } : {}) })
 }

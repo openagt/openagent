@@ -88,7 +88,7 @@ test("it knows the project's runs on GitHub Actions, and only those: where one's
     const { host: actions } = host()
     const project = projectAt(repo)
     assert.deepEqual(await actions.find({ id: FIRST, project }), {
-      record: { status: 'done', host: HERE, branch: 'claude/actions-1', pr: { number: 7 } },
+      record: { status: 'done', host: HERE, branch: 'claude/actions-1', pr: { number: 7, url: 'https://github.com/o/r/pull/7' } },
       changedNothing: false,
     })
     // This computer's run is its own host's to find, and a run is found in a project.
