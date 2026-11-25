@@ -261,9 +261,10 @@ export function makeRpcMount(context: DashboardContext): (req: IncomingMessage, 
       // this a rejected promise inside the mount became an unhandled rejection. A body left
       // unread (one past the bound) ends the connection with the answer: what is left of it is
       // no next request, and a connection kept for one would stay open waiting for it.
-      if (!req.complete) res.setHeader('connection', 'close')
-      if (!res.headersSent) await sendJson(req, res, 500, { error: errorMessage(err) })
-      else res.end()
+      if (!res.headersSent) {
+        if (!req.complete) res.setHeader('connection', 'close')
+        await sendJson(req, res, 500, { error: errorMessage(err) })
+      } else res.end()
     }
     return true
   }
