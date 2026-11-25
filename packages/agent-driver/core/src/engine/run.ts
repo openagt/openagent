@@ -46,7 +46,7 @@ import { detailOf, modelOf } from './session.js'
  *
  * A run started in the sessions home has no project: it works in a folder of its own there
  * (`session-folder.ts`), with no branch, no pull request and nothing to reclaim, and its record is
- * kept with the other sessions' (`@openagt/agent-data`'s sessions).
+ * kept with the other sessions' (git-branches' session folders).
  */
 
 /** Filesystem-safe, time-ordered id from an ISO start: the shape the dashboard sorts runs by. */

@@ -26,7 +26,7 @@ test('add a project: it is installed, registered, and readable like the sidebar 
     const projects = await rpc(onProjects)()
     const mine = projects.find(p => p.id === project.id)
     assert.equal(mine?.path, project.cwd)
-    assert.equal(mine?.errors?.some(error => error.title === 'Not activated') ?? false, false)
+    assert.equal(mine?.notes?.some(note => note.words === 'Not activated') ?? false, false)
 
     // The project's reads answer: an empty docs rail, an empty agent history.
     assert.deepEqual(await rpc(onDocs)(project.id), [])

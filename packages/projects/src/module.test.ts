@@ -72,7 +72,7 @@ test("a listed project whose folder lacks the ignore file adding it writes is no
     const app = fakeApp({ settings: memorySettings() })
     const attention = projectsModule().hooks['app.attention']!
     const project = { id: 'app-1', name: 'app', dir }
-    assert.deepEqual(await attention({ project }, app), [{ kind: 'setup', scope: 'project', id: 'not-activated', words: 'Not activated' }])
+    assert.deepEqual(await attention({ project }, app), [{ kind: 'note', scope: 'project', id: 'not-activated', words: 'Not activated' }])
     await mkdir(join(dir, '.openagent'), { recursive: true })
     assert.equal((await attention({ project }, app)).length, 1, 'the directory alone is not the mark')
     await writeFile(gitignorePath(dir), openagentGitignore())

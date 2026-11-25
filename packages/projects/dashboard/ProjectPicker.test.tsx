@@ -111,7 +111,7 @@ describe('ProjectPicker', () => {
 
   test("a project's row says what is wrong with it, that it is not activated, or what the modules note of it", async () => {
     const stranded: ProjectSummary = { ...ALPHA, errors: [{ id: 'store-git-branch:data-sync', title: 'Not syncing with the remote', message: 'the data branch could not be pushed: Permission denied (publickey)', since: '2026-08-20T10:00:00.000Z' }] }
-    const idle: ProjectSummary = { id: 'beta-2', path: '/home/me/beta', name: 'beta', errors: [{ id: 'projects:not-activated', title: 'Not activated' }] }
+    const idle: ProjectSummary = { id: 'beta-2', path: '/home/me/beta', name: 'beta', notes: [{ id: 'projects:not-activated', words: 'Not activated' }] }
     const local: ProjectSummary = { id: 'gamma-3', path: '/home/me/gamma', name: 'gamma', notes: [{ id: 'store-filesystem:data-here', words: 'Local only, no remote' }] }
     const kept: ProjectSummary = { id: 'delta-4', path: '/home/me/delta', name: 'delta', notes: [{ id: 'store-filesystem:data-here', words: 'Records kept on this machine' }] }
     renderPicker({ projects: [stranded, idle, local, kept] })
@@ -119,7 +119,7 @@ describe('ProjectPicker', () => {
     const broken = screen.getByRole('option', { name: /alpha/ })
     expect(broken.querySelector('.bg-danger')).toBeTruthy()
     expect(within(broken).getByText('Not syncing with the remote').getAttribute('title')).toContain('Permission denied (publickey)')
-    expect(within(screen.getByRole('option', { name: /beta/ })).getByText('Not activated')).toBeTruthy()
+    expect(within(screen.getByRole('option', { name: /beta/ })).getByText('Not activated').className).toContain('text-muted-foreground')
     expect(within(screen.getByRole('option', { name: /gamma/ })).getByText('Local only, no remote').className).toContain('text-muted-foreground')
     expect(within(screen.getByRole('option', { name: /delta/ })).getByText('Records kept on this machine')).toBeTruthy()
   })

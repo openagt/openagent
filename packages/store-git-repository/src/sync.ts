@@ -24,7 +24,7 @@ export const NOT_SYNCING = 'Not syncing with your repository'
 export interface FolderSyncDeps {
   /** Whether the folder syncs with a repository: the plugin's row, which may turn on while the app runs. */
   syncs?: () => Promise<boolean>
-  /** The real one takes in the repository and sends what waits (`@openagt/agent-data`). */
+  /** The real one takes in the repository and sends what waits (`folder-sync.ts`). */
   sync?: SyncFolder
   /** Whether a project keeps its data in the folder: one it does not share on its own branch. */
   keptHere?: (dir: string) => Promise<boolean>

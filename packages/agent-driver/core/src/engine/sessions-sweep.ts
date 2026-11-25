@@ -5,7 +5,7 @@ import { isPidAlive } from './run-lock.js'
 import { sweep } from './sweep.js'
 
 // The sessions with no project work in the sessions home, each in a folder of its own
-// (`@openagt/agent-data`'s sessions). A project's runs are swept by its scheduler; no scheduler runs
+// (git-branches' session folders). A project's runs are swept by its scheduler; no scheduler runs
 // there, so this module sweeps it itself, as its own background work while the app runs.
 
 /** How often the sessions home is swept for a session whose process died. */
