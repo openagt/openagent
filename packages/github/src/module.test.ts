@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { RunOrder, type GithubFacts, type ProjectRef, type PullRequest, type RunContext, type RunFacts } from '@openagt/hooks'
+import { RunOrder, type GithubFacts, type ProjectRef, type PullRequest, type RunContext, type RunFacts, type RunSummary } from '@openagt/hooks'
 import { fakeRun } from '@openagt/hooks/testing'
 import { homedir } from 'node:os'
 import { githubModule, requestsWaiting, type GithubDeps } from './module.js'
@@ -163,18 +163,20 @@ test('the people behind commit emails are asked of GitHub for a project on GitHu
   assert.equal(await people('/projects/elsewhere', ['rom@y.dev']), undefined)
 })
 
-test("the project's open requests wait on the person to merge them: a run's goes to the run, by the request its record names or its branch; one opened by hand opens on GitHub; a draft opened by hand is not asking", () => {
+test("the project's open requests wait on the person to merge them: a run's goes to the run, by the request its record names or its branch (the newest run on it); one opened by hand opens on GitHub; a draft opened by hand is not asking", () => {
   const pr = (number: number, over: Record<string, unknown> = {}) => ({ number, title: `Request ${number}`, url: `https://github.com/o/r/pull/${number}`, isDraft: false, createdAt: '2026-08-21T10:00:00Z', ...over })
+  const run = (id: string, startedAt: string, over: Partial<RunSummary> = {}): RunSummary => ({ id, host: 'here', status: 'done', startedAt, prompt: '', ...over })
   const runs = [
-    { id: 'r1', name: 'Fix the login', pr: { number: 1, url: 'https://github.com/o/r/pull/1' } },
-    { id: 'r2', branch: 'agent/dark-mode' },
+    run('r1', '2026-08-20T09:00:00Z', { title: 'Fix the login', facts: { github: { pr: { number: 1, url: 'https://github.com/o/r/pull/1' } } } }),
+    run('r0', '2026-08-19T09:00:00Z', { prompt: 'Make a dark mode', facts: { 'git-branches': { branch: 'agent/dark-mode' } } }),
+    run('r2', '2026-08-20T10:00:00Z', { facts: { 'git-branches': { branch: 'agent/dark-mode' } } }),
   ]
   const items = requestsWaiting([pr(1), pr(2, { isDraft: true, headRefName: 'agent/dark-mode' }), pr(3), pr(4, { isDraft: true, headRefName: 'mine' })], runs)
   assert.deepEqual(
     items.map(item => [item.id, item.scope, item.run, item.title]),
     [
       ['https://github.com/o/r/pull/1', 'run', 'r1', 'Fix the login'],
-      ['https://github.com/o/r/pull/2', 'run', 'r2', 'Request 2'],
+      ['https://github.com/o/r/pull/2', 'run', 'r2', 'agent/dark-mode'],
       ['https://github.com/o/r/pull/3', 'project', undefined, 'Request 3'],
     ],
   )

@@ -1,4 +1,4 @@
-import type { Attention, Hooks, ProjectRun, WaitingRun } from '@openagt/hooks'
+import type { Attention, Hooks, WaitingRun } from '@openagt/hooks'
 import { readRunEvents, type AgentMeta } from '../store/index.js'
 import { contextRuns, runHostOf } from '../dashboard-rpc/context.js'
 import { pendingChoices } from '../open-choices.js'
@@ -16,8 +16,8 @@ export { waitingKey } from './keys.js'
 
 // What waits on the person (#632, #2394), across the projects: the `waiting` items of
 // `app.attention`, every module's (a run waiting on its question, an open pull request, a run's
-// work never published), asked with the project's runs and the ones that wait. Each is said in the
-// hook's shape, by the module it is whose. #627 notifications ride this whole set.
+// work never published), asked with the project's runs that wait (the others are the app's to list,
+// `AppContext.runs`). Each is said in the hook's shape, by the module it is whose. #627 notifications ride this whole set.
 
 /**
  * One thing waiting on the person, as every list of them shows it (the Human Queue, a project's
@@ -104,7 +104,7 @@ async function projectWaiting(project: ProjectSummary, deps: WaitingDeps, hooks:
   const inProject = { projectId: project.id, projectName: project.name }
   // The project's runs, read once for every source that asks.
   const runsRead = (deps.agents ?? contextRuns)(project).catch(() => undefined)
-  const [recorded, modules] = await Promise.all([runsRead, modulesWaiting(project, hooks, () => waitingRuns(project, runsRead, events), () => projectRuns(runsRead))])
+  const [recorded, modules] = await Promise.all([runsRead, modulesWaiting(project, hooks, () => waitingRuns(project, runsRead, events))])
   if (!modules.whole) unread()
   const items: Waiting[] = modules.items.map(item => ({ ...item, ...inProject }))
   if (recorded === undefined) unread()
@@ -124,10 +124,10 @@ async function sessionsWaiting(home: string, deps: WaitingDeps, hooks: Hooks): P
 }
 
 /** What the modules on in the project say waits on the person there, given its runs that wait; asked only of a distribution where one says anything. No project: the sessions that have none. */
-async function modulesWaiting(project: ProjectSummary | undefined, hooks: Hooks, waiting: () => Promise<WaitingRun[]>, runs?: () => Promise<ProjectRun[]>): Promise<{ items: (Attention & { kind: 'waiting' })[]; whole: boolean }> {
+async function modulesWaiting(project: ProjectSummary | undefined, hooks: Hooks, waiting: () => Promise<WaitingRun[]>): Promise<{ items: (Attention & { kind: 'waiting' })[]; whole: boolean }> {
   if (!hooks.modules.some(module => module.hooks['app.attention'])) return { items: [], whole: true }
   try {
-    const read = await hooks.attention({ ...(project ? { project: await projectRefAt(project.id, project.path) } : {}), waiting, ...(runs ? { runs } : {}), pullRequestsRead })
+    const read = await hooks.attention({ ...(project ? { project: await projectRefAt(project.id, project.path) } : {}), waiting, pullRequestsRead })
     return { items: read.items.filter((item): item is Attention & { kind: 'waiting' } => item.kind === 'waiting'), whole: read.whole }
   } catch {
     return { items: [], whole: false }
@@ -138,20 +138,6 @@ async function modulesWaiting(project: ProjectSummary | undefined, hooks: Hooks,
 async function hostEvents(project: ProjectSummary | undefined, agentId: string): Promise<RunEvent[] | undefined> {
   const run = { id: agentId, ...(project ? { project: { id: project.id, name: project.name, dir: project.path } } : {}) }
   return readRunEvents(await runHostOf(run), run)
-}
-
-/**
- * The project's runs, newest first, as a module tells the run that opened a pull request by: a
- * branch name reused by a later run, or a run continued on it, is that run's now. None when they
- * could not be read: what the modules find is still listed, and the project is not read whole.
- */
-async function projectRuns(read: Promise<AgentMeta[] | undefined>): Promise<ProjectRun[]> {
-  return [...((await read) ?? [])]
-    .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
-    .map(run => {
-      const name = runName(run)
-      return { id: run.id, ...(name !== undefined ? { name } : {}), ...(run.branch !== undefined ? { branch: run.branch } : {}), ...(run.pr ? { pr: run.pr } : {}) }
-    })
 }
 
 /**

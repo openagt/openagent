@@ -2,7 +2,7 @@ import { realpathSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 import { errorMessage, nodeGitRunner, remoteHostOf, sessionFolder, sessionsHome } from '@openagt/agent-data'
-import { defineModule, PICKED_GITHUB_ACCOUNT, RunOrder, type AttentionItem, type GitAccess, type ModuleDefinition, type ProjectRun, type PullRequest, type RunAccount, type RunContext } from '@openagt/hooks'
+import { defineModule, PICKED_GITHUB_ACCOUNT, RunOrder, runName, type AttentionItem, type GitAccess, type ModuleDefinition, type PullRequest, type RunAccount, type RunSummary, type RunContext } from '@openagt/hooks'
 import { cachedOpenPrs, cachedPrStates, mergeLookup, requestsRead, type OpenPr } from './pulls.js'
 
 export type { OpenPr } from './pulls.js'
@@ -86,12 +86,17 @@ export function githubModule(deps: GithubDeps = {}): ModuleDefinition {
         runAs: async (dir, login) => (dir === undefined ? runAs(homedir(), login) : (await onGithub(dir)) ? runAs(dir, login) : undefined),
         people: async (dir, emails) => ((await onGithub(dir)) ? people(dir, emails) : undefined),
       },
-      'app.attention': async args => {
+      'app.attention': async (args, app) => {
         if (args.project === undefined) return accountsMissing(await accounts())
         if (!(await onGithub(args.project.dir))) return []
         // Every request of the project read with them, whatever its state: the lists mark a run whose request merged.
-        const [open] = await Promise.all([(deps.openRequests ?? cachedOpenPrs)(args.project.dir), (deps.requestStates ?? cachedPrStates)(args.project.dir).catch(() => undefined)])
-        const items = requestsWaiting(open, (await args.runs?.()) ?? [])
+        // Runs that cannot be listed tell no request apart: each is still said, as the project's.
+        const [open, runs] = await Promise.all([
+          (deps.openRequests ?? cachedOpenPrs)(args.project.dir),
+          app.runs(args.project).catch(() => []),
+          (deps.requestStates ?? cachedPrStates)(args.project.dir).catch(() => undefined),
+        ])
+        const items = requestsWaiting(open, runs)
         args.pullRequestsRead?.([...requestsRead(), ...open.map(pr => ({ url: pr.url, state: pr.isDraft ? ('draft' as const) : ('open' as const), title: pr.title, ...(pr.headRefName !== undefined ? { branch: pr.headRefName } : {}) }))])
         return items
       },
@@ -210,14 +215,17 @@ export function accountsMissing({ installed, accounts }: Pick<GithubAccounts, 'i
 
 /**
  * The project's open pull requests, each waiting on the person to merge it: a run's, by the request
- * its record names, else by the branch a run worked on, where a press of its row goes to the run;
- * one opened by hand opens on GitHub. A draft opened by hand is not asking for review, so it is
+ * its record names, else by the branch a run worked on (the newest run on it: a branch name reused
+ * by a later run, or a run continued on it, is that run's now), where a press of its row goes to the
+ * run; one opened by hand opens on GitHub. A draft opened by hand is not asking for review, so it is
  * left out; a draft on a run's branch is not: the agent opened it as a draft so it does not ask
  * reviewers, and nothing else would say the work is there.
  */
-export function requestsWaiting(open: readonly OpenPr[], runs: readonly ProjectRun[]): AttentionItem[] {
+export function requestsWaiting(open: readonly OpenPr[], runs: readonly RunSummary[]): AttentionItem[] {
+  const newest = [...runs].sort((a, b) => b.startedAt.localeCompare(a.startedAt))
+  const branchOf = (run: RunSummary): string | undefined => run.facts?.['git-branches']?.branch
   return open.flatMap((pr): AttentionItem[] => {
-    const run = runs.find(one => one.pr?.url === pr.url) ?? (pr.headRefName !== undefined ? runs.find(one => one.branch === pr.headRefName) : undefined)
+    const run = newest.find(one => one.facts?.github?.pr?.url === pr.url) ?? (pr.headRefName !== undefined ? newest.find(one => branchOf(one) === pr.headRefName) : undefined)
     if (pr.isDraft && !run) return []
     return [
       {
@@ -225,7 +233,7 @@ export function requestsWaiting(open: readonly OpenPr[], runs: readonly ProjectR
         ...(run ? { scope: 'run' as const, run: run.id } : { scope: 'project' as const }),
         id: pr.url,
         words: 'Needs merge',
-        title: run?.name ?? pr.title,
+        title: (run && runName(run, branchOf(run))) ?? pr.title,
         detail: `#${pr.number}`,
         mark: 'pull-request',
         ...(pr.createdAt ? { since: pr.createdAt } : {}),

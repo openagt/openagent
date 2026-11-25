@@ -1,4 +1,4 @@
-import type { AttentionItem, RunSummary } from '@openagt/hooks'
+import { runName, type AttentionItem, type RunSummary } from '@openagt/hooks'
 import type { BranchAhead } from './branch-ahead.js'
 
 /**
@@ -79,11 +79,6 @@ export async function unpublishedRuns(runs: readonly RunSummary[], ahead: AheadO
   return found
 }
 
-/** What every list names a run by: its short name, else what it was asked, else its branch. */
-function runName(run: RunSummary, branch: string): string {
-  return run.title?.trim() || run.prompt.trim() || branch
-}
-
 /**
  * What waits on the person in the runs' work never published, as items (`app.attention`): files
  * left uncommitted first, since committing them is the run's next step, else commits never pushed.
@@ -98,7 +93,7 @@ export function unpublishedItems(runs: readonly RunSummary[], found: ReadonlyMap
         ? { id: `uncommitted:${run.id}`, words: 'Needs commit', detail: counted(work.uncommitted, 'file'), mark: 'changes' as const }
         : { id: `unpushed:${run.id}`, words: 'Needs push', detail: counted(work.commits, 'commit'), mark: 'branch' as const }
     const since = run.endedAt ?? run.startedAt
-    return [{ kind: 'waiting', scope: 'run', run: run.id, ...left, title: runName(run, work.branch), since }]
+    return [{ kind: 'waiting', scope: 'run', run: run.id, ...left, title: runName(run, work.branch) ?? work.branch, since }]
   })
 }
 

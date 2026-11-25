@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { beforeEach, test } from 'node:test'
-import { createHooks, defineModule, type AttentionItem, type Hooks, type WaitingRun } from '@openagt/hooks'
-import { memoryStore } from '@openagt/hooks/testing'
+import { createHooks, defineModule, type AttentionItem, type Hooks, type RunSummary, type WaitingRun } from '@openagt/hooks'
+import { fakeHost, memoryStore } from '@openagt/hooks/testing'
 import ask from '@openagt/ask/module'
 import { buildWaiting, waitingKey, type Waiting, type WaitingDeps } from './waiting.js'
 import { forgetPullRequestStates } from './pr-states.js'
@@ -46,19 +46,35 @@ function waitingDeps({ liveAgents, agents, events, prs, ...deps }: TestDeps): Wa
     const [live, recorded] = await Promise.all([(liveAgents ?? noAgents)(cwd), (agents ?? noAgents)(cwd)])
     return [...live, ...recorded.filter(run => !live.some(other => other.id === run.id))]
   }
-  return { ...deps, ...(prs ? { hooks: withGithub(prs, deps.hooks) } : {}), agents: runs, ...(events ? { events: (project, agentId) => events(project?.path ?? SESSIONS, agentId) } : {}) }
+  const listed = async (dir: string | undefined): Promise<AgentMeta[]> => runs(dir === undefined ? undefined : { id: dir, name: dir, path: dir, activated: true, gitHost: false })
+  return { ...deps, ...(prs ? { hooks: withGithub(prs, deps.hooks, listed) } : {}), agents: runs, ...(events ? { events: (project, agentId) => events(project?.path ?? SESSIONS, agentId) } : {}) }
+}
+
+/** A run of the test's as its host lists it: the branch git-branches' facts name, the request github's. */
+function summaryOf(meta: AgentMeta): RunSummary {
+  return {
+    id: meta.id,
+    host: 'here',
+    status: meta.status === 'running' ? 'working' : meta.status,
+    startedAt: meta.startedAt,
+    prompt: meta.intent ?? '',
+    ...(meta.title !== undefined ? { title: meta.title } : {}),
+    facts: { ...(meta.branch !== undefined ? { 'git-branches': { branch: meta.branch } } : {}), ...(meta.pr ? { github: { pr: meta.pr } } : {}) },
+  }
 }
 
 /**
  * The modules of `base`, with github's on, its projects all on GitHub, their open pull requests
- * `prs`'s: what waits on a pull request is its to say.
+ * `prs`'s: what waits on a pull request is its to say. The project's runs are a host's, as the
+ * app lists them to a module (`AppContext.runs`): the test's, by the project's folder.
  */
-const withGithub = (prs: (cwd: string) => Promise<OpenPr[]>, base: () => Promise<Hooks> = noModules) => async (): Promise<Hooks> =>
+const withGithub = (prs: (cwd: string) => Promise<OpenPr[]>, base: () => Promise<Hooks> = noModules, runs: (dir: string | undefined) => Promise<AgentMeta[]> = async () => []) => async (): Promise<Hooks> =>
   createHooks(
     [
       // A plugin of `base` stays on; github is a core module, on with no row.
       ...(await base()).modules.map(module => (module.plugin ? { module, on: true } : { module })),
       { module: githubModule({ onGithub: async () => true, openRequests: prs, requestStates: async () => undefined, accounts: async () => ({ installed: true, accounts: [] }) }) },
+      { module: defineModule({ name: 'runs', hooks: { 'run.host': [{ ...fakeHost({ id: 'here' }), list: async project => (await runs(project?.dir)).map(summaryOf) }] } }) },
     ],
     { onError: () => {} },
   )
