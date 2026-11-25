@@ -39,7 +39,7 @@ export function fakeHost(pkg: string, services: Partial<Omit<ModuleHost, 'packag
     adjustPage: () => {},
     backToPage: () => {},
     openSettings: () => {},
-    gitHostPeople: async () => [],
+    people: async () => [],
     startRun: nothing,
     configureRun: () => {},
     agents: async () => [],

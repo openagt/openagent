@@ -1,6 +1,5 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { execFileSync } from 'node:child_process'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -9,7 +8,6 @@ import { DISTRIBUTION_ENV } from '@openagt/hooks'
 import { computerPackages, distributionPackages, lookupProvided, packagesOf, providedCommand, type DashboardPackage } from './distribution-packages.js'
 import { distributionHooks, projectRefAt } from './distribution-hooks.js'
 import { readComputerModules, readProjectModules } from './project-modules.js'
-import { providedGitHost } from './store/git-host.js'
 import TEST_DISTRIBUTION, { handDownTestDistribution } from './test-distribution.js'
 
 handDownTestDistribution()
@@ -166,30 +164,15 @@ test("a project's own dependencies bring nothing: neither a copy of the distribu
   }
 })
 
-test("the git host is a project's only when the project's remote is on that host", async () => {
-  const root = await scratch('host')
-  try {
-    execFileSync('git', ['init', '-q'], { cwd: root })
-    assert.equal(await providedGitHost()(root), undefined, 'no remote: no git host')
-    execFileSync('git', ['remote', 'add', 'origin', 'git@gitlab.com:o/r.git'], { cwd: root })
-    assert.equal(await providedGitHost()(root), undefined, 'a remote on another host: not its git host')
-    execFileSync('git', ['remote', 'set-url', 'origin', 'git@github.com:o/r.git'], { cwd: root })
-    const gitHost = await providedGitHost()(root)
-    assert.deepEqual(await gitHost?.home(), { url: 'https://github.com/o/r', name: 'GitHub' })
-  } finally {
-    await rm(root, { recursive: true, force: true })
-  }
-})
-
 test('two packages of the distribution that provide one kind provide it neither, and say why', async () => {
   const root = await scratch('two')
   try {
     await withPackages(
       [
-        { entry: { package: 'one-host' }, fields: { openagent: { 'git-host': 'one-host' } } },
-        { entry: { package: 'other-host' }, fields: { openagent: { 'git-host': 'other-host' } } },
+        { entry: { package: 'one-branches' }, fields: { openagent: { branches: 'one-branches' } } },
+        { entry: { package: 'other-branches' }, fields: { openagent: { branches: 'other-branches' } } },
       ],
-      async () => assert.deepEqual(await lookupProvided(root, 'git-host'), { problem: '2 packages of the distribution provide git-host: one-host, other-host' }),
+      async () => assert.deepEqual(await lookupProvided(root, 'branches'), { problem: '2 packages of the distribution provide branches: one-branches, other-branches' }),
     )
   } finally {
     await rm(root, { recursive: true, force: true })

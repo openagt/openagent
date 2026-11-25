@@ -56,8 +56,8 @@ import { SidebarResizer } from './SidebarResizer.js'
 import { HideSidebarButton } from './SidebarToggle.js'
 import { JumpButton } from './JumpPalette.js'
 import { readAgentLogAhead } from '../lib/agent-log.js'
-import { onGitHostPeople } from '../rpc/people.js'
-import { personSaid, useGitHostPeople } from '../lib/use-git-host-people.js'
+import { onPeople } from '../rpc/people.js'
+import { personSaid, usePeople } from '../lib/use-people.js'
 import { usePerson } from '../lib/use-person.js'
 
 // One rendered row of the rail, from either source (a project's own run, or a pooled cross-project
@@ -280,7 +280,7 @@ export function AgentHistory({
   const hasRecents = rows.length > 0 || showOptimistic
 
   // Each row's person, in its own project.
-  const accountIn = useGitHostPeople(rows.map(row => ({ projectId: row.projectId, person: row.agent.person })), onGitHostPeople, 'sidebar:people')
+  const accountIn = usePeople(rows.map(row => ({ projectId: row.projectId, person: row.agent.person })), onPeople, 'sidebar:people')
   // A session with no project has no git host to ask who its person is: they are who a project's
   // host said they are, on another row of the list, so one person has one picture down the list.
   // Between two projects nothing is carried over: a project's host may know another person by the address.

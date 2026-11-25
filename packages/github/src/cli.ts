@@ -16,10 +16,10 @@ import { jobFiles, jobState, startJob, type JobState } from './job.js'
 import { accountNamed, tokenOf, workingGh } from './working-account.js'
 
 /**
- * The command line over the package (#1820): the same functions for an agent in a shell, and for
- * OpenAgent and the scheduler, which run this command as the project's git host provider,
- * declared in package.json as `"openagent": { "git-host": "github" }`. One implementation, every
- * surface a caller. It answers as every OpenAgent command does (`runCommandLine`).
+ * The command line over the package (#1820): the same functions for an agent in a shell or a
+ * person, and for the module itself, which runs them in its own process (`cliAnswer`). One
+ * implementation, every surface a caller. It answers as every OpenAgent command does
+ * (`runCommandLine`).
  *
  * Every command acts on the repository the working directory is in: `gh` finds the repository
  * and its remote from there, as it does for a person.

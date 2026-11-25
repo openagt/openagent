@@ -2,7 +2,7 @@ import { afterEach, expect, test, vi } from 'vitest'
 import { cleanup, renderHook, waitFor } from '@testing-library/react'
 import type { ModuleHostPerson } from '../module/index.js'
 import { forgetRemembered } from './use-async.js'
-import { personSaid, useGitHostPeople, type PersonWanted } from './use-git-host-people.js'
+import { personSaid, usePeople, type PersonWanted } from './use-people.js'
 
 afterEach(() => {
   cleanup()
@@ -16,7 +16,7 @@ const answers = (known: ModuleHostPerson[]) => vi.fn(async (_projectId: string, 
 test("each project's git host is asked once, for that project's people, however many rows name them", async () => {
   const ask = answers([account('ada@x.dev', 'ada')])
   const { result } = renderHook(() =>
-    useGitHostPeople(
+    usePeople(
       [
         { projectId: 'beta', person: 'ada@x.dev' },
         { projectId: 'alpha', person: 'rom@y.dev' },
@@ -47,7 +47,7 @@ test('the list read again is not asked again; someone new is, and those already 
   let answer: (people: ModuleHostPerson[]) => void = () => {}
   const ask = vi.fn<(projectId: string, emails: string[]) => Promise<ModuleHostPerson[]>>(async () => [account('ada@x.dev', 'ada')])
   const first: PersonWanted[] = [{ projectId: 'alpha', person: 'ada@x.dev' }]
-  const { result, rerender } = renderHook(({ wanted }) => useGitHostPeople(wanted, ask, 'test'), { initialProps: { wanted: first } })
+  const { result, rerender } = renderHook(({ wanted }) => usePeople(wanted, ask, 'test'), { initialProps: { wanted: first } })
   await waitFor(() => expect(result.current('alpha', 'ada@x.dev')?.login).toBe('ada'))
   expect(ask).toHaveBeenCalledTimes(1)
 
@@ -67,7 +67,7 @@ test('the list read again is not asked again; someone new is, and those already 
 
 test('no people, nothing asked', async () => {
   const ask = answers([])
-  renderHook(() => useGitHostPeople([{ projectId: 'alpha' }], ask, 'test'))
+  renderHook(() => usePeople([{ projectId: 'alpha' }], ask, 'test'))
   await new Promise(resolve => setTimeout(resolve, 20))
   expect(ask).not.toHaveBeenCalled()
 })

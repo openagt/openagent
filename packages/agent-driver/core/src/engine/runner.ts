@@ -7,14 +7,14 @@ import { findRun } from '../record-store.js'
 import { createHooks, DISTRIBUTION_ENV, loadHandedDown, type DistributionEntry, type Driver, type DriverReadiness, type PersonalSetup, type Profile, type RunAgent } from '@openagt/hooks'
 import { readPersonal } from './config.js'
 import { runProfile, type SessionPicks } from './profile.js'
-import { gitHostCommand, gitHostEnv } from './git-host.js'
+import { gitHostEnv, hasGitHost } from './git-host.js'
 import { namedAtStart, resumeRun, runCommand, runIdFrom, type RunOutcome, type RunRequest } from './run.js'
 import { NAME_FILE_ENV, askName } from './title.js'
 import { publishChange, runnerMark, type NO_PUBLISH, type Publish } from './records.js'
 import { acquireRunLock, handOverRunLock, isPidAlive, releaseRunLock, runStderrPath } from './run-lock.js'
 import { accountRotation } from '../accounts/rotation.js'
 import { accountsPath, hasAddedAccount, readAccounts } from '../accounts/accounts.js'
-import { AGENT_ID_ENV, PLUGINS_WITHOUT_ENV, PROFILE_ENV, PROJECT_SKILLS_ENV, sessionsHomeOf } from '@openagt/agent-data'
+import { AGENT_ID_ENV, PLUGINS_WITHOUT_ENV, PROFILE_ENV, PROJECT_SKILLS_ENV } from '@openagt/agent-data'
 
 /**
  * The tool's process side: a run in this process, the same run detached in its own process and
@@ -30,9 +30,9 @@ const BIN = fileURLToPath(new URL('../../bin/agent-runner', import.meta.url))
  * start on this machine, asked before it spends a checkout: what the agent says stands in the way
  * (its CLI missing or logged out: the session would die before its first turn) and warns of. What
  * this computer's host checks before a Start (`host.ts`), and what a person's run and a scheduler's
- * tick refuse on. The git host is asked whether the account runs work as there can be used,
- * `login` when one is named: a project with no git host package runs fine, and one with no account
- * there is refused.
+ * tick refuse on. The module that answers for the project's git host is asked whether the account
+ * runs work as there can be used, `login` when one is named: a project no module answers for runs
+ * fine, and one with no account there is refused.
  */
 export async function readyToRun(repo: string, driver: string | undefined, deps: { agent?: RunAgent; gitHostEnv?: typeof gitHostEnv; login?: string } = {}): Promise<DriverReadiness> {
   const agent = deps.agent ?? (await codingAgent(driver))
@@ -310,7 +310,7 @@ export const GIT_ACCOUNT_ENV = 'OPENAGENT_GIT_ACCOUNT'
 export async function profileLoginFor(repo: string, profile: Pick<Profile, 'options'>): Promise<string | undefined> {
   const account = profile.options.github?.account
   if (account === undefined) return undefined
-  return (await sessionsHomeOf(repo)) !== undefined || (await gitHostCommand(repo)) ? account : undefined
+  return (await hasGitHost(repo)) ? account : undefined
 }
 
 /**

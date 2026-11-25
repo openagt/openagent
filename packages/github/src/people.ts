@@ -36,3 +36,31 @@ export async function peopleByEmail(cwd: string, emails: readonly string[], gh: 
   )
   return found.filter((person): person is GitHubPerson => person !== undefined)
 }
+
+/** How long what GitHub said of an email is kept, an email it knows nobody for too: a person's account and picture seldom change, and each ask is a question to GitHub. */
+const KEEP_MS = 24 * 60 * 60_000
+
+/**
+ * The people behind a repository's commit emails, `ask`ed of GitHub and kept a day: what a card
+ * shows as each person's picture, so a card that asks every minute asks GitHub once a day per
+ * person. What it said of an email is kept, a miss too; when it could not be asked, nothing is
+ * kept, so it is asked again next time. Each repository is its own.
+ */
+export function keptPeople(ask: (dir: string, emails: string[]) => Promise<GitHubPerson[]>, now: () => number = Date.now): (dir: string, emails: readonly string[]) => Promise<GitHubPerson[]> {
+  const kept = new Map<string, { at: number; person: GitHubPerson | undefined }>()
+  return async (dir, emails) => {
+    const at = now()
+    const key = (email: string): string => `${dir}\n${email.toLowerCase()}`
+    const fresh = (email: string): boolean => {
+      const known = kept.get(key(email))
+      return known !== undefined && at - known.at < KEEP_MS
+    }
+    const asking = [...new Set(emails.filter(email => typeof email === 'string' && email.includes('@')))].filter(email => !fresh(email))
+    for (let from = 0; from < asking.length; from += MAX_PEOPLE) {
+      const some = asking.slice(from, from + MAX_PEOPLE)
+      const found = await ask(dir, some).catch(() => undefined)
+      if (found) for (const email of some) kept.set(key(email), { at, person: found.find(person => person.email.toLowerCase() === email.toLowerCase()) })
+    }
+    return emails.flatMap(email => kept.get(key(email))?.person ?? [])
+  }
+}

@@ -3,5 +3,5 @@ import { rpc } from '../lib/rpc.js'
 
 export type * from '../../src/dashboard-rpc/people.js'
 
-// The git host's accounts behind a project's commit emails: the pictures a card shows of its people.
-export const onGitHostPeople = rpc<typeof impl.onGitHostPeople>('onGitHostPeople')
+// The people behind a project's commit emails at its git host: the pictures a card shows of its people.
+export const onPeople = rpc<typeof impl.onPeople>('onPeople')
