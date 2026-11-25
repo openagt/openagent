@@ -96,15 +96,12 @@ export const Composer = forwardRef<ComposerHandle, {
   addContext?: ((path: string) => void) | undefined
   /** Drop a path from the Context when its `@`/`#` chip leaves the editor (#948). */
   removeContext?: ((path: string) => void) | undefined
-  /** Where the agent starts, in the row above the box after the "Run on" pick and the modules'
-   *  controls there (the project): the branch it starts from. */
-  startsAt?: ReactNode
   /** The session's setup, behind the gear that leads the row under the box: the profile, the skills, the git host account and the Auto level. */
   setup?: SessionSetup | undefined
   /**
    * The box the modules' controls are drawn for (`composer.control`): the launcher's picks, or the
-   * session's. Its controls stand before `startsAt` above the box (the launcher's), in the gear's
-   * menu after the setup's lines, after the caller's controls under the box, and at that row's right.
+   * session's. Its controls stand in the gear's menu after the setup's lines, after the caller's
+   * controls under the box (the project, the repos, the branch), and at that row's right.
    */
   controlBox?: ControlBox | undefined
   /** The caller's controls in the row under the box, after the gear: the Context picker. */
@@ -142,7 +139,7 @@ export const Composer = forwardRef<ComposerHandle, {
   /** The box takes the caret when it opens. */
   autoFocus?: boolean | undefined
 }>(function Composer(
-  { files, addContext, removeContext, startsAt, setup, controlBox, controls, sessionContext, onSubmit, onPromptChange, onLoaded, busy, submitLabel, submitBusyLabel, placeholder, inAgent = false, sessionRow, idleControl, notes, notesUnder = false, draftKey, autoFocus = false },
+  { files, addContext, removeContext, setup, controlBox, controls, sessionContext, onSubmit, onPromptChange, onLoaded, busy, submitLabel, submitBusyLabel, placeholder, inAgent = false, sessionRow, idleControl, notes, notesUnder = false, draftKey, autoFocus = false },
   ref,
 ) {
   const [prompt, setPrompt] = useState('')
@@ -395,17 +392,9 @@ export const Composer = forwardRef<ComposerHandle, {
   return (
     <>
       <div className="relative">
-        {/* Where the agent starts, above the box (his pick): the machine, the project and the branch,
-            drawn as the row under the box draws its items. A session has its own words in the same place. */}
-        {inAgent ? (
-          sessionRow
-        ) : (
-          <RowAboveBox>
-            {runOnEl}
-            {controlBox && <ComposerControls at="start" box={controlBox} />}
-            {startsAt}
-          </RowAboveBox>
-        )}
+        {/* Above the box: in a session, where it runs and its labels; in the launcher, the host it runs on,
+            where the project's modules bring one. The project, the repos and the branch are under the box. */}
+        {inAgent ? sessionRow : runOnEl && <RowAboveBox>{runOnEl}</RowAboveBox>}
 
         {/* The box, as Claude Code's: the raised surface, the commands menu (+) at its left, the text,
             and the send at its right (the launcher's "Start agent"), the two kept at the last line. One
