@@ -1,7 +1,7 @@
 {
   "name": "@openagt/store-filesystem",
   "version": "0.1.0",
-  "description": "OpenAgent's store on this computer, the end of the store's chain: each scope's files in a folder of its own (the person's and each project's in ~/.openagent, this computer's beside it), and the writer every store that keeps files uses.",
+  "description": "OpenAgent's store on this computer, the end of the store's chain: each scope's files in its folder, the person's own folder among them. Beside it, the files OpenAgent writes outside the chain: the personal folder's writes, a project's data there or on its repository's agent-data branch (checked out under .branches/, every write one sync-commit-push cycle), a module's command's reads and writes of it, and why a project's data stays on this computer.",
   "license": "MIT",
   "repository": {
     "type": "git",

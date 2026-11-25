@@ -12,7 +12,7 @@ import type { ProjectSummary } from './projects.js'
 import type { AgentMeta } from '../store/index.js'
 import type { RunEvent } from '@openagt/hooks'
 
-const project = (id: string, path: string): ProjectSummary => ({ id, path, name: id, activated: true })
+const project = (id: string, path: string): ProjectSummary => ({ id, path, name: id })
 
 // What a test's modules read of pull requests is that test's alone.
 beforeEach(forgetPullRequestStates)
@@ -46,7 +46,7 @@ function waitingDeps({ liveAgents, agents, events, prs, ...deps }: TestDeps): Wa
     const [live, recorded] = await Promise.all([(liveAgents ?? noAgents)(cwd), (agents ?? noAgents)(cwd)])
     return [...live, ...recorded.filter(run => !live.some(other => other.id === run.id))]
   }
-  const listed = async (dir: string | undefined): Promise<AgentMeta[]> => runs(dir === undefined ? undefined : { id: dir, name: dir, path: dir, activated: true })
+  const listed = async (dir: string | undefined): Promise<AgentMeta[]> => runs(dir === undefined ? undefined : { id: dir, name: dir, path: dir })
   return { ...deps, ...(prs ? { hooks: withGithub(prs, deps.hooks, listed) } : {}), agents: runs, ...(events ? { events: (project, agentId) => events(project?.path ?? SESSIONS, agentId) } : {}) }
 }
 

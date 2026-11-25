@@ -3,12 +3,8 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { listSessionFolders, runsRootOf, sessionFolder, sessionsHome, sessionsHomeOf } from './sessions.js'
-
-test('the sessions home sits beside the personal folder, never in it', () => {
-  assert.equal(sessionsHome({ XDG_CONFIG_HOME: '/x' }), '/x/openagent-sessions')
-  assert.equal(sessionsHome({ HOME: '/home/me' }), '/home/me/.openagent-sessions')
-})
+import { sessionsHome } from '@openagt/hooks'
+import { listSessionFolders, runsRootOf, sessionFolder, sessionsHomeOf } from './sessions.js'
 
 test('a folder in the sessions home is about the home; any other is not', async () => {
   const home = sessionsHome()

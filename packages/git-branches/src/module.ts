@@ -1,7 +1,6 @@
 import { stat } from 'node:fs/promises'
 import { errorMessage, nodeGitRunner } from './git.js'
-import { type GitRunner, START_FROM, defineModule, isBranchName, RunOrder, type AppContext, type AttentionArgs, type AttentionItem, type ModuleDefinition, type ProjectRef, type RunContext, type Settings } from '@openagt/hooks'
-import { sessionsHome } from './sessions.js'
+import { type GitRunner, START_FROM, defineModule, isBranchName, RunOrder, type AppContext, type AttentionArgs, type AttentionItem, type ModuleDefinition, type ProjectRef, type RunContext, type Settings, sessionsHome } from '@openagt/hooks'
 import { publishedBase, agentBranchName } from './branch-names.js'
 import { readBranchesAhead } from './branch-ahead.js'
 import { attachCheckout, createCheckout } from './checkout.js'

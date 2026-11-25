@@ -11,20 +11,20 @@ import type { ProjectSummary } from '../dashboard/projects.js'
 import type { StartedInResult } from '../dashboard/types.js'
 
 // The Projects sidebar behind the new dashboard (#405): the list of projects the projects module
-// keeps (`PROJECTS`) — id, path, name, activated, last activity. The live event stream is its
+// keeps (`PROJECTS`) — id, path, name, last activity. The live event stream is its
 // own endpoint rather than a call (`GET /_rpc/events`).
 //
 // Each project also carries what the person has to fix there (#1500), what the modules on in it
-// say needs setting up: a data branch that cannot reach origin, say (#1599); and why its data stays
-// on this machine, if it does. Both ride this list rather than a read of their own because the
+// say needs setting up: a data branch that cannot reach origin, say (#1599); and what they note
+// under its name where nothing is wrong: why its data stays on this machine, say. Both ride this list rather than a read of their own because the
 // list is what every project surface already polls, so an error reaches the sidebar dot and the
 // project's banner with nothing new to subscribe to.
 export async function onProjects(): Promise<ProjectSummary[]> {
   const state = contextProjectState()
   return Promise.all(
     (await contextProjects().list()).map(async project => {
-      const { errors, local } = await state(project)
-      return { ...project, ...(errors.length > 0 ? { errors } : {}), ...(local ? { local } : {}) }
+      const { errors, notes } = await state(project)
+      return { ...project, ...(errors.length > 0 ? { errors } : {}), ...(notes.length > 0 ? { notes } : {}) }
     }),
   )
 }

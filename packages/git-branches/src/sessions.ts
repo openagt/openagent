@@ -1,21 +1,13 @@
 import { readdir, realpath } from 'node:fs/promises'
-import { homedir } from 'node:os'
 import { join, resolve, sep } from 'node:path'
+import { sessionsHome, type GitRunner } from '@openagt/hooks'
 import { checkoutRoot, nodeGitRunner } from './git.js'
-import type { GitRunner } from '@openagt/hooks'
 
 // Sessions with no project. A session that is not tied to a project works in a folder of its own,
-// `<sessions home>/<id>/`, which holds copies of the repos it picked (`session-folder.ts`), and its
-// record is kept in the personal folder's `sessions/` directory (store-filesystem's
-// `project-data.ts`), which has the shape a project's data directory has. The home sits beside the personal folder,
-// not in it: the personal folder is committed whole and synced to the person's repository, and a
-// session's folder holds its work, not its record.
-
-/** Where the sessions with no project work: `$XDG_CONFIG_HOME/openagent-sessions` when that is set, beside the personal folder, else `~/.openagent-sessions`. */
-export function sessionsHome(env: NodeJS.ProcessEnv = process.env): string {
-  if (env.XDG_CONFIG_HOME) return join(env.XDG_CONFIG_HOME, 'openagent-sessions')
-  return join(env.HOME || homedir(), '.openagent-sessions')
-}
+// `<sessions home>/<id>/` (the home is the kernel's, `@openagt/hooks`' `sessionsHome`), which holds
+// copies of the repos it picked (`session-folder.ts`), and its record is kept in the personal
+// folder's `sessions/` directory (store-filesystem's `project-data.ts`), which has the shape a
+// project's data directory has.
 
 /** One session's own folder in the home. */
 export function sessionFolder(home: string, id: string): string {

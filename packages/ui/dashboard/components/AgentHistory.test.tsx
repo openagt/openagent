@@ -659,7 +659,7 @@ describe('whose run a row is', () => {
   })
 })
 
-const proj = (id: string, name: string): ProjectSummary => ({ id, path: `/${id}`, name, activated: true })
+const proj = (id: string, name: string): ProjectSummary => ({ id, path: `/${id}`, name })
 
 describe('AgentHistory New button (#new-button)', () => {
   test('with no project, New starts a session with no project', () => {
@@ -794,10 +794,9 @@ describe('the project select (#1513)', () => {
     id: 'p1',
     path: '/repos/p1',
     name: 'alpha',
-    activated: true,
     errors: [{ id: 'store-git-branch:data-sync', title: 'Not syncing with the remote', message: 'the data branch could not be pushed: Permission denied (publickey)', since: '2026-08-20T10:00:00.000Z' }],
   }
-  const idle: ProjectSummary = { id: 'p2', path: '/repos/p2', name: 'beta', activated: false }
+  const idle: ProjectSummary = { id: 'p2', path: '/repos/p2', name: 'beta' }
 
   test('it names the picked project, or "All projects" when none is picked', () => {
     const { unmount } = renderRail(<AgentHistory projectId={null} scope="p2" agents={[]} selectedAgentId={null} onSelect={() => {}} projects={[stranded, idle]} />)
@@ -808,8 +807,8 @@ describe('the project select (#1513)', () => {
   })
 
   test('two projects with the same name say which folder each is in, on the button, in the menu and in the name of each row', async () => {
-    const work: ProjectSummary = { id: 'shop-1', path: '/home/me/work/shop', name: 'shop', activated: true }
-    const clients: ProjectSummary = { id: 'shop-2', path: '/home/me/clients/shop', name: 'shop', activated: true }
+    const work: ProjectSummary = { id: 'shop-1', path: '/home/me/work/shop', name: 'shop' }
+    const clients: ProjectSummary = { id: 'shop-2', path: '/home/me/clients/shop', name: 'shop' }
     const projects = [work, clients, idle]
     const recentAgents = [
       { projectId: 'shop-2', projectName: 'shop', agent: agent({ id: 'b1', status: 'done', intent: 'second' }) },
@@ -871,7 +870,7 @@ describe('the project select (#1513)', () => {
     expect(positionOf()).toBe('absolute')
   })
 
-  test('a project the daemon recorded an error for gets a red dot and the error in words; one not activated says so', async () => {
+  test('a project a module says needs fixing gets a red dot and what is wrong in words; one with nothing to fix gets neither', async () => {
     renderRail(<AgentHistory projectId={null} agents={[]} recentAgents={[]} selectedAgentId={null} onSelect={() => {}} projects={[stranded, idle]} />)
     await openMenu(screen.getByRole('combobox', { name: 'Project: All projects' }))
     const broken = screen.getByRole('option', { name: /alpha/ })
@@ -879,12 +878,12 @@ describe('the project select (#1513)', () => {
     expect(within(broken).getByText('Not syncing with the remote').getAttribute('title')).toContain('Permission denied (publickey)')
     const quiet = screen.getByRole('option', { name: /beta/ })
     expect(quiet.querySelector('.bg-danger')).toBeNull()
-    expect(within(quiet).getByText('Not activated')).toBeTruthy()
+    expect(quiet.querySelector('[data-line2]')).toBeNull()
   })
 
-  test('an activated project whose repository has no remote says so in grey, with no red dot', async () => {
-    const local = { ...idle, id: 'p3', name: 'gamma', activated: true, local: 'no-remote' as const }
-    const kept = { ...idle, id: 'p4', name: 'delta', activated: true, local: 'kept' as const }
+  test('what the modules note of a project where nothing is wrong is said under its name in grey, with no red dot', async () => {
+    const local = { ...idle, id: 'p3', name: 'gamma', notes: [{ id: 'store-filesystem:data-here', words: 'Local only, no remote' }] }
+    const kept = { ...idle, id: 'p4', name: 'delta', notes: [{ id: 'store-filesystem:data-here', words: 'Records kept on this machine' }] }
     renderRail(<AgentHistory projectId={null} agents={[]} recentAgents={[]} selectedAgentId={null} onSelect={() => {}} projects={[stranded, local, kept]} />)
     await openMenu(screen.getByRole('combobox', { name: 'Project: All projects' }))
     // A project with a remote whose records the person keeps says that instead, as quietly.

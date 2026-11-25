@@ -44,7 +44,7 @@ export function testDashboardContext(over: Partial<DashboardContext> = {}): Dash
     otherHosts: async () => [],
     preferences: registryPreferencesStore(),
     openAgentUpdate: { read: async () => undefined },
-    projectState: async () => ({ errors: [] }),
+    projectState: async () => ({ errors: [], notes: [] }),
     ...over,
   }
 }

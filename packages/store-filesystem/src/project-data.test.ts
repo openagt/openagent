@@ -3,8 +3,8 @@ import { mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, writeFile } from
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { nodeGitRunner, sessionFolder, sessionsHome, writeRemoteAccount, type RemoteAccount } from '@openagt/git-branches'
-import type { GitRunner } from '@openagt/hooks'
+import { nodeGitRunner, sessionFolder, writeRemoteAccount, type RemoteAccount } from '@openagt/git-branches'
+import { sessionsHome, type GitRunner } from '@openagt/hooks'
 import { writeSharing } from './file-branch.js'
 import { personalFolder } from './personal-folder.js'
 import {

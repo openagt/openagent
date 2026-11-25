@@ -35,6 +35,10 @@ process.exit(await runCli(process.argv.slice(2), { distribution: '/path/to/distr
 The list of projects is a setting of this computer's (`PROJECTS`, `@openagt/hooks`), which the
 projects module writes (`@openagt/projects`) and the shell reads: its sidebar and its routes. A
 module that changes it says so in the page (`projectsChanged`), and the shell reads it again.
+Under a project's name the shell says what the modules on in it say (`app.attention`): what needs
+fixing there, in red, else what they note of it (a `note`: why its data stays on this computer).
+After a module's act or command in a project, the shell tells the modules it wrote the project's
+data (`app.lifecycle`'s `projectWritten`), so a store that keeps it elsewhere takes it in at once.
 
 The distribution's file is handed down to every process the dashboard starts
 (`OPENAGENT_DISTRIBUTION`), a run's own among them. Its package is the one OpenAgent is installed

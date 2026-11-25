@@ -117,9 +117,9 @@ interface WhereRead {
   unreached?: string
 }
 
-/** A project's state as a dot: red when the daemon recorded an error for it (#1500), else whether it is activated. */
+/** A project's state as a dot: red when a module says something needs fixing there (#1500). */
 export function ProjectDot({ project }: { project: ProjectSummary }) {
-  return <span aria-hidden className={cn('h-2 w-2 shrink-0 rounded-full', project.errors?.length ? 'bg-danger' : project.activated ? 'bg-primary' : 'bg-muted-foreground')} />
+  return <span aria-hidden className={cn('h-2 w-2 shrink-0 rounded-full', project.errors?.length ? 'bg-danger' : 'bg-primary')} />
 }
 
 /** A project's name, after the folders that tell it from another of the same name, muted, so the names line up. */
@@ -133,7 +133,7 @@ function ProjectName({ name, label }: { name: string; label: string }) {
   )
 }
 
-/** A project's row: its dot, its name, and under it what is wrong with it, or how its records are kept. */
+/** A project's row: its dot, its name, and under it what is wrong with it, or what the modules note of it. */
 function ProjectLine({ project, label }: { project: ProjectSummary; label: string }) {
   return (
     <>
@@ -149,11 +149,13 @@ function ProjectLine({ project, label }: { project: ProjectSummary; label: strin
             {e.title}
           </span>
         ))}
-        {!project.errors?.length && !project.activated && <span data-line2 className="block text-xs leading-4 text-muted-foreground">Not activated</span>}
-        {/* Nothing wrong: the repository has no remote, or the person keeps the agents' records here. */}
-        {!project.errors?.length && project.activated && project.local && (
-          <span data-line2 className="block text-xs leading-4 text-muted-foreground">{project.local === 'no-remote' ? 'Local only, no remote' : 'Records kept on this machine'}</span>
-        )}
+        {/* Nothing wrong: what the modules note under its name (why its data stays on this machine). */}
+        {!project.errors?.length &&
+          project.notes?.map(note => (
+            <span key={note.id} data-line2 className="block truncate text-xs leading-4 text-muted-foreground">
+              {note.words}
+            </span>
+          ))}
       </span>
     </>
   )

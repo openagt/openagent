@@ -1,12 +1,10 @@
 import { basename } from 'node:path'
-import { type ProjectRecord, projectNameOf, repositoryAddress } from '@openagt/hooks'
+import { type ProjectRecord, projectNameOf, repositoryAddress, sessionsHome } from '@openagt/hooks'
 import { listProjects } from '../distribution-hooks.js'
 import { nodeFs } from '../node-fs.js'
-import { isActivated } from '../project.js'
 import { readRuns, type AgentMeta } from '../store/index.js'
 import { contextHosts } from '../dashboard-rpc/context.js'
-import type { ProjectError, StaysLocal } from '../project-state.js'
-import { sessionsHome } from '@openagt/git-branches'
+import type { ProjectError, ProjectNote } from '../project-state.js'
 import { SESSIONS_ID } from '../project-address.js'
 
 /**
@@ -24,8 +22,6 @@ export interface ProjectSummary {
   path: string
   /** Display name (the path's basename). */
   name: string
-  /** True when the repo still has its `.openagent/` marker. */
-  activated: boolean
   /** Its repository's address, origin's (`git.example.com/me/shop`), as the hooks name it; none for a project with no remote. */
   remote?: string
   /** ISO timestamp of the project's newest activity: its most recent session. */
@@ -37,11 +33,11 @@ export interface ProjectSummary {
    */
   errors?: ProjectError[]
   /**
-   * Why the project's data stays on this machine: its repository has no remote, or the person
-   * keeps the agents' records here. Nothing is wrong. Absent for a project that shares them;
-   * attached like `errors`.
+   * How the project stands where nothing is wrong with it, as the modules on in it note it under
+   * its name: why its data stays on this machine, say. Absent when none says anything; attached
+   * like `errors`.
    */
-  local?: StaysLocal
+  notes?: ProjectNote[]
 }
 
 /**
@@ -61,7 +57,6 @@ export interface ProjectionRead<T> {
 
 /** Injectable readers so {@link summarizeProject} is unit-testable off disk. */
 export interface SummarizeDeps {
-  isActivated?: (path: string) => Promise<boolean>
   /** The project's runs, newest-first: its hosts' by default. */
   readAgents?: (record: ProjectRecord) => Promise<AgentMeta[]>
   /** The project's name. Defaults to {@link projectNameOf}: its repository's. */
@@ -71,18 +66,16 @@ export interface SummarizeDeps {
 }
 
 /**
- * Derive a {@link ProjectSummary} from a record of the list: its name (its repository's), whether
- * it is still activated, and its last activity. Forgiving: a failed read reads as an
- * inactive project with no activity, never a throw.
+ * Derive a {@link ProjectSummary} from a record of the list: its name (its repository's), its
+ * repository's address, and its last activity. Forgiving: a failed read reads as a project with
+ * no activity, never a throw.
  *
  * Activity is the sessions themselves (B3). It used to be the newest of those and the latest
  * `LOGS.md` entry — a committed markdown re-narration of the same sessions, which could only ever
  * be older than the agent it described.
  */
 export async function summarizeProject(record: ProjectRecord, deps: SummarizeDeps = {}): Promise<ProjectSummary> {
-  const checkActivated = deps.isActivated ?? isActivated
   const loadAgents = deps.readAgents ?? (project => readRuns(contextHosts(), { id: project.id, name: basename(project.path), dir: project.path }))
-  const activated = await checkActivated(record.path).catch(() => false)
   const agents = await loadAgents(record).catch(() => [] as AgentMeta[])
   // ISO timestamps sort chronologically.
   const agentActivity = agents.map(r => r.updatedAt || r.startedAt).filter(Boolean)
@@ -91,7 +84,6 @@ export async function summarizeProject(record: ProjectRecord, deps: SummarizeDep
     id: record.id,
     path: record.path,
     name: await (deps.name ?? projectNameOf)(record.path).catch(() => basename(record.path)),
-    activated,
   }
   if (lastActivityAt) summary.lastActivityAt = lastActivityAt
   const remote = await (deps.remote ?? (path => repositoryAddress(path)))(record.path).catch(() => undefined)

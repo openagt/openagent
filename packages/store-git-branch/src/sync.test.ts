@@ -129,3 +129,13 @@ test('the real pull: a shared project converges with its remote, needs the perso
     await rm(base, { recursive: true, force: true, maxRetries: 10 })
   }
 })
+
+test("a module that wrote a project's data from outside the app's store has it pulled at once, but not once the project was removed", async () => {
+  const pulled: string[] = []
+  const sync = dataSync({ pull: async dir => (pulled.push(dir), { ok: true }), everyMs: 60_000 })
+  await sync.lifecycle.projectWritten?.(shop, fakeApp())
+  assert.deepEqual(pulled, [shop.dir])
+  await sync.lifecycle.projectRemoved?.(shop, fakeApp(), { files: false })
+  await sync.lifecycle.projectWritten?.(shop, fakeApp())
+  assert.deepEqual(pulled, [shop.dir], 'a removed project is pulled no more')
+})

@@ -53,6 +53,7 @@ export {
 } from './agent.js'
 export { saidCall, type AgentCalls, type CallFamily, type CallKind, type CallWords, type SaidCall } from './calls.js'
 export { OPENAGENT_DIR, type ProjectRef } from './project.js'
+export { sessionsHome } from './sessions-home.js'
 export { originUrl, projectNameOf, repositoryAddress, repositorySpelling, type GitRunner } from './origin.js'
 export { addressOfRemote, remoteHostOf, spellingOfRemote, typedRepository, type TypedRepository } from './repository-address.js'
 export {

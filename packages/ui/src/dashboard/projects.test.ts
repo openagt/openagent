@@ -8,7 +8,6 @@ const RECORD: ProjectRecord = { id: 'app-a-1', path: '/repos/app-a', addedAt: '2
 
 function deps(over: SummarizeDeps): SummarizeDeps {
   return {
-    isActivated: async () => true,
     readAgents: async () => [],
     ...over,
   }
@@ -51,24 +50,15 @@ test('no runs means no lastActivityAt key at all', async () => {
   assert.equal('lastActivityAt' in summary, false)
 })
 
-test('activation reflects the injected check', async () => {
-  const summary = await summarizeProject(RECORD, deps({ isActivated: async () => false }))
-  assert.equal(summary.activated, false)
-})
-
-test('a throwing reader is forgiving: inactive, no activity, never throws', async () => {
+test('a throwing reader is forgiving: no activity, never throws', async () => {
   const summary = await summarizeProject(
     RECORD,
     deps({
-      isActivated: async () => {
-        throw new Error('stat failed')
-      },
       readAgents: async () => {
         throw new Error('read failed')
       },
     }),
   )
-  assert.equal(summary.activated, false)
   assert.equal('lastActivityAt' in summary, false)
 })
 
@@ -79,7 +69,7 @@ function provider(present: string[]) {
   return defaultProjectsProvider({
     listRecords: async () => [RECORD, RECORD_B],
     isDirectory: async path => present.includes(path),
-    summarize: async record => ({ id: record.id, path: record.path, name: record.path.split('/').pop()!, activated: true, gitHost: false }),
+    summarize: async record => ({ id: record.id, path: record.path, name: record.path.split('/').pop()!, gitHost: false }),
   })
 }
 
@@ -110,7 +100,7 @@ test('a failing directory check reads as gone, never throws (#1140)', async () =
     isDirectory: async () => {
       throw new Error('EACCES')
     },
-    summarize: async record => ({ id: record.id, path: record.path, name: 'x', activated: true, gitHost: false }),
+    summarize: async record => ({ id: record.id, path: record.path, name: 'x', gitHost: false }),
   }).list()
   assert.deepEqual(listed, [])
 })

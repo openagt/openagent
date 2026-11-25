@@ -8,7 +8,6 @@ const project = (id: string, path: string, lastActivityAt?: string): ProjectSumm
   id,
   path,
   name: id,
-  activated: true,
   ...(lastActivityAt ? { lastActivityAt } : {}),
 })
 

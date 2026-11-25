@@ -1,6 +1,5 @@
 import { SESSIONS_ID } from '../project-address.js'
 import { stat } from 'node:fs/promises'
-import { originDefaultBranch } from '@openagt/git-branches'
 import { moduleAgents, type ModuleAgent, type ModuleAgentsWanted } from '../dashboard/module-agents.js'
 import { doingOf, readRunEvents, readRuns, type AgentDoing, type AgentMeta, isRunId } from '../store/index.js'
 import { readDocs, type WorkspaceDoc } from '../dashboard/docs.js'

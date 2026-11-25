@@ -24,12 +24,12 @@ const ALL: Row = { value: 'all', label: 'All projects', search: '' }
 
 const sameRow = (a: Row, b: Row): boolean => a.value === b.value
 
-/** A project's state as a dot: red when the daemon recorded an error for it (#1500), else whether it is activated. */
+/** A project's state as a dot: red when a module says something needs fixing there (#1500). */
 export function ProjectDot({ project }: { project: ProjectSummary }) {
-  return <span aria-hidden className={cn('h-2 w-2 shrink-0 rounded-full', project.errors?.length ? 'bg-danger' : project.activated ? 'bg-primary' : 'bg-muted-foreground')} />
+  return <span aria-hidden className={cn('h-2 w-2 shrink-0 rounded-full', project.errors?.length ? 'bg-danger' : 'bg-primary')} />
 }
 
-/** A project's row: its dot, its name, and under it what is wrong with it, or how its records are kept. */
+/** A project's row: its dot, its name, and under it what is wrong with it, or what the modules note of it. */
 function ProjectLine({ project, label }: { project: ProjectSummary; label: string }) {
   const folders = label.endsWith(project.name) ? label.slice(0, -project.name.length) : ''
   return (
@@ -48,10 +48,12 @@ function ProjectLine({ project, label }: { project: ProjectSummary; label: strin
             {e.title}
           </span>
         ))}
-        {!project.errors?.length && !project.activated && <span data-line2 className="block text-xs leading-4 text-muted-foreground">Not activated</span>}
-        {!project.errors?.length && project.activated && project.local && (
-          <span data-line2 className="block text-xs leading-4 text-muted-foreground">{project.local === 'no-remote' ? 'Local only, no remote' : 'Records kept on this machine'}</span>
-        )}
+        {!project.errors?.length &&
+          project.notes?.map(note => (
+            <span key={note.id} data-line2 className="block truncate text-xs leading-4 text-muted-foreground">
+              {note.words}
+            </span>
+          ))}
       </span>
     </>
   )

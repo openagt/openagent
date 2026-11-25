@@ -104,6 +104,8 @@ export interface Hooks {
   /** The app is stopping: the modules started, the last first. */
   stopping(): Promise<void>
   projectAdded(project: ProjectRef): Promise<void>
+  /** A module wrote the project's data from outside this process's store: the modules on in it are told (`AppLifecycle.projectWritten`), and answered. */
+  projectWritten(project: ProjectRef): Promise<void>
   /** Every module is told, each cleaning up its own data; what they removed and kept in the folder with `files`, and a line for each that refused or failed. */
   projectRemoved(project: ProjectRef, removal?: ProjectRemoval): Promise<CleanupReport>
   /** The folder `openagent` was typed in, made a project by the first module that answers for it: the modules on in it are told when it was added just now. */
@@ -192,6 +194,17 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
         await lifecycle.projectAdded(project, appContext(module))
       } catch (error) {
         report(module.name, 'app.lifecycle.projectAdded', error)
+      }
+    }
+  }
+  const projectWritten = async (project: ProjectRef): Promise<void> => {
+    for (const module of await onModules(project, undefined, 'app.lifecycle')) {
+      const lifecycle = module.hooks['app.lifecycle']
+      if (!lifecycle?.projectWritten) continue
+      try {
+        await lifecycle.projectWritten(project, appContext(module))
+      } catch (error) {
+        report(module.name, 'app.lifecycle.projectWritten', error)
       }
     }
   }
@@ -435,6 +448,7 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
       for (const module of [...live.keys()].reverse()) await stopOne(module)
     },
     projectAdded,
+    projectWritten,
     projectRemoved,
     async folderGiven(folder) {
       for (const module of modules) {

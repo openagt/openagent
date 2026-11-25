@@ -134,7 +134,7 @@ export async function makeWorld(): Promise<StoryWorld> {
     startedIn: runtime.onStartedIn,
     preferences: registryPreferencesStore(),
     openAgentUpdate: { read: async () => undefined },
-    projectState: async () => ({ errors: [] }),
+    projectState: async () => ({ errors: [], notes: [] }),
   }
 
   const repos: string[] = []

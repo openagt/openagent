@@ -1,5 +1,7 @@
 import type { AttentionItem } from '@openagt/hooks'
 
+// Browser-safe: the dashboard imports the fix's id. What reads the disk is `not-activated.ts`.
+
 /** "No project yet": what the person sets up first, on this computer, while the list has no project. */
 export function noProjectYet(listed: number): AttentionItem[] {
   if (listed > 0) return []
