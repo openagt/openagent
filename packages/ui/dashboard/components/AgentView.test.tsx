@@ -7,7 +7,6 @@ import { questionCard } from '../test-utils.js'
 import type { UiRunNoticeProps, UiRunProps } from '../module/index.js'
 
 const onAgent = vi.fn(async () => [] as unknown)
-const onRetainedWorktrees = vi.fn(async () => [] as unknown)
 const onAgentHandoff = vi.fn(async () => null as unknown)
 const onBridgeQuestion = vi.fn(async () => null as unknown)
 const onBridgeEvents = vi.fn(async () => [] as unknown)
@@ -20,7 +19,7 @@ vi.mock('../rpc/agents.js', () => ({
   onCodingAgents: () => Promise.resolve([{ id: 'claude-code', label: 'Claude Code', logo: '<svg/>', models: { models: [{ id: 'opus', name: 'Opus 5.5', resolvedId: 'claude-opus-5-5', contextWindow: 200_000 }] } }, { id: 'codex', label: 'Codex', models: { models: [] } }]),
   onNamesRuns: () => Promise.resolve(true),
 }))
-vi.mock('../rpc/reads.js', () => ({ onAgent, onRetainedWorktrees, onAgentHandoff, onBridgeQuestion, onBridgeEvents, onBridgeAnswer, onAgentWorktree, onGitHostHome }))
+vi.mock('../rpc/reads.js', () => ({ onAgent, onAgentHandoff, onBridgeQuestion, onBridgeEvents, onBridgeAnswer, onAgentWorktree, onGitHostHome }))
 const sendMessage = vi.fn(async () => ({ ok: true }) as unknown)
 const withdrawMessage = vi.fn(async () => ({ ok: true }) as unknown)
 const sendNow = vi.fn(async () => ({ ok: true }) as unknown)
@@ -130,7 +129,6 @@ const view = (over: Partial<Parameters<typeof AgentView>[0]> = {}) => (
 
 beforeEach(() => {
   vi.clearAllMocks()
-  onRetainedWorktrees.mockResolvedValue([])
   onAgentHandoff.mockResolvedValue(null)
   onAgentWorktree.mockResolvedValue({ branch: 'agent-x' })
 })

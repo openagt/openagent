@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { makeWorld, waitFor, release } from './harness.js'
-import { onWaiting, onAgents, onAgent, onRetainedWorktrees, onAgentWorktree } from '../dashboard-rpc/reads.js'
+import { onWaiting, onAgents, onAgent, onAgentWorktree } from '../dashboard-rpc/reads.js'
 import { sendMessage, sendStop, sendDeleteAgent } from '../dashboard-rpc/control.js'
 import { callModule } from '../dashboard-rpc/module-calls.js'
 
@@ -117,7 +117,6 @@ test('stop a run; its checkout is reclaimed, then the run is deleted (#737/#1032
 
     // One rule (E5): the checkout goes once its work is on the remote, whatever the run did.
     await world.waitRetired(project, agentId)
-    assert.deepEqual(await rpc(onRetainedWorktrees)(project.id), [])
     assert.equal((await rpc(onAgentWorktree)(project.id, agentId))?.checkout, undefined, 'no checkout of its own is left')
     assert.ok((await rpc(onAgents)(project.id)).some(r => r.id === agentId && r.status === 'stopped'), 'the run\'s row survives')
 
@@ -154,11 +153,16 @@ test('a waiting run’s kept checkout can be removed by hand (#737)', async () =
     // The record lands a moment after the card says `waiting`; removing the checkout before it
     // does would take away the only copy there is.
     await world.waitRecorded(project, agentId)
-    await waitFor(async () => ((await rpc(onRetainedWorktrees)(project.id)).includes(agentId) ? true : undefined), 'the kept checkout to reach the Remove list')
+    // git-branches' read of the checkout a run kept: what offers Remove worktree.
+    const kept = async () => {
+      const read = await rpc(callModule)(project.id, '@openagt/git-branches', 'checkout', { agentId })
+      return read.ok && (read.output as { kept: boolean }).kept
+    }
+    await waitFor(async () => ((await kept()) ? true : undefined), 'the kept checkout to be offered removing')
     // git-branches' Remove worktree, in the session's menu.
     const removed = await rpc(callModule)(project.id, '@openagt/git-branches', 'removeCheckout', { agentId })
     assert.equal(removed.ok && (removed.output as { ok: boolean }).ok, true, `remove failed: ${JSON.stringify(removed)}`)
-    assert.deepEqual(await rpc(onRetainedWorktrees)(project.id), [])
+    assert.equal(await kept(), false)
     assert.ok((await rpc(onAgents)(project.id)).some(r => r.id === agentId && r.status === 'waiting'), 'the run\'s row survives, still waiting')
   } finally {
     await world.close()

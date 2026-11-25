@@ -77,8 +77,6 @@ export interface AgentWorktree {
     path: string
     /** Uncommitted changes present in it. */
     dirty: boolean
-    /** Size on disk, bytes. Only read once nothing is writing to it, and best-effort even then. */
-    sizeBytes?: number
   }
   /** The branch the run's work is on: its checkout's while it has one, else the one it recorded. */
   branch?: string

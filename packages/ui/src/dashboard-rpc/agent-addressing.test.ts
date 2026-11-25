@@ -5,7 +5,7 @@ import { mkdtemp, rm, mkdir, writeFile, readFile, realpath, stat } from 'node:fs
 import { hostname, tmpdir } from 'node:os'
 import { sendStop, sendMessage, sendOpenPullRequest } from './control.js'
 import { callModule } from './module-calls.js'
-import { onRetainedWorktrees, onAgents, onWaiting } from './reads.js'
+import { onAgents, onWaiting } from './reads.js'
 import { listTestProject } from '../test-projects.js'
 import { DATA_BRANCH, fileBranchPath, nodeGitRunner, projectId as idFor } from '@openagt/agent-data'
 import { worktreePath, addWorktree, agentBranchName } from '@openagt/git-branches'
@@ -270,25 +270,6 @@ test('a message with no run, or an unsafe run id, is refused (#749)', async () =
     assert.deepEqual(await sendMessage('no-such-project', 'three', ctx.agentId), { ok: false, error: 'unknown session' })
     assert.deepEqual(await entries(ctx.rootInbox), [])
     assert.deepEqual(await entries(ctx.agentInbox), [], 'the run is left alone')
-  } finally {
-    ctx.restore()
-    await rm(ctx.dir, { recursive: true, force: true })
-  }
-})
-
-// #737: a failed agent keeps its worktree for inspection, so removing one is an explicit action —
-// and must never yank the checkout out from under an agent that is still going.
-
-test('onRetainedWorktrees hides a live run, and lists one that has finished (#737)', async () => {
-  const ctx = await projectWithWorktreeAgent()
-  try {
-    assert.deepEqual(await onRetainedWorktrees(ctx.projectId), [], 'a running run has nothing to offer removing')
-    // Once it is no longer running, its retained checkout is listed.
-    await writeFile(
-      join(worktreePath(ctx.dir, ctx.agentId), OPENAGENT_DIR, `${ctx.agentId}.json`),
-      JSON.stringify({ id: ctx.agentId, startedAt: '2026-07-19T10:00:00.000Z', status: 'failed' }),
-    )
-    assert.deepEqual(await onRetainedWorktrees(ctx.projectId), [ctx.agentId])
   } finally {
     ctx.restore()
     await rm(ctx.dir, { recursive: true, force: true })

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MutableRefObject } from 'react'
 import type { AgentMeta, AgentWorktree } from '../../src/index.js'
 import type { RunEvent } from '@openagt/hooks'
-import { onGitHostHome, onRetainedWorktrees } from '../rpc/reads.js'
+import { onGitHostHome } from '../rpc/reads.js'
 import { useLoaded } from '../lib/use-async.js'
 import { handoffSays, useAgentHandoff } from '../lib/use-agent-handoff.js'
 import { useCheckoutStatus } from '../lib/use-checkout-status.js'
@@ -115,14 +115,10 @@ export function AgentView({
 }) {
   // The log on screen: the live channel's while the agent works, its archive once it has ended.
   const { archived, shown, active, feedLive } = useAgentFeed(projectId, agentId, live, events, replayed)
-  // Whether this agent kept its worktree (#737): a failed/stopped run does, a clean one had it
-  // removed when it finished. Its menu opens that folder.
-  const retained = useLoaded<string[]>(live === false ? () => onRetainedWorktrees(projectId) : null, [], [projectId, agentId, live], { remember: `retained:${projectId}` })
   // The project's page on GitHub, where `#12` in an answer leads. Another host names its issues
   // under another path, so its numbers stay text.
   const gitHostHome = useLoaded(() => onGitHostHome(projectId), null, [projectId], { remember: `git-host-home:${projectId}` })
   const issueLinks = gitHostHome?.name === 'GitHub' ? gitHostHome.url : undefined
-  const hasWorktree = live === false && retained.includes(agentId)
 
   // Whether the agent is still working. A run that stops on a question ends `waiting` rather than
   // staying up, so a live run is a working one. One not known yet is neither working nor ended:
@@ -175,6 +171,9 @@ export function AgentView({
   // The agent's checkout (its branch, its pull request, clean or dirty, its size), read once for
   // the top bar and for the bar above the message box, and again the moment a turn starts or ends.
   const checkout = useCheckoutStatus(projectId, agentId, active)
+  // Whether this agent kept its worktree (#737), as its host finds it: a failed/stopped run does, a
+  // clean one had it removed when it finished. Its menu opens that folder.
+  const hasWorktree = live === false && checkout?.checkout !== undefined
   // What the branch holds (#1023), read once for the bar above the message box. Read once
   // the agent stops rather than once the process does: while it is still writing to the branch
   // there is nothing to hand off yet, but a parked session's branch is finished work. "Stops" is
