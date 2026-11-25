@@ -1,5 +1,6 @@
 import { accountRotation, firstAccountOf, inFolder, modelsAskedOnce } from '@openagt/agent-driver'
 import { defineModule, type RunAgent } from '@openagt/hooks'
+import { CODEX_CALLS } from './calls.js'
 import { CodexDriver, codexReady, type CodexReadyOptions } from './codex.js'
 import { CODEX_LOGO } from './logo.js'
 import { codexLogins } from './logins.js'
@@ -18,6 +19,7 @@ export function codexAgent(checks: Pick<CodexReadyOptions, 'probe' | 'isRoot' | 
     label: 'Codex',
     logo: CODEX_LOGO,
     program: { bin: 'codex', npm: '@openai/codex' },
+    calls: CODEX_CALLS,
     accounts: codexLogins(),
     models: opts => models.read(opts),
     ready: ({ personal, addedAccount }) => codexReady({ ...checks, personal, addedAccount }),

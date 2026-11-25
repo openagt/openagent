@@ -20,7 +20,7 @@ import { useAction } from '../lib/use-action.js'
 import { keepSending, keepWaiting, keptSending, keptWaiting, onKeptWaiting } from '../lib/draft-handoff.js'
 import { AgentFeed } from './AgentFeed.js'
 import { IssueLinks } from '../lib/markdown-links.js'
-import { OpenFile } from './ToolCalls.js'
+import { OpenFile, RunCalls } from './ToolCalls.js'
 import { ChatNote, ChatPane } from './ChatPane.js'
 import { LostStreamNotice } from './LostStreamNotice.js'
 import { ModuleSlot } from './ModulePageView.js'
@@ -133,9 +133,11 @@ export function AgentView({
   // An agent just started on a host has no card listed yet: the host's name says where it runs.
   const elsewhere = (target !== undefined && target !== 'local') || startedOn !== undefined
   const setup = useMemo(() => ({ workspace, branch, base, driver, model, elsewhere }), [workspace, branch, base, driver, model, elsewhere])
-  // How full this session's context is: the run's own last reading, against what its agent says
-  // the model holds. Either missing, no circle. The model itself is said by its agent's control.
-  const contextWindow = modelContextWindow(agentOf(useAgents(), driver), model)
+  // The coding agent the run is on: how its calls read in the chat. And how full this session's
+  // context is: the run's own last reading, against what its agent says the model holds. Either
+  // missing, no circle. The model itself is said by its agent's control.
+  const ranOn = agentOf(useAgents(), driver)
+  const contextWindow = modelContextWindow(ranOn, model)
   // Where the agent runs, for the row above the message box: a host by its own name. A run another
   // computer started is named by that computer: it did not run here.
   const host = hostOf(target)
@@ -159,7 +161,7 @@ export function AgentView({
   // A run writes its prompt line once its coding agent begins. Until then its prompt, off its card,
   // is the chat's first row, after a reload and on a run stopped before it began too. Not while a
   // working run's replay is still coming: its log is not read yet, and its prompt alone was the
-  // chat of a run just starting ("Starting Claude Code 12m 36s"), for the moment the replay took.
+  // chat of a run just starting ("Starting <its coding agent> 12m 36s"), for the moment the replay took.
   const replaying = working && !replayed
   const standIn = card?.intent ?? startedWith
   const standsIn = standIn !== undefined && !replaying && !(live !== false && startedWith !== undefined) && !shown.some(e => e.kind === 'driver' && e.event.type === 'start')
@@ -409,6 +411,7 @@ export function AgentView({
         // opens at its own place, not where the one before was left.
         <IssueLinks.Provider value={issueLinks}>
         <OpenFile.Provider value={onOpenFile}>
+        <RunCalls.Provider value={ranOn?.calls}>
         <AgentFeed
           key={agentId}
           events={chat}
@@ -430,6 +433,7 @@ export function AgentView({
           onOpenChange={onOpenChange}
           onOpenScreen={onOpenScreen}
         />
+        </RunCalls.Provider>
         </OpenFile.Provider>
         </IssueLinks.Provider>
       )}

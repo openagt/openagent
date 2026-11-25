@@ -92,10 +92,10 @@ describe('callSubagents and subagentEvents', () => {
   test("what the chat passes over: the subagent's events, its call and that call's answer, and all it said and did; never the run's own steps", () => {
     const events = [call, started, named, read, grep, said, answered, ended, own]
     expect([...subagentEvents(events)]).toEqual([call, started, named, read, grep, said, answered, ended])
-    // On Codex the call is the part of the subagent's id before the colon.
-    const codexCall = ev({ type: 'action', label: 'collabAgentToolCall', id: 'item_1' }, '00:10')
-    const codexAgent = ev({ type: 'subagent', id: 'item_1:t1', status: 'working' }, '00:10')
-    expect([...subagentEvents([codexCall, codexAgent, own])]).toEqual([codexCall, codexAgent])
+    // A call that starts several subagents is the one their `call` names.
+    const several = ev({ type: 'action', label: 'spawn', id: 'item_1' }, '00:10')
+    const first = ev({ type: 'subagent', id: 'item_1:t1', call: 'item_1', status: 'working' }, '00:10')
+    expect([...subagentEvents([several, first, own])]).toEqual([several, first])
   })
 })
 
@@ -140,9 +140,9 @@ describe('subagentWait', () => {
     expect(subagentWait([prompt, callA, startA, own, done, endA, backA, thinks])).toEqual({ waiting: false, wokeAt: '2026-10-01T10:00:10.000Z' })
   })
 
-  test('on Codex the call that starts a subagent is the part of its id before the colon', () => {
-    const call = ev({ type: 'action', label: 'collabAgentToolCall', id: 'item_1' }, '00:03')
-    const start = ev({ type: 'subagent', id: 'item_1:t1', status: 'working' }, '00:03')
+  test('the call that starts a subagent is the one its `call` names', () => {
+    const call = ev({ type: 'action', label: 'spawn', id: 'item_1' }, '00:03')
+    const start = ev({ type: 'subagent', id: 'item_1:t1', call: 'item_1', status: 'working' }, '00:03')
     const back = ev({ type: 'output', id: 'item_1', text: 'done' }, '00:09')
     expect(subagentWait([prompt, start, call, back]).waiting).toBe(true)
   })

@@ -6,7 +6,8 @@ vi.mock('../rpc/agents.js', () => ({ onCodingAgents: () => new Promise(() => {})
 
 const { SubagentsPanel } = await import('./SubagentsPanel.js')
 const { forgetRevealedChanges, revealSubagent } = await import('../lib/reveal-change.js')
-const { hoverTooltip, phoneScreen } = await import('../test-utils.js')
+const { SAMPLE_CALLS, hoverTooltip, phoneScreen } = await import('../test-utils.js')
+const { RunCalls } = await import('./ToolCalls.js')
 const { FocusHome } = await import('../lib/focus-home.js')
 const { PaneHeaderContext } = await import('./PaneHeader.js')
 
@@ -18,8 +19,11 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
+// The main agent's run is on a coding agent that words its calls.
 const panel = (props: { events?: RunEvent[]; live?: boolean; agentId?: string }) => (
-  <SubagentsPanel projectId="p1" agentId={props.agentId ?? 'main'} events={props.events ?? []} live={props.live ?? true} />
+  <RunCalls.Provider value={SAMPLE_CALLS}>
+    <SubagentsPanel projectId="p1" agentId={props.agentId ?? 'main'} events={props.events ?? []} live={props.live ?? true} />
+  </RunCalls.Provider>
 )
 
 /**

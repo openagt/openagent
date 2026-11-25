@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { LiveLine, OpenFile, Seconds, ToolCalls, type ToolStep } from './ToolCalls.js'
+import type { ReactElement, ReactNode } from 'react'
+import { act, cleanup, fireEvent, render as rendered, screen } from '@testing-library/react'
+import { LiveLine, OpenFile, RunCalls, Seconds, ToolCalls, type ToolStep } from './ToolCalls.js'
+import { SAMPLE_CALLS } from '../test-utils.js'
+
+// Every chat here is a run's on a coding agent that words its calls.
+const render = (ui: ReactElement) => rendered(ui, { wrapper: ({ children }: { children: ReactNode }) => <RunCalls.Provider value={SAMPLE_CALLS}>{children}</RunCalls.Provider> })
 
 afterEach(() => {
   cleanup()
@@ -95,7 +100,7 @@ describe('ToolCalls', () => {
   })
 
   test('a call that failed says so on its row, and opened, its exit code when it has one, with no empty output box', () => {
-    render(<ToolCalls steps={[{ type: 'action', label: 'commandExecution', detail: 'exit 3', output: { text: '', failed: true, exitCode: 3 } }]} />)
+    render(<ToolCalls steps={[{ type: 'action', label: 'Bash', detail: 'exit 3', output: { text: '', failed: true, exitCode: 3 } }]} />)
     fireEvent.click(screen.getByRole('button', { name: 'Ran exit 3, failed' }))
     expect(screen.getByText('Exit code 3')).toBeTruthy()
     expect(screen.queryByLabelText('Output')).toBeNull()
@@ -134,13 +139,6 @@ describe('ToolCalls', () => {
     expect(screen.getByText('/repo/src/app.ts')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Ran a command, edited a file' }))
     expect(screen.queryByRole('group', { name: 'Steps' })).toBeNull()
-  })
-
-  test("Codex's calls read the same: its item kinds have their own verbs", () => {
-    render(<ToolCalls steps={[{ type: 'action', label: 'commandExecution', detail: 'pnpm test' }, { type: 'action', label: 'fileChange', detail: '/repo/a.ts' }]} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Ran a command, edited a file' }))
-    expect(screen.getByRole('button', { name: 'Ran pnpm test' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Edited a.ts' })).toBeTruthy()
   })
 
   test('what the agent thought is not shown at all: the panel is the steps it took', () => {

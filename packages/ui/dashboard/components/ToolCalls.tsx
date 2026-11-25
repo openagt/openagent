@@ -1,5 +1,5 @@
 import { createContext, Fragment, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
-import type { BackgroundTask } from '@openagt/hooks'
+import type { AgentCalls, BackgroundTask } from '@openagt/hooks'
 import { callsSummary, doingOf, doneOf, summaryWords, toolCall, type ToolCall } from '../lib/tool-calls.js'
 import { usePreferences } from '../lib/preferences.js'
 import type { FileEdit } from '../lib/turn-changes.js'
@@ -17,6 +17,12 @@ import { ColouredLines, languageOf, Pieces, useHighlightedIn, type Piece } from 
  * Given by the agent's page when a module of its project has such a pane; without it the name is text.
  */
 export const OpenFile = createContext<((path: string) => void) | undefined>(undefined)
+
+/**
+ * How the run's coding agent says its calls (`RunAgent.calls`), given by the page of its run: what
+ * the chat words every call with. Without it, a call is said by its label.
+ */
+export const RunCalls = createContext<AgentCalls | undefined>(undefined)
 
 /** What a tool call gave back: what it printed, cut by the driver, whether it failed, and the files it changed. */
 export interface CallOutput {
@@ -76,9 +82,6 @@ function firstWords(text: string): string {
 // printed, once taller than their limit.
 const CODE = 'max-h-64 overflow-auto whitespace-pre-wrap break-all font-mono text-chat-code'
 
-/** The calls that start a subagent: their detail is the task the agent wrote for it. */
-const SUBAGENT_CALLS = new Set(['Agent', 'Task'])
-
 // One tool call: the verb in grey, what it was done to in dark, on one line. A command the coding
 // agent said in a few words of its own reads as those words ("List project files"), the command
 // itself one click further. With a detail or an output it opens, on a click: the detail whole in a
@@ -88,7 +91,7 @@ const SUBAGENT_CALLS = new Set(['Agent', 'Task'])
 function CallLine(call: Call) {
   const [open, setOpen] = useState(false)
   const openFile = useContext(OpenFile)
-  const { words, label, opens } = callWords(call, false, openFile)
+  const { words, label, opens } = callWords(call, false, useContext(RunCalls), openFile)
   if (!opens) return <div className="flex min-w-0 items-center gap-1.5">{words}</div>
   return (
     <div className="min-w-0">
@@ -138,14 +141,14 @@ function FileName({ name, path, openFile }: { name: string; path: string; openFi
  * with the lines its edits changed; going on (`live`) in the present ("Running", "Finding all
  * markdown files"), and shimmering, else in the past. `opens` when there is more to see on a click.
  */
-function callWords({ label, detail, whole, summary, output }: Call, live: boolean, openFile?: (path: string) => void): { words: ReactNode; label: string; opens: boolean } {
-  const call = toolCall(label, detail, output?.changed)
+function callWords({ label, detail, whole, summary, output }: Call, live: boolean, calls: AgentCalls | undefined, openFile?: (path: string) => void): { words: ReactNode; label: string; opens: boolean } {
+  const call = toolCall(calls, label, detail, output?.changed)
   // What the agent wrote about the call: a command's description, a subagent's task. While it goes
   // on, said as going on ("Finding all markdown files", "Summarizing README"), as Claude Code on the
   // web's live line says what is being done; a subagent's task the agent wrote only as a noun keeps
   // the line's own words ("Starting agent …"). Once done, said as done ("Waited 10 seconds then
   // listed files"), as Claude Code on the web's row says it.
-  const written = call.kind === 'command' ? summary : SUBAGENT_CALLS.has(label) && live ? (detail !== undefined ? doingOf(detail) : undefined) : undefined
+  const written = call.kind === 'command' ? summary : call.task && live ? (detail !== undefined ? doingOf(detail) : undefined) : undefined
   const said = written === undefined ? undefined : live ? (doingOf(written) ?? written) : (doneOf(written) ?? written)
   const words = (
     <>
@@ -179,7 +182,7 @@ function callWords({ label, detail, whole, summary, output }: Call, live: boolea
  * call printed, grey and with no box; a call that failed says its exit code when it has one.
  */
 function CallDetail({ label, detail, whole, output, card = false }: Call & { card?: boolean }) {
-  const call = toolCall(label, detail, output?.changed)
+  const call = toolCall(useContext(RunCalls), label, detail, output?.changed)
   const read = call.kind === 'read' && call.path !== undefined && output !== undefined ? fileLines(output.text) : undefined
   if (read) return <ReadDetail path={call.path!} read={read} />
   return <GivenDetail label={label} call={call} whole={whole} output={output} card={card} />
@@ -192,9 +195,9 @@ interface FileLines {
 }
 
 /**
- * The numbered lines a read gave back, from the first: Claude Code's Read says each as its number,
- * a tab and the line ("1\t<!DOCTYPE html>"), an empty line as its number alone. A text that does
- * not open with them is no file's lines.
+ * The numbered lines a read gave back, from the first: a coding agent's read may say each as its
+ * number, a tab and the line ("1\t<!DOCTYPE html>"), an empty line as its number alone. A text that
+ * does not open with them is no file's lines.
  */
 function fileLines(text: string): FileLines | undefined {
   const all = text.split('\n')
@@ -422,19 +425,20 @@ function TokenCount({ tokens }: { tokens: number }) {
 export function ToolCalls({ steps, lead, live }: { steps: readonly ToolStep[]; lead?: ReactNode; live?: { call: Call; since?: string | undefined } | undefined }) {
   const [open, setOpen] = useState(false)
   const openFile = useContext(OpenFile)
+  const agentCalls = useContext(RunCalls)
   // What the agent thought between two calls is not a step it took, and Claude Code on the web's
   // panel has none of it. Shown only to a person who asked for it in Settings.
   const thinking = usePreferences().showThinking === true
   const shown = thinking ? steps : steps.filter(step => step.type === 'action')
   const calls = steps.filter(step => step.type === 'action')
   if (calls.length === 0 && !live) return null
-  const summary = callsSummary(calls.map(call => ({ ...toolCall(call.label, call.detail, call.output?.changed), ...(call.output?.failed ? { failed: true as const } : {}) })))
+  const summary = callsSummary(calls.map(call => ({ ...toolCall(agentCalls, call.label, call.detail, call.output?.changed), ...(call.output?.failed ? { failed: true as const } : {}) })))
   const only = !live && shown.length === 1 && shown[0]!.type === 'action' ? shown[0] : undefined
   // The row's words: the call going on now, as going on; once it is done, as Claude Code on the
   // web's row does, the same row says the steps it took ("Ran 2 commands"), the old words fading
   // out as the new come in. A row of one call says that call.
-  const going = live ? callWords(live.call, true) : undefined
-  const one = only ? callWords(only, false, openFile) : undefined
+  const going = live ? callWords(live.call, true, agentCalls) : undefined
+  const one = only ? callWords(only, false, agentCalls, openFile) : undefined
   const words = going?.label ?? one?.label ?? summaryWords(summary)
   const head = going ? (
     <CrossFade id={`live:${live!.call.id ?? `${live!.call.label} ${live!.call.detail ?? ''}`}`}>{going.words}</CrossFade>

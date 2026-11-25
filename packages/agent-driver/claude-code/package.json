@@ -1,7 +1,7 @@
 {
   "name": "@openagt/agent-driver-claude-code",
   "version": "0.0.21",
-  "description": "Claude Code behind the agent-driver contract, on this machine; plus the reader of the account's quota.",
+  "description": "Claude Code behind the agent-driver contract, on this machine, with how its tool calls read in the chat; plus the reader of the account's quota.",
   "license": "MIT",
   "repository": {
     "type": "git",

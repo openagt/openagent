@@ -1,5 +1,6 @@
 import { accountRotation, firstAccountOf, inFolder, modelsAskedOnce, type DriverReadyOptions } from '@openagt/agent-driver'
 import { defineModule, type RunAgent } from '@openagt/hooks'
+import { CLAUDE_CODE_CALLS } from './calls.js'
 import { ClaudeCodeDriver, claudeCodeReady } from './claude-code.js'
 import { CLAUDE_CODE_LOGO } from './logo.js'
 import { claudeLogins } from './logins.js'
@@ -19,6 +20,7 @@ export function claudeCodeAgent(checks: Pick<DriverReadyOptions, 'probe' | 'isRo
     logo: CLAUDE_CODE_LOGO,
     program: { bin: 'claude', npm: '@anthropic-ai/claude-code' },
     ownQuestionTool: true,
+    calls: CLAUDE_CODE_CALLS,
     accounts: claudeLogins(),
     models: opts => models.read(opts),
     // Every part of the person's setup has a switch in Claude Code: none is a warning.

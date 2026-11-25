@@ -18,6 +18,7 @@ import { agentLabel, awaitingName } from './lib/agent-label.js'
 import { callSubagents } from './lib/subagents.js'
 import { PaneLayout, PanesProvider } from './components/Panes.js'
 import { SubagentsPanel } from './components/SubagentsPanel.js'
+import { RunCalls } from './components/ToolCalls.js'
 import { PagesBar, PhoneBar, PhoneBarCount } from './components/PhoneBar.js'
 import { cn } from './lib/utils.js'
 import { usePolled } from './lib/use-async.js'
@@ -40,7 +41,7 @@ import { projectAddresses, SESSIONS_ID } from '../src/project-address.js'
 import { startedAtFromAgentId } from '../src/agent-id.js'
 import { WaitingContext } from './lib/use-waiting.js'
 import { usePreferences, OpenProjectContext } from './lib/preferences.js'
-import { useNamesRuns } from './lib/agents.js'
+import { useNamesRuns, useRunCalls } from './lib/agents.js'
 import { useDocumentTitle } from './lib/document-title.js'
 import { projectLabels, ProjectLabelsContext } from './lib/project-labels.js'
 import { onProjectsChanged, ShellProjectsContext, type ProjectsChange } from './lib/shell-projects.js'
@@ -451,6 +452,8 @@ export function App() {
   const sessionGone = agentId !== null && !selectedAgent && agentsState === 'fresh' && (agentId !== agentStart.id || agentStart.listed === true)
   // Whether the selected run's coding agent started subagents: they get a pane beside the chat.
   const hasSubagents = useMemo(() => callSubagents(events).length > 0, [events])
+  // How the calls of its coding agent read, in that pane's transcripts as in its chat.
+  const runCalls = useRunCalls(selectedAgent?.driver)
   const justStarted = agentId === agentStart.id
   // What a listed session's page is called, in its heading and its tab: nothing while its name is on its way.
   const sessionLabel = selectedAgent && !awaitingName(selectedAgent, namesRuns) ? agentLabel(selectedAgent) : undefined
@@ -731,7 +734,13 @@ export function App() {
           toggleContext={toggleContext}
           activity={events.length}
           // The run's subagents, when its coding agent started any, beside the chat.
-          subagents={projectId && agentId && hasSubagents ? <SubagentsPanel projectId={projectId} agentId={agentId} events={events} live={selectedAgent?.status === 'running'} /> : undefined}
+          subagents={
+            projectId && agentId && hasSubagents ? (
+              <RunCalls.Provider value={runCalls}>
+                <SubagentsPanel projectId={projectId} agentId={agentId} events={events} live={selectedAgent?.status === 'running'} />
+              </RunCalls.Provider>
+            ) : undefined
+          }
         >
           <PaneLayout>
             <FocusHome as="main" className="flex min-h-0 min-w-0 flex-1 flex-col">

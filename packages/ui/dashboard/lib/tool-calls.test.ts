@@ -1,53 +1,21 @@
 import { describe, expect, test } from 'vitest'
-import { callsSummary, doingOf, doneOf, summaryWords, toolCall, type ToolCall } from './tool-calls.js'
+import { callsSummary, doingOf, doneOf, summaryWords, toolCall as callOf, type ToolCall } from './tool-calls.js'
+import { SAMPLE_CALLS } from '../test-utils.js'
+
+// The words of each coding agent's own calls are its driver's, and tested there.
+const toolCall = (label: string, detail?: string, changed?: Parameters<typeof callOf>[3]) => callOf(SAMPLE_CALLS, label, detail, changed)
 
 describe('toolCall', () => {
-  test("Claude Code's tools read as a verb and what it was done to", () => {
+  test("a call reads by the words of its coding agent, and a label they do not word as it is", () => {
     expect(toolCall('Bash', 'pnpm test')).toEqual({ verb: 'Ran', doing: 'Running', target: 'pnpm test', detail: 'pnpm test', kind: 'command' })
-    expect(toolCall('Read', '/repo/AGENTS.md')).toEqual({ verb: 'Read', doing: 'Reading', target: 'AGENTS.md', detail: '/repo/AGENTS.md', path: '/repo/AGENTS.md', kind: 'read' })
-    expect(toolCall('Edit', '/repo/src/app.ts').verb).toBe('Edited')
-    expect(toolCall('Write', '/repo/src/new.ts')).toMatchObject({ verb: 'Wrote', target: 'new.ts', kind: 'edit' })
-    // What a search looked for is in the verb's grey, as Claude Code on the web says it.
-    expect(toolCall('Grep', 'TODO')).toMatchObject({ verb: 'Searched', target: 'TODO', kind: 'search', plain: true })
-    expect(toolCall('Glob', '**/*.md')).toMatchObject({ verb: 'Searched', target: '**/*.md', kind: 'find', plain: true })
-    expect(toolCall('Skill', 'browser')).toMatchObject({ verb: 'Ran skill', target: '/browser', kind: 'skill' })
-  })
-
-  test("Codex's item kinds read the same way", () => {
-    expect(toolCall('commandExecution', 'pnpm test')).toEqual({ verb: 'Ran', doing: 'Running', target: 'pnpm test', detail: 'pnpm test', kind: 'command' })
-    expect(toolCall('fileChange', '/repo/a.ts, /repo/src/b.ts')).toEqual({ verb: 'Edited', doing: 'Editing', target: 'a.ts, b.ts', detail: '/repo/a.ts, /repo/src/b.ts', kind: 'edit' })
-    expect(toolCall('fileChange', '/repo/a.ts').path).toBe('/repo/a.ts')
-    expect(toolCall('mcpToolCall', 'github.search')).toMatchObject({ verb: 'Called', target: 'github.search' })
-    expect(toolCall('webSearch', 'vitest docs')).toMatchObject({ verb: 'Searched the web', kind: 'web' })
-  })
-
-  test('a label the map does not know is its own verb: a camel-case kind as words, any other name as it is', () => {
-    expect(toolCall('imageView')).toEqual({ verb: 'Image view', doing: 'Image view', kind: 'other' })
-    expect(toolCall('run https://example.test/1')).toEqual({ verb: 'run https://example.test/1', doing: 'run https://example.test/1', kind: 'other' })
-  })
-
-  test('every verb has its word for a call still going on', () => {
-    const doing = (label: string) => toolCall(label).doing
-    expect(['Bash', 'Read', 'Edit', 'Write', 'Grep', 'WebSearch', 'WebFetch', 'Skill', 'Task'].map(doing)).toEqual(['Running', 'Reading', 'Editing', 'Writing', 'Searching', 'Searching the web', 'Fetching', 'Running skill', 'Starting agent'])
-    expect(['commandExecution', 'fileChange', 'mcpToolCall', 'webSearch'].map(doing)).toEqual(['Running', 'Editing', 'Calling', 'Searching the web'])
-  })
-
-  test("an MCP server's tool reads as Claude Code on the web says a connector's: the server, then the tool", () => {
-    expect(toolCall('mcp__github__get_me')).toEqual({ verb: 'Used github:', doing: 'Using github:', target: 'Get me', kind: 'other' })
-    expect(toolCall('ToolSearch', 'select:Read')).toMatchObject({ verb: 'Loaded tools', kind: 'other' })
+    expect(callOf(undefined, 'Bash', 'pnpm test')).toEqual({ verb: 'Bash', doing: 'Bash', target: 'pnpm test', detail: 'pnpm test', kind: 'other' })
   })
 
   test('a call that changed files is "Created" or "Updated", as Claude Code on the web says them', () => {
     expect(toolCall('Edit', '/repo/a.md', [{ path: '/repo/a.md', added: 1, removed: 1 }]).verb).toBe('Updated')
     expect(toolCall('Write', '/repo/b.md', [{ path: '/repo/b.md', added: 3, removed: 0, created: true }]).verb).toBe('Created')
-  })
-
-  test('a call with no detail has no target', () => {
-    expect(toolCall('TodoWrite')).toEqual({ verb: 'Updated todos', doing: 'Updating todos', kind: 'other' })
-  })
-
-  test('a path that ends in a slash keeps its last part', () => {
-    expect(toolCall('Read', '/repo/src/').target).toBe('src')
+    // Whatever the tool was called, and naming every file it changed.
+    expect(callOf(undefined, 'apply', undefined, [{ path: '/repo/a.md', added: 1, removed: 0 }, { path: '/repo/b.md', added: 2, removed: 2 }])).toMatchObject({ verb: 'Updated', target: 'a.md, b.md', kind: 'edit', size: { added: 3, removed: 2 } })
   })
 })
 
