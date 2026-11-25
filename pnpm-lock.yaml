@@ -1379,9 +1379,6 @@ importers:
       '@openagt/hooks':
         specifier: workspace:*
         version: link:../hooks
-      '@openagt/scheduled-agents':
-        specifier: workspace:*
-        version: link:../scheduled-agents
       '@shadcn/react':
         specifier: ^0.2.1
         version: 0.2.1(@types/react@19.2.17)(react@19.2.7)
@@ -1530,6 +1527,9 @@ importers:
       '@openagt/saved-prompts':
         specifier: workspace:*
         version: link:../saved-prompts
+      '@openagt/scheduled-agents':
+        specifier: workspace:*
+        version: link:../scheduled-agents
       '@openagt/skills':
         specifier: workspace:*
         version: link:../skills

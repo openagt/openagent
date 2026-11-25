@@ -62,7 +62,6 @@
     "@base-ui/react": "1.9.0",
     "@openagt/agent-data": "workspace:*",
     "@openagt/git-branches": "workspace:*",
-    "@openagt/scheduled-agents": "workspace:*",
     "@shadcn/react": "^0.2.1",
     "@tiptap/core": "^2.10.0",
     "@tiptap/extension-hard-break": "^2.10.0",
@@ -141,7 +140,8 @@
     "tsx": "^4.22.4",
     "typescript": "^7.0.2",
     "vite": "^8.0.0",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "@openagt/scheduled-agents": "workspace:*"
   },
   "author": "Suleiman Shahbari",
   "publishConfig": {
