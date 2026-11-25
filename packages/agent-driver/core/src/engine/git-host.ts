@@ -1,4 +1,4 @@
-import { sessionsHomeOf } from '@openagt/agent-data'
+import { sessionsHomeOf } from '@openagt/git-branches'
 import { createHooks, DISTRIBUTION_ENV, loadHandedDown, type GitAccounts } from '@openagt/hooks'
 
 /**

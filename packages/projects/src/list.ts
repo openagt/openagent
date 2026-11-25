@@ -1,7 +1,7 @@
 import { isAbsolute, resolve } from 'node:path'
 import { stat } from 'node:fs/promises'
-import { projectId, projectNameOf, repositoryAddress } from '@openagt/agent-data'
-import { defineSetting, PROJECTS, type ProjectRecord, type ProjectRef, type Settings } from '@openagt/hooks'
+import { projectId } from './project-id.js'
+import { projectNameOf, repositoryAddress, defineSetting, PROJECTS, type ProjectRecord, type ProjectRef, type Settings } from '@openagt/hooks'
 
 // The list of projects on this computer (#390, #2394): the PROJECTS setting of the catalog, which
 // only this module writes and the shell reads, for its sidebar, its routes and every read that

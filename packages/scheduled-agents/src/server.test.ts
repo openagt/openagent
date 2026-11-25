@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { projectId } from '@openagt/agent-data'
+import { projectId } from '@openagt/projects'
 import { SCHEDULED_COMMANDS } from '@openagt/hooks'
 import { memorySettings, rpcHost } from '@openagt/hooks/testing'
 import { addAutomation } from './automation.js'

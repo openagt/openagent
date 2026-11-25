@@ -1,4 +1,4 @@
-import { errorMessage } from '@openagt/agent-data'
+import { errorMessage } from '../error-message.js'
 import type { ProjectRef, SettingScope } from '@openagt/hooks'
 import { distributionPlugins } from '../distribution-packages.js'
 import { distributionHooks, projectRefAt } from '../distribution-hooks.js'

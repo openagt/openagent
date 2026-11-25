@@ -1,5 +1,6 @@
 import { posix } from 'node:path'
-import { originDefaultBranch, type GitRunner } from '@openagt/agent-data'
+import { originDefaultBranch } from '@openagt/git-branches'
+import type { GitRunner } from '@openagt/hooks'
 import { START_POINT_FETCH_MS } from './names.js'
 
 /**

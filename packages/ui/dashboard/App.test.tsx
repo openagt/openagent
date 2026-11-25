@@ -90,7 +90,7 @@ vi.mock('./components/AgentView.js', async importOriginal => {
 const { App } = await import('./App.js')
 const { Dialog } = await import('./components/ui/dialog.js')
 
-const PROJECT = { id: 'app-abc', path: '/work/app', name: 'app', activated: true }
+const PROJECT = { id: 'app-abc', path: '/work/app', name: 'app' }
 
 /** A module's browser part the loader imports like a real one: a data URL whose default export is a definition that fills `views`. */
 function moduleModule(key: string, ...views: UiView[]): string {
@@ -770,7 +770,7 @@ describe('module cards on the Overview (#1818)', () => {
 })
 
 describe('the project select (#1513)', () => {
-  const OTHER = { id: 'site-def', path: '/work/site', name: 'site', activated: true }
+  const OTHER = { id: 'site-def', path: '/work/site', name: 'site' }
   const url = () => window.location.pathname + window.location.search
 
   function answerTwo(): void {
@@ -1185,7 +1185,7 @@ describe('the project select (#1513)', () => {
 
   test("a page's word is the page's: a project with that name is addressed by its id, and a name nobody has says so", async () => {
     answerTwo()
-    const LOGS = { id: 'logs-9zz', path: '/work/logs', name: 'logs', activated: true }
+    const LOGS = { id: 'logs-9zz', path: '/work/logs', name: 'logs' }
     answers.set('onProjects', () => [PROJECT, OTHER, LOGS])
     window.history.replaceState(null, '', '/logs')
     render(<App />)

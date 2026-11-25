@@ -21,7 +21,7 @@ vi.mock('./calls.js', () => ({
 const { ProjectControl, ProjectPicker, REPOS_SHOWN, repoDetail, shownAddress } = await import('./ProjectPicker.js')
 const { default: projectsUi } = await import('./index.js')
 
-const ALPHA: ProjectSummary = { id: 'alpha-1', path: '/home/me/alpha', name: 'alpha', activated: true }
+const ALPHA: ProjectSummary = { id: 'alpha-1', path: '/home/me/alpha', name: 'alpha' }
 const VIKE = { path: '/home/me/oss/vike', name: 'vike', url: 'https://github.com/vikejs/vike.git' }
 const NOTES = { path: '/home/me/notes', name: 'notes' }
 
@@ -109,11 +109,11 @@ describe('ProjectPicker', () => {
     expect(trigger().textContent).toBe('alpha')
   })
 
-  test("a project's row says what is wrong with it, that it is not activated, or how its records are kept", async () => {
+  test("a project's row says what is wrong with it, that it is not activated, or what the modules note of it", async () => {
     const stranded: ProjectSummary = { ...ALPHA, errors: [{ id: 'store-git-branch:data-sync', title: 'Not syncing with the remote', message: 'the data branch could not be pushed: Permission denied (publickey)', since: '2026-08-20T10:00:00.000Z' }] }
-    const idle: ProjectSummary = { id: 'beta-2', path: '/home/me/beta', name: 'beta', activated: false }
-    const local: ProjectSummary = { id: 'gamma-3', path: '/home/me/gamma', name: 'gamma', activated: true, local: 'no-remote' }
-    const kept: ProjectSummary = { id: 'delta-4', path: '/home/me/delta', name: 'delta', activated: true, local: 'kept' }
+    const idle: ProjectSummary = { id: 'beta-2', path: '/home/me/beta', name: 'beta', errors: [{ id: 'projects:not-activated', title: 'Not activated' }] }
+    const local: ProjectSummary = { id: 'gamma-3', path: '/home/me/gamma', name: 'gamma', notes: [{ id: 'store-filesystem:data-here', words: 'Local only, no remote' }] }
+    const kept: ProjectSummary = { id: 'delta-4', path: '/home/me/delta', name: 'delta', notes: [{ id: 'store-filesystem:data-here', words: 'Records kept on this machine' }] }
     renderPicker({ projects: [stranded, idle, local, kept] })
     await openMenu(trigger())
     const broken = screen.getByRole('option', { name: /alpha/ })
@@ -143,7 +143,7 @@ describe('ProjectPicker', () => {
     fireEvent.click(screen.getByRole('button', { name: 'I trust it, clone and add it' }))
     await waitFor(() => expect(addFromAddress).toHaveBeenCalledWith('https://github.com/ada/shop'))
     await screen.findByText('Project added')
-    rerender({ projects: [ALPHA, { id: 'shop-5', path: '/home/me/projects/shop', name: 'shop', activated: true }] })
+    rerender({ projects: [ALPHA, { id: 'shop-5', path: '/home/me/projects/shop', name: 'shop' }] })
     await waitFor(() => expect(onPick).toHaveBeenCalledWith('shop-5'))
     // Picked, it still says it was added, until Done.
     expect(screen.getByRole('status').textContent).toBe('Project added')
@@ -286,14 +286,14 @@ describe('ProjectPicker', () => {
     await waitFor(() => expect(addProject).toHaveBeenCalledWith(VIKE.path))
     await screen.findByText('Project added')
     expect(onPick).not.toHaveBeenCalled()
-    rerender({ projects: [ALPHA, { id: 'vike-9', path: VIKE.path, name: 'vike', activated: true }] })
+    rerender({ projects: [ALPHA, { id: 'vike-9', path: VIKE.path, name: 'vike' }] })
     await waitFor(() => expect(onPick).toHaveBeenCalledWith('vike-9'))
     expect(screen.queryByText('Do you trust this repository?')).toBeNull()
   })
 
   test('a project added is picked once the projects read again have it, after its panel has gone too, unless another was picked meanwhile', async () => {
     addProject.mockResolvedValue({ ok: true, alreadyActivated: false })
-    const VIKE_PROJECT = { id: 'vike-9', path: VIKE.path, name: 'vike', activated: true }
+    const VIKE_PROJECT = { id: 'vike-9', path: VIKE.path, name: 'vike' }
     const { onPick, rerender } = renderPicker()
     await openMenu(trigger())
     fireEvent.click(await screen.findByRole('option', { name: /vike/ }))

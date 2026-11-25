@@ -46,11 +46,12 @@
   "dependencies": {
     "@openagt/agent-driver": "workspace:*",
     "@openagt/agent-driver-claude-code": "workspace:*",
-    "@openagt/hooks": "workspace:*",
-    "@openagt/github": "workspace:*"
+    "@openagt/github": "workspace:*",
+    "@openagt/hooks": "workspace:*"
   },
   "devDependencies": {
-    "@openagt/agent-data": "workspace:*",
+    "@openagt/git-branches": "workspace:*",
+    "@openagt/store-filesystem": "workspace:*",
     "@tailwindcss/vite": "^4.0.0",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.2",

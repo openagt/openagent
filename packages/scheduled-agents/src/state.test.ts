@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { nodeGitRunner } from '@openagt/agent-data'
+import { nodeGitRunner } from '@openagt/git-branches'
 import { DEFAULT_STATE, readState, statePath, updateState, writeState, type State, type ListedCommand, agentInForce, modelInForce, withAgent, withPick, isSwitchedOn, switchedOnAt, withoutCommand, publishInForce, capInForce, namesGivenUp, withoutName, withoutListed } from './state.js'
 import { STATE_DIR } from './names.js'
 

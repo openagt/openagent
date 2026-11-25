@@ -13,3 +13,10 @@ export interface ProjectRef {
    */
   remote?: string
 }
+
+/**
+ * The directory, under a project root, that holds OpenAgent's own files on this machine: a run's
+ * live files, a module's own. Hidden from git by an ignore file of its own, written when the folder
+ * becomes a project (projects' `install.ts`).
+ */
+export const OPENAGENT_DIR = '.openagent'

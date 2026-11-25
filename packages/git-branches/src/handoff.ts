@@ -1,7 +1,8 @@
 import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import { nodeGitRunner, sessionFolder, sessionsHome, type GitRunner } from '@openagt/agent-data'
-import type { RunFound } from '@openagt/hooks'
+import { nodeGitRunner } from './git.js'
+import { type GitRunner, type RunFound, sessionsHome } from '@openagt/hooks'
+import { sessionFolder } from './sessions.js'
 import { readBranchStates } from './branch-state.js'
 import { copyStart } from './session-folder.js'
 

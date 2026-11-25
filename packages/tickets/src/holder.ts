@@ -1,4 +1,6 @@
-import { AGENT_ID_ENV, checkoutRoot, nodeGitRunner, type GitRunner } from '@openagt/agent-data'
+import { AGENT_ID_ENV } from '@openagt/agent-driver'
+import { checkoutRoot, nodeGitRunner } from '@openagt/git-branches'
+import type { GitRunner } from '@openagt/hooks'
 
 /** Who claims, or that nobody can: see {@link holderOf}. */
 export type Holder = { ok: true; holder: string } | { ok: false; reason: 'no-identity' }

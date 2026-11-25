@@ -1,4 +1,4 @@
-import { helpRows, helpText, unknownWord, usageError } from '@openagt/agent-data'
+import { helpRows, helpText, unknownWord, usageError } from '@openagt/hooks/command'
 import { defaultIO, install, uninstall, type InstallIO } from './install.js'
 
 const OPTIONS = helpRows(['Options:', ['-h, --help', 'Show this help.']])

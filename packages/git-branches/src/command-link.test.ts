@@ -5,7 +5,7 @@ import { promisify } from 'node:util'
 import { join } from 'node:path'
 import { lstat, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { nodeGitRunner } from '@openagt/agent-data'
+import { nodeGitRunner } from './git.js'
 import { CLI_BIN_DIR } from './bin-dir.js'
 import { createCheckout, relinkCheckout } from './checkout.js'
 

@@ -1,10 +1,10 @@
-import { isSkillName, type FileBranchWrite } from '@openagt/agent-data'
+import { isSkillName } from './names.js'
+import type { FileBranchWrite } from '@openagt/store-filesystem'
 import { isProfileId, MODULE_NAME, type AgentDriverOptions, type RunOptions } from '@openagt/hooks'
 import type { ProjectSkillsPick } from './profile.js'
-import { publishedBranch } from '@openagt/agent-data/names'
+import { publishedBranch, type SessionRepo } from '@openagt/git-branches'
 import { deleteRun, writeRun, type RecordDeps } from '../record-store.js'
 import { type AnyDiaryLine, type RunCard } from '../record.js'
-import type { SessionRepo } from '@openagt/git-branches'
 
 /**
  * A run in flight is a run record (#1774): the `logs` skill's card on the project's `agent-data`

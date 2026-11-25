@@ -1,7 +1,8 @@
 import { lstat, mkdir, readdir, readlink, symlink, unlink } from 'node:fs/promises'
 import { basename, join } from 'node:path'
-import { nodeGitRunner, type GitRunner, BRANCHES_DIR } from '@openagt/agent-data'
-import { isAgentBranch } from './branch-names.js'
+import { nodeGitRunner } from './git.js'
+import type { GitRunner } from '@openagt/hooks'
+import { BRANCHES_DIR, isAgentBranch } from './branch-names.js'
 import { worktreeDirEntries, worktreeBranch, type WorktreeDirEntry } from './worktree.js'
 
 // The branches view (#1580): every checkout under `.branches/` is a directory named as the branch

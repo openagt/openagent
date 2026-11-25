@@ -4,7 +4,7 @@ import { chmod, mkdir, open, readFile, rm, stat, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { unknownWord, usageError, wrongArguments, helpRows, helpText } from '@openagt/agent-data'
+import { unknownWord, usageError, wrongArguments, helpRows, helpText } from '@openagt/hooks/command'
 import { resolveChromePath } from './chrome.js'
 import type { HostAnswer, HostCommand, HostState } from './host.js'
 

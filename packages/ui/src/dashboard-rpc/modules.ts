@@ -3,7 +3,7 @@ import { contextProjects, resolveProjectPath } from './context.js'
 import { SESSIONS_ID } from '../project-address.js'
 import { findComputerModule, findProjectModule, readComputerModules, readProjectModules, runModuleCommand as runCommand, type ModuleCommandResult } from '../project-modules.js'
 import { broughtModuleUrl, computerModuleUrl, moduleUrl, versionedModuleUrl } from '../dashboard/module-serve.js'
-import { pullProjectData } from '@openagt/agent-data'
+import { distributionHooks, projectRefAt } from '../distribution-hooks.js'
 
 export type { ModuleCommandResult } from '../project-modules.js'
 
@@ -64,10 +64,10 @@ export async function onModules(): Promise<DashboardModule[]> {
  * program.
  *
  * `acts` says the command is a module's action on the project (a claim released, an entry added),
- * not a page's read. Only then does OpenAgent converge the project's data branch with origin, as
- * its clock does every minute: in a project that shares its records a package's command writes as
- * a remote writer, straight to origin, and the next read shows the change at once instead of at
- * the next sync. `input` is what the command reads
+ * not a page's read. Only then are the modules on in the project told it was written
+ * (`app.lifecycle`'s `projectWritten`): in a project that shares its records a package's command
+ * writes as a remote writer, straight to origin, and the store that keeps them there takes the
+ * change in at once, so the next read shows it instead of the next sync. `input` is what the command reads
  * on standard input: a whole file an action writes, a ticket say.
  */
 export async function runModuleCommand(projectId: string, pkg: string, args: string[], command?: string, acts = false, input?: string | null): Promise<ModuleCommandResult> {
@@ -77,7 +77,7 @@ export async function runModuleCommand(projectId: string, pkg: string, args: str
   const module = await findProjectModule(root, pkg)
   if (!module) return { ok: false, error: `${pkg} brings no module to this project` }
   const result = await runCommand(root, module, args, command, typeof input === 'string' ? input : undefined)
-  if (acts) await pullProjectData(root, { log: () => {} }).catch(() => {})
+  if (acts && projectId !== SESSIONS_ID) await (await distributionHooks()).projectWritten(await projectRefAt(projectId, root)).catch(() => {})
   return result
 }
 

@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import { hostname } from 'node:os'
-import { nodeGitRunner, originDefaultBranch, type GitRunner } from '@openagt/agent-data'
+import { nodeGitRunner, originDefaultBranch } from '@openagt/git-branches'
+import type { GitRunner } from '@openagt/hooks'
 import type { MergeLookup, RpcHost } from '@openagt/hooks/rpc'
 import { readFileStatuses, type FileGitStatus } from './status.js'
 import { CONTEXT_LINES, safeRepoPath } from './confined.js'

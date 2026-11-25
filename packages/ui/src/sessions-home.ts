@@ -1,6 +1,6 @@
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import { OPENAGENT_DIR } from '@openagt/agent-data'
+import { OPENAGENT_DIR } from '@openagt/hooks'
 
 // The sessions home: where the sessions with no project work, each in a folder of its own
 // (`@openagt/agent-data`'s sessions). The daemon keeps it as it keeps a project: its `.openagent/`

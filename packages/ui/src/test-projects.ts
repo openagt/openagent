@@ -1,5 +1,5 @@
 import { resolve } from 'node:path'
-import { projectId } from '@openagt/agent-data'
+import { projectId } from './project-id.js'
 import { PROJECTS, type ProjectRecord } from '@openagt/hooks'
 import { distributionSettings } from './distribution-hooks.js'
 

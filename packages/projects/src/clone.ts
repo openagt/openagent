@@ -2,9 +2,7 @@ import { execFile } from 'node:child_process'
 import { lstat, mkdir, mkdtemp, rename, rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
-import { repositoryAddress } from '@openagt/agent-data'
-import type { GitAccess } from '@openagt/hooks'
-import { typedRepository } from './typed-repository.js'
+import { repositoryAddress, typedRepository, type GitAccess } from '@openagt/hooks'
 
 /**
  * A project added by its repository's address, for a computer that does not have its folder: a

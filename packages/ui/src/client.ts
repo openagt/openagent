@@ -10,8 +10,6 @@ export { runName } from './run-name.js'
 export { foldScreenRows } from './screens.js'
 export { formatBytes } from './format-bytes.js'
 export { errorMessage } from './error-message.js'
-export { publishedBase } from '@openagt/agent-data/names'
-export { typedRepository, type TypedRepository } from './typed-repository.js'
 export { pickedIds } from './events.js'
 export {
   sessionInfo,

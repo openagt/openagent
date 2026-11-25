@@ -1,5 +1,5 @@
 import { hostname } from 'node:os'
-import { errorMessage } from '@openagt/agent-data'
+import { errorMessage } from '../error-message.js'
 import { contextRun, runHostOf } from '../dashboard-rpc/context.js'
 
 import { runRefAt } from '../distribution-hooks.js'

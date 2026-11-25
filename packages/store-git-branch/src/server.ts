@@ -1,9 +1,11 @@
 import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import { nodeGitRunner, projectDataDir, readPersonalFolder, readRemoteAccount, readSharing, shareProjectData } from '@openagt/agent-data'
+import { nodeGitRunner, readRemoteAccount } from '@openagt/git-branches'
+import { projectDataDir, readSharing } from '@openagt/store-filesystem'
+import { readPersonalFolder, originHost, personalFolderShown, sendProjectDataAs, type PersonalFolderShown } from '@openagt/store-git-repository'
+import { shareProjectData } from './share.js'
 import type { HostAccounts } from '@openagt/hooks'
 import { act, read, type RpcHost } from '@openagt/hooks/rpc'
-import { originHost, personalFolderShown, sendProjectDataAs, type PersonalFolderShown } from '@openagt/store-git-repository'
 
 // store-git-branch's server part (`@openagt/hooks/rpc`): Settings › Project › Project agent data.
 // Where one project's agent data is, the person's own folder or the project's own branch

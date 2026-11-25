@@ -1,4 +1,5 @@
-import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
+import { nodeGitRunner } from './git.js'
+import type { GitRunner } from '@openagt/hooks'
 import { basename } from 'node:path'
 import { agentIdFromWorktreeDir, sessionNameOf } from './branch-names.js'
 import { checkoutsByBranch, repoHasRemote } from './worktree.js'

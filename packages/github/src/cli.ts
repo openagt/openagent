@@ -1,4 +1,6 @@
-import { Refused, UsageError, errorMessage, nodeGitRunner, parseCommandArgs, runCommandLine, helpRows, helpText, type Command, type Failure, type GitRunner } from '@openagt/agent-data'
+import { Refused, UsageError, parseCommandArgs, runCommandLine, helpRows, helpText, type Command, type Failure } from '@openagt/hooks/command'
+import { errorMessage, nodeGitRunner } from '@openagt/git-branches'
+import type { GitRunner } from '@openagt/hooks'
 import { hasBrew, installCommand, nodeGhRunner, type GhRunner } from './gh.js'
 import { listRequests } from './requests.js'
 import { openRequest, type OpenOutcome } from './open.js'

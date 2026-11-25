@@ -4,7 +4,7 @@ import { test } from 'node:test'
 import { mkdtemp, writeFile, rm, mkdir, readdir, realpath } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { createHooks, LOCAL_HOST, type AppContext } from '@openagt/hooks'
+import { createHooks, LOCAL_HOST, type AppContext, OPENAGENT_DIR } from '@openagt/hooks'
 import { fakeHost } from '@openagt/hooks/testing'
 import { runDaemon, type DaemonState, type RunDaemonOptions } from './daemon.js'
 import { handDownTestDistribution } from './test-distribution.js'
@@ -36,11 +36,11 @@ async function startDaemon(cwd: string, opts: RunDaemonOptions): Promise<{ done:
   )
   return { done, state: await listening }
 }
-import { OPENAGENT_DIR } from './openagent-dir.js'
 import { listProjects } from './distribution-hooks.js'
 import projectsModule from '@openagt/projects/module'
 import storeFilesystem from '@openagt/store-filesystem/module'
-import { gitignorePath, openagentGitignore, projectId } from '@openagt/agent-data'
+import { gitignorePath, openagentGitignore } from '@openagt/projects'
+import { projectId } from './project-id.js'
 
 // The dashboard steers + starts over the daemon's in-process RPC mount (#405/#426), not the
 // retired per-read HTTP routes. Post to `/_rpc/<name>` (same-origin) and return the unwrapped `ret`.

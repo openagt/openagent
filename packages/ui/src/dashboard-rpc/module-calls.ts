@@ -4,7 +4,6 @@ import { callModuleFunction, computerHost, functionKind, serverHost, type Comput
 import { distributionHooks, projectRefAt, runRefAt } from '../distribution-hooks.js'
 import { SESSIONS_ID } from '../project-address.js'
 
-import { pullProjectData } from '@openagt/agent-data'
 import type { ProjectRef, RunFacts, RunFound, RunQuestion, RunRef } from '@openagt/hooks'
 import type { ModuleOn } from '@openagt/hooks/rpc'
 import { readRunEvents } from '../store/index.js'
@@ -20,8 +19,8 @@ export type { ModuleCallResult } from '../dashboard/module-host.js'
  * Call function `name` of a module's server part in one project (`@openagt/hooks/rpc`): how a
  * module's browser part reads, or changes, what a command cannot answer fast enough. Refused for
  * an unknown project, a package that is not a module of that project, and a module with no server
- * part. An act is followed as a command's is (`modules.ts`' runModuleCommand): the project's data is
- * converged with origin. With `null` for
+ * part. An act is followed as a command's is (`modules.ts`' runModuleCommand): the modules on in
+ * the project are told it wrote the project's data (`projectWritten`). With `null` for
  * the project, it is a call of a package that is this computer's ({@link callComputerModule}).
  */
 export async function callModule(projectId: string | null, pkg: string, name: string, input: unknown): Promise<ModuleCallResult> {
@@ -43,7 +42,8 @@ export async function callModule(projectId: string | null, pkg: string, name: st
     modulesOn: async opts => modulesOn(await project(), opts?.every === true),
   })
   const result = await callModuleFunction(module.server, name, host, input)
-  if (kind === 'act') await pullProjectData(root, { log: () => {} }).catch(() => {})
+  const written = kind === 'act' ? await project() : undefined
+  if (written) await (await distributionHooks()).projectWritten(written).catch(() => {})
   return result
 }
 

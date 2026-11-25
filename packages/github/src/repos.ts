@@ -1,5 +1,5 @@
 import { HOST } from './accounts.js'
-import { errorMessage } from '@openagt/agent-data'
+import { errorMessage } from '@openagt/git-branches'
 import type { GhRunner } from './gh.js'
 
 /**

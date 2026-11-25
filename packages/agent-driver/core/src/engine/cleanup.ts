@@ -1,6 +1,7 @@
 import { lstat, readdir, rm, rmdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import { nodeGitRunner, repositoryCheckouts, unexcludeFromGit, type GitRunner } from '@openagt/agent-data'
+import { nodeGitRunner, repositoryCheckouts, unexcludeFromGit } from '@openagt/git-branches'
+import type { GitRunner } from '@openagt/hooks'
 import { RUNNER_CONFIG, RUNNER_DIR, RUNS_DIR } from './names.js'
 import { isPidAlive, runsAlive } from './run-lock.js'
 

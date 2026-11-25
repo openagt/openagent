@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { DISTRIBUTION_ENV, distributionItems, packageDirOf, type DistributionEntry, type DistributionPackage, type ModuleDefinition, type PluginInfo, type ProjectRef } from '@openagt/hooks'
-import { projectId, readManifest, type ProjectPackage } from '@openagt/agent-data'
+import { projectId } from './project-id.js'
+import { readManifest, type ProjectPackage } from './package-command.js'
 import { distributionHooks, projectRefAt } from './distribution-hooks.js'
 
 /**

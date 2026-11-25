@@ -1,6 +1,7 @@
-import { errorMessage, personalFolderSyncs, readSharing, withPersonalFolder } from '@openagt/agent-data'
+import { errorMessage } from '@openagt/git-branches'
+import { personalFolderSyncs } from './folder-sync.js'
+import { readSharing, withPersonalFolder, foldersOf } from '@openagt/store-filesystem'
 import type { AppAttention, AppLifecycle } from '@openagt/hooks'
-import { foldersOf } from '@openagt/store-filesystem'
 
 /**
  * The person's folder kept in step with their repository (#1582, #1599), the module's own work

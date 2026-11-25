@@ -1,6 +1,6 @@
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { writeFileWhole } from '@openagt/agent-data'
+import { writeFileWhole } from '@openagt/store-filesystem'
 import { logCardFile, logDiaryFile } from '../session-log.js'
 import { parseDiary, parseRunCard, type AnyDiaryLine, type RunCard, type RunStatus } from '../record.js'
 import { DASHBOARD_DIR } from './names.js'

@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 import { closeSync, mkdirSync, openSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { BRANCHES_DIR, errorMessage } from '@openagt/agent-data'
+import { BRANCHES_DIR, errorMessage } from '@openagt/git-branches'
 import type { GhRunner } from './gh.js'
 
 /**

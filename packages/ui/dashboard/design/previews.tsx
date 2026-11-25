@@ -69,7 +69,7 @@ function Jump() {
       waiting={[{ projectId: 'shop', projectName: 'shop', kind: 'waiting', module: 'ask', scope: 'run', run: 'r1', words: 'Needs answer', title: 'Ask which colour the login page should be', mark: 'question' }]}
       runs={[jumpRun('r2', 'Move the cart to a page of its own', { pr: { number: 42, url: '' } }), jumpRun('r3', 'Commit a login page with session cookies'), { ...jumpRun('r4', 'Write the first post'), projectId: 'blog', projectName: 'blog' }]}
       pages={[{ segment: 'tickets', label: 'Tickets' }, { segment: 'agents', label: 'Agents' }]}
-      projects={['shop', 'blog'].map(name => ({ id: name, path: `/${name}`, name, activated: true }))}
+      projects={['shop', 'blog'].map(name => ({ id: name, path: `/${name}`, name }))}
       scope={null}
       here={{ projectId: null, agentId: null }}
       hrefOf={() => '#'}

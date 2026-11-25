@@ -5,7 +5,7 @@ import type { StartedProject } from '../dashboard/types.js'
 import { handDownDistribution } from './distribution.js'
 import { openInBrowser } from './browser.js'
 import { openagentPackage, openagentVersion } from '../version.js'
-import { helpRows, helpText, unknownWord, usageError } from '@openagt/agent-data'
+import { helpRows, helpText, unknownWord, usageError } from '@openagt/hooks/command'
 
 export type { DashboardDistribution, DashboardPackage } from '../distribution-packages.js'
 

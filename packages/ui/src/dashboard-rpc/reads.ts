@@ -1,6 +1,5 @@
 import { SESSIONS_ID } from '../project-address.js'
 import { stat } from 'node:fs/promises'
-import { originDefaultBranch } from '@openagt/agent-data'
 import { moduleAgents, type ModuleAgent, type ModuleAgentsWanted } from '../dashboard/module-agents.js'
 import { doingOf, readRunEvents, readRuns, type AgentDoing, type AgentMeta, isRunId } from '../store/index.js'
 import { readDocs, type WorkspaceDoc } from '../dashboard/docs.js'
@@ -11,9 +10,8 @@ import { buildActivity, type Activity } from '../dashboard/activity.js'
 import { buildDashboard, type DashboardData } from '../dashboard/dashboard.js'
 import { crawlRepoFiles } from '../project.js'
 import { contextHosts, contextProject, contextProjects, resolveProjectPath, resolveAgentPath, runHostOf } from './context.js'
-import type { RunEvent } from '@openagt/hooks'
+import type { RunEvent, ProjectRef, RunRef } from '@openagt/hooks'
 import { markOtherHost, withPrStates } from '../dashboard/run-rows.js'
-import type { ProjectRef, RunRef } from '@openagt/hooks'
 
 // The read model behind the dashboard (#405): the agent history, an agent's replay, and the
 // surfaced PLAN/TODO docs — each keyed by project id and backed by

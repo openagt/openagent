@@ -1,12 +1,13 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { execFileSync } from 'node:child_process'
-import { mkdtemp, realpath, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createHooks, PROJECTS, RunOrder, type RunContext } from '@openagt/hooks'
 import { fakeApp, memorySettings, memoryStore } from '@openagt/hooks/testing'
 import { copiesLine, projectsModule } from './module.js'
+import { gitignorePath, openagentGitignore } from './openagent-gitignore.js'
 
 // The module's own steps of a run, its "No project yet", and the folder `openagent` was typed in
 // as the app hands it over.
@@ -62,7 +63,23 @@ test('"Add your first project" is asked about this computer while the list is em
   await app.settings.set(PROJECTS, [{ id: 'app-1', path: '/repos/app', addedAt: '2026-11-01T00:00:00.000Z' }])
   assert.deepEqual(await attention({}, app), [])
   await app.settings.set(PROJECTS, [])
-  assert.deepEqual(await attention({ project: { id: 'app-1', name: 'app', dir: '/repos/app' } }, app), [])
+  assert.ok(!(await attention({ project: { id: 'app-1', name: 'app', dir: '/repos/app' } }, app)).some(item => item.id === 'no-project'))
+})
+
+test("a listed project whose folder lacks the ignore file adding it writes is not activated, on its page; one that has it says nothing", async () => {
+  const dir = await realpath(await mkdtemp(join(tmpdir(), 'projects-activated-')))
+  try {
+    const app = fakeApp({ settings: memorySettings() })
+    const attention = projectsModule().hooks['app.attention']!
+    const project = { id: 'app-1', name: 'app', dir }
+    assert.deepEqual(await attention({ project }, app), [{ kind: 'setup', scope: 'project', id: 'not-activated', words: 'Not activated' }])
+    await mkdir(join(dir, '.openagent'), { recursive: true })
+    assert.equal((await attention({ project }, app)).length, 1, 'the directory alone is not the mark')
+    await writeFile(gitignorePath(dir), openagentGitignore())
+    assert.deepEqual(await attention({ project }, app), [])
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
 })
 
 test('the folder openagent was typed in is the module\'s to make a project, and the app tells the other modules of one it added', async () => {

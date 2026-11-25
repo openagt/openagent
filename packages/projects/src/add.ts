@@ -1,5 +1,7 @@
 import { resolve, sep } from 'node:path'
-import { installProject, nodeGitRunner, writeSharing } from '@openagt/agent-data'
+import { installProject } from './install.js'
+import { nodeGitRunner } from '@openagt/git-branches'
+import { writeSharing } from '@openagt/store-filesystem'
 import { PROJECTS, type GivenFolder, type ProjectsLifecycle, type Settings } from '@openagt/hooks'
 import { isFolder, listProject, projectRefAt } from './list.js'
 import { repositoryOf } from './repository-of.js'

@@ -90,6 +90,13 @@ export interface AppLifecycle {
   /** A project was added: called for the modules that are on in it. */
   projectAdded?(project: ProjectRef, app: AppContext): void | Promise<void>
   /**
+   * A module wrote the project's data from outside this process's store: its server's act, or its
+   * command, which writes as a one-shot writer (straight to origin, for a project whose data is
+   * shared). Called for the modules on in it, the shell waiting on them before it answers the act:
+   * a store that keeps the data elsewhere takes it in now, so the next read shows the change.
+   */
+  projectWritten?(project: ProjectRef, app: AppContext): void | Promise<void>
+  /**
    * A project is to be taken off the list: why the module refuses it now, in words (a run of its
    * own at work there); nothing when it may go. Asked of every module, on in the project or not,
    * before any is told it was removed: the first that refuses keeps it on the list.
@@ -134,10 +141,12 @@ export type AttentionMark = 'question' | 'pull-request' | 'branch' | 'changes'
 /**
  * Something that needs the person: something to set up, or something waiting on them. A list
  * shows it as a row: what is needed, what it is about, then the rest; a row of an item about a
- * run opens the run, else what fixes it.
+ * run opens the run, else what fixes it. A `note` needs nothing of them: it says how a project
+ * stands where nothing is wrong with it ("Records kept on this machine"), and the shell draws the
+ * project's notes under its name.
  */
 export interface AttentionItem {
-  kind: 'setup' | 'waiting'
+  kind: 'setup' | 'waiting' | 'note'
   /**
    * What it is about: this computer, the project asked about, or a run: one of its runs (`run`),
    * or, with no `run`, the run the options asked with would start, which it stops. The shell draws

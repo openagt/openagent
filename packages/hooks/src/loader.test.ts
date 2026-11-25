@@ -342,13 +342,14 @@ test('the people behind commit emails are the first module answering for the rep
   assert.deepEqual(await hooks.gitAccounts.people('/repos/elsewhere', ['ada@x.dev']), [])
 })
 
-test("the app's life: modules start where they are on, one that keeps its own row wherever it is, and stop the last first; a project added reaches the modules on in it, a removed one every module", async () => {
+test("the app's life: modules start where they are on, one that keeps its own row wherever it is, and stop the last first; a project added or written reaches the modules on in it, a removed one every module", async () => {
   const seen: string[] = []
   const errors: HandlerError[] = []
   const lifecycle = (name: string): AppLifecycle => ({
     started: async (app: AppContext) => void seen.push(`${name} started in ${(await app.projects()).map(project => project.id).join(',') || 'none'}`),
     stopping: () => void seen.push(`${name} stopping`),
     projectAdded: project => void seen.push(`${name} added ${project.id}`),
+    projectWritten: project => void seen.push(`${name} wrote ${project.id}`),
     projectRemoved: project => void seen.push(`${name} removed ${project.id}`),
   })
   const hooks = hooksOf(
@@ -379,6 +380,7 @@ test("the app's life: modules start where they are on, one that keeps its own ro
   await hooks.setEnabled('github-auto-reply', true, P2)
   await hooks.started({ signal: new AbortController().signal, url: 'http://127.0.0.1:4200' })
   await hooks.projectAdded({ id: 'p3', name: 'Three', dir: '/projects/three' })
+  await hooks.projectWritten(P2)
   await hooks.projectRemoved(P1)
   await hooks.stopping()
   assert.deepEqual(seen, [
@@ -387,6 +389,9 @@ test("the app's life: modules start where they are on, one that keeps its own ro
     'folder sync started in p1,p2',
     'projects added p3',
     'scheduler added p3',
+    'projects wrote p2',
+    'auto-reply wrote p2',
+    'scheduler wrote p2',
     'projects removed p1',
     'auto-reply removed p1',
     'notifications-command removed p1',

@@ -1,4 +1,4 @@
-import { PLUGINS_WITHOUT_ENV, PROFILE_ENV, PROJECT_SKILLS_ENV, isSkillName } from '@openagt/agent-data'
+import { PLUGINS_WITHOUT_ENV, PROFILE_ENV, PROJECT_SKILLS_ENV, isSkillName } from './names.js'
 import { DEFAULT_PROFILE, MODULE_NAME, PROFILES, createHooks, isProfileId, loadHandedDown, profileOf, type Profile, type Settings, type SkillsOptions } from '@openagt/hooks'
 
 /**

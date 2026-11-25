@@ -38,8 +38,8 @@
     "clean": "rm -rf dist dist-test"
   },
   "dependencies": {
-    "@openagt/agent-data": "workspace:*",
     "@openagt/agent-driver": "workspace:*",
+    "@openagt/git-branches": "workspace:*",
     "@openagt/github": "workspace:*",
     "@openagt/hooks": "workspace:*"
   },

@@ -1,5 +1,6 @@
-import { readPersonalFolder, readSharing, remoteHostOf, sendPersonalFolderAs, stopSyncingPersonalFolder, syncPersonalFolder } from '@openagt/agent-data'
-import type { HostAccounts } from '@openagt/hooks'
+import { readPersonalFolder, sendPersonalFolderAs, stopSyncingPersonalFolder, syncPersonalFolder } from './folder-sync.js'
+import { readSharing } from '@openagt/store-filesystem'
+import { remoteHostOf, type HostAccounts } from '@openagt/hooks'
 import { act, read, type RpcComputerHost } from '@openagt/hooks/rpc'
 import { backUpProjectAs, personalGap, projectGap, type BackupGap } from './gaps.js'
 import { repositoryUrlOf } from './repository-url.js'

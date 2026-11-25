@@ -5,7 +5,7 @@
 // only the coding agent is scripted.
 import { spawn } from 'node:child_process'
 import { appendFileSync } from 'node:fs'
-import { sessionsHomeOf } from '@openagt/agent-data'
+import { sessionsHomeOf } from '@openagt/git-branches'
 import { localHost, type SpawnedResume, type SpawnedRun } from '@openagt/agent-driver'
 import type { ModuleDefinition, RunHost } from '@openagt/hooks'
 import { FAKE_RUN } from './fixture.js'

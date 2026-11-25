@@ -35,7 +35,7 @@
     "clean": "rm -rf dist dist-test"
   },
   "dependencies": {
-    "@openagt/agent-data": "workspace:*",
+    "@openagt/git-branches": "workspace:*",
     "@openagt/hooks": "workspace:*",
     "@openagt/store-filesystem": "workspace:*"
   },

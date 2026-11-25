@@ -1,6 +1,6 @@
 import { readFile, stat } from 'node:fs/promises'
-import { listSessionFolders, nodeGitRunner, sessionFolder, sessionsHomeOf, type GitRunner } from '@openagt/agent-data'
-import { agentBranchName, reclaimWorktree, SESSION_FOLDER_STAYS, worktreeDirEntries, worktreePath } from '@openagt/git-branches'
+import { listSessionFolders, nodeGitRunner, sessionFolder, sessionsHomeOf, agentBranchName, reclaimWorktree, SESSION_FOLDER_STAYS, worktreeDirEntries, worktreePath } from '@openagt/git-branches'
+import type { GitRunner } from '@openagt/hooks'
 import { listRuns, type RecordDeps } from '../record-store.js'
 import { type RunCard } from '../record.js'
 import { endLiveCard, readLiveCard, readLiveDiary } from './live-card.js'

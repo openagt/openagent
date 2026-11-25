@@ -1,7 +1,6 @@
 import { hostname } from 'node:os'
 import { runIdFrom, writeRun, type AnyDiaryLine, type RecordDeps, type RunCard } from '@openagt/agent-driver'
-import type { ProjectRef, RunRequest } from '@openagt/hooks'
-import type { GitRunner } from '@openagt/agent-data'
+import type { ProjectRef, RunRequest, GitRunner } from '@openagt/hooks'
 import { bridgeQuestions } from './bridge-store.js'
 import { bridgeStarts, type BridgeStarts } from './bridge-starts.js'
 import { githubAccount, repoOf } from './github.js'

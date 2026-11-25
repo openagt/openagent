@@ -1,4 +1,4 @@
-import { unknownWord, usageError, wrongArguments, helpRows, helpText } from '@openagt/agent-data'
+import { unknownWord, usageError, wrongArguments, helpRows, helpText } from '@openagt/hooks/command'
 import { clearWebhook, invalidWebhook, postMessage, resolveWebhook, saveWebhook, WEBHOOK_ENV } from './webhook.js'
 
 /**

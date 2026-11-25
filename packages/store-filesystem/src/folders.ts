@@ -1,6 +1,6 @@
 import { join, sep } from 'node:path'
-import { personalFolder } from '@openagt/agent-data'
 import type { ProjectRef, Scope } from '@openagt/hooks'
+import { personalFolder } from './personal-folder.js'
 
 // Where each scope's files are on this computer. The person's own folder, `~/.openagent`, holds
 // what is theirs and each project's data kept on this computer: what a git store may sync with a

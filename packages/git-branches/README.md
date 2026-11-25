@@ -37,6 +37,13 @@ What it brings:
   pushed ("Needs push"), read from the project's runs (`AppContext.runs`) and this package's own
   branches.
 
+What other modules import of it (`@openagt/git-branches`): the git every module runs (one runner
+with a timeout per subcommand, origin's default branch, git's own line of a failure, `GIT_FAILED`
+for a command), what a project hides from git (`excludeFromGit`), the lock on a branch's checkout,
+the account a repository's branches are sent as (`accountGit`), where a session with no project
+works (`sessionFolder`, in the kernel's `sessionsHome`), and the names under `.branches/`
+(`BRANCHES_DIR`, `DATA_BRANCH`, `publishedBase`; `./branch-names` for the browser).
+
 Every talk with a remote goes as an account of OpenAgent's (`RpcHost.gitAccess`, which the git
 host's module answers), never the person's own login. Its Node part is the module (`./module`), with
 a server part for the dashboard's reads and presses (`./server`), and the `branches` command its

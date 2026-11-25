@@ -1,11 +1,12 @@
-import { pullProjectData } from '@openagt/agent-data'
+import { pullProjectData } from '@openagt/store-filesystem'
 import type { AppAttention, AppLifecycle, ProjectRef } from '@openagt/hooks'
 
 /**
  * The shared projects' data kept in step with their remotes (#1582, #1599), the module's own work
  * (`app.lifecycle`, #2394, decision 17): a turn as the app starts, then one a minute, each pulling
  * the `agent-data` branch of every project the module is on in, what other computers pushed coming
- * in and what a write could not send going out. A project whose data does not converge needs the
+ * in and what a write could not send going out; and one project's pull as soon as a module wrote
+ * its data from outside the app's store (`projectWritten`). A project whose data does not converge needs the
  * person, and is said through `app.attention` until a turn goes through.
  */
 
@@ -19,7 +20,7 @@ export type PullData = (dir: string) => Promise<{ ok: true } | { ok: false; erro
 export const NOT_SYNCING = 'Not syncing with the remote'
 
 export interface DataSyncDeps {
-  /** The real one pulls the project's data branch (`@openagt/agent-data`). */
+  /** The real one pulls the project's data branch (store-filesystem's `pullProjectData`). */
   pull?: PullData
   everyMs?: number
   now?: () => Date
@@ -75,6 +76,11 @@ export function dataSync(deps: DataSyncDeps = {}): { lifecycle: AppLifecycle; at
       },
       projectAdded(project) {
         removed.delete(project.dir)
+      },
+      // A module's act wrote the data as a one-shot writer, straight to origin: taken in now, as
+      // the next turn would, so the next read shows it. What went wrong is the turn's to say.
+      async projectWritten(project) {
+        if (!removed.has(project.dir)) await pull(project.dir).catch(() => {})
       },
       projectRemoved(project) {
         removed.add(project.dir)

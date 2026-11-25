@@ -14,7 +14,7 @@ import { publishChange, runnerMark, type NO_PUBLISH, type Publish } from './reco
 import { acquireRunLock, handOverRunLock, isPidAlive, releaseRunLock, runStderrPath } from './run-lock.js'
 import { accountRotation } from '../accounts/rotation.js'
 import { accountsPath, hasAddedAccount, readAccounts } from '../accounts/accounts.js'
-import { AGENT_ID_ENV, PLUGINS_WITHOUT_ENV, PROFILE_ENV, PROJECT_SKILLS_ENV } from '@openagt/agent-data'
+import { AGENT_ID_ENV, PLUGINS_WITHOUT_ENV, PROFILE_ENV, PROJECT_SKILLS_ENV } from './names.js'
 
 /**
  * The tool's process side: a run in this process, the same run detached in its own process and

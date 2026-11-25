@@ -4,10 +4,9 @@ import { lstat, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:f
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { nodeGitRunner } from '@openagt/agent-data'
+import { nodeGitRunner, createCheckout, HARNESS_SKILL_DIRS } from '@openagt/git-branches'
 import type { ProjectRef } from '@openagt/hooks'
 import { fakeRun } from '@openagt/hooks/testing'
-import { createCheckout, HARNESS_SKILL_DIRS } from '@openagt/git-branches'
 import { skillsModule } from './module.js'
 
 const git = nodeGitRunner()

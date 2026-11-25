@@ -1,5 +1,5 @@
 import { homedir } from 'node:os'
-import { errorMessage, noAccountSentence } from '@openagt/agent-data'
+import { errorMessage, noAccountSentence } from '@openagt/git-branches'
 import type { HostAccounts, RepositoryAccount } from '@openagt/hooks'
 import { HOST, gitConfig } from './accounts.js'
 import { readAccounts, runCli, type GithubAccounts } from './cli.js'

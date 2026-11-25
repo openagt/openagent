@@ -5,7 +5,7 @@ import { RemoveProjectDialog } from './RemoveProjectDialog.js'
 
 afterEach(cleanup)
 
-const PROJECTS = [{ id: 'p1', name: 'app', path: '/repos/app', activated: true, addedAt: '2026-11-01T00:00:00.000Z' }]
+const PROJECTS = [{ id: 'p1', name: 'app', path: '/repos/app', addedAt: '2026-11-01T00:00:00.000Z' }]
 
 /** The dialog as the project's menu opens it, for the project p1, with what the module's server answers a removal. */
 function opened(answer: unknown = { ok: true }) {

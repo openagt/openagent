@@ -1,0 +1,84 @@
+import { access, mkdir, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { EMPTY_TREE, errorMessage, isGitRepo, missingIdentity, nodeGitRunner } from '@openagt/git-branches'
+import { type GitRunner, OPENAGENT_DIR } from '@openagt/hooks'
+import { openagentGitignore, gitignorePath } from './openagent-gitignore.js'
+
+/**
+ * Make a folder a project of OpenAgent's (#391): create the `.openagent/` marker and its ignore
+ * file. Nothing is committed on a branch that has a commit. What a dashboard's "Add project" does
+ * to a folder. Pure core over a {@link GitRunner} and the three file operations it needs.
+ */
+
+/** The file operations an install needs; `node:fs/promises` in production. */
+export interface InstallFs {
+  exists(path: string): Promise<boolean>
+  mkdir(path: string): Promise<void>
+  write(path: string, contents: string): Promise<void>
+}
+
+/** The `node:fs/promises` implementation of {@link InstallFs}. */
+export function nodeInstallFs(): InstallFs {
+  return {
+    exists: path => access(path).then(() => true, () => false),
+    async mkdir(path) {
+      await mkdir(path, { recursive: true })
+    },
+    write: (path, contents) => writeFile(path, contents),
+  }
+}
+
+/** The message of the empty commit an install gives a repository that has none. */
+export const FIRST_COMMIT_MESSAGE = '[OpenAgent] first commit'
+
+/** The outcome of {@link installProject}. Failures are values, never throws. */
+export type InstallResult =
+  | { ok: true; alreadyActivated?: boolean; initialized?: boolean }
+  | { ok: false; error: string }
+
+/** Injectable seams for {@link installProject}. */
+export interface InstallDeps {
+  git?: GitRunner
+  fs?: InstallFs
+}
+
+/**
+ * Activate the repo at `cwd`: create `.openagent/` with its ignore file, which hides the whole
+ * directory from git, itself included, so the person's repository shows no change. A repo whose
+ * ignore file is already there is a no-op (`alreadyActivated`) — the ignore file is the
+ * activation marker. Forgiving: any git/fs failure surfaces as `{ ok: false, error }`.
+ */
+export async function installProject(cwd: string, deps: InstallDeps = {}): Promise<InstallResult> {
+  const git = deps.git ?? nodeGitRunner()
+  const fs = deps.fs ?? nodeInstallFs()
+
+  if (await fs.exists(gitignorePath(cwd))) return { ok: true, alreadyActivated: true }
+
+  try {
+    // Auto-initialize a repo when the folder isn't one yet: OpenAgent treats
+    // git as the source of truth, so `git init` it for the user rather than erroring.
+    const insideRepo = await isGitRepo(cwd, git)
+    if (!insideRepo) await git(['init'], cwd)
+
+    // A repository with no commit cannot give an agent's branch a start. Its first commit is
+    // made empty, straight from the empty tree: the index is not read, so a file the person has
+    // staged stays staged and none of theirs is committed. Before the marker below, so a commit
+    // that fails leaves a folder the next add tries again. It is made by the author and committer
+    // git names; where git cannot name them, OpenAgent's name or email fills what git's config lacks.
+    const hasCommit = await git(['rev-parse', '--verify', '--quiet', 'HEAD'], cwd).then(() => true, () => false)
+    if (!hasCommit) {
+      const named = await Promise.all(['GIT_AUTHOR_IDENT', 'GIT_COMMITTER_IDENT'].map(ident => git(['var', ident], cwd).then(() => true, () => false)))
+      const identity = named.every(Boolean) ? [] : (await missingIdentity(cwd, git)).flatMap(([key, value]) => ['-c', `${key}=${value}`])
+      const first = (await git([...identity, 'commit-tree', EMPTY_TREE, '-m', FIRST_COMMIT_MESSAGE], cwd)).trim()
+      await git(['update-ref', 'HEAD', first], cwd)
+    }
+
+    await fs.mkdir(join(cwd, OPENAGENT_DIR))
+    // Keep what lives under `.openagent/` (a run's live files) out of git
+    // (#313). The early return above established the file is absent.
+    await fs.write(gitignorePath(cwd), openagentGitignore())
+    return insideRepo ? { ok: true } : { ok: true, initialized: true }
+  } catch (err) {
+    return { ok: false, error: errorMessage(err) }
+  }
+}

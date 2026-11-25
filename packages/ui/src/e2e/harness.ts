@@ -7,10 +7,10 @@ import { readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { DISTRIBUTION_ENV } from '@openagt/hooks'
+import { DISTRIBUTION_ENV, type RunEvent } from '@openagt/hooks'
 import { setDashboardContext } from '../dashboard-rpc/context.js'
 import { createProjectRuntime, type ProjectRuntime } from '../daemon-runtime.js'
-import { projectId } from '@openagt/agent-data'
+import { projectId } from '../project-id.js'
 import { registryPreferencesStore } from '../registry.js'
 import type { AgentMeta, AgentStatus } from '../store/index.js'
 import { findRun } from '@openagt/agent-driver'
@@ -22,7 +22,6 @@ import { callModule } from '../dashboard-rpc/module-calls.js'
 import { sendSwitchPlugin } from '../dashboard-rpc/plugins.js'
 import { sendStart, sendStop } from '../dashboard-rpc/control.js'
 import { onAgents, onRunCheckout } from '../dashboard-rpc/reads.js'
-import type { RunEvent } from '@openagt/hooks'
 import type { StartAgentOptions } from '../dashboard/types.js'
 
 export { git } from './fixture.js'
@@ -135,7 +134,7 @@ export async function makeWorld(): Promise<StoryWorld> {
     startedIn: runtime.onStartedIn,
     preferences: registryPreferencesStore(),
     openAgentUpdate: { read: async () => undefined },
-    projectState: async () => ({ errors: [] }),
+    projectState: async () => ({ errors: [], notes: [] }),
   }
 
   const repos: string[] = []

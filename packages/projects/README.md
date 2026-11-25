@@ -20,6 +20,13 @@ adds a repo to it and takes one off.
   (`app.lifecycle`'s `projectRemoved`) and says what it removed and kept; the dialog lists it.
   Refused while a module says no (`app.lifecycle`'s `refuseRemoval`): agent-driver's, while a
   run's process is alive there.
-- **Add your first project**, the Overview's first step while the list is empty (`app.attention`).
+- **Add your first project**, the Overview's first step while the list is empty (`app.attention`),
+  and **Not activated** on a listed project whose folder lost the `.openagent/.gitignore` adding
+  it writes.
 - A run's steps: its project's repository is there (`RunOrder.CLONE`), and the agent is told
   where the copies of the repos its task is about are (`RunOrder.CONTEXT`).
+
+What other modules import of it (`@openagt/projects`): making a folder a project
+(`installProject`, the `.openagent/` ignore file), the id a project's folder gets on the list
+(`projectId`), the repositories the person owns (the repo owners, in the person's own folder), and
+a module's own directory at a project's root taken away again (`removeOwnDirectory`).

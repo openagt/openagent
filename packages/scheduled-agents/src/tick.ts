@@ -1,6 +1,6 @@
 import { type RunCard, markerCard, runnerMark, type Publish, type RunnerMark } from '@openagt/agent-driver'
 import type { DriverQuota, DriverRateWindow, DriverReadiness, AgentAccount } from '@openagt/hooks'
-import type { FileBranchWrite } from '@openagt/agent-data'
+import type { FileBranchWrite } from '@openagt/store-filesystem'
 import { AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, NOW_READY_MS, isAgent, type AgentName } from './names.js'
 import type { LastRun } from './records.js'
 import { dueFrom, localStamp, paceInForce, paceText } from './pace.js'

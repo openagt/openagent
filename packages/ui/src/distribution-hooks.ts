@@ -1,6 +1,5 @@
 import { stat } from 'node:fs/promises'
-import { projectNameOf, repositoryAddress } from '@openagt/agent-data'
-import { createHooks, DISTRIBUTION_ENV, loadHandedDown, LOCAL_HOST, PROJECTS, type Hooks, type ProjectRecord, type ProjectRef, type RunHost, type RunRef, type Settings } from '@openagt/hooks'
+import { projectNameOf, repositoryAddress, createHooks, DISTRIBUTION_ENV, loadHandedDown, LOCAL_HOST, PROJECTS, type Hooks, type ProjectRecord, type ProjectRef, type RunHost, type RunRef, type Settings } from '@openagt/hooks'
 import { SESSIONS_ID } from './project-address.js'
 
 /**

@@ -32,10 +32,10 @@ async function registered(): Promise<{ dir: string; restore: () => Promise<void>
   }
 }
 
-test('onProjects carries what each project’s state says: its errors, and nothing when there are none; why its data stays here, if it does (#1500)', async () => {
+test('onProjects carries what each project’s state says: its errors, and nothing when there are none; what the modules note of it, if they do (#1500)', async () => {
   const { dir, restore } = await registered()
   try {
-    let state: ProjectState = { errors: [] }
+    let state: ProjectState = { errors: [], notes: [] }
     const asked: string[] = []
     provideTestContext({ projectState: async project => (asked.push(project.path), state) })
 
@@ -45,15 +45,14 @@ test('onProjects carries what each project’s state says: its errors, and nothi
     assert.deepEqual(asked, [dir], "each project's state is asked by its folder")
 
     const stranded = { id: 'store-git-branch:data-sync', title: 'Not syncing with the remote', message: 'the data branch could not be pushed: permission denied', since: '2026-08-20T10:00:00.000Z' }
-    state = { errors: [stranded] }
+    state = { errors: [stranded], notes: [] }
     const [listed] = await onProjects()
     assert.deepEqual(listed?.errors, [stranded])
-    assert.equal('local' in listed!, false, 'a project whose data reaches its remote carries no note')
+    assert.equal('notes' in listed!, false, 'a project nothing notes carries no notes field')
 
-    state = { errors: [], local: 'no-remote' }
-    assert.equal((await onProjects())[0]?.local, 'no-remote')
-    state = { errors: [], local: 'kept' }
-    assert.equal((await onProjects())[0]?.local, 'kept')
+    const here = { id: 'store-filesystem:data-here', words: 'Local only, no remote' }
+    state = { errors: [], notes: [here] }
+    assert.deepEqual((await onProjects())[0]?.notes, [here])
   } finally {
     await restore()
   }

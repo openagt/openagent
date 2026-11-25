@@ -2,7 +2,8 @@ import { mkdir, readFile, rm, rmdir, stat, writeFile } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import { dirname, join } from 'node:path'
 import { listRuns, type RunCard } from '@openagt/agent-driver'
-import { errorMessage, type GitRunner } from '@openagt/agent-data'
+import { errorMessage } from '@openagt/git-branches'
+import type { GitRunner } from '@openagt/hooks'
 import { COMMENT_MARK, nodeGhRunner, pushFork, type GhRunner } from '@openagt/github'
 
 /**

@@ -1,4 +1,4 @@
-import { errorMessage } from '@openagt/agent-data'
+import { errorMessage } from '@openagt/git-branches'
 import { nodeGhRunner, type GhRunner } from './gh.js'
 import { spawnMergeWatch } from './merge-watch.js'
 

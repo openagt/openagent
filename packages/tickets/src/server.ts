@@ -1,4 +1,5 @@
-import { commandReader, nodeGitRunner } from '@openagt/agent-data'
+import { commandReader } from '@openagt/store-filesystem'
+import { nodeGitRunner } from '@openagt/git-branches'
 import { read, type RpcHost } from '@openagt/hooks/rpc'
 import { nameInTickets, TICKETS_DIR } from './names.js'
 import { readShownTicket, readTickets, readTicketsMeta, type ShownTicket, type Ticket, type TicketsMeta } from './tickets.js'

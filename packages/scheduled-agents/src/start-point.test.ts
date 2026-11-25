@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { mkdir, mkdtemp, realpath, rename, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { GitRunner } from '@openagt/agent-data'
+import type { GitRunner } from '@openagt/hooks'
 import { atStartOf, isOnCommit, readStartPoint } from './start-point.js'
 import { RETRIED_RM, git, removeRepo, testRepo, writeSkill } from './test-repo.js'
 

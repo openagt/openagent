@@ -1,4 +1,4 @@
-import { personalFolderSyncs } from '@openagt/agent-data'
+import { personalFolderSyncs } from './folder-sync.js'
 import { defineModule } from '@openagt/hooks'
 import { SYNC_ENTRY } from './entry.js'
 import { gitRepositoryBackend } from './backend.js'

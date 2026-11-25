@@ -1,4 +1,5 @@
-import { accountGit, nodeGitRunner, type GitRunner } from '@openagt/agent-data'
+import { accountGit, nodeGitRunner } from '@openagt/git-branches'
+import type { GitRunner } from '@openagt/hooks'
 import { HOST, accountNamed, asAccount, gitConfig, homeUrlFor, nodeGhRunner, type GhRunner } from '@openagt/github'
 
 // The project's repository on GitHub, and the account this host reaches it as: a cloud session is

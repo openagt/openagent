@@ -1,7 +1,7 @@
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, relative, isAbsolute } from 'node:path'
-import { errorMessage } from '@openagt/agent-data'
+import { errorMessage } from '@openagt/git-branches'
 import type { GhRunner } from './gh.js'
 import { jobFiles, jobState, lastLines, startJob, stopJob, type JobFiles } from './job.js'
 

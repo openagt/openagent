@@ -3,7 +3,8 @@ import { test } from 'node:test'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { nodeGitRunner, writeSharing, DATA_BRANCH } from '@openagt/agent-data'
+import { nodeGitRunner, DATA_BRANCH } from '@openagt/git-branches'
+import { writeSharing } from '@openagt/store-filesystem'
 import { runCli } from './cli.js'
 
 const git = nodeGitRunner()

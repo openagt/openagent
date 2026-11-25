@@ -4,7 +4,7 @@ import { logOut, removeAdded } from './login.js'
 import { addingAll, listed, listing } from './reads.js'
 import { loginWiring, type LoginWiring } from './wiring.js'
 import { readUsage } from './usage.js'
-import { unknownWord, usageError, wrongArguments, helpRows } from '@openagt/agent-data'
+import { unknownWord, usageError, wrongArguments, helpRows } from '@openagt/hooks/command'
 import { UnknownAgent } from '../agents.js'
 
 /**

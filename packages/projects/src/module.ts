@@ -1,8 +1,9 @@
 import { join } from 'node:path'
-import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
-import { defineModule, PROJECTS, RunOrder, type ModuleDefinition, type RunContext } from '@openagt/hooks'
+import { nodeGitRunner } from '@openagt/git-branches'
+import { type GitRunner, defineModule, PROJECTS, RunOrder, type ModuleDefinition, type RunContext } from '@openagt/hooks'
 import { givenFolder } from './add.js'
 import { noProjectYet } from './attention.js'
+import { notActivated } from './not-activated.js'
 
 /**
  * projects, the module (#2394): the list of projects on this computer and what changes it, a
@@ -30,8 +31,9 @@ export function projectsModule(deps: ProjectsDeps = {}): ModuleDefinition {
       'app.lifecycle': {
         folderGiven: (folder, app) => givenFolder(app.settings, folder),
       },
-      // About this computer, so asked with no project: a project's own pages have one already.
-      'app.attention': async ({ project }, app) => (project === undefined ? noProjectYet((await app.settings.get(PROJECTS)).length) : []),
+      // About this computer, asked with no project: a project's own pages have one already. Asked
+      // with one, whether its folder is still made ready for OpenAgent.
+      'app.attention': async ({ project }, app) => (project === undefined ? noProjectYet((await app.settings.get(PROJECTS)).length) : notActivated(project)),
     },
   })
 }

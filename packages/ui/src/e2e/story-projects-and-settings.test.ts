@@ -22,11 +22,11 @@ test('add a project: it is installed, registered, and readable like the sidebar 
     // the one file install writes (B3).
     await stat(join(project.cwd, '.openagent', '.gitignore'))
 
-    // The Projects sidebar shows the repo as an activated project.
+    // The Projects sidebar shows the repo as a project, not one that is no longer activated.
     const projects = await rpc(onProjects)()
     const mine = projects.find(p => p.id === project.id)
     assert.equal(mine?.path, project.cwd)
-    assert.equal(mine?.activated, true)
+    assert.equal(mine?.errors?.some(error => error.title === 'Not activated') ?? false, false)
 
     // The project's reads answer: an empty docs rail, an empty agent history.
     assert.deepEqual(await rpc(onDocs)(project.id), [])
