@@ -4,7 +4,7 @@ import { forgetRemembered, type ModuleCallResult } from '@openagt/ui/module'
 import { fakeHost, renderWithHost } from '@openagt/ui/module/testing'
 import { Committing } from './Committing.js'
 
-// What the bar says while the agent commits on the Commit press's ask (`chat.summary`, while the run works).
+// What the project's row says while the agent commits on the Commit press's ask (while the run works).
 
 let asked = true
 const call = vi.fn(async (_projectId: string, name: string): Promise<ModuleCallResult> => (name === 'committing' ? { ok: true, output: asked } : { ok: false, error: `no ${name} here` }))

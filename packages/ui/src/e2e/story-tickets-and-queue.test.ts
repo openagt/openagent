@@ -14,7 +14,7 @@ import { callModule } from '../dashboard-rpc/module-calls.js'
 // that agent reads the skills itself.
 
 const TICKET_FILE = '2026-08-01_login-page.md'
-/** The fixture's provider packages: the modules' commands are these packages' own. */
+/** The fixture's module packages: the modules' commands are these packages' own. */
 const QUEUE_PACKAGE = '@openagt/queue'
 const TICKETS_PACKAGE = '@openagt/tickets'
 const TICKET = [
@@ -37,7 +37,7 @@ interface TicketRow {
   lockedBy?: string
 }
 
-test('browse the ticket backlog: the module reads the list and one ticket through the tickets command, OpenAgent reads the provider (#697/#1144/#1774)', async () => {
+test('browse the ticket backlog: the module reads the list and one ticket through the tickets command (#697/#1144/#1774)', async () => {
   const world = await makeWorld()
   const rpc = world.rpc
   try {
@@ -110,7 +110,7 @@ test("a claim released by hand from the module is the tickets command's own act,
   }
 })
 
-test('the queue is read through the project\'s queue provider, the boards show a queued ticket, and the queue module\'s action is seen at once (#1164/#1774)', async () => {
+test('the queue is read through the queue module, the boards show a queued ticket, and the queue module\'s action is seen at once (#1164/#1774)', async () => {
   const world = await makeWorld()
   const rpc = world.rpc
   try {

@@ -29,7 +29,7 @@ describe('ProjectErrorBanner (#1500)', () => {
   })
 
   test('one said with no detail and no since is its headline alone', () => {
-    render(<ProjectErrorBanner errors={[{ id: 'provider', title: 'Unsettled: which package provides the data' }]} />)
-    expect(screen.getByRole('alert').textContent).toBe('Unsettled: which package provides the data')
+    render(<ProjectErrorBanner errors={[{ id: 'store:no-account', title: 'No account to push as' }]} />)
+    expect(screen.getByRole('alert').textContent).toBe('No account to push as')
   })
 })

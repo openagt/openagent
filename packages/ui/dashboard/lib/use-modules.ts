@@ -43,8 +43,8 @@ export interface MountedModules {
    * The views, by place: the pages (a word two modules claim going to the first), the Overview's
    * cards and line and the Settings entries by their `order` then their package, the panes, the
    * parts of a run's page, what this computer's modules draw over every page, and the usage
-   * bar's line (the first module's that has one); the message box's controls and the labels of a
-   * session's row by their `order`; every other place in package order. Actions and options by
+   * bar's line (the first module's that has one); the message box's controls, the labels of a
+   * session's row and the rows of its work by their `order`; every other place in package order. Actions and options by
    * their `order`, then their package.
    */
   views: { [P in ViewPlace]: MountedView<P>[] }
@@ -240,7 +240,7 @@ function mount(loadedModules: { module: DashboardModule; definition: UiModuleDef
     for (const render of definition.hooks['ui.render'] ?? []) if (!mounted.renders.some(each => each.kind === render.kind)) mounted.renders.push({ ...render, ...of })
   }
   // Numbers, not a list the shell keeps: a third package sits between two others without the shell knowing it exists.
-  for (const place of ['overview.card', 'overview.line', 'overview.notice', 'settings.section', 'permissions.section', 'chat.labels', 'composer.control'] as const) views[place].sort(byMountOrder)
+  for (const place of ['overview.card', 'overview.line', 'overview.notice', 'settings.section', 'permissions.section', 'chat.labels', 'chat.work', 'composer.control'] as const) views[place].sort(byMountOrder)
   // The pages by their own order alone: at the same order they stay in the order the modules are loaded.
   const pages = views['app.page'] as MountedView<'app.page'>[]
   pages.sort((a, b) => (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER))

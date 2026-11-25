@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
-import type { AgentWorktree } from '../../src/index.js'
 import type { RunEvent } from '@openagt/hooks'
 
 // The menu reads the daemon and has tests of its own: here it is a stand-in that says what it was
@@ -31,20 +30,19 @@ const AGENTS = {
   stopped: [session, said, { kind: 'end', ok: false, stopped: true }],
   'waiting for an answer': [session, said, { kind: 'end', ok: false, waiting: true }],
 } as unknown as Record<string, RunEvent[]>
-const DIRTY: AgentWorktree = { checkout: { path: '/w', dirty: true }, branch: 'agent-dark-mode', pr: { number: 7, url: 'https://github.com/o/r/pull/7', state: 'open' } }
 
 const lastSession = () => menus.filter(menu => menu['agentId'] !== undefined).at(-1)!
 
 describe('AgentActionBar', () => {
-  test.each(Object.keys(AGENTS))('a %s agent with a dirty checkout: the name as its menu, then the project\'s; no status word, no clean or dirty, no branch, no project or place', kind => {
-    const { container } = render(<AgentActionBar projectId="p1" agentId="run-1" events={AGENTS[kind]!} label="Dark mode" checkout={DIRTY} />)
+  test.each(Object.keys(AGENTS))('a %s agent: the name as its menu, then the project\'s; no status word, no clean or dirty, no branch, no project or place', kind => {
+    const { container } = render(<AgentActionBar projectId="p1" agentId="run-1" events={AGENTS[kind]!} label="Dark mode" />)
     // All the bar says, word for word: nothing of the agent's state, of its tree, of its branch.
     expect(container.textContent).toBe('[Dark mode ⌄][⋮]')
     expect(screen.getAllByRole('button')).toHaveLength(2)
   })
 
   test('the run\'s state stands after its name, in the run table\'s word on its soft fill', () => {
-    const { container } = render(<AgentActionBar projectId="p1" agentId="run-1" events={AGENTS.running!} label="Dark mode" checkout={DIRTY} status="running" />)
+    const { container } = render(<AgentActionBar projectId="p1" agentId="run-1" events={AGENTS.running!} label="Dark mode" status="running" />)
     expect(container.textContent).toBe('[Dark mode ⌄]Working[⋮]')
     // The mark is drawn in the pill's own colour, the state's.
     expect(container.querySelector('svg')!.getAttribute('class')).toContain('text-current')
@@ -53,7 +51,7 @@ describe('AgentActionBar', () => {
 
   test('the project\'s ⋮ stands where the "New agent session" page has it: past the spacer, just before the panes\' icons, acting on the project', () => {
     const error = { kind: 'error', message: 'The push was rejected' }
-    const { container } = render(<AgentActionBar projectId="p1" agentId="run-1" events={[...AGENTS.running!, error] as RunEvent[]} label="Dark mode" checkout={DIRTY} />)
+    const { container } = render(<AgentActionBar projectId="p1" agentId="run-1" events={[...AGENTS.running!, error] as RunEvent[]} label="Dark mode" />)
     const project = menus.at(-1)!
     expect(project['agentId']).toBeUndefined()
     expect(project['projectId']).toBe('p1')
@@ -70,7 +68,7 @@ describe('AgentActionBar', () => {
   test('the count of errors is still said, for a running agent and for one that ended, at the bar\'s end', () => {
     const error = { kind: 'error', message: 'The push was rejected' }
     for (const kind of ['running', 'finished', 'stopped']) {
-      const { container } = render(<AgentActionBar projectId="p1" agentId="run-1" events={[...AGENTS[kind]!.slice(0, 2), error, ...AGENTS[kind]!.slice(2)] as RunEvent[]} label="Dark mode" checkout={DIRTY} />)
+      const { container } = render(<AgentActionBar projectId="p1" agentId="run-1" events={[...AGENTS[kind]!.slice(0, 2), error, ...AGENTS[kind]!.slice(2)] as RunEvent[]} label="Dark mode" />)
       expect(screen.getByRole('alert').textContent).toBe('1 error')
       expect(container.textContent).toBe('[Dark mode ⌄]1 error[⋮]')
       cleanup()
@@ -78,7 +76,7 @@ describe('AgentActionBar', () => {
   })
 
   test('the bar starts 16 in on every screen, the sidebar opening from the bar of pages on a phone; its end is its own, for the panes\' icons', () => {
-    const { container } = render(<AgentActionBar projectId="p1" agentId="run-1" events={AGENTS.finished!} label="Dark mode" checkout={DIRTY} />)
+    const { container } = render(<AgentActionBar projectId="p1" agentId="run-1" events={AGENTS.finished!} label="Dark mode" />)
     const row = container.firstElementChild!.firstElementChild!.className.split(' ')
     for (const cls of ['pr-2', 'pl-4']) expect(row).toContain(cls)
     expect(row).not.toContain('pr-12')
@@ -92,19 +90,19 @@ describe('AgentActionBar', () => {
   })
 
   test('a name not known yet is still the session\'s menu, handed no name', () => {
-    render(<AgentActionBar projectId="p1" agentId="run-1" events={[]} checkout={null} />)
+    render(<AgentActionBar projectId="p1" agentId="run-1" events={[]} />)
     expect(screen.getByRole('button', { name: '[no name ⌄]' })).toBeTruthy()
   })
 
   test('the session\'s menu shows and hides the detail under the bar, when the page has one', () => {
     const onToggle = vi.fn()
-    const { rerender } = render(<AgentActionBar projectId="p1" agentId="run-1" events={AGENTS.finished!} label="Dark mode" checkout={DIRTY} onToggle={onToggle} />)
+    const { rerender } = render(<AgentActionBar projectId="p1" agentId="run-1" events={AGENTS.finished!} label="Dark mode" onToggle={onToggle} />)
     expect(lastSession()['details']).toMatchObject({ open: false })
     screen.getByRole('button', { name: '[Dark mode ⌄]' }).click()
     expect(onToggle).toHaveBeenCalledTimes(1)
-    rerender(<AgentActionBar projectId="p1" agentId="run-1" events={AGENTS.finished!} label="Dark mode" checkout={DIRTY} onToggle={onToggle} expanded />)
+    rerender(<AgentActionBar projectId="p1" agentId="run-1" events={AGENTS.finished!} label="Dark mode" onToggle={onToggle} expanded />)
     expect(lastSession()['details']).toMatchObject({ open: true })
-    rerender(<AgentActionBar projectId="p1" agentId="run-1" events={AGENTS.finished!} label="Dark mode" checkout={DIRTY} />)
+    rerender(<AgentActionBar projectId="p1" agentId="run-1" events={AGENTS.finished!} label="Dark mode" />)
     expect(lastSession()['details']).toBeUndefined()
   })
 })

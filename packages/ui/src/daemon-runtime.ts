@@ -1,7 +1,7 @@
 import { basename, resolve } from 'node:path'
 import { stat } from 'node:fs/promises'
 import { MODULE_NAME, type Hooks, type ProjectRef, type RunHost, type RunOptions } from '@openagt/hooks'
-import { projectBranches, readRunEvents } from './store/index.js'
+import { readRunEvents } from './store/index.js'
 import type { StartAgentOptions, StartAgentResult, StartedInResult } from './dashboard/types.js'
 import { ownRunsWatch } from './dashboard/runs-watch.js'
 import { liveScreen } from './screens.js'
@@ -107,12 +107,8 @@ export function createProjectRuntime({ cwd, env, host, otherHosts = async () => 
         options: { ...(runsOn !== host ? { host: runsOn.id } : {}), ...runOptionsOf(options, publish) },
       })
       .then(({ id }) => ({ ok: true as const, id }), (err: unknown) => ({ ok: false as const, error: errorMessage(err) }))
-    // The host made a checkout (or is about to): the project's checkouts are read again on the
-    // next look rather than a few seconds from now, so the new run's page finds its own.
-    if (started.ok) {
-      projectBranches.changed(projectCwd)
-      ownRunsWatch.poke(projectCwd)
-    }
+    // The project's runs are read again now, so the pages that list them show the new one at once.
+    if (started.ok) ownRunsWatch.poke(projectCwd)
     return started.ok ? { ok: true, agentId: started.id } : { ok: false, error: started.error }
   }
 

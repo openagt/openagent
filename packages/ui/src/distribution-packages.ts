@@ -1,14 +1,13 @@
 import { join } from 'node:path'
 import { DISTRIBUTION_ENV, distributionItems, packageDirOf, type DistributionEntry, type DistributionPackage, type ModuleDefinition, type PluginInfo, type ProjectRef } from '@openagt/hooks'
-import { declaring, projectId, readManifest, type ProjectPackage, type ProvidedCommand, type ProvidedCommandLookup } from '@openagt/agent-data'
+import { projectId, readManifest, type ProjectPackage } from '@openagt/agent-data'
 import { distributionHooks, projectRefAt } from './distribution-hooks.js'
 
 /**
  * The packages the dashboard brings (#2394): the ones its distribution lists, resolved from the
  * distribution's own install (`@openagt/dashboard`'s), so a project installs nothing for them and
- * an empty folder starts an agent and shows it. Each comes through the same contract: a module
- * by its `./dashboard` export, a provider of a kind of data by its `openagent` key. A plugin's
- * package is there only where its Enabled row is on (`@openagt/hooks`). Nothing in `ui` names a
+ * an empty folder starts an agent and shows it. Each comes through the same contract, its module's
+ * hooks. A plugin's package is there only where its Enabled row is on (`@openagt/hooks`). Nothing in `ui` names a
  * package, and a project's own dependencies bring none.
  */
 
@@ -99,21 +98,4 @@ export async function projectsPackages(): Promise<OwnPackage[]> {
 /** The packages that are this computer's ({@link DashboardPackage.for}), a plugin's where it is on. */
 export async function computerPackages(): Promise<OwnPackage[]> {
   return onPackages('the computer')
-}
-
-/**
- * What provides `kind` in the project at `root`: the one package it has that declares it
- * (`"openagent": { "<kind>": "<command>" }`). Two that both do are the distribution's mistake,
- * which the project's banner says.
- */
-export async function lookupProvided(root: string, kind: string): Promise<ProvidedCommandLookup> {
-  const providers = declaring(await packagesOf(root), kind)
-  if (providers.length === 1) return { command: providers[0]! }
-  if (providers.length === 0) return {}
-  return { problem: `${providers.length} packages of the distribution provide ${kind}: ${providers.map(p => p.package).join(', ')}` }
-}
-
-/** {@link lookupProvided}'s command, for a caller that only needs to run it. */
-export async function providedCommand(root: string, kind: string): Promise<ProvidedCommand | undefined> {
-  return (await lookupProvided(root, kind)).command
 }

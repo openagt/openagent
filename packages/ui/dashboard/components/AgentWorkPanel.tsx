@@ -1,14 +1,14 @@
 import type { ReactNode } from 'react'
-import type { AgentWorktree } from '../../src/index.js'
 import { Folder, FolderGit2, GitBranch } from 'lucide-react'
 import { MiddleCut } from './MiddleCut.js'
 import { Panel, PanelRow } from './ui/panel.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 
 // The session's work, above the message box: one panel, a row per repo that has work (his pick,
-// over a bar per repo and over the project's bar with a label per copy). The project's row is
-// first; each copy of a repo the session has (Context) has the same row after it, so a copied
-// repo's work is read and taken further exactly as the project's is. A row is the repo's name,
+// over a bar per repo and over the project's bar with a label per copy), each drawn by the module
+// whose work it is (`chat.work`). The project's row is first; each copy of a repo
+// the session has (Context) has the same row after it, so a copied repo's work is read and taken
+// further exactly as the project's is. A row is the repo's name,
 // under it its branch, what the branch holds (+N −N) and its pull request, and at its end the next
 // step as a press (Commit, Open PR, Merge). A repo with nothing to say has no row, and a session
 // with no row has no panel. On a phone the press stays at the row's end, as wide as its word.
@@ -89,23 +89,4 @@ export function WorkRow({
       actionsAtRest
     />
   )
-}
-
-/**
- * The project's row: the run's checkout as the page read it, its branch and its pull request. It is
- * there while there is something to say (`show`): the agent has changes, a pull request or a next
- * step. An agent that changed nothing has no row.
- */
-export function ProjectWorkRow({ name, checkout, summary, actions, error, show }: {
-  /** The project's name; "This project" until the projects are read. */
-  name?: string | null | undefined
-  checkout: AgentWorktree | null
-  summary?: ReactNode
-  actions?: ReactNode
-  error?: string | null | undefined
-  show: boolean
-}) {
-  const branch = checkout?.branch
-  if (branch === undefined || !show) return null
-  return <WorkRow project name={name || 'This project'} branch={branch} path={checkout?.checkout?.path} summary={summary} pr={checkout?.pr} actions={actions} error={error} />
 }

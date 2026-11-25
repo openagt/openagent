@@ -2,7 +2,6 @@ import { SESSIONS_ID } from '../project-address.js'
 import { stat } from 'node:fs/promises'
 import { originDefaultBranch } from '@openagt/agent-data'
 import { moduleAgents, type ModuleAgent, type ModuleAgentsWanted } from '../dashboard/module-agents.js'
-import { join } from 'node:path'
 import { doingOf, readRunEvents, readRuns, type AgentDoing, type AgentMeta, isRunId } from '../store/index.js'
 import { readDocs, type WorkspaceDoc } from '../dashboard/docs.js'
 import { buildOverview, buildRecentAgents, type FoundAgent, type Overview, type RecentAgent } from '../dashboard/overview.js'
@@ -10,13 +9,8 @@ import { buildWaiting, type Waiting } from '../dashboard/waiting.js'
 import type { ProjectionRead, ProjectSummary } from '../dashboard/projects.js'
 import { buildActivity, type Activity } from '../dashboard/activity.js'
 import { buildDashboard, type DashboardData } from '../dashboard/dashboard.js'
-import { readGitStatus } from '../dashboard/git-status.js'
-import { readRunHandoff, type AgentHandoff } from '../dashboard/agent-handoff.js'
-import { pullRequestState } from '../dashboard/pr-states.js'
-import { copyTarget } from '../dashboard/session-copies.js'
-import type { AgentWorktree } from '../dashboard/types.js'
 import { crawlRepoFiles } from '../project.js'
-import { contextHosts, contextProject, contextProjects, contextRun, resolveProjectPath, resolveAgentPath, runHostOf } from './context.js'
+import { contextHosts, contextProject, contextProjects, resolveProjectPath, resolveAgentPath, runHostOf } from './context.js'
 import type { RunEvent } from '@openagt/hooks'
 import { markOtherHost, withPrStates } from '../dashboard/run-rows.js'
 import type { ProjectRef, RunRef } from '@openagt/hooks'
@@ -66,46 +60,14 @@ export async function onModuleAgents(projectId: string, wanted: ModuleAgentsWant
 }
 
 /**
- * Where a session is working (#798): the checkout it has, its branch, and whether it is holding
- * uncommitted changes.
- *
- * The dashboard could not answer "where is this session working". The git status bar reads the
- * *project*, so a session's own branch was visible nowhere, and a worktree an agent kept (#737) was
- * a name in a list with no size and no way in.
- *
- * Every run works in a checkout of its own, so once that checkout is gone there is no tree left to
- * be clean or dirty: the answer is then only what the run recorded, its branch and its pull
- * request. It used to fall back to the project's root and report the user's own checkout (their
- * branch, their "clean") as the run's.
+ * The run's own checkout while it has one, as its host finds it: an absolute path, or `null` for a
+ * run with none left (a clean run's is removed when it ends). Its menu opens that folder.
  */
-export async function onAgentWorktree(projectId: string, agentId: string): Promise<AgentWorktree | null> {
-  const root = await resolveProjectPath(projectId)
-  if (!root || !isRunId(agentId)) return null
-  const run = await runRefOf(projectId, agentId)
-  const found = run ? await (await runHostOf(run)).find(run).catch(() => undefined) : undefined
-  const checkout = found?.checkout !== undefined ? { path: found.checkout } : undefined
-  // Read only while the checkout's own `.git` is there: without it git reads the project's
-  // checkout the run's folder sits in, and answered with the person's branch as the run's.
-  const linked = checkout ? await stat(join(checkout.path, '.git')).then(() => true, () => false) : false
-  const status = checkout && linked ? await readGitStatus(checkout.path).catch(() => undefined) : undefined
-  // The run's pull request is the one its record names, as its git host module last read it.
-  const agent = await contextRun(projectId, agentId).catch(() => undefined)
-  const state = agent?.pr ? pullRequestState(agent.pr.url)?.state : undefined
-  const pr = agent?.pr ? { ...agent.pr, ...(state ? { state } : {}) } : undefined
-  if (!checkout || !status) {
-    // The checkout's branch was the agent's; with no checkout the record is the only witness. So
-    // it is for a checkout git cannot read: the run's clean-up is removing it, and an answer
-    // without its branch put the bar above the message box away until the next read.
-    if (!agent) return null
-    return { ...(agent.branch ? { branch: agent.branch } : {}), ...(pr ? { pr } : {}) }
-  }
-  return {
-    checkout: { path: checkout.path, dirty: status.dirty },
-    branch: status.branch,
-    // A session's branch is exactly the thing that has a PR (#809), so the bar can show it
-    // like the project's does.
-    ...(pr ? { pr } : {}),
-  }
+export async function onRunCheckout(projectId: string, agentId: string): Promise<string | null> {
+  const run = isRunId(agentId) ? await runRefOf(projectId, agentId) : undefined
+  const checkout = run ? (await (await runHostOf(run)).find(run).catch(() => undefined))?.checkout : undefined
+  // A folder being removed by the run's clean-up is none to open.
+  return checkout !== undefined && (await stat(checkout).then(() => true, () => false)) ? checkout : null
 }
 
 /** One run's events for replay, as its host says them (or `[]` when the run or project is gone). */
@@ -229,25 +191,3 @@ export async function onProjectFiles(projectId: string, agentId?: string): Promi
   return cwd ? crawlRepoFiles(cwd).catch(() => []) : []
 }
 
-/**
- * The end-of-session handoff (#799): the branch a finished session left its work on, what it
- * committed, what it changed, and whether that has been pushed or opened as a PR.
- *
- * Read from the *project* checkout against the session's branch, not from the session's worktree.
- * A clean agent's worktree is removed when it finishes, and `resolveAgentPath` then falls back to the
- * project root — so a worktree-addressed read reports the project's own branch and the user's own
- * uncommitted changes as though they were the session's. The branch is what outlives the agent, so
- * the branch is what this asks about.
- */
-export async function onAgentHandoff(projectId: string, agentId: string, repo?: string): Promise<AgentHandoff | null> {
-  const cwd = await resolveProjectPath(projectId)
-  if (!cwd || !isRunId(agentId)) return null
-  const agent = await contextRun(projectId, agentId).catch(() => undefined)
-  if (!agent) return null
-  // One of the session's copies of repos: the same read, of the copy's own folder and branch.
-  if (repo !== undefined) {
-    const copy = await copyTarget(agent, repo)
-    return (copy && (await readRunHandoff(copy.cwd, copy.agent).catch(() => undefined))) ?? null
-  }
-  return (await readRunHandoff(cwd, agent).catch(() => undefined)) ?? null
-}

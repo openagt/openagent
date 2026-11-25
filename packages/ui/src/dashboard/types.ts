@@ -1,4 +1,3 @@
-import type { PullRequestState } from '@openagt/hooks'
 import type { RunOptions } from '@openagt/hooks'
 
 import type { PublishPick } from '../publish-levels.js'
@@ -51,24 +50,3 @@ export interface StartAgentOptions {
 /** The outcome of a Start attempt (#345): the id of the run the run's host began, or why there is none. */
 export type StartAgentResult = { ok: true; agentId: string } | { ok: false; error: string }
 
-/**
- * Where a session is working (#798): its checkout, its branch, and what it is holding. Read by
- * the dashboard so a session's action bar can say which worktree it has, rather than leaving the
- * user to infer it from an agent id.
- *
- * Only what is true of the run: once its checkout is gone there is no tree to be clean or dirty,
- * so {@link checkout} is absent and the branch is the one the run recorded.
- */
-export interface AgentWorktree {
-  /** The run's own checkout while it exists. */
-  checkout?: {
-    /** Absolute path of the checkout. */
-    path: string
-    /** Uncommitted changes present in it. */
-    dirty: boolean
-  }
-  /** The branch the run's work is on: its checkout's while it has one, else the one it recorded. */
-  branch?: string
-  /** The PR its record names (#809), and how it stands as its git host module last read it. */
-  pr?: { number: number; url: string; state?: PullRequestState }
-}

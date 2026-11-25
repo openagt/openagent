@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { START_FROM } from '@openagt/hooks'
 import { rpcHost } from '@openagt/hooks/testing'
 import { agentBranchName } from './branch-names.js'
-import { checkout, commit, committing, discard, merge, pickStart, removeCheckout, startBranches, startedFrom, startPlaces } from './server.js'
+import { checkout, commit, committing, discard, handoff, merge, pickStart, removeCheckout, startBranches, startedFrom, startPlaces, worktree } from './server.js'
 import { addWorktree } from './worktree.js'
 
 // What the launcher's start menu reads and saves, against real repositories.
@@ -196,4 +196,46 @@ test('Commit asks the run, and the bar says it is committing while the run works
   assert.equal(await committing(host, { agentId: 'run1' }), false)
   status = 'running'
   assert.equal(await committing(host, { agentId: 'run1' }), false, 'a later turn of the run is no commit asked')
+})
+
+test("where a run works: its checkout, its branch and whether it holds uncommitted changes; with no checkout git can read, the branch its record names, never the project's own", async () => {
+  const at = await keptCheckout()
+  const found = { checkout: at.worktree, record: { status: 'running', branch: 'agent-recorded' }, changedNothing: false }
+  try {
+    assert.deepEqual(await worktree(rpcHost({ root: at.dir, run: async () => found }), { agentId: 'run1' }), { checkout: { path: at.worktree, dirty: true }, branch: at.branch })
+    git(at.worktree, 'add', '-A')
+    git(at.worktree, 'commit', '-q', '-m', 'work')
+    assert.deepEqual(await worktree(rpcHost({ root: at.dir, run: async () => found }), { agentId: 'run1' }), { checkout: { path: at.worktree, dirty: false }, branch: at.branch })
+    // A checkout being removed: its folder is there, its `.git` is not, and git would read the project's.
+    await rm(join(at.worktree, '.git'))
+    assert.deepEqual(await worktree(rpcHost({ root: at.dir, run: async () => found }), { agentId: 'run1' }), { branch: 'agent-recorded' })
+    assert.deepEqual(await worktree(rpcHost({ root: at.dir, run: async () => ({ record: { status: 'done' }, changedNothing: false }) }), { agentId: 'run1' }), {}, 'a record that names no branch')
+    assert.equal(await worktree(rpcHost({ root: at.dir, run: async () => undefined }), { agentId: 'run1' }), null, 'a run its host does not know')
+    assert.equal(await worktree(rpcHost({ root: at.dir, run: async () => found }), { agentId: '../../etc' }), null, 'an id that would climb out of a folder')
+  } finally {
+    await rm(at.dir, { recursive: true, force: true })
+  }
+})
+
+test("what a run's branch holds, off its record: its commits and files from where its work began; a landed run by the commit its record kept; a branch gone because it changed nothing", async () => {
+  const at = await keptCheckout()
+  try {
+    git(at.worktree, 'add', '-A')
+    git(at.worktree, 'commit', '-q', '-m', 'welcome')
+    const start = git(at.dir, 'rev-parse', 'main').trim()
+    const tip = git(at.worktree, 'rev-parse', 'HEAD').trim()
+    const read = (record: Record<string, unknown>, changedNothing = false) => handoff(rpcHost({ root: at.dir, run: async () => ({ record: { status: 'done', ...record }, changedNothing }) }), { agentId: 'run1' })
+    const held = await read({ branch: at.branch, baseCommit: start })
+    assert.deepEqual([held?.branch, held?.exists, held?.commits.map(commit => commit.subject), held?.files.map(file => file.path), held?.insertions, held?.deletions, held?.empty, held?.landed], [at.branch, true, ['welcome'], ['index.html'], 1, 1, false, undefined])
+    assert.equal(held?.commits[0]?.short, tip.slice(0, 7))
+    // Landed: its branch went, and what it held is read by the commit its record kept.
+    const landed = await read({ landed: tip, baseCommit: start })
+    assert.deepEqual([landed?.landed, landed?.commits.length], [true, 1])
+    // Gone with the checkout of a run that changed nothing: said as that, not as lost work.
+    assert.equal((await read({ branch: 'agent-gone' }, true))?.unchanged, true)
+    assert.equal((await read({ branch: 'agent-gone' }))?.unchanged, undefined)
+    assert.equal(await read({}), null, 'a run with neither a branch nor a landed commit')
+  } finally {
+    await rm(at.dir, { recursive: true, force: true })
+  }
 })

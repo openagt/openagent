@@ -1,17 +1,9 @@
-import { DiffStat, Facts, useModuleHost, type UiRunProps } from '@openagt/ui/module'
-import { useHandoff, type Handoff } from './calls.js'
+import { DiffStat, Facts } from '@openagt/ui/module'
+import type { Handoff } from './calls.js'
 
-// What an ended session left on its branch, in a few words, in the bar above its message box
-// (`chat.summary`) beside the branch they are about (#799, #1023): the next step is offered beside
-// it (`chat.handoff`), and the commits and the files themselves are a pane away. The read is
-// branch-addressed, so it survives the checkout: a clean run's checkout is removed when it ends.
-
-/** The summary of the run's own branch, once the run has ended. */
-export function RunSummary({ projectId, agentId, working }: UiRunProps) {
-  const host = useModuleHost()
-  const { handoff } = useHandoff(host, { projectId, agentId }, !working)
-  return working ? null : <HandoffSummary handoff={handoff} />
-}
+// What an ended session left on its branch, in a few words, in its row of the panel above its
+// message box, beside the branch they are about (#799, #1023): the next step is offered beside it
+// (`chat.handoff`), and the commits and the files themselves are a pane away.
 
 /** The one-line verdict: what the session left behind, or that it left nothing. */
 export function HandoffSummary({ handoff }: { handoff: Handoff | null }) {

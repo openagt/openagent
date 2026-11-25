@@ -1,10 +1,11 @@
-import { rpcClient, usePolled, type ModuleHost, type ReadState } from '@openagt/ui/module'
-import type { Handoff } from '../src/server.js'
+import { useEffect, useRef, useState } from 'react'
+import { forgetRemembered, rpcClient, useAskOn, usePolled, type ModuleHost, type ReadState } from '@openagt/ui/module'
+import type { Handoff, Worktree } from '../src/server.js'
 
 // The module's calls of its own server part (`../src/server.ts`), typed by it, in the project the
 // place is drawn in. Each throws the reason a call failed, so a polled read keeps the last answer it had.
 
-export type { Handoff, HandoffCommit, HandoffFile, Pressed, StartFrom, StartPlaces } from '../src/server.js'
+export type { Handoff, HandoffCommit, HandoffFile, Pressed, StartFrom, StartPlaces, Worktree } from '../src/server.js'
 
 /** The client of the server part, for a host that calls in a project: a place's (`UiHost`) or a view's (`ModuleHost`). */
 export const server = (host: Pick<ModuleHost, 'call'>) => rpcClient<typeof import('../src/server.js')>(host)
@@ -36,18 +37,110 @@ export function forgetHandoff(on: WorkOn): void {
   shared.delete(`${on.projectId}\n${on.agentId}\n${on.repo ?? ''}`)
 }
 
-/** How often an ended run's branch is read while it shows: a push or a merge from a terminal changes what it says. */
+/** How often a branch is read while nothing is moving: a push or a merge from a terminal changes what it says. */
 const REST_MS = 15_000
 
 /**
- * What the run's branch, or a copy's, holds, read while `enabled` (the run has ended: a branch still
- * being written to has nothing to hand off yet), remembered per run in this browser, so going back
- * to a run shows its last answer at once.
+ * How long after a run's turn ends its branch is read every second rather than every fifteen.
+ *
+ * A clean run makes its own last commit while it cleans up, after its turn has ended, so the first
+ * read taken then answers for a branch that holds nothing yet. Waiting a quarter of a minute for
+ * the next read is why the row's last step used to arrive late, and why the row itself blinked.
  */
-export function useHandoff(host: ModuleHost, on: WorkOn, enabled: boolean, again: unknown = 0): { handoff: Handoff | null; state: ReadState } {
+export const SETTLING_MS = 10_000
+
+/** How often the branch is read in that window. */
+export const SETTLING_EVERY_MS = 1_000
+
+/**
+ * Whether a run's turn has just ended, so what it leaves is read every {@link SETTLING_EVERY_MS}:
+ * from `working` going false, for {@link SETTLING_MS}, or until `settled` says it has landed.
+ */
+export function useSettling(working: boolean, settled = false): boolean {
+  const [settling, setSettling] = useState(false)
+  const wasWorking = useRef(working)
+  useEffect(() => {
+    if (wasWorking.current && !working) setSettling(true)
+    wasWorking.current = working
+  }, [working])
+  useEffect(() => {
+    if (!settling) return
+    const timer = setTimeout(() => setSettling(false), SETTLING_MS)
+    return () => clearTimeout(timer)
+  }, [settling])
+  useEffect(() => {
+    if (settling && settled) setSettling(false)
+  }, [settling, settled])
+  return settling
+}
+
+/** Where a run stands, as the row it is read for knows it. */
+export interface Standing {
+  /** The run has ended: a branch still being written to has nothing to hand off yet, so it is read only then. */
+  ended: boolean
+  /** The run's clean-up is still going: the branch is read again the moment it is done, since it may have deleted an empty branch or pushed one. */
+  saving?: boolean
+  /** The run works: the answer read before it did is no longer what its branch holds. */
+  working?: boolean
+}
+
+/**
+ * What the run's branch, or a copy's, holds, read once the run has ended, remembered per run in
+ * this browser too, so going back to a run, or loading it again, shows its last answer at once
+ * while it is read again; another run's answer is never shown. Polled rather than read once: a
+ * push or a merge from here (or from a terminal) changes what the branch holds. Read every second
+ * while the branch is still settling after a turn ({@link useSettling}), every fifteen at rest.
+ */
+export function useHandoff(host: ModuleHost, on: WorkOn, { ended, saving = false, working = false }: Standing): { handoff: Handoff | null; state: ReadState } {
   const key = `git-branches:handoff:${on.projectId}:${on.agentId}${on.repo !== undefined ? `:${on.repo}` : ''}`
-  const { value, state } = usePolled<Handoff | null>(enabled ? () => readHandoff(host, on) : null, null, REST_MS, [on.projectId, on.agentId, on.repo, enabled, again], { remember: key, stored: true })
+  // A run that works again writes to its branch: the answer remembered from before is not the
+  // one shown when the run ends, which would put the last step back for a moment.
+  useEffect(() => {
+    if (working) forgetRemembered(key)
+  }, [working, key])
+  const [everyMs, setEveryMs] = useState(REST_MS)
+  const { value, state, reload, refresh } = usePolled<Handoff | null>(ended ? () => readHandoff(host, on) : null, null, everyMs, [on.projectId, on.agentId, on.repo, ended], { remember: key, stored: true })
+  // The run's turn has just ended: its branch is read every second until it has something to say,
+  // since the run's own last commit lands moments after its turn does.
+  const settling = useSettling(working, handoffSays(value))
+  useEffect(() => setEveryMs(settling ? SETTLING_EVERY_MS : REST_MS), [settling])
+  // A quicker pace reads at once, which is how the read the moment a run ends is taken at all; and
+  // the clean-up done (`saving` over) may have deleted the branch or pushed it.
+  useAskOn(everyMs, refresh)
+  useAskOn(saving, () => {
+    forgetHandoff(on)
+    return reload()
+  })
   return { handoff: value, state }
+}
+
+/** How often a run's checkout is read at rest. */
+const CHECKOUT_MS = 10_000
+
+/**
+ * Where the run works (its checkout, its branch, clean or dirty), polled: `null` until its own
+ * answer is in, or what was read last time for the same run. Read again at once when `working`
+ * changes: a turn that ends leaves the checkout clean or dirty right then, not at the next poll;
+ * and every second for a while after, as the branch is: the run's clean-up pushes and removes its
+ * checkout then.
+ */
+export function useWorktree(host: ModuleHost, projectId: string, agentId: string, working: boolean): Worktree | null {
+  const [everyMs, setEveryMs] = useState(CHECKOUT_MS)
+  const { value, refresh } = usePolled<Worktree | null>(
+    () => server(host).worktree(projectId, { agentId }),
+    null,
+    everyMs,
+    [projectId, agentId],
+    // A run seen before, by this load or an earlier one, shows what was read last time at once,
+    // while it is read again. One never seen shows no facts until its own answer: never the
+    // previous run's, which read as this one's for the beat the read took.
+    { remember: `git-branches:worktree:${projectId}:${agentId}`, stored: true },
+  )
+  const settling = useSettling(working)
+  useEffect(() => setEveryMs(settling ? SETTLING_EVERY_MS : CHECKOUT_MS), [settling])
+  useAskOn(working, refresh)
+  useAskOn(everyMs, refresh)
+  return value
 }
 
 /** The project's main branch by name, when the work was measured from it; work measured from a commit only knows it as "the main branch". */

@@ -9,9 +9,12 @@ What it brings:
 - **The run's checkout**, made before anything is linked into it, and reclaimed once the record says
   how the run ended: only what is committed may go, and a branch that holds work stays. A session
   with no project works in a folder of its own, its repos copied into it.
-- **What the branch holds**, in the bar above an ended session's message box (`chat.summary`): the
-  size of the change, its commits and files in the hover. A row per copy of a repo the session
-  holds work in follows the project's (`chat.work`).
+- **The project's row** in the panel of a session's work above its message box (`chat.work`): the
+  run's branch and its pull request; while the run works, whether its checkout holds changes, the
+  other modules' words (`chat.summary`) and "Committing…"; once it has ended, what the branch holds
+  (the size of the change, its commits and files in the hover). It comes when there is something
+  to say, holds while the branch settles after a turn, and goes once nothing is left: a request
+  merged or closed, or work landed. A row per copy of a repo the session holds work in follows it.
 - **The next steps there** (`chat.handoff`), each offered from what the branch holds: Commit, which
   asks the agent to commit what it left uncommitted, the bar saying "Committing…" while it does; Discard changes, asked first; Publish branch, a
   push as one of OpenAgent's accounts; Merge, for a project with no remote, on this machine; and a

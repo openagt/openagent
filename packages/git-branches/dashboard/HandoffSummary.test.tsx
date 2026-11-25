@@ -3,9 +3,9 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { forgetRemembered, type ModuleCallResult } from '@openagt/ui/module'
 import { fakeHost, renderWithHost } from '@openagt/ui/module/testing'
 import type { Handoff } from './calls.js'
-import { HandoffSummary, RunSummary } from './HandoffSummary.js'
+import { HandoffSummary } from './HandoffSummary.js'
 
-// What an ended session left on its branch, in the bar above its message box (`chat.summary`).
+// What an ended session left on its branch, in its project's row above its message box.
 
 /** A session that did real work, on a repo with a remote, not pushed yet. */
 const worked: Handoff = {
@@ -69,20 +69,5 @@ describe('HandoffSummary', () => {
     expect(render(<HandoffSummary handoff={{ ...worked, ...nothing, merged: true, pendingFiles: ['index.html'] }} />).container.textContent).toBe('')
     cleanup()
     expect(render(<HandoffSummary handoff={{ ...worked, exists: false, landed: true }} />).container.textContent).toBe('')
-  })
-})
-
-describe('RunSummary', () => {
-  test("the run's branch is read once the run has ended, and nothing is said while it works", async () => {
-    const call = vi.fn(async (): Promise<ModuleCallResult> => ({ ok: true, output: worked }))
-    const host = fakeHost('@openagt/git-branches', { call })
-    const { container } = renderWithHost(<RunSummary projectId="p1" agentId="run-1" working />, host)
-    await new Promise(resolve => setTimeout(resolve, 20))
-    expect(call).not.toHaveBeenCalled()
-    expect(container.textContent).toBe('')
-    cleanup()
-    renderWithHost(<RunSummary projectId="p1" agentId="run-1" working={false} />, host)
-    await waitFor(() => expect(screen.getByLabelText('1 commit · 1 file')).toBeTruthy())
-    expect(call).toHaveBeenCalledWith('p1', 'handoff', { agentId: 'run-1' })
   })
 })
