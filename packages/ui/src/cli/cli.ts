@@ -21,7 +21,7 @@ const defaultIO: CliIO = {
 }
 
 /** The command's help; with `--uninstall` where the distribution takes OpenAgent off the computer. */
-const helpOf = (uninstall: boolean): string => `OpenAgent — autonomous AI programming, with a coding agent (Claude Code or Codex).
+const helpOf = (uninstall: boolean): string => `OpenAgent — autonomous AI programming, with a coding agent.
 
 ${helpRows([
   'Usage:',

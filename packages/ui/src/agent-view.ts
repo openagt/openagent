@@ -46,7 +46,7 @@ export interface SessionInfo {
    *
    * Taken from the event rather than the filesystem on purpose: an agent that finishes cleanly has
    * its worktree removed (`tearDownWorktree`), so the event is the only surviving record of where
-   * the session lived — and that path is exactly what `claude --resume` needs to find it again.
+   * the session lived — and that path is exactly what its CLI's resume needs to find it again.
    */
   workspace?: string
 }

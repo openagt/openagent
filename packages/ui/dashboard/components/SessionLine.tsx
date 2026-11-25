@@ -31,7 +31,7 @@ function Step({ label, value }: { label: string; value?: string }) {
 //
 // While the session is being set up (`live`), it is one moving line naming the step going on now,
 // with the seconds since the prompt: "Starting session" until the agent has a card, "Making the
-// checkout" until the card names its branch or its checkout, then "Starting Claude Code" until the
+// checkout" until the card names its branch or its checkout, then "Starting <its coding agent>" until the
 // first row after the prompt. The steps are read off the card, which the runner writes as it
 // goes. An agent that runs elsewhere has no checkout made here: it says "Starting session" until
 // its card names a branch.
