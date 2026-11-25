@@ -8,7 +8,7 @@ import { RunOrder, type GitBranchesFacts, type ProjectRef, type RunContext, type
 import { fakeApp, fakeRun } from '@openagt/hooks/testing'
 import { gitBranchesModule } from './module.js'
 import { SESSION_FOLDER_STAYS } from './session-folder.js'
-import { PROJECTS_ENV, SESSION_ENV } from './add.js'
+import { PROJECTS_ENV, projectsLine, SESSION_ENV } from './add.js'
 import { worktreePath } from './worktree.js'
 
 // git-branches as a module: its steps, run alone on a real repository, each reading and writing
@@ -40,7 +40,7 @@ test('its steps stand where a checkout is made, its branch read back, and the ch
     (gitBranchesModule().hooks['run.step'] ?? []).map(step => [step.order, step.name]),
     [
       [RunOrder.WORKSPACE, 'make the checkout'],
-      [RunOrder.CONTEXT, 'hand the agent its projects'],
+      [RunOrder.CONTEXT, 'tell the agent its projects'],
       [RunOrder.RECORD - 20, 'read the branch back'],
       [RunOrder.CLEANUP, 'reclaim the checkout'],
     ],
@@ -242,13 +242,33 @@ test("a finished run's work left on this machine is what waits on the person: it
     await rm(p.dir, { recursive: true, force: true })
     await rm(origin, { recursive: true, force: true })
   }
+})
+
 test("a session handed the person's projects has them in its agent's environment, with its id, for its `add` command; one handed none has neither", async () => {
   const { projects } = steps()
-  const projectsGiven = [{ name: 'shop', dir: '/w/shop' }]
+  const projectsGiven = [{ name: 'shop', dir: '/w/shop' }, { name: 'blog', dir: '/w/blog' }]
   const handed: RunContext = fakeRun({ id: 'run9', options: { 'git-branches': { projects: projectsGiven } } })
   await projects.run(handed)
   assert.deepEqual(handed.env, { [PROJECTS_ENV]: JSON.stringify(projectsGiven), [SESSION_ENV]: 'run9' })
   const none: RunContext = fakeRun({ id: 'run10' })
   await projects.run(none)
-  assert.deepEqual(none.env, {})
+  assert.deepEqual([none.env, none.context], [{}, []])
+})
+
+test("a fresh session with no project is told the names of the projects it may bring in, the rule to ask when it cannot tell, and how to add one; a project it has a copy of is not offered; a resume and a run in a project are told nothing", async () => {
+  const { projects } = steps()
+  const given = { 'git-branches': { projects: [{ name: 'shop', dir: '/w/shop' }, { name: 'blog', dir: '/w/blog' }], repos: [{ name: 'blog', from: '/w/blog' }] } }
+  const fresh: RunContext = fakeRun({ id: 'run11', options: given })
+  await projects.run(fresh)
+  assert.deepEqual(fresh.context, [projectsLine(['shop'])])
+  assert.equal(
+    projectsLine(['shop', 'blog']),
+    "Projects you can work on: shop, blog. If the work needs one of them and you cannot tell which, ask the person, with the projects as the choices. To work on one, run `npx @openagt/git-branches@0.1 add <name>`: it copies the project into this session's folder and prints where.",
+  )
+  const resumed: RunContext = fakeRun({ id: 'run11', options: given, resume: { text: 'go on' } })
+  await projects.run(resumed)
+  assert.deepEqual(resumed.context, [])
+  const inProject: RunContext = fakeRun({ id: 'run12', project: { id: 'p', name: 'p', dir: '/w/p' }, options: given })
+  await projects.run(inProject)
+  assert.deepEqual(inProject.context, [])
 })

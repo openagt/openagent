@@ -1,5 +1,7 @@
 import { join } from 'node:path'
-import { checkoutRoot, nodeGitRunner, sessionFolder, type GitRunner } from '@openagt/agent-data'
+import type { GitRunner } from '@openagt/hooks'
+import { checkoutRoot, nodeGitRunner } from './git.js'
+import { sessionFolder } from './sessions.js'
 import { agentBranchName } from './branch-names.js'
 import { addSessionRepos, foundCopies } from './session-folder.js'
 
@@ -52,12 +54,17 @@ export async function addProject(home: string, id: string | undefined, projects:
   const root = await checkoutRoot(project.dir, git)
   const there = have.find(repo => repo.from === root)
   if (there) return { ok: true, project: project.name, copy: join(sessionFolder(home, id), there.name), branch, existing: true }
-  const { added } = await addSessionRepos(home, id, have, [project.dir], git)
-  return { ok: true, project: project.name, copy: join(sessionFolder(home, id), added[0]!.name), branch, existing: false }
+  const { repos } = await addSessionRepos(home, id, have, [project.dir], git)
+  return { ok: true, project: project.name, copy: join(sessionFolder(home, id), repos[repos.length - 1]!.name), branch, existing: false }
 }
 
 /** The line a refusal of `add` says. */
 export function addRefusalLine(outcome: Extract<AddOutcome, { ok: false }>): string {
   if (outcome.reason === 'no-session') return `add runs in a session OpenAgent started: ${SESSION_ENV} names none`
   return outcome.projects.length === 0 ? `no project named ${outcome.project}: this session was handed none` : `no project named ${outcome.project}; the projects are ${outcome.projects.join(', ')}`
+}
+
+/** What a session that may bring in the person's projects is told of them with its first prompt (Auto). */
+export function projectsLine(names: readonly string[]): string {
+  return `Projects you can work on: ${names.join(', ')}. If the work needs one of them and you cannot tell which, ask the person, with the projects as the choices. To work on one, run \`npx @openagt/git-branches@0.1 add <name>\`: it copies the project into this session's folder and prints where.`
 }

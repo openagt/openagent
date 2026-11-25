@@ -241,7 +241,9 @@ test('a line said to a working run goes to its inbox; one to a run that ended re
     await here.steer({ id: ended, project }, { kind: 'answer', question: 'Which way?', answer: 'Left' })
     // A take-back or a Send now acts on a turn that runs: with none, it is done.
     await here.steer({ id: ended, project }, { kind: 'now' })
-    assert.deepEqual(resumes, [{ id: ended, text: 'ship it', publish: 'pr' }, { id: ended, answer: 'Left' }])
+    // The repos a message gives the session go with its resume, by their folders.
+    await here.steer({ id: ended, project }, { kind: 'message', text: 'compare with the blog', options: { 'git-branches': { repos: [{ name: 'blog', from: '/w/blog' }] } } })
+    assert.deepEqual(resumes, [{ id: ended, text: 'ship it', publish: 'pr' }, { id: ended, answer: 'Left' }, { id: ended, text: 'compare with the blog', repos: ['/w/blog'] }])
     await assert.rejects(here.resume({ id: 'no-such-run', project }, { text: 'go on' }), /no run no-such-run in this project/)
     await assert.rejects(here.resume({ id: ended, project }, {}), /A run goes on with a message or an answer/)
   } finally {

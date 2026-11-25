@@ -18,7 +18,7 @@ vi.mock('./calls.js', () => ({
   addFromAddress: (_host: unknown, address: string) => addFromAddress(address),
 }))
 
-const { ProjectControl, ProjectPicker, REPOS_SHOWN, repoDetail, shownAddress } = await import('./ProjectPicker.js')
+const { ProjectControl, ProjectPicker, REPOS_SHOWN, agentPicksDetail, repoDetail, shownAddress } = await import('./ProjectPicker.js')
 const { default: projectsUi } = await import('./index.js')
 
 const ALPHA: ProjectSummary = { id: 'alpha-1', path: '/home/me/alpha', name: 'alpha' }
@@ -99,6 +99,20 @@ describe('ProjectPicker', () => {
     expect(repoDetail({ path: '/home/me/blog', url: '/srv/git/blog.git' })).toBe('/home/me/blog')
     expect(repoDetail({ path: '/home/me/blog', url: 'file:///srv/git/blog.git' })).toBe('/home/me/blog')
     expect(repoDetail({ path: '/home/me/notes' })).toBe('/home/me/notes')
+  })
+
+  test("the agent's pick: the button says it short with its mark; its row in the list says it whole, with the projects it picks from and that it asks", async () => {
+    const none = { label: 'Agent picks', tip: 'The agent picks the project your task needs', row: { label: 'Agent picks the project', detail: agentPicksDetail(['alpha']) }, agent: true }
+    renderPicker({ none })
+    expect(trigger().textContent).toBe('Agent picks')
+    expect(trigger().querySelector('.lucide-sparkles')).not.toBeNull()
+    await openMenu(trigger())
+    const row = await screen.findByRole('option', { name: /^Agent picks the project/ })
+    expect(row.textContent).toContain('From alpha, by your task. It asks you when it can\u2019t tell.')
+    expect(row.querySelector('.lucide-sparkles')).not.toBeNull()
+    expect(agentPicksDetail(['shop', 'blog'])).toBe('From shop and blog, by your task. It asks you when it can\u2019t tell.')
+    expect(agentPicksDetail(['a', 'b', 'c', 'd', 'e'])).toBe('From a, b, c and 2 more, by your task. It asks you when it can\u2019t tell.')
+    expect(agentPicksDetail([])).toBe('From the projects you add, by your task. It asks you when it can\u2019t tell.')
   })
 
   test('the button reads where the session works: no project, or the project by its name', () => {
@@ -364,7 +378,7 @@ describe('ProjectPicker', () => {
     control({})
     expect(trigger().textContent).toBe('alpha')
     await openMenu(trigger())
-    fireEvent.click(await screen.findByRole('option', { name: 'No project' }))
+    fireEvent.click(await screen.findByRole('option', { name: /^Agent picks the project/ }))
     expect(pickProject).toHaveBeenLastCalledWith(undefined)
     cleanup()
     control({ in: 'session' })
