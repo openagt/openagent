@@ -90,7 +90,7 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   // A run starts on this computer's host, the distribution's (#2394), which names it as it starts.
   const hooks = opts.hooks ?? (await distributionHooks(env))
   const host = await localHostOf(hooks)
-  // The hosts beside it, of the modules on in a project (a GitHub Actions runner): a run may be picked to run on one.
+  // The hosts beside it, of the modules on in a project (a CI runner): a run may be picked to run on one.
   const otherHosts = async (project?: ProjectRef): Promise<RunHost[]> => (await hooks.hosts(project)).filter(other => other.id !== host.id)
   // The folder `openagent` was typed in is made a project by the modules (`app.lifecycle`): the projects module's.
   const runtime = createProjectRuntime({ cwd, env, host, otherHosts, folderGiven: folder => hooks.folderGiven(folder) })

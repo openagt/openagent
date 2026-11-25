@@ -7,7 +7,7 @@ import { distributionSettings } from '../distribution-hooks.js'
  * The person at this dashboard, as the foot of its sidebar shows them: their name, and a picture
  * when they have one. Both are the person's own (the catalog's `user-info.person`, saved with the
  * person, the same on every computer of theirs): what they typed in Settings › Profile, or copied
- * once from a GitHub profile. With no name set, the name is git's own `user.name`, else this
+ * once from a profile at a git host. With no name set, the name is git's own `user.name`, else this
  * computer's user; with no picture, none. No git host is ever asked.
  */
 export interface Person {
@@ -16,8 +16,8 @@ export interface Person {
   email?: string
   /** A picture of them: an https address. */
   avatar?: string
-  /** The GitHub login the name and picture were copied from. */
-  github?: string
+  /** The login at a git host the name and picture were copied from. */
+  login?: string
   /** Whether the person set their name in OpenAgent, rather than it being the computer's. */
   own?: true
 }
@@ -29,7 +29,7 @@ export async function readPerson(deps: { info?: () => Promise<PersonInfo>; gitNa
     name: info.name ?? (await (deps.gitName ?? readGitName)()) ?? userInfo().username,
     ...(email !== undefined ? { email } : {}),
     ...(info.picture ? { avatar: info.picture } : {}),
-    ...(info.github ? { github: info.github } : {}),
+    ...(info.login ? { login: info.login } : {}),
     ...(info.name !== undefined ? { own: true as const } : {}),
   }
 }

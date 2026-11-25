@@ -45,7 +45,6 @@ test('a run as its host says it, in the page shape: its record\'s facts and opti
     naming: true,
     base: 'develop',
     baseCommit: 'c0ffee',
-    gitAccount: 'me',
     prBase: 'main',
     repos: [{ name: 'app', from: '/me/app' }],
     publish: 'pr',

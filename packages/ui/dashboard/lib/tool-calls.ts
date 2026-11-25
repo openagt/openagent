@@ -56,7 +56,7 @@ const CALLS: Record<string, { verb: string; doing: string; kind: CallKind; file?
   Glob: { verb: 'Searched', doing: 'Searching', kind: 'find', plain: true },
   WebSearch: { verb: 'Searched the web', doing: 'Searching the web', kind: 'web', plain: true },
   WebFetch: { verb: 'Fetched', doing: 'Fetching', kind: 'other' },
-  // "Ran skill /github", as Claude Code on the web says it.
+  // "Ran skill /deploy", as Claude Code on the web says it.
   Skill: { verb: 'Ran skill', doing: 'Running skill', kind: 'skill', slash: true },
   Task: { verb: 'Started agent', doing: 'Starting agent', kind: 'other' },
   Agent: { verb: 'Started agent', doing: 'Starting agent', kind: 'other' },
@@ -85,7 +85,7 @@ function fileNames(detail: string): string {
 }
 
 /**
- * A tool of an MCP server, as Claude Code names it (`mcp__github__get_me`): "Used github: Get me",
+ * A tool of an MCP server, as Claude Code names it (`mcp__linear__get_me`): "Used linear: Get me",
  * as Claude Code on the web says a call to its connectors.
  */
 function mcpCall(label: string): { verb: string; doing: string; tool: string } | undefined {

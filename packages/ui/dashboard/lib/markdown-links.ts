@@ -5,7 +5,7 @@ import { createContext } from 'react'
 // issues and pull requests.
 
 /**
- * What a file named in the text opens, by the name as written (`.github/workflows/deploy.yml`):
+ * What a file named in the text opens, by the name as written (`.config/deploy.yml`):
  * given where the text is a file of the project, as the Files pane's Markdown is; none for a name
  * that is no file there, or where nothing opens files.
  */

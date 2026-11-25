@@ -1,8 +1,8 @@
 import { addressOfRemote } from '@openagt/agent-data/repository-address'
 
 /**
- * What a person typed as a repository's address, read: `github.com/you/shop`, the same with
- * `https://` before it, `ssh://git@github.com/you/shop.git`, or `git@github.com:you/shop.git`.
+ * What a person typed as a repository's address, read: `git.example.com/you/shop`, the same with
+ * `https://` before it, `ssh://git@git.example.com/you/shop.git`, or `git@git.example.com:you/shop.git`.
  * Undefined for anything else: a folder on this disk, another kind of address, a name that could
  * be read as an option or lead out of the folder projects are cloned into. Pure, so the page can
  * tell an address from a search word as it is typed, before the daemon is asked anything.

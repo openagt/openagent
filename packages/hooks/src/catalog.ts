@@ -16,8 +16,8 @@ export interface PersonInfo {
   name?: string
   /** A picture of them: an https address. */
   picture?: string
-  /** The GitHub login the name and picture were last copied from. */
-  github?: string
+  /** The login at a git host the name and picture were last copied from. */
+  login?: string
 }
 
 /** What a person may be called: one line, at most 60 characters. */
@@ -42,11 +42,11 @@ export const PERSON_INFO = defineSetting<PersonInfo>({
   default: {},
   parse: value => {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
-    const { name, picture, github } = value as Record<string, unknown>
+    const { name, picture, login } = value as Record<string, unknown>
     return {
       ...(isPersonName(name) ? { name: name.trim() } : {}),
       ...(isPictureAddress(picture) ? { picture } : {}),
-      ...(typeof github === 'string' && github ? { github } : {}),
+      ...(typeof login === 'string' && login ? { login } : {}),
     }
   },
 })

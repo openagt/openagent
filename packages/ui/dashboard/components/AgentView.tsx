@@ -91,7 +91,7 @@ export function AgentView({
   naming?: boolean | undefined
   /** The session's project, said in the row above the message box. */
   projectName?: string | null | undefined
-  /** Where the agent executes: a host beside this computer's, by its id (`run.host`: GitHub Actions' `actions`, Claude Code on the web's `web`); none, or `local`, for this computer's. */
+  /** Where the agent executes: a host beside this computer's, by its id (`run.host`: a CI runner's, Claude Code on the web's `web`); none, or `local`, for this computer's. */
   target?: string | undefined
   /** The host a run just started goes to, by its name, until its card says where it runs: the row above the message box says it. */
   startedOn?: string | undefined

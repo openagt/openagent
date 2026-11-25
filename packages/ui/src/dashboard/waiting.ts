@@ -19,7 +19,7 @@ export { waitingKey } from './keys.js'
 
 // What waits on the person (#632, #2394), across the projects: the `waiting` items of
 // `app.attention`, every module's (a run waiting on the question it ended on is ask's), asked with
-// the project's runs and the ones that wait (an open pull request is github's), and the one the shell
+// the project's runs and the ones that wait (an open pull request is the git host module's), and the one the shell
 // still finds itself until its module says it (#2394's step 6): a finished run's work never
 // published (git-branches'). Each is said in the hook's shape, by the module it is whose, so no
 // reader tells the two apart. #627 notifications ride this whole set.

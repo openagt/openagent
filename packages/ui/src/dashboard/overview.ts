@@ -29,8 +29,8 @@ export interface ActiveAgent {
   /** ISO timestamp of the agent's last event. */
   updatedAt?: string
   /**
-   * The host beside this computer's it runs on, by its id (`run.host`, #2394: GitHub Actions'
-   * `actions`, Claude Code on the web's `web`). No checkout here backs it, so it is listed because
+   * The host beside this computer's it runs on, by its id (`run.host`, #2394: a CI runner's, Claude
+   * Code on the web's `web`). No checkout here backs it, so it is listed because
    * its record says it is at work: "no agents working" over a cloud session at work was a lie (#1668).
    */
   host?: string

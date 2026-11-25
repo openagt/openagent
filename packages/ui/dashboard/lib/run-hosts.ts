@@ -2,7 +2,7 @@ import { useEffect, useSyncExternalStore } from 'react'
 import { onRunHosts, type RunHostChoice } from '../rpc/projects.js'
 
 // The hosts a run may be picked to run on beside this computer (`run.host`, #2394), each project's
-// as its modules on there bring them (a GitHub Actions runner), and the one picked in "Run on". The
+// as its modules on there bring them (a CI runner), and the one picked in "Run on". The
 // pick is the page's, not saved: a host is a project's, and the next opening starts on this
 // computer. It holds on a project that has the host, and is none on one that has not.
 

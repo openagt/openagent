@@ -5,7 +5,7 @@ import { fakeHost, renderWithHost } from '@openagt/ui/module/testing'
 
 // The person as the shell reads them: `person` is what is saved, and the page shows it once it
 // reads them again. The module's own calls as a test answers them.
-type Person = { name: string; avatar?: string; github?: string; own?: true }
+type Person = { name: string; avatar?: string; login?: string; own?: true }
 const shell = vi.hoisted(() => ({ person: { name: '' } as Person, shown: { name: '' } as Person, personChanged: vi.fn() }))
 vi.mock('@openagt/ui/module', async original => ({
   ...(await original<typeof import('@openagt/ui/module')>()),
@@ -61,7 +61,7 @@ describe('Settings › Profile', () => {
   test('Sync from GitHub copies a profile once; the picture it gave can be removed', async () => {
     render()
     fireEvent.change(await screen.findByLabelText('Sync from GitHub'), { target: { value: 'suleimansh' } })
-    shell.person = { name: 'Suleiman Shahbari', avatar: 'https://avatars.githubusercontent.com/u/1', github: 'suleimansh', own: true }
+    shell.person = { name: 'Suleiman Shahbari', avatar: 'https://avatars.githubusercontent.com/u/1', login: 'suleimansh', own: true }
     fireEvent.click(screen.getByRole('button', { name: 'Sync' }))
     await waitFor(() => expect(sent('copyFromGitHub')).toEqual([{ login: 'suleimansh' }]))
     expect(await screen.findByText('From @suleimansh on GitHub.')).toBeTruthy()
@@ -70,7 +70,7 @@ describe('Settings › Profile', () => {
     answers['copyFromGitHub'] = () => ({ ok: true, output: { changed: false, login: 'suleimansh' } })
     fireEvent.click(screen.getByRole('button', { name: 'Sync' }))
     expect(await screen.findByText('Already up to date with @suleimansh.')).toBeTruthy()
-    shell.person = { name: 'Suleiman Shahbari', github: 'suleimansh', own: true }
+    shell.person = { name: 'Suleiman Shahbari', login: 'suleimansh', own: true }
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
     await waitFor(() => expect(sent('removePicture')).toEqual([{}]))
     expect(await screen.findByText('None: your initials.')).toBeTruthy()

@@ -14,8 +14,8 @@ function runsOnIcon(target: AgentMeta['target']): LucideIcon {
 // A session's row above the message box: the "New agent session" page's row, in its place, each item
 // said in words rather than offered as a menu, since a session keeps where it started. Where it
 // runs, the project, then the modules' controls there (`composer.control` at `start`: git-branches
-// says the branch it started from); at its right end, the modules' labels (`chat.labels`: github
-// draws the run's pull requests). The setup and the model are under the box, as on "New agent
+// says the branch it started from); at its right end, the modules' labels (`chat.labels`: the git host's
+// module draws the run's pull requests). The setup and the model are under the box, as on "New agent
 // session". The row's height is fixed, and each item lands in place. A session with no project
 // says its repos under the box, as Context.
 export function SessionRow({

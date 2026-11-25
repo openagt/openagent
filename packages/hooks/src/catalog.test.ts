@@ -8,8 +8,8 @@ test("the person's name and picture: saved with the person, each part read stric
   const store = chainStore([memoryStore()])
   const settings = settingsIn(store)
   assert.deepEqual(await settings.get(PERSON_INFO), {})
-  await settings.set(PERSON_INFO, { name: 'Ada Lovelace', picture: 'https://avatars.example/ada.png', github: 'ada' })
-  assert.deepEqual(await settings.get(PERSON_INFO), { name: 'Ada Lovelace', picture: 'https://avatars.example/ada.png', github: 'ada' })
+  await settings.set(PERSON_INFO, { name: 'Ada Lovelace', picture: 'https://avatars.example/ada.png', login: 'ada' })
+  assert.deepEqual(await settings.get(PERSON_INFO), { name: 'Ada Lovelace', picture: 'https://avatars.example/ada.png', login: 'ada' })
   assert.match((await store.read(PERSON, SETTINGS_FILE)) ?? '', /"user-info\.person"/)
 
   // Only a picture on the web, and a name that is one line: what is not valid goes, the rest stays.

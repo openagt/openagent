@@ -8,7 +8,7 @@ import { CrossFade } from './CrossFade.js'
 
 /** What was set up for the agent before it read its prompt, as its card says it. */
 export type SessionSetup = { [K in 'workspace' | 'branch' | 'base' | 'driver' | 'model']?: AgentMeta[K] | undefined } & {
-  /** True for an agent that runs elsewhere (GitHub Actions, Claude Code on the web): no checkout is made for it on this machine. */
+  /** True for an agent that runs elsewhere (a CI runner, Claude Code on the web): no checkout is made for it on this machine. */
   elsewhere?: boolean | undefined
 }
 
