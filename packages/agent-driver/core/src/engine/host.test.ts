@@ -321,7 +321,7 @@ test("the runs it lists are the project's records and its runs at work, newest f
     await git(['worktree', 'add', '-q', '-b', 'agent-first', worktreePath(repo, first), 'main'], repo)
     await liveCard(repo, first, 'running', { pid: 4242, host: HERE, sessionId: 's-1', workspace: '/w' })
     const [, again] = await here.list(project)
-    assert.deepEqual([again!.status, again!.facts?.['git-branches']?.branch, again!.facts?.github?.pr?.number, again!.session], ['working', 'agent-first', 7, { id: 's-1', resume: 'claude --resume s-1' }])
+    assert.deepEqual([again!.status, again!.branch, again!.pr?.number, again!.session], ['working', 'agent-first', 7, { id: 's-1', resume: 'claude --resume s-1' }])
 
     // Asked for some of them: by id, or since a time.
     assert.deepEqual((await here.list(project, { ids: [first] })).map(run => run.id), [first])

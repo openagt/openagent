@@ -229,7 +229,7 @@ test("a finished run's work left on this machine is what waits on the person: it
     await git(['add', '-A'], p.dir)
     await git(['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'cart'], p.dir)
     await git(['checkout', '-q', 'main'], p.dir)
-    const done: RunSummary = { id: 'run1', host: 'here', status: 'done', startedAt: '2026-07-16T00:00:00Z', endedAt: '2026-07-16T01:00:00Z', prompt: 'add the cart', facts: { 'git-branches': { branch: 'agent-run1' } } }
+    const done: RunSummary = { id: 'run1', host: 'here', status: 'done', startedAt: '2026-07-16T00:00:00Z', endedAt: '2026-07-16T01:00:00Z', prompt: 'add the cart', branch: 'agent-run1' }
     const attention = gitBranchesModule({ git }).hooks['app.attention']!
     const items = await attention({ project: p }, fakeApp({ runs: async project => (project?.id === p.id ? [done] : []) }))
     assert.deepEqual(

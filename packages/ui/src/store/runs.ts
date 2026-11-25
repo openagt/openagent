@@ -39,14 +39,8 @@ export interface AgentMeta {
   naming?: true
   /** The branch the run was told to start from, by its name: a person's local branch picked in the launcher. Absent on a run that started from origin's default branch. */
   base?: string
-  /** The commit the run's own work begins at: its changes are measured from it; absent, from the default branch. */
-  baseCommit?: string
-  /** The branch the run's pull request goes into; absent, the repository's default branch. */
-  prBase?: string
   /** How far the run takes its work when its agent finishes: `commit`, `branch`, `pr` or `merge`; absent on a run with none. The session's "Auto" pick shows it. */
   publish?: string
-  /** The last commit of the run's work, once its main agent landed it: its branch is gone, and its changes are read from this commit. */
-  landed?: string
   /** The run's options, one slice per module, as its record keeps them: what its box's controls say. */
   options?: RunOptions
   /** The folder the run's agent works or worked in. */
@@ -79,17 +73,12 @@ export interface AgentMeta {
   contextTokens?: number
 }
 
-/** The origin's name a published branch is kept under in a run's options, which a page names the branch without. */
+/** The origin's name a published branch it started from is kept under, which a page names the branch without. */
 const ON_ORIGIN = 'origin/'
 
 /** A run as its host says it, in the shell's page shape: `local` is the host that is this computer's. */
 export function metaOf(run: RunSummary, local: string): AgentMeta {
-  const branches = run.options?.['git-branches']
-  const branchFacts = run.facts?.['git-branches']
-  // The run's pull requests, as the git host's module read them back into its slice of the facts.
-  const requests = run.facts?.github
-  const base = branches?.base
-  const branch = branchFacts?.branch
+  const base = run.base
   return {
     id: run.id,
     status: run.status === 'working' ? 'running' : run.status,
@@ -103,19 +92,16 @@ export function metaOf(run: RunSummary, local: string): AgentMeta {
     ...(run.title !== undefined ? { title: run.title } : {}),
     ...(run.naming ? { naming: true as const } : {}),
     ...(base !== undefined ? { base: base.startsWith(ON_ORIGIN) ? base.slice(ON_ORIGIN.length) : base } : {}),
-    ...(branchFacts?.baseCommit !== undefined ? { baseCommit: branchFacts.baseCommit } : {}),
-    ...(run.options?.github?.prBase !== undefined ? { prBase: run.options.github.prBase } : {}),
     ...(run.options?.publish !== undefined ? { publish: run.options.publish } : {}),
-    ...(branchFacts?.landed !== undefined ? { landed: branchFacts.landed } : {}),
     ...(run.options !== undefined ? { options: run.options } : {}),
     ...(run.workspace !== undefined ? { workspace: run.workspace } : {}),
     ...(run.agent !== undefined ? { driver: run.agent.id } : {}),
     ...(run.agent?.model !== undefined ? { model: run.agent.model } : {}),
     ...(run.agent?.effort !== undefined ? { effort: run.agent.effort } : {}),
     ...(run.contextTokens !== undefined ? { contextTokens: run.contextTokens } : {}),
-    ...(branch !== undefined ? { branch } : {}),
-    ...(requests?.pr ? { pr: requests.pr } : {}),
-    ...(requests?.earlierPrs ? { earlierPrs: requests.earlierPrs } : {}),
+    ...(run.branch !== undefined ? { branch: run.branch } : {}),
+    ...(run.pr ? { pr: run.pr } : {}),
+    ...(run.earlierPrs ? { earlierPrs: run.earlierPrs } : {}),
     ...(run.session?.resume !== undefined ? { resumeCommand: run.session.resume } : {}),
     ...(run.saving ? { saving: true } : {}),
     ...(run.host !== local ? { target: run.host } : {}),

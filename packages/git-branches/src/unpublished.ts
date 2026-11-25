@@ -15,8 +15,6 @@ export interface Unpublished {
 /** How far the project's branches are past their base, measured from `from` when it is given (`readBranchesAhead`). */
 export type AheadOf = (branches: readonly string[], from?: string) => Promise<BranchAhead[]>
 
-/** The run's branch, as its facts name it: the one the agent left its work on. */
-const branchOf = (run: RunSummary): string | undefined => run.facts?.['git-branches']?.branch
 
 /**
  * The finished runs of a project whose work never left this machine (#860), by run id: what every
@@ -48,7 +46,7 @@ const branchOf = (run: RunSummary): string | undefined => run.facts?.['git-branc
  */
 export async function unpublishedRuns(runs: readonly RunSummary[], ahead: AheadOf): Promise<Map<string, Unpublished>> {
   const finished = runs.flatMap(run => {
-    const branch = branchOf(run)
+    const branch = run.branch
     return branch === undefined || run.status === 'working' ? [] : [{ run, branch }]
   })
   const found = new Map<string, Unpublished>()
@@ -64,7 +62,7 @@ export async function unpublishedRuns(runs: readonly RunSummary[], ahead: AheadO
   // The newest run on each branch, working or not: the one whose checkout is on it.
   const newest = new Map<string, RunSummary>()
   for (const run of runs) {
-    const branch = branchOf(run)
+    const branch = run.branch
     const known = branch === undefined ? undefined : newest.get(branch)
     if (branch !== undefined && (!known || run.startedAt > known.startedAt)) newest.set(branch, run)
   }
@@ -72,7 +70,7 @@ export async function unpublishedRuns(runs: readonly RunSummary[], ahead: AheadO
     const state = counts.get(`${fromOf(run) ?? ''}\0${branch}`)
     if (!state || !state.exists || !state.agent) continue
     const uncommitted = run.status === 'waiting' || newest.get(branch) !== run ? 0 : state.uncommitted
-    const own = run.facts?.github?.pr === undefined && state.ahead > 0 && !state.merged && !state.gone && state.hasRemote
+    const own = run.pr === undefined && state.ahead > 0 && !state.merged && !state.gone && state.hasRemote
     const commits = own && !state.pushed ? state.ahead : 0
     if (uncommitted > 0 || commits > 0) found.set(run.id, { branch, commits, uncommitted })
   }

@@ -50,7 +50,7 @@ function waitingDeps({ liveAgents, agents, events, prs, ...deps }: TestDeps): Wa
   return { ...deps, ...(prs ? { hooks: withGithub(prs, deps.hooks, listed) } : {}), agents: runs, ...(events ? { events: (project, agentId) => events(project?.path ?? SESSIONS, agentId) } : {}) }
 }
 
-/** A run of the test's as its host lists it: the branch git-branches' facts name, the request github's. */
+/** A run of the test's as its host lists it, its branch and its pull request among what it says. */
 function summaryOf(meta: AgentMeta): RunSummary {
   return {
     id: meta.id,
@@ -59,7 +59,8 @@ function summaryOf(meta: AgentMeta): RunSummary {
     startedAt: meta.startedAt,
     prompt: meta.intent ?? '',
     ...(meta.title !== undefined ? { title: meta.title } : {}),
-    facts: { ...(meta.branch !== undefined ? { 'git-branches': { branch: meta.branch } } : {}), ...(meta.pr ? { github: { pr: meta.pr } } : {}) },
+    ...(meta.branch !== undefined ? { branch: meta.branch } : {}),
+    ...(meta.pr ? { pr: meta.pr } : {}),
   }
 }
 

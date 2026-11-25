@@ -289,7 +289,15 @@ export interface RunSummary {
   agent?: { id: string; model?: string; effort?: string }
   /** Its options, one slice per module, as its record keeps them: what its box's controls say. */
   options?: RunOptions
-  /** What each module found out about it, as its record keeps it: its branch, its pull request. */
+  /** The branch its work is on, as its record last said: the one its checkout was made on, then the one the agent left it on. None for a run on no branch. */
+  branch?: string
+  /** The branch it was told to start from, by its name, when not the project's main one: a person's own branch (`my/work`), or one of origin's (`origin/develop`). */
+  base?: string
+  /** The pull request its branch has, as its record keeps it. */
+  pr?: PullRequest
+  /** The pull requests it opened before that one, oldest first. */
+  earlierPrs?: PullRequest[]
+  /** What each module found out about it beside that, as its record keeps it. */
   facts?: RunFacts
   /** The computer it runs or ran on, by its name. */
   computer?: string

@@ -223,9 +223,8 @@ export function accountsMissing({ installed, accounts }: Pick<GithubAccounts, 'i
  */
 export function requestsWaiting(open: readonly OpenPr[], runs: readonly RunSummary[]): AttentionItem[] {
   const newest = [...runs].sort((a, b) => b.startedAt.localeCompare(a.startedAt))
-  const branchOf = (run: RunSummary): string | undefined => run.facts?.['git-branches']?.branch
   return open.flatMap((pr): AttentionItem[] => {
-    const run = newest.find(one => one.facts?.github?.pr?.url === pr.url) ?? (pr.headRefName !== undefined ? newest.find(one => branchOf(one) === pr.headRefName) : undefined)
+    const run = newest.find(one => one.pr?.url === pr.url) ?? (pr.headRefName !== undefined ? newest.find(one => one.branch === pr.headRefName) : undefined)
     if (pr.isDraft && !run) return []
     return [
       {
@@ -233,7 +232,7 @@ export function requestsWaiting(open: readonly OpenPr[], runs: readonly RunSumma
         ...(run ? { scope: 'run' as const, run: run.id } : { scope: 'project' as const }),
         id: pr.url,
         words: 'Needs merge',
-        title: (run && runName(run, branchOf(run))) ?? pr.title,
+        title: (run && runName(run, run.branch)) ?? pr.title,
         detail: `#${pr.number}`,
         mark: 'pull-request',
         ...(pr.createdAt ? { since: pr.createdAt } : {}),

@@ -15,7 +15,7 @@ function listing(id: string, runs: RunSummary[]): RunHost {
 
 const hostsOf = (...hosts: RunHost[]): RunHosts => ({ local: LOCAL_HOST, of: async () => hosts })
 
-test('a run as its host says it, in the page shape: its record\'s facts and options where the pages read them, its agent session\'s command, the host beside this computer\'s it is on', () => {
+test('a run as its host says it, in the page shape: where its work is and its options where the pages read them, its agent session\'s command, the host beside this computer\'s it is on', () => {
   const run = summary('r1', {
     status: 'working',
     endedAt: undefined as never,
@@ -23,7 +23,11 @@ test('a run as its host says it, in the page shape: its record\'s facts and opti
     person: 'me@x.org',
     agent: { id: 'claude-code', model: 'opus', effort: 'high' },
     options: { publish: 'pr', 'git-branches': { base: 'origin/develop', repos: [{ name: 'app', from: '/me/app' }] }, github: { prBase: 'main', account: 'me' } },
-    facts: { 'git-branches': { branch: 'agent-x', baseCommit: 'c0ffee', landed: 'beef' }, github: { pr: { number: 7, url: 'u7' }, earlierPrs: [{ number: 6, url: 'u6' }] } },
+    branch: 'agent-x',
+    base: 'origin/develop',
+    pr: { number: 7, url: 'u7' },
+    earlierPrs: [{ number: 6, url: 'u6' }],
+    facts: { 'git-branches': { baseCommit: 'c0ffee', landed: 'beef' } },
     session: { id: 's-1', resume: 'claude --resume s-1' },
     saving: true,
     cost: 0.5,
@@ -44,10 +48,7 @@ test('a run as its host says it, in the page shape: its record\'s facts and opti
     title: 'Fix the login',
     naming: true,
     base: 'develop',
-    baseCommit: 'c0ffee',
-    prBase: 'main',
     publish: 'pr',
-    landed: 'beef',
     options: run.options,
     driver: 'claude-code',
     model: 'opus',

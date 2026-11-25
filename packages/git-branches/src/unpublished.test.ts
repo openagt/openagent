@@ -6,10 +6,7 @@ import { unpublishedItems, unpublishedRuns, type AheadOf } from './unpublished.j
 
 // #860: a finished run whose work never left this machine, as what waits on the person says it.
 
-const run = (over: Partial<RunSummary> & { branch?: string } = {}): RunSummary => {
-  const { branch = 'agent-add-cart', ...rest } = over
-  return { id: 'r1', host: 'here', status: 'done', startedAt: '2026-07-16T00:00:00Z', endedAt: '2026-07-16T01:00:00Z', prompt: 'add the cart', facts: { 'git-branches': { branch } }, ...rest }
-}
+const run = (over: Partial<RunSummary> = {}): RunSummary => ({ id: 'r1', host: 'here', status: 'done', startedAt: '2026-07-16T00:00:00Z', endedAt: '2026-07-16T01:00:00Z', prompt: 'add the cart', branch: 'agent-add-cart', ...over })
 
 /** A run's branch with work on it that never left the machine, as the read counts it. */
 const ahead = (over: Partial<BranchAhead> = {}): BranchAhead => ({ branch: 'agent-add-cart', exists: true, agent: true, ahead: 1, hasRemote: true, pushed: false, gone: false, merged: false, uncommitted: 0, ...over })
@@ -37,7 +34,7 @@ test('nothing waits when the work already went somewhere, or has nowhere to go, 
     assert.deepEqual(await itemsOf([run()], counting(branch => ahead({ branch, ...state }))), [], JSON.stringify(state))
   }
   // A run with a pull request: its request is what waits.
-  assert.deepEqual(await itemsOf([run({ facts: { 'git-branches': { branch: 'agent-add-cart' }, github: { pr: { number: 4, url: 'u' } } } })], counting(branch => ahead({ branch }))), [])
+  assert.deepEqual(await itemsOf([run({ pr: { number: 4, url: 'u' } })], counting(branch => ahead({ branch }))), [])
 })
 
 test('a working run is still writing its branch; one waiting on its question leaves its files as they are', async () => {
@@ -55,7 +52,7 @@ test("a checkout's uncommitted files are the newest run's on its branch: a run c
 
 test('a run started from another branch is counted from the commit its own work begins at; the runs started from the default branch share one read', async () => {
   const asked: [string[], string | undefined][] = []
-  const runs = [run({ id: 'a', branch: 'agent-a' }), run({ id: 'b', branch: 'agent-b' }), run({ id: 'c', branch: 'agent-c', options: { 'git-branches': { base: 'dev' } }, facts: { 'git-branches': { branch: 'agent-c', baseCommit: 'abc' } } })]
+  const runs = [run({ id: 'a', branch: 'agent-a' }), run({ id: 'b', branch: 'agent-b' }), run({ id: 'c', branch: 'agent-c', options: { 'git-branches': { base: 'dev' } }, facts: { 'git-branches': { baseCommit: 'abc' } } })]
   await unpublishedRuns(runs, counting(branch => ahead({ branch }), asked))
   assert.deepEqual(asked, [[['agent-a', 'agent-b'], undefined], [['agent-c'], 'abc']])
 })

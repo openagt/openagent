@@ -167,9 +167,9 @@ test("the project's open requests wait on the person to merge them: a run's goes
   const pr = (number: number, over: Record<string, unknown> = {}) => ({ number, title: `Request ${number}`, url: `https://github.com/o/r/pull/${number}`, isDraft: false, createdAt: '2026-08-21T10:00:00Z', ...over })
   const run = (id: string, startedAt: string, over: Partial<RunSummary> = {}): RunSummary => ({ id, host: 'here', status: 'done', startedAt, prompt: '', ...over })
   const runs = [
-    run('r1', '2026-08-20T09:00:00Z', { title: 'Fix the login', facts: { github: { pr: { number: 1, url: 'https://github.com/o/r/pull/1' } } } }),
-    run('r0', '2026-08-19T09:00:00Z', { prompt: 'Make a dark mode', facts: { 'git-branches': { branch: 'agent/dark-mode' } } }),
-    run('r2', '2026-08-20T10:00:00Z', { facts: { 'git-branches': { branch: 'agent/dark-mode' } } }),
+    run('r1', '2026-08-20T09:00:00Z', { title: 'Fix the login', pr: { number: 1, url: 'https://github.com/o/r/pull/1' } }),
+    run('r0', '2026-08-19T09:00:00Z', { prompt: 'Make a dark mode', branch: 'agent/dark-mode' }),
+    run('r2', '2026-08-20T10:00:00Z', { branch: 'agent/dark-mode' }),
   ]
   const items = requestsWaiting([pr(1), pr(2, { isDraft: true, headRefName: 'agent/dark-mode' }), pr(3), pr(4, { isDraft: true, headRefName: 'mine' })], runs)
   assert.deepEqual(

@@ -160,9 +160,15 @@ export interface SummaryAt {
   deps: Pick<RunReadsDeps, 'host' | 'here' | 'isAlive'>
 }
 
+/** The options a record keeps under `caller`, when they are a slice per module. */
+function isOptions(options: unknown): options is RunOptions {
+  return options !== null && typeof options === 'object' && !Array.isArray(options)
+}
+
 /**
- * A run's card as a host lists it: the record's own fields, and what its writer kept under
- * `caller` that a page shows (its options, its facts, the computer it ran on, its agent's session).
+ * A run's card as a host lists it: the record's own fields, where its work is (its branch, the one
+ * it started from, its pull requests), and what its writer kept under `caller` that a page shows
+ * (its options, its facts, the computer it ran on, its agent's session).
  */
 export function summaryOf(card: Listed, at: SummaryAt): RunSummary {
   const status: RunStatus = card.status === 'running' ? 'working' : card.status
@@ -172,10 +178,12 @@ export function summaryOf(card: Listed, at: SummaryAt): RunSummary {
   const branch = at.folder?.branch ?? card.branch
   const baseCommit = text(card, 'baseCommit')
   const landed = text(card, 'landed')
-  const branches: GitBranchesFacts = { ...(branch !== undefined ? { branch } : {}), ...(baseCommit !== undefined ? { baseCommit } : {}), ...(landed !== undefined ? { landed } : {}) }
+  const branches: GitBranchesFacts = { ...(baseCommit !== undefined ? { baseCommit } : {}), ...(landed !== undefined ? { landed } : {}) }
   const account = text(card, 'gitAccount')
   const earlierPrs = pullRequests(card.caller?.['earlierPrs'])
-  const github: GithubFacts = { ...(account !== undefined ? { account } : {}), ...(card.pr ? { pr: card.pr } : {}), ...(earlierPrs ? { earlierPrs } : {}) }
+  const github: GithubFacts = account !== undefined ? { account } : {}
+  // The branch the run was told to start from, as the options it was started with name it.
+  const base = isOptions(options) ? options['git-branches']?.base : undefined
   const facts: RunFacts = { ...(Object.keys(branches).length > 0 ? { 'git-branches': branches } : {}), ...(Object.keys(github).length > 0 ? { github } : {}) }
   const sessionId = text(card, 'sessionId')
   const workspace = text(card, 'workspace')
@@ -196,7 +204,11 @@ export function summaryOf(card: Listed, at: SummaryAt): RunSummary {
     ...(card.cost !== undefined ? { cost: card.cost } : {}),
     ...(card.contextTokens !== undefined ? { contextTokens: card.contextTokens } : {}),
     ...(card.driver !== undefined ? { agent: { id: card.driver, ...(card.model !== undefined ? { model: card.model } : {}), ...(card.effort !== undefined ? { effort: card.effort } : {}) } } : {}),
-    ...(options && typeof options === 'object' && !Array.isArray(options) ? { options: options as RunOptions } : {}),
+    ...(isOptions(options) ? { options } : {}),
+    ...(branch !== undefined ? { branch } : {}),
+    ...(typeof base === 'string' ? { base } : {}),
+    ...(card.pr ? { pr: card.pr } : {}),
+    ...(earlierPrs ? { earlierPrs } : {}),
     ...(Object.keys(facts).length > 0 ? { facts } : {}),
     // A computer's name that is no name is none: a record is a file anyone with the project can write.
     ...(computer !== undefined && /^[A-Za-z0-9._-]{1,253}$/.test(computer) ? { computer } : {}),

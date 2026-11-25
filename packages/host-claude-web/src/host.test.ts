@@ -103,7 +103,7 @@ test("the host lists the project's runs on the web, and finds one by its record:
     const web = host()
     const listed = await web.list!(project)
     assert.deepEqual(
-      listed.map(run => [run.id, run.host, run.project, run.status, run.endedAt, run.title, run.prompt, run.facts?.github?.pr?.number, run.facts?.['git-branches']?.branch, run.session?.id, run.computer]),
+      listed.map(run => [run.id, run.host, run.project, run.status, run.endedAt, run.title, run.prompt, run.pr?.number, run.branch, run.session?.id, run.computer]),
       [
         ['2026-11-19T11-00-00-000Z', WEB_HOST, 'shop', 'done', '2026-11-19T11:30:00.000Z', undefined, 'run 2026-11-19T11-00-00-000Z', 9, 'claude/add-flag', undefined, HERE],
         ['2026-11-19T10-00-00-000Z', WEB_HOST, 'shop', 'working', undefined, 'Add a flag', 'run 2026-11-19T10-00-00-000Z', undefined, undefined, 'session_01S', HERE],
