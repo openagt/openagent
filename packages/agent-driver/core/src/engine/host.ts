@@ -1,6 +1,6 @@
 import { rm, stat } from 'node:fs/promises'
 import { hostname } from 'node:os'
-import { appendInbox, imagesOf, promptLines, takeInbox } from '../inbox.js'
+import { appendInbox, givenRepos, imagesOf, promptLines, takeInbox } from '../inbox.js'
 import { deleteRun, findRun, patchRun } from '../record-store.js'
 import { isRunId, type RunCard, type RunPatch } from '../record.js'
 import { PLUGINS_WITHOUT_ENV, PROFILE_ENV, PROJECT_SKILLS_ENV, isSkillName } from './names.js'
@@ -434,7 +434,7 @@ function inputOf(line: PromptLine): RunInput {
     text: line.text,
     ...(publish !== undefined && (isPublish(publish) || publish === NO_PUBLISH) ? { publish } : {}),
     ...imagesOf(line),
-    ...(line.repos !== undefined && line.repos.length > 0 ? { repos: line.repos } : {}),
+    ...(givenRepos(line).length > 0 ? { repos: givenRepos(line) } : {}),
   }
 }
 

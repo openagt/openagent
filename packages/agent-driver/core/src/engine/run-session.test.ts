@@ -283,7 +283,7 @@ test('a message gives a running session a repo: copied before the message goes, 
       start: async opts => {
         const fake = await new FakeDriver({ respond }).start(opts)
         return wrap(fake, async () => {
-          if (fake.prompts.length === 0) await appendInbox(inboxPath(opts.cwd), { kind: 'message', text: 'compare with the other repo', repos: [other] })
+          if (fake.prompts.length === 0) await appendInbox(inboxPath(opts.cwd), { kind: 'message', text: 'compare with the other repo', options: { 'git-branches': { repos: [{ name: 'other', from: other }] } } })
         })
       },
     }

@@ -52,7 +52,7 @@ export async function takeInbox(path: string): Promise<InboxLine[]> {
 function isInboxLine(value: unknown): value is InboxLine {
   if (!value || typeof value !== 'object') return false
   const v = value as Record<string, unknown>
-  if (v['kind'] === 'message') return typeof v['text'] === 'string' && v['text'].trim().length > 0 && (v['publish'] === undefined || typeof v['publish'] === 'string') && (v['id'] === undefined || typeof v['id'] === 'string') && (v['images'] === undefined || (Array.isArray(v['images']) && v['images'].every(isImageName))) && (v['repos'] === undefined || (Array.isArray(v['repos']) && v['repos'].every(folder => typeof folder === 'string' && folder.trim() !== '')))
+  if (v['kind'] === 'message') return typeof v['text'] === 'string' && v['text'].trim().length > 0 && (v['publish'] === undefined || typeof v['publish'] === 'string') && (v['id'] === undefined || typeof v['id'] === 'string') && (v['images'] === undefined || (Array.isArray(v['images']) && v['images'].every(isImageName))) && (v['options'] === undefined || (typeof v['options'] === 'object' && v['options'] !== null && !Array.isArray(v['options'])))
   if (v['kind'] === 'answer') return typeof v['question'] === 'string' && typeof v['answer'] === 'string'
   if (v['kind'] === 'cancel') return typeof v['id'] === 'string'
   return v['kind'] === 'now'
@@ -115,4 +115,14 @@ export async function finishTurn(
     last = await session.prompt(promptOf(line), { ...further, ...(attached !== undefined ? { attached } : {}), resume: true, ...imagesOf(line) })
   }
   return last
+}
+
+/**
+ * The repos a message gives the session, by their folders: the ones its options name (the session
+ * box's Repos), which the run copies into the session's folder; the ones it has already add nothing.
+ */
+export function givenRepos(line: PromptLine): string[] {
+  if (line.kind !== 'message') return []
+  const repos = line.options?.['git-branches']?.repos
+  return Array.isArray(repos) ? repos.flatMap(repo => (typeof repo?.from === 'string' && repo.from.trim() !== '' ? [repo.from] : [])) : []
 }

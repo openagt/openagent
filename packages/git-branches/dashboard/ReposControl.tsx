@@ -4,12 +4,6 @@ import {
   BoxOfRow,
   cn,
   Combobox,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
   MENU_BODY_CLASS,
   MENU_ITEM_CLASS,
   MENU_POPUP_CLASS,
@@ -36,7 +30,7 @@ import { folderName, nameRepos, type SessionRepo } from '../src/repo-names.js'
 // copied into the session's folder, beside the run's checkout of its project or, with no project,
 // as all it works in. In the launcher and a profile's editor a menu ticks them on and off, written
 // to the run's options (`options['git-branches'].repos`), each named as its copy will be; in a
-// session, the repos it started with, said and not offered, as its record keeps them.
+// session, the repos its record keeps stay ticked, and one ticked beside them goes with the next message.
 
 /** The room the menu takes over the box at its full height: its search, its list (20rem) and the page's edge. */
 const ROOM_ABOVE_PX = 400
@@ -139,6 +133,7 @@ export function ReposMenu({
   busy,
   onChange,
   without,
+  kept,
 }: {
   picked: readonly SessionRepo[]
   projects: readonly ProjectSummary[]
@@ -147,6 +142,8 @@ export function ReposMenu({
   onChange: (picked: SessionRepo[]) => void
   /** A folder left out of the list: the session's own project. */
   without?: string | undefined
+  /** In a session: the repos it has, ticked and kept; a repo ticked beside them goes with its next message. */
+  kept?: readonly SessionRepo[] | undefined
 }) {
   const search = usePickerSearch()
   const { open, typed } = search
@@ -179,7 +176,11 @@ export function ReposMenu({
       itemToStringLabel={row => row.label}
       autoHighlight
       {...search.root}
-      onValueChange={rows => onChange(nameRepos(rows.map(row => row.path)))}
+      onValueChange={rows => {
+        const folders = rows.map(row => row.path)
+        // A session keeps the repos it has: a new one is named beside them.
+        onChange(kept ? [...kept, ...nameRepos(folders.filter(folder => !kept.some(repo => repo.from === folder)), kept)] : nameRepos(folders))
+      }}
     >
       <Tooltip>
         <TooltipTrigger
@@ -213,7 +214,7 @@ export function ReposMenu({
             <ScrollArea viewportClassName="h-[min(20rem,calc(var(--available-height)-5rem))]">
               <div className={MENU_BODY_CLASS}>
                 {/* What a tick does. */}
-                <p className="px-2 pt-1 pb-0.5 text-xs text-muted-foreground">Repos copied into the session's folder</p>
+                <p className="px-2 pt-1 pb-0.5 text-xs text-muted-foreground">{kept ? "Repos copied into this session's folder: a new one with your next message" : "Repos copied into the session's folder"}</p>
                 <Combobox.Empty className="px-2 py-1.5 text-xs text-muted-foreground empty:hidden">{repos === null ? '' : 'No repo by that name.'}</Combobox.Empty>
                 <Combobox.List>
                   {(group: Group) => (
@@ -259,54 +260,6 @@ export function ReposMenu({
   )
 }
 
-/**
- * The repos of a session on its own page: the launcher's button in the launcher's place, and a
- * menu above the box as the launcher's is (his pick, over words with a hover: the same control on
- * both pages). It lists the repos the session started with, each ticked, with where it was copied
- * from. A session keeps them, so the rows are said, not offered, and the menu's heading says so.
- */
-export function SessionReposSaid({ repos }: { repos: readonly SessionRepo[] }) {
-  const box = useContext(BoxOfRow)
-  return (
-    <DropdownMenu>
-      <Tooltip>
-        <TooltipTrigger render={<DropdownMenuTrigger type="button" aria-label={repos.length > 0 ? `Repos: ${counted(repos.length)}` : 'Repos'} className={rowButtonClass} />}>
-          <FolderGit2 className="size-4 shrink-0" aria-hidden />
-          <span className="truncate">
-            Repos{repos.length > 0 && <span className="text-primary"> · {repos.length}</span>}
-          </span>
-        </TooltipTrigger>
-        <TooltipContent>{repos.length === 0 ? 'This session started with no repo' : `Copies in this session's folder: ${repos.map(repo => repo.name).join(', ')}`}</TooltipContent>
-      </Tooltip>
-      <DropdownMenuContent align="start" {...(box ? { anchor: box, side: 'top' as const } : {})} className="w-[24rem] max-w-[var(--available-width)]">
-        <DropdownMenuGroup>
-          <DropdownMenuLabel className="font-normal">Repos copied into this session's folder when it started</DropdownMenuLabel>
-          {repos.length === 0 ? (
-            <p className="px-2 py-1 text-xs text-muted-foreground">None: this session started with no repo.</p>
-          ) : (
-            repos.map(repo => (
-              <DropdownMenuItem key={repo.name} closeOnClick={false} aria-disabled className="cursor-default">
-                <MenuMark>
-                  <FolderGit2 className="size-3.5" aria-hidden />
-                </MenuMark>
-                <span className="min-w-0 flex-1 leading-5">
-                  <span className="block truncate">{repo.name}</span>
-                  <span data-line2 title={repo.from} className="flex min-w-0 text-xs leading-4 text-muted-foreground">
-                    <MiddleCut text={repo.from} />
-                  </span>
-                </span>
-                <MenuMark className="w-4 justify-center">
-                  <Check className="size-4" aria-hidden />
-                </MenuMark>
-              </DropdownMenuItem>
-            ))
-          )}
-        </DropdownMenuGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
-}
-
 /** The run options with these repos picked: the slice keeps its other picks, and goes when it holds none. */
 export function withRepos(options: RunOptions, repos: readonly SessionRepo[]): RunOptions {
   const { 'git-branches': slice, ...others } = options
@@ -316,12 +269,14 @@ export function withRepos(options: RunOptions, repos: readonly SessionRepo[]): R
 }
 
 /**
- * The control: in the launcher and a profile's editor, the menu that picks the repos, the project
- * the box is in left out (its own checkout is the run's); in a session, the repos it started with.
+ * The control: the menu that picks the repos, the project the box is in left out (its own checkout
+ * is the run's). In a session, the repos it has stay ticked, and one ticked beside them is copied
+ * in with the next message.
  */
-export function ReposControl({ in: box, projectId, options, onChange, busy }: UiComposerControlProps) {
+export function ReposControl({ in: box, projectId, options, recorded, onChange, busy }: UiComposerControlProps) {
   const projects = useProjects()
   const repos = options['git-branches']?.repos ?? []
-  if (box === 'session') return <SessionReposSaid repos={repos} />
-  return <ReposMenu picked={repos} projects={projects} busy={busy} onChange={picked => onChange(withRepos(options, picked))} without={projects.find(project => project.id === projectId)?.path} />
+  // In a session, the repos its record names stay ticked; a tick beside them goes with the next message.
+  const kept = box === 'session' ? (recorded?.['git-branches']?.repos ?? []) : undefined
+  return <ReposMenu picked={repos} projects={projects} busy={busy} kept={kept} onChange={picked => onChange(withRepos(options, picked))} without={projects.find(project => project.id === projectId)?.path} />
 }

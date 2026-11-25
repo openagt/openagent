@@ -207,9 +207,11 @@ export interface UiComposerControlProps {
   /**
    * The options picked: the next run's in the launcher (the ones picked for that run alone: a pick
    * made for every run is its module's setting, which its step reads where the run's options say
-   * nothing), the session's as its record keeps them, the profile's in its editor.
+   * nothing), the session's as its next message goes with them, the profile's in its editor.
    */
   options: RunOptions
+  /** In a session's box: its options as its record keeps them, which its next message can add to and not take back. */
+  recorded?: RunOptions
   /** Change the options picked, whole: the next run's, the next message's in a session's box, the profile's in its editor. */
   onChange(options: RunOptions): void
   /** A start or a send is under way: the control takes no pick. */

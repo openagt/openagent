@@ -1,6 +1,6 @@
 import { AgentExitError } from '../cli-session.js'
 import { ConversationGoneError } from '../gone.js'
-import { imagesOf, promptLines, promptOf, takeInbox } from '../inbox.js'
+import { givenRepos, imagesOf, promptLines, promptOf, takeInbox } from '../inbox.js'
 import { join } from 'node:path'
 import { sessionsHome } from '@openagt/hooks'
 import { addSessionRepos, agentBranchName, errorMessage, foundCopies, sessionFolder, type SessionRepo } from '@openagt/git-branches'
@@ -108,7 +108,7 @@ function queued(line: PromptLine): Queued {
   return {
     prompt: promptOf(line),
     ...(line.kind === 'message' && line.publish !== undefined ? { publish: line.publish } : {}),
-    ...(line.kind === 'message' && line.repos !== undefined && line.repos.length > 0 ? { repos: line.repos } : {}),
+    ...(givenRepos(line).length > 0 ? { repos: givenRepos(line) } : {}),
     ...imagesOf(line),
   }
 }
@@ -303,7 +303,7 @@ function publishLevel(
     // later turn may have changed.
     onInboxLine: async (line, sent) => {
       if (line.kind === 'message') await take(line.publish)
-      const told = line.kind === 'message' && line.repos !== undefined && line.repos.length > 0 ? await repos.add(line.repos) : undefined
+      const told = givenRepos(line).length > 0 ? await repos.add(givenRepos(line)) : undefined
       const { added: _was, attached: _attached, ...rest } = sent
       return { ...rest, ...added(), ...(told !== undefined ? { attached: told } : {}) }
     },

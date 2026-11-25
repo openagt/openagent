@@ -5,10 +5,10 @@ import type { RunOptions } from '@openagt/hooks'
 import { forgetRemembered } from '@openagt/ui/module'
 import { fakeHost, hoverTooltip, mountedOf, openMenu, renderWithHost } from '@openagt/ui/module/testing'
 import { folderName } from '../src/repo-names.js'
-import { repoGroups, ReposControl, ReposMenu, reposSaid, SessionReposSaid, withRepos } from './ReposControl.js'
+import { repoGroups, ReposControl, ReposMenu, reposSaid, withRepos } from './ReposControl.js'
 
 // The repos a session works with, under the message box (`composer.control` at `context`): the
-// launcher's menu that picks them into the run's options, and a session's, which says them.
+// launcher's menu that picks them into the run's options, and a session's, which adds to the ones it has.
 
 const onRepos = vi.fn()
 
@@ -138,27 +138,18 @@ describe("the session's repos", () => {
     expect(screen.queryByText('Looking for repos on this computer…')).toBeNull()
   })
 
-  test("on a session's own page the button is the launcher's, and its menu lists the repos it started with, each ticked with where it was copied from; a press on one changes nothing and closes nothing", async () => {
-    render(<SessionReposSaid repos={[{ name: 'vike', from: '/home/me/oss/vike' }, { name: 'notes', from: '/home/me/notes' }]} />)
-    const button = screen.getByRole('button', { name: 'Repos: 2 repos' })
-    expect(button.textContent).toBe('Repos · 2')
-    expect((await hoverTooltip(button)).textContent).toBe("Copies in this session's folder: vike, notes")
-    await openMenu(button)
-    expect(screen.getByText("Repos copied into this session's folder when it started")).toBeTruthy()
-    const rows = screen.getAllByRole('menuitem')
-    expect(rows.map(row => row.textContent?.startsWith('vike') || row.textContent?.startsWith('notes'))).toEqual([true, true])
-    expect(rows.map(row => row.querySelector('[data-line2]')!.getAttribute('title'))).toEqual(['/home/me/oss/vike', '/home/me/notes'])
-    expect(rows.every(row => row.getAttribute('aria-disabled') === 'true' && row.querySelector('.lucide-check'))).toBe(true)
-    fireEvent.click(rows[0]!)
-    expect(button.getAttribute('aria-expanded')).toBe('true')
-  })
-
-  test('a session that started with no repo says so in the same menu', async () => {
-    render(<SessionReposSaid repos={[]} />)
-    const button = screen.getByRole('button', { name: 'Repos' })
-    expect(button.textContent).toBe('Repos')
-    await openMenu(button)
-    expect(screen.getByText('None: this session started with no repo.')).toBeTruthy()
+  test("in a session the repos it has stay ticked: a press on one keeps it, and a repo ticked beside them is named beside them", async () => {
+    onRepos.mockResolvedValue({ repos: [{ path: '/home/me/oss/vike', name: 'vike' }, { path: '/oss/vike', name: 'vike' }], ...READ })
+    const onChange = vi.fn()
+    const kept = [{ name: 'vike', from: '/home/me/oss/vike' }]
+    render(<ReposMenu picked={kept} kept={kept} projects={[]} busy={false} onChange={onChange} />)
+    await openMenu(context())
+    expect(screen.getByText("Repos copied into this session's folder: a new one with your next message")).toBeTruthy()
+    const rows = await screen.findAllByRole('option', { name: /vike/ })
+    fireEvent.click(rows.find(row => row.getAttribute('aria-selected') === 'true')!)
+    expect(onChange).toHaveBeenLastCalledWith(kept)
+    fireEvent.click(rows.find(row => row.getAttribute('aria-selected') === 'false')!)
+    expect(onChange).toHaveBeenLastCalledWith([...kept, { from: '/oss/vike', name: 'vike-2' }])
   })
 
   test('two folders of one name are told apart by a number, as their copies are named in the session folder', async () => {
@@ -185,12 +176,13 @@ describe('the control', () => {
     expect(withRepos({ 'git-branches': { repos: [{ name: 'notes', from: '/home/me/notes' }] }, publish: 'commit' }, [])).toEqual({ publish: 'commit' })
   })
 
-  test("a profile's editor picks them the same way; a session says the ones its record keeps", async () => {
+  test("a profile's editor picks them the same way; a session counts the ones its next message goes with", async () => {
     onRepos.mockResolvedValue({ repos: [], ...READ })
     render(<ReposControl {...props('profile', {})} />)
     expect(context().textContent).toBe('Repos')
     cleanup()
-    render(<ReposControl {...props('session', { 'git-branches': { repos: [{ name: 'vike', from: '/home/me/oss/vike' }] } })} />)
-    expect(screen.getByRole('button', { name: 'Repos: 1 repo' })).toBeTruthy()
+    const recorded = { 'git-branches': { repos: [{ name: 'vike', from: '/home/me/oss/vike' }] } }
+    render(<ReposControl {...props('session', recorded)} recorded={recorded} />)
+    expect(screen.getByRole('combobox', { name: 'Repos: 1 repo' })).toBeTruthy()
   })
 })
