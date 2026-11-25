@@ -54,7 +54,7 @@ afterEach(() => {
 
 test("a copy's row reads the copy's own branch: its name, its branch, what it holds, and the next steps offered for that copy", async () => {
   held = { 'oa-newuser': worked }
-  renderWithHost(<CopyRows projectId="p1" agentId="run-1" working={false} />, host, modules)
+  renderWithHost(<CopyRows projectId="p1" agentId="run-1" working={false} ended saving={false} />, host, modules)
   const row = await screen.findByRole('listitem')
   expect(call).toHaveBeenCalledWith('p1', 'copies', { agentId: 'run-1' })
   expect(call).toHaveBeenCalledWith('p1', 'handoff', { agentId: 'run-1', repo: 'oa-newuser' })
@@ -66,13 +66,13 @@ test("a copy's row reads the copy's own branch: its name, its branch, what it ho
 
 test('a copy with no work has no row, and neither has one of a run still going, whose branch is not read', async () => {
   held = { empty: { ...worked, commits: [], files: [], insertions: 0, deletions: 0, empty: true }, site: worked }
-  renderWithHost(<CopyRows projectId="p1" agentId="run-1" working={false} />, host, modules)
+  renderWithHost(<CopyRows projectId="p1" agentId="run-1" working={false} ended saving={false} />, host, modules)
   await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(1))
   expect(screen.getByRole('listitem').getAttribute('aria-label')).toBe('site: its work')
   cleanup()
   forgetRemembered()
   call.mockClear()
-  renderWithHost(<CopyRows projectId="p1" agentId="run-1" working />, host, modules)
+  renderWithHost(<CopyRows projectId="p1" agentId="run-1" working ended={false} saving={false} />, host, modules)
   await waitFor(() => expect(call).toHaveBeenCalledWith('p1', 'copies', { agentId: 'run-1' }))
   await new Promise(resolve => setTimeout(resolve, 20))
   expect(call.mock.calls.some(([, name]) => name === 'handoff')).toBe(false)

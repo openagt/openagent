@@ -1,8 +1,9 @@
-// git-branches' UI part: the package's `./dashboard` export. What an ended session's branch holds,
-// in the bar above its message box (`chat.summary`), "Committing…" there while the agent does what
-// its Commit press asked, and its next steps there (`chat.handoff`):
-// Commit, Publish branch, Merge on this machine, a copy's work brought back to its folder, and
-// uncommitted work discarded; a row per copy of a repo the session holds work in (`chat.work`);
+// git-branches' UI part: the package's `./dashboard` export. The project's row in the panel of a
+// session's work above its message box (`chat.work`): the run's branch, while it works whether its
+// checkout holds changes and "Committing…" while the agent does what its Commit press asked, once
+// it has ended what its branch holds, and its next steps there (`chat.handoff`): Commit, Publish
+// branch, Merge on this machine, a copy's work brought back to its folder, and uncommitted work
+// discarded; a row per copy of a repo the session holds work in after it (`chat.work`);
 // Remove worktree in the session's menu (`chat.menu`); the branch a run starts from, in the row
 // above the box (`composer.control` at `start`); the repos a session works with, each copied into
 // its folder, under the box (`composer.control` at `context`); the Auto menu's Commit and Publish branch
@@ -12,10 +13,9 @@
 import { defineUiModule, formatBytes, type UiActionAt } from '@openagt/ui/module'
 import { FolderX } from 'lucide-react'
 import { server } from './calls.js'
-import { Committing } from './Committing.js'
 import { CopyRows } from './CopyRows.js'
 import { handoffActions } from './handoff.js'
-import { RunSummary } from './HandoffSummary.js'
+import { ProjectRow } from './ProjectRow.js'
 import { ReposControl } from './ReposControl.js'
 import { StartControl } from './StartControl.js'
 
@@ -55,9 +55,8 @@ export default defineUiModule({
   name: 'git-branches',
   hooks: {
     'ui.view': [
-      { place: 'chat.summary', id: 'committing', View: Committing },
-      { place: 'chat.summary', id: 'branch', ended: true, View: RunSummary },
-      { place: 'chat.work', id: 'copies', View: CopyRows },
+      { place: 'chat.work', id: 'project', order: 10, View: ProjectRow },
+      { place: 'chat.work', id: 'copies', order: 20, View: CopyRows },
       { place: 'composer.control', id: 'start-from', at: 'start', order: 10, View: StartControl },
       { place: 'composer.control', id: 'repos', at: 'context', order: 10, View: ReposControl },
     ],

@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { makeWorld, waitFor, release } from './harness.js'
-import { onWaiting, onAgents, onAgent, onAgentWorktree } from '../dashboard-rpc/reads.js'
+import { onWaiting, onAgents, onAgent, onRunCheckout } from '../dashboard-rpc/reads.js'
 import { sendMessage, sendStop, sendDeleteAgent } from '../dashboard-rpc/control.js'
 import { callModule } from '../dashboard-rpc/module-calls.js'
 
@@ -27,7 +27,7 @@ test('answer a waiting run’s question from the Human Queue; the answer resumes
     if (gate.kind !== 'choice') return
     assert.deepEqual(gate.options.map(o => o.label), ['Left', 'Right'])
     await world.waitAgent(project, agentId, 'waiting')
-    assert.equal((await rpc(onAgentWorktree)(project.id, agentId))?.checkout !== undefined, true, 'a waiting run keeps its checkout')
+    assert.notEqual(await rpc(onRunCheckout)(project.id, agentId), null, 'a waiting run keeps its checkout')
     const waiting = await waitFor(
       async () => (await rpc(onWaiting)()).items.find(item => item.words === 'Needs answer' && item.run === agentId),
       'the Human Queue to list the waiting run',
@@ -117,7 +117,7 @@ test('stop a run; its checkout is reclaimed, then the run is deleted (#737/#1032
 
     // One rule (E5): the checkout goes once its work is on the remote, whatever the run did.
     await world.waitRetired(project, agentId)
-    assert.equal((await rpc(onAgentWorktree)(project.id, agentId))?.checkout, undefined, 'no checkout of its own is left')
+    assert.equal(await rpc(onRunCheckout)(project.id, agentId), null, 'no checkout of its own is left')
     assert.ok((await rpc(onAgents)(project.id)).some(r => r.id === agentId && r.status === 'stopped'), 'the run\'s row survives')
 
     // Delete is the destructive sibling: the row itself disappears from the dashboard.

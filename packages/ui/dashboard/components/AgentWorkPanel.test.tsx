@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import { cleanup, render, screen, within } from '@testing-library/react'
 
-const { AgentWorkPanel, ProjectWorkRow, WorkRow } = await import('./AgentWorkPanel.js')
+const { AgentWorkPanel, WorkRow } = await import('./AgentWorkPanel.js')
 
 afterEach(cleanup)
 
@@ -26,20 +26,8 @@ describe('the session\'s work panel', () => {
     expect(within(copy!).getByRole('alert').textContent).toBe('Could not open the pull request.')
   })
 
-  test('with no row the panel holds nothing: a project with nothing to say, or no branch, has no row', () => {
-    render(
-      <AgentWorkPanel>
-        <ProjectWorkRow name="test-project" checkout={{ branch: 'agent-x' }} show={false} />
-        <ProjectWorkRow name="test-project" checkout={null} show />
-      </AgentWorkPanel>,
-    )
+  test('with no row the panel holds nothing', () => {
+    render(<AgentWorkPanel>{null}</AgentWorkPanel>)
     expect(screen.getByRole('group', { name: "This session's work" }).querySelector('ul')!.childElementCount).toBe(0)
-    cleanup()
-    render(
-      <AgentWorkPanel>
-        <ProjectWorkRow checkout={{ branch: 'agent-x' }} show />
-      </AgentWorkPanel>,
-    )
-    expect(screen.getByText('This project')).toBeTruthy()
   })
 })

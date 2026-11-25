@@ -3,13 +3,23 @@ import { test } from 'node:test'
 import { readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { makeWorld, waitFor, release, git } from './harness.js'
-import { onAgent, onAgents, onAgentHandoff, onAgentWorktree, onActivity, onRecentAgents } from '../dashboard-rpc/reads.js'
+import { onAgent, onAgents, onActivity, onRecentAgents, onRunCheckout } from '../dashboard-rpc/reads.js'
 import { sendStart } from '../dashboard-rpc/control.js'
 import { callModule } from '../dashboard-rpc/module-calls.js'
 
 // The run lifecycle stories (README.md): what a user sees between clicking Start and reading the
 // recorded run's row — through the same RPCs the dashboard calls, this computer's run host, and a
 // real detached run process with the fake driver in the agent seat.
+
+/** What git-branches' server part answers about a run, as the project's row above its message box calls it. */
+async function branchesRead<T>(rpc: Awaited<ReturnType<typeof makeWorld>>['rpc'], projectId: string, name: 'worktree' | 'handoff', agentId: string): Promise<T> {
+  const said = await rpc(callModule)(projectId, '@openagt/git-branches', name, { agentId })
+  assert.ok(said.ok, `${name}: ${said.ok ? '' : said.error}`)
+  return said.output as T
+}
+
+/** Where a run works, as git-branches reads it. */
+type Worktree = { checkout?: { path: string; dirty: boolean }; branch?: string } | null
 
 test("start a run on this computer's host, watch it live, and read the recorded row when it ends", async () => {
   const world = await makeWorld()
@@ -44,12 +54,12 @@ test("start a run on this computer's host, watch it live, and read the recorded 
     // The run's tool reclaimed the checkout and published nothing: nothing is left to remove,
     // and the branch is on this machine only.
     await world.waitRetired(project, agentId)
-    assert.equal((await rpc(onAgentWorktree)(project.id, agentId))?.checkout, undefined)
+    assert.equal(await rpc(onRunCheckout)(project.id, agentId), null)
     assert.ok((await git(project.cwd, 'branch', '--list', `agent-${agentId}`)).includes(`agent-${agentId}`), 'the run\'s branch is still here')
     assert.equal((await git(project.cwd, 'ls-remote', '--heads', 'origin')).includes(`agent-${agentId}`), false, 'and not on origin')
-    // Its header then says only what is true of the run: the branch it recorded, and no checkout
-    // to be clean or dirty. Never the user's own checkout's branch and "clean".
-    assert.deepEqual(await rpc(onAgentWorktree)(project.id, agentId), { branch: `agent-${agentId}` })
+    // Its project's row then says only what is true of the run: the branch it recorded, and no
+    // checkout to be clean or dirty. Never the user's own checkout's branch and "clean".
+    assert.deepEqual(await branchesRead<Worktree>(rpc, project.id, 'worktree', agentId), { branch: `agent-${agentId}` })
 
     // The recorded run replays the story the live tail told, and the cross-project surfaces list it.
     const replay = await waitFor(async () => {
@@ -64,9 +74,9 @@ test("start a run on this computer's host, watch it live, and read the recorded 
     assert.ok(activity.whole.includes(project.id))
     assert.ok((await rpc(onRecentAgents)()).some(r => r.projectId === project.id && r.agent.id === agentId))
 
-    // The handoff panel reads the branch off the repository: it exists, and it is not pushed.
+    // The project's row reads the branch off the repository: it exists, and it is not pushed.
     const handoff = await waitFor(async () => {
-      const panel = await rpc(onAgentHandoff)(project.id, agentId)
+      const panel = await branchesRead<{ exists: boolean; branch: string; pushed: boolean } | null>(rpc, project.id, 'handoff', agentId)
       return panel?.exists ? panel : undefined
     }, 'the panel to report the branch')
     assert.equal(handoff.branch, `agent-${agentId}`)
@@ -93,10 +103,10 @@ test('two runs at once, each in its own checkout (#736)', async () => {
     // worktrees dir — the user's checkout is neither.
     const agents = await rpc(onAgents)(project.id)
     assert.equal(agents.filter(r => [runA, runB].includes(r.id) && r.status === 'running').length, 2)
-    const [wtA, wtB] = [await rpc(onAgentWorktree)(project.id, runA), await rpc(onAgentWorktree)(project.id, runB)]
-    assert.ok(wtA?.checkout && wtB?.checkout, 'each run reports a checkout of its own')
-    assert.notEqual(wtA.checkout.path, wtB.checkout.path)
-    assert.notEqual(wtA.checkout.path, project.cwd)
+    const [wtA, wtB] = [await rpc(onRunCheckout)(project.id, runA), await rpc(onRunCheckout)(project.id, runB)]
+    assert.ok(wtA && wtB, 'each run reports a checkout of its own')
+    assert.notEqual(wtA, wtB)
+    assert.notEqual(wtA, project.cwd)
 
     // Each goes on and finishes on its own.
     for (const agentId of [runA, runB]) {
@@ -121,7 +131,7 @@ test("the Changes and Files panes find a run's work through this computer's host
     }
     const agentId = await world.startAgent(project, 'hold: commit the work')
     await world.waitAgent(project, agentId, 'running')
-    const checkout = (await rpc(onAgentWorktree)(project.id, agentId))?.checkout?.path
+    const checkout = await rpc(onRunCheckout)(project.id, agentId)
     assert.ok(checkout, 'the run works in a checkout of its own')
 
     // Working: a file it wrote and has not committed is read where it is, in its checkout.
@@ -157,19 +167,22 @@ test('a checkout git can no longer read, as one being removed, still answers wit
     const project = await world.addProject()
     const agentId = await world.startAgent(project, 'hold: a change')
     await world.waitAgent(project, agentId, 'running')
-    const path = (await rpc(onAgentWorktree)(project.id, agentId))?.checkout?.path
+    const path = (await branchesRead<Worktree>(rpc, project.id, 'worktree', agentId))?.checkout?.path
     assert.ok(path, 'the run has a checkout')
     // What the run's clean-up leaves for a moment: the folder is there, git cannot read it. An
-    // answer without the branch put the bar above the message box away until the next read.
+    // answer without the branch put the project's row above the message box away until the next read.
     // A checkout's `.git` is a file naming where its repository is: pointed nowhere, git fails
     // there rather than reading the project's own checkout above it.
     const gitFile = join(path, '.git')
     const was = await readFile(gitFile, 'utf8')
     await writeFile(gitFile, 'gitdir: /nowhere\n')
-    assert.deepEqual(await rpc(onAgentWorktree)(project.id, agentId), { branch: `agent-${agentId}` })
+    assert.deepEqual(await branchesRead<Worktree>(rpc, project.id, 'worktree', agentId), { branch: `agent-${agentId}` })
     // Gone first, as a removal may take it: never the project's own branch, which git reads then.
+    // The working run's host no longer finds it there, so there is no branch to say: the row keeps the one it said.
     await rm(gitFile)
-    assert.deepEqual(await rpc(onAgentWorktree)(project.id, agentId), { branch: `agent-${agentId}` })
+    const gone = await branchesRead<Worktree>(rpc, project.id, 'worktree', agentId)
+    assert.equal(gone?.checkout, undefined)
+    assert.notEqual(gone?.branch, 'main', "never the project's own branch")
     await writeFile(gitFile, was)
     await release(project, agentId)
     await world.waitAgent(project, agentId, 'done')

@@ -12,7 +12,7 @@ export type * from '../../src/dashboard-rpc/reads.js'
 
 export const onAgents = rpc<typeof impl.onAgents>('onAgents')
 export const onModuleAgents = rpc<typeof impl.onModuleAgents>('onModuleAgents')
-export const onAgentWorktree = rpc<typeof impl.onAgentWorktree>('onAgentWorktree')
+export const onRunCheckout = rpc<typeof impl.onRunCheckout>('onRunCheckout')
 export const onAgent = rpc<typeof impl.onAgent>('onAgent')
 export const onAgentsDoing = rpc<typeof impl.onAgentsDoing>('onAgentsDoing')
 export const onDocs = rpc<typeof impl.onDocs>('onDocs')
@@ -23,4 +23,3 @@ export const onWaiting = rpc<typeof impl.onWaiting>('onWaiting')
 export const onActivity = rpc<typeof impl.onActivity>('onActivity')
 export const onDashboard = rpc<typeof impl.onDashboard>('onDashboard')
 export const onProjectFiles = rpc<typeof impl.onProjectFiles>('onProjectFiles')
-export const onAgentHandoff = rpc<typeof impl.onAgentHandoff>('onAgentHandoff')

@@ -19,6 +19,12 @@ the menu under the message box, the usage card, what a run needs before it can s
 agents' updates, and where the images a message goes with are kept (`composer.images`). Its host
 (`run.host`) starts, stops, deletes and names this computer's runs.
 
+It reads no git either. The panel of a session's work above its message box holds the modules'
+rows (`chat.work`): `@openagt/git-branches` draws the project's row and one per copy of a repo
+from its own reads of the run's checkout and branch, and the shell hands each row whether the run
+works or has ended, whether its clean-up is going, the project's name and the pull request the
+run's record names. The panel's frame and the next steps' presses (`chat.handoff`) are the shell's.
+
 ```ts
 import { runCli } from '@openagt/ui/cli'
 

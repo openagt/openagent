@@ -1,5 +1,4 @@
 import { ArrowLeft } from 'lucide-react'
-import type { AgentWorktree } from '../../src/index.js'
 import type { RunEvent } from '@openagt/hooks'
 import { AgentActionsMenu } from './AgentActionsMenu.js'
 import { AgentErrorCount } from './AgentErrorCount.js'
@@ -31,7 +30,6 @@ export function AgentActionBar({
   expanded = false,
   onToggle,
   ready = true,
-  checkout,
   status,
   onBack,
   resumeCommand,
@@ -63,8 +61,6 @@ export function AgentActionBar({
    * and a fact still on screen from the run before read as this one's.
    */
   ready?: boolean
-  /** The agent's checkout as the page read it (`null`: not answered yet), read once for this bar and the one above the message box. */
-  checkout: AgentWorktree | null
   /** The run's state as the run table names it (`shownStatus`), once it is known. */
   status?: string | undefined
   /** Given, a phone's bar starts with a back arrow that calls it: a phone's session page has no bar of pages. */

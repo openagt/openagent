@@ -5,7 +5,7 @@
 // (`ui.action`), something to pick in a shared menu (`ui.option`), and how a kind of content looks
 // (`ui.render`). Each place's props are typed here, so a new place needs no new hook.
 import type { ComponentType } from 'react'
-import type { RunOptions } from './run.js'
+import type { PullRequest, PullRequestState, RunOptions } from './run.js'
 
 /** An icon, drawn at the size its `className` gives. */
 export type UiIcon = ComponentType<{ className?: string; 'aria-hidden'?: boolean }>
@@ -104,6 +104,26 @@ export interface UiRunProps {
   agentId: string
   /** The run's agent is still working: a run that ended, or stopped on a question, is not. */
   working: boolean
+}
+
+/**
+ * What a row of the panel of a session's work above its message box is given: the run, where it
+ * stands as its page knows it, and what the shell knows of it beside its work.
+ */
+export interface UiWorkProps extends UiRunProps {
+  /**
+   * The run works, or is about to (a message was just sent to it): what its work holds is still
+   * being written. Neither this nor {@link ended}: not known yet.
+   */
+  working: boolean
+  /** The run has ended: what its work holds is read, and its next steps are offered (`chat.handoff`). */
+  ended: boolean
+  /** It ended, and its clean-up is still going: its record being saved, its checkout cleaned up. */
+  saving: boolean
+  /** The session's project, by its name: the project's row is named by it. */
+  projectName?: string
+  /** The pull request the run's record names, and how it stands as its git host module last read it. */
+  pr?: PullRequest & { state?: PullRequestState; title?: string }
 }
 
 /** What a strip above a run's chat is given: the run, and the host it runs on. */
@@ -274,16 +294,19 @@ export interface ViewPlaces {
     props: UiPaneProps
   }
   /**
-   * A few words in the bar above a run's message box, until the run has ended and its branch was
-   * read; an entry that says `ended` is drawn from then on instead (git-branches': what the branch holds).
+   * A few words in the project's row of the panel above a run's message box, while the run works
+   * and until what its work holds is read (ui-pane-changes': what the run has changed so far). The
+   * module that draws the project's row (`chat.work`) draws them in it.
    */
-  'chat.summary': { entry: { id: string; ended?: true }; props: UiRunProps }
+  'chat.summary': { entry: { id: string }; props: UiRunProps }
   /**
-   * Rows of the panel of a session's work above its message box, after the project's own row: one
-   * per repo the session holds work in beside its project (git-branches' copies of repos), each
-   * with its next steps (`chat.handoff` with the repo).
+   * The rows of the panel of a session's work above its message box, by `order`: the project's
+   * (git-branches': its branch, what the branch holds, its pull request and its next steps), then
+   * one per repo the session holds work in beside its project (git-branches' copies of repos), each
+   * with its next steps (`chat.handoff`, with the repo for a copy). A row with nothing to say draws
+   * nothing, and a panel with no row is not drawn.
    */
-  'chat.work': { entry: { id: string; order?: number }; props: UiRunProps }
+  'chat.work': { entry: { id: string; order?: number }; props: UiWorkProps }
   /** A strip above a run's chat, with a word on the run: a host's, on a run it runs, say where the run is and when its news comes. */
   'chat.notice': { entry: { id: string }; props: UiRunNoticeProps }
   /** Words at the end of the row above a session's message box: github's pull request labels. */

@@ -1,4 +1,4 @@
-import { HandoffOffers, useLoaded, useModuleHost, WorkRow, type UiRunProps } from '@openagt/ui/module'
+import { HandoffOffers, useLoaded, useModuleHost, WorkRow, type UiWorkProps } from '@openagt/ui/module'
 import { handoffSays, server, useHandoff } from './calls.js'
 import { HandoffSummary } from './HandoffSummary.js'
 
@@ -8,22 +8,22 @@ import { HandoffSummary } from './HandoffSummary.js'
 // copy's name). A copy holding no work has no row.
 
 /** A row per copy that holds work, once the run has ended. */
-export function CopyRows({ projectId, agentId, working }: UiRunProps) {
+export function CopyRows({ projectId, agentId, working, ended }: UiWorkProps) {
   const host = useModuleHost()
   // A copy is made as the run starts: read again when it stops or goes on.
   const names = useLoaded<string[] | null>(() => server(host).copies(projectId, { agentId }).catch(() => []), [], [projectId, agentId, working], { remember: `git-branches:copies:${projectId}:${agentId}` })
   return (
     <>
       {(names ?? []).map(repo => (
-        <CopyRow key={repo} projectId={projectId} agentId={agentId} repo={repo} ended={!working} />
+        <CopyRow key={repo} projectId={projectId} agentId={agentId} repo={repo} ended={ended} working={working} />
       ))}
     </>
   )
 }
 
-function CopyRow({ projectId, agentId, repo, ended }: { projectId: string; agentId: string; repo: string; ended: boolean }) {
+function CopyRow({ projectId, agentId, repo, ended, working }: { projectId: string; agentId: string; repo: string; ended: boolean; working: boolean }) {
   const host = useModuleHost()
-  const { handoff } = useHandoff(host, { projectId, agentId, repo }, ended)
+  const { handoff } = useHandoff(host, { projectId, agentId, repo }, { ended, working })
   if (!ended || !handoff || !handoffSays(handoff)) return null
   return (
     <WorkRow

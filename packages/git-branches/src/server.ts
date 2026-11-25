@@ -1,3 +1,5 @@
+import { stat } from 'node:fs/promises'
+import { join } from 'node:path'
 import { DATA_BRANCH, errorMessage, nodeGitRunner, originDefaultBranch, type GitRunner } from '@openagt/agent-data'
 import { START_FROM, isBranchName, type StartFrom } from '@openagt/hooks'
 import { act, read, type RpcHost } from '@openagt/hooks/rpc'
@@ -7,6 +9,7 @@ import { bringBranch } from './bring.js'
 import { checkoutDir, reclaimAgent, refusalLine } from './agent-checkout.js'
 import { bringRefusalLine, mergeRefusalLine, pushRefusalLine } from './cli.js'
 import { readFolderBehind, updateFolder } from './folder-behind.js'
+import { readGitStatus } from './git-status.js'
 import { readHandoff, sessionCopies, workAt, type Handoff } from './handoff.js'
 import { mergeBranch } from './merge.js'
 import { branchesOnOrigin } from './origin-branches.js'
@@ -15,8 +18,8 @@ import { pushBranchByName } from './push.js'
 import { currentBranch, worktreeSize } from './worktree.js'
 
 // git-branches' server part (`@openagt/hooks/rpc`): what its places in the dashboard read and do.
-// The bar above an ended run's message box reads what the run's branch holds (`handoff`) and
-// offers its next steps: Commit (said to the run, which commits its own work), Publish branch,
+// The project's row above a run's message box reads where the run works (`worktree`) while it
+// works, and once it has ended what its branch holds (`handoff`), and offers its next steps: Commit (said to the run, which commits its own work), Publish branch,
 // Merge on this machine, a copy's work brought back to its folder, uncommitted work discarded.
 // The session's menu offers Remove worktree for a checkout the run kept. The row above the box
 // says, and in the launcher picks, the branch a run starts from; and a project's folder behind its
@@ -51,6 +54,38 @@ export const handoff = read(async (host: RpcHost, { agentId, repo }: { agentId: 
   if (!isRunId(agentId)) return null
   const at = await workAt(host.root, agentId, await host.run(agentId), repo)
   return (at && (await readHandoff(at).catch(() => undefined))) ?? null
+})
+
+/** Where a run works, for its project's row: its checkout while it has one, and the branch its work is on. */
+export interface Worktree {
+  /** The run's own checkout while it exists: where it is, and whether it holds uncommitted changes. */
+  checkout?: { path: string; dirty: boolean }
+  /** The branch the run's work is on: its checkout's while it has one, else the one its record names. */
+  branch?: string
+}
+
+/**
+ * Where a session is working (#798): the checkout it has, its branch, and whether it is holding
+ * uncommitted changes. Every run works in a checkout of its own, so once that checkout is gone
+ * there is no tree left to be clean or dirty: the answer is then only the branch its record names,
+ * never the project's own folder (the person's branch, their "clean") as the run's. Nothing for a
+ * run its host does not know.
+ */
+export const worktree = read(async (host: RpcHost, { agentId }: { agentId: string }): Promise<Worktree | null> => {
+  if (!isRunId(agentId)) return null
+  const run = await host.run(agentId)
+  const path = run?.checkout
+  // Read only while the checkout's own `.git` is there: without it git reads the project's
+  // checkout the run's folder sits in, and answered with the person's branch as the run's.
+  const linked = path !== undefined && (await stat(join(path, '.git')).then(() => true, () => false))
+  const status = linked ? await readGitStatus(path).catch(() => undefined) : undefined
+  if (path === undefined || !status) {
+    // With no checkout the record is the only witness. So it is for a checkout git cannot read: the
+    // run's clean-up is removing it, and an answer without its branch put the row away until the next read.
+    if (!run?.record) return null
+    return run.record.branch !== undefined ? { branch: run.record.branch } : {}
+  }
+  return { checkout: { path, dirty: status.dirty }, branch: status.branch }
 })
 
 /** The names of the session's copies of repos, in its folder: each has a row of its own in the panel above the box. */
