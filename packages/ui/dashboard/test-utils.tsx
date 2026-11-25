@@ -1,11 +1,34 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react'
-import { continuationPrompt } from '@openagt/hooks'
+import { continuationPrompt, type AgentCalls } from '@openagt/hooks'
 import { mountedOf, type Mounted, type MountedModules, type MountedOption } from './lib/use-modules.js'
 import type { UiMarkdownProps, UiQuestionProps, UiRender } from './module/index.js'
 
 // The gear and its lines, a tooltip's hover and a menu's opening: the SDK's own test helpers, which a module's tests use too.
 import { openMenu } from './module/testing.js'
 export { hoverTooltip, openMenu, GearMenu, gear, setupLine, openSetupLine } from './module/testing.js'
+
+/**
+ * A coding agent's words for its calls (`RunAgent.calls`), as the chat's tests word theirs: Claude
+ * Code's tools and its MCP naming, which the chat's own tests draw their calls with.
+ */
+export const SAMPLE_CALLS: AgentCalls = {
+  tools: {
+    Bash: { verb: 'Ran', doing: 'Running', kind: 'command' },
+    Read: { verb: 'Read', doing: 'Reading', kind: 'read', detail: 'path' },
+    Edit: { verb: 'Edited', doing: 'Editing', kind: 'edit', detail: 'path' },
+    Write: { verb: 'Wrote', doing: 'Writing', kind: 'edit', detail: 'path' },
+    Grep: { verb: 'Searched', doing: 'Searching', kind: 'search', detail: 'query' },
+    Glob: { verb: 'Searched', doing: 'Searching', kind: 'find', detail: 'query' },
+    WebSearch: { verb: 'Searched the web', doing: 'Searching the web', kind: 'web', detail: 'query' },
+    WebFetch: { verb: 'Fetched', doing: 'Fetching', kind: 'other' },
+    Skill: { verb: 'Ran skill', doing: 'Running skill', kind: 'skill', detail: 'slash' },
+    Task: { verb: 'Started agent', doing: 'Starting agent', kind: 'other', detail: 'task' },
+    Agent: { verb: 'Started agent', doing: 'Starting agent', kind: 'other', detail: 'task' },
+    TodoWrite: { verb: 'Updated todos', doing: 'Updating todos', kind: 'other' },
+    ToolSearch: { verb: 'Loaded tools', doing: 'Loading tools', kind: 'other' },
+  },
+  families: [{ pattern: 'mcp__(.+?)__(.+)', verb: 'Used $1:', doing: 'Using $1:', target: '$2', kind: 'other' }],
+}
 
 /**
  * A module that keeps the images a message goes with (`composer.images`), as agent-driver's does:

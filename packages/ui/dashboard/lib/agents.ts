@@ -1,10 +1,11 @@
+import type { AgentCalls } from '@openagt/hooks'
 import { useLoaded } from './use-async.js'
 import { onCodingAgents, onNamesRuns, type AgentSaid } from '../rpc/agents.js'
 
-// The coding agents as each says itself (`run.agent`, #2394): its name, its mark and its models,
-// for every page that shows a run. The shell names none of them: a run's record names its agent
-// by id, and these read what that agent says of it. Asked once and remembered for the page's
-// life, so every row that names a model shows its name from its first frame.
+// The coding agents as each says itself (`run.agent`, #2394): its name, its mark, its models and
+// how its calls read, for every page that shows a run. The shell names none of them: a run's
+// record names its agent by id, and these read what that agent says of it. Asked once and
+// remembered for the page's life, so every row that names a model shows its name from its first frame.
 
 export type { AgentSaid }
 
@@ -16,6 +17,11 @@ export function useAgents(): AgentSaid[] | undefined {
 /** The agent a run's record names, by its id; none for one the distribution does not have. */
 export function agentOf(agents: readonly AgentSaid[] | undefined, id: string | undefined): AgentSaid | undefined {
   return id === undefined ? undefined : agents?.find(agent => agent.id === id)
+}
+
+/** How the calls of a run on the agent its record names read in the chat; none until the daemon has answered, or for an agent that words none. */
+export function useRunCalls(id: string | undefined): AgentCalls | undefined {
+  return agentOf(useAgents(), id)?.calls
 }
 
 /** A model as its agent lists it, by its id or by the full id it runs today. */

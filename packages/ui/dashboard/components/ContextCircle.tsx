@@ -4,9 +4,9 @@ import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 // How full the session's context is, as the small circle Claude Code on the web has under its box:
 // a ring that fills as the conversation grows. The reading is the last model call's own (what it
 // was given, cached part included, plus what it wrote), not a total of the turn's calls, and the
-// window is what the coding agent says of the model — Codex says it outright, and for Claude it is
-// what `@openagt/agent-driver-claude-code` knows of the family. Without a window there is no circle: a
-// fullness nobody can measure is worse than none. With one and no reading yet the ring is there and
+// window is what the coding agent says of the model, out of its CLI or what its module knows of
+// the model's family. Without a window there is no circle: a fullness nobody can measure is worse
+// than none. With one and no reading yet the ring is there and
 // empty, as Claude Code's is from the session's first frame, rather than appearing mid-turn.
 
 /** A token count as a person reads it, as Claude Code says it: `18.2k`, `184k`, `8.1M`. Every place that says a count says it so. */

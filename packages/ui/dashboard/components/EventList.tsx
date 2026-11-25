@@ -231,7 +231,7 @@ export function replyBeforeEnd(events: readonly RunEvent[]): RunEvent | undefine
     if (e.kind === 'choice' || e.kind === 'end' || isTurnBoundary(e)) return undefined
     if (e.kind !== 'driver' || ('subagent' in e.event && e.event.subagent !== undefined)) continue
     if (e.event.type === 'action') return undefined
-    // A message with no words (Codex ends some turns with one) is not the turn's last word.
+    // A message with no words (a coding agent may end a turn with one) is not the turn's last word.
     if (e.event.type !== 'text' || e.event.text.trim() === '') continue
     return e
   }

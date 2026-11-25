@@ -4,7 +4,8 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render as rendered, screen, waitFor, within } from '@testing-library/react'
 import { continuationPrompt } from '@openagt/hooks'
 import { ModulesContext, mountedOf } from '../lib/use-modules.js'
-import { MARKDOWN_RENDER, imageStore, questionCard } from '../test-utils.js'
+import { MARKDOWN_RENDER, SAMPLE_CALLS, imageStore, questionCard } from '../test-utils.js'
+import { RunCalls } from './ToolCalls.js'
 
 /** What a reader gets of an element: its words less the ones fading out of it (CrossFade). */
 const shownText = (el: Element): string | null => {
@@ -20,11 +21,17 @@ const { EventList, askedReplies, quietEnds, replyBeforeEnd } = await import('./E
 
 // Every list here is in a page where ask is on, as the distribution starts it: its card asks a
 // question (a stand-in, which keeps what it was given), and the chat leaves its block out of the
-// message whose question the card asks.
+// message whose question the card asks. Its run is on a coding agent that words its calls.
 let card = questionCard()
 const render = (ui: ReactElement) => {
   const { modules } = card
-  return rendered(ui, { wrapper: ({ children }: { children: ReactNode }) => <ModulesContext.Provider value={modules}>{children}</ModulesContext.Provider> })
+  return rendered(ui, {
+    wrapper: ({ children }: { children: ReactNode }) => (
+      <ModulesContext.Provider value={modules}>
+        <RunCalls.Provider value={SAMPLE_CALLS}>{children}</RunCalls.Provider>
+      </ModulesContext.Provider>
+    ),
+  })
 }
 
 afterEach(() => {
@@ -1074,12 +1081,12 @@ describe('EventList subagent rows', () => {
     expect(screen.getByText('stopped')).toBeTruthy()
   })
 
-  test('on Codex a call that concerns two agents is two rows, and the call itself is no row', () => {
+  test('a call that concerns two agents is two rows, and the call itself is no row', () => {
     const codex: RunEvent[] = [
       { kind: 'driver', event: { type: 'start', prompt: 'split it' }, at: '2026-10-01T10:00:00.000Z' },
       { kind: 'driver', event: { type: 'action', label: 'collabAgentToolCall', id: 'item_1' }, at: '2026-10-01T10:00:10.000Z' },
-      { kind: 'driver', event: { type: 'subagent', id: 'item_1:t1', status: 'working', name: 'Ada', role: 'worker' }, at: '2026-10-01T10:00:10.000Z' },
-      { kind: 'driver', event: { type: 'subagent', id: 'item_1:t2', status: 'working', name: 'Brin', role: 'worker' }, at: '2026-10-01T10:00:10.000Z' },
+      { kind: 'driver', event: { type: 'subagent', id: 'item_1:t1', call: 'item_1', status: 'working', name: 'Ada', role: 'worker' }, at: '2026-10-01T10:00:10.000Z' },
+      { kind: 'driver', event: { type: 'subagent', id: 'item_1:t2', call: 'item_1', status: 'working', name: 'Brin', role: 'worker' }, at: '2026-10-01T10:00:10.000Z' },
       { kind: 'driver', event: { type: 'output', id: 'item_1', text: '' }, at: '2026-10-01T10:00:11.000Z' },
     ]
     const { container } = render(<EventList events={codex} working stick={false} />)

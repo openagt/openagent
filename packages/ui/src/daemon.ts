@@ -118,7 +118,7 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
       projectState: projectStateReader({ hooks: async () => hooks }),
     },
     screen: runtime.screenOf,
-    // What the modules on answer on the dashboard's address (`app.route`): host-claude-web's bridge.
+    // What the modules on answer on the dashboard's address (`app.route`): a host's bridge, say.
     routes: () => hooks.routes(),
     ...(clientBundleDir ? { clientBundleDir } : {}),
     ...(secure ? { secure: { ...secure, port: SECURE_PORT } } : {}),

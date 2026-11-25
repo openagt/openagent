@@ -1,12 +1,12 @@
-import { NAME_RUNS, type DriverModel } from '@openagt/hooks'
+import { NAME_RUNS, type AgentCalls, type DriverModel } from '@openagt/hooks'
 import { distributionHooks, distributionSettings } from '../distribution-hooks.js'
 import { contextOpenAgentUpdate } from './context.js'
 import type { OpenAgentUpdate } from '../dashboard/openagent-update.js'
 
 // What a run's agent says of itself (`run.agent`, #2394), for every page that shows a run: its
-// name, its mark and its models, read off the distribution's coding agents. The shell names none
-// of them. Whether runs are named as they start (the catalog's setting), so a list says a name is
-// coming. And whether a newer OpenAgent is out.
+// name, its mark, its models and how its calls read, read off the distribution's coding agents.
+// The shell names none of them. Whether runs are named as they start (the catalog's setting), so a
+// list says a name is coming. And whether a newer OpenAgent is out.
 
 /** What one coding agent offers: its models, or why it could not say; `missing` when its program is not on this computer. */
 export type AgentModelsSaid = { models: DriverModel[] } | { models: []; error: string; missing?: true }
@@ -20,6 +20,8 @@ export interface AgentSaid {
   /** Its mark, as SVG markup in the text's colour. */
   logo?: string
   models: AgentModelsSaid
+  /** How its tool calls read in the chat. */
+  calls?: AgentCalls
 }
 
 /** The coding agents of the distribution, in its order, each with the models it offers. */
@@ -33,7 +35,7 @@ export async function onCodingAgents(): Promise<AgentSaid[]> {
             (err: unknown) => ({ models: [] as [], error: err instanceof Error ? err.message : String(err), ...(['ENOENT', 'EACCES'].includes(String((err as NodeJS.ErrnoException).code)) ? { missing: true as const } : {}) }),
           )
         : { models: [], error: 'it cannot list its models' }
-      return { id: agent.id, label: agent.label, ...(agent.logo !== undefined ? { logo: agent.logo } : {}), models }
+      return { id: agent.id, label: agent.label, ...(agent.logo !== undefined ? { logo: agent.logo } : {}), models, ...(agent.calls !== undefined ? { calls: agent.calls } : {}) }
     }),
   )
 }

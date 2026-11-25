@@ -20,7 +20,7 @@ export interface ModuleAgent {
   person?: string
   /** What it cost so far, in US dollars. */
   cost?: number
-  /** The coding agent that runs it (`claude-code`, `codex`, …) and its model. */
+  /** The coding agent that runs it, by its `run.agent` id, and its model. */
   driver?: string
   model?: string
   /** Its pull request, with how it stands as the git host last said (`merged`: the sidebar's merged run), once read. */

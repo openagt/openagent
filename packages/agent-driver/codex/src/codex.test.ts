@@ -713,19 +713,19 @@ test('a Codex collab call says a subagent for each agent it names, and a finishe
     // The call's own row, which the agent's reader shows today: now with something beside the label.
     { type: 'action', label: 'collabAgentToolCall', detail: 'spawnAgent reviewer, scout', id: 'collab-1' },
     // One subagent per agent, keyed by the call and the agent's own thread: the item's id alone
-    // could not tell two agents of one call apart.
-    { ...said, id: 'collab-1:agent-1', name: 'reviewer', role: 'reviewer' },
-    { ...said, id: 'collab-1:agent-2', name: 'scout', role: 'explorer' },
+    // could not tell two agents of one call apart. Each names the call that started it.
+    { ...said, id: 'collab-1:agent-1', call: 'collab-1', name: 'reviewer', role: 'reviewer' },
+    { ...said, id: 'collab-1:agent-2', call: 'collab-1', name: 'scout', role: 'explorer' },
     // The spawn itself is over — and the agents it started are not: their rows stay live.
     { type: 'output', id: 'collab-1', text: '' },
-    { ...said, id: 'collab-1:agent-1', name: 'reviewer', role: 'reviewer' },
-    { ...said, id: 'collab-1:agent-2', name: 'scout', role: 'explorer' },
+    { ...said, id: 'collab-1:agent-1', call: 'collab-1', name: 'reviewer', role: 'reviewer' },
+    { ...said, id: 'collab-1:agent-2', call: 'collab-1', name: 'scout', role: 'explorer' },
     // A `wait` says nothing of a model or a prompt of its own, and absent is absent.
     { type: 'action', label: 'collabAgentToolCall', detail: 'wait reviewer', id: 'collab-2' },
-    { type: 'subagent', id: 'collab-2:agent-1', status: 'working', name: 'reviewer', role: 'reviewer' },
+    { type: 'subagent', id: 'collab-2:agent-1', call: 'collab-2', status: 'working', name: 'reviewer', role: 'reviewer' },
     // `wait` comes back when the agent has answered: that row is over.
     { type: 'output', id: 'collab-2', text: '' },
-    { type: 'subagent', id: 'collab-2:agent-1', status: 'ended', name: 'reviewer', role: 'reviewer' },
+    { type: 'subagent', id: 'collab-2:agent-1', call: 'collab-2', status: 'ended', name: 'reviewer', role: 'reviewer' },
   ])
 })
 
@@ -738,12 +738,12 @@ test('a Codex collab call that did not go through reads as failed, and a malform
   assert.deepEqual(await toolEvents([collab(true, refused), collab(true, nonsense), collab(true, older)]), [
     // `declined` and `failed` are both "did not go through", as they are for a file change.
     { type: 'output', id: 'collab-3', text: '', failed: true },
-    { type: 'subagent', id: 'collab-3:agent-1', status: 'failed', name: 'reviewer', role: 'reviewer' },
+    { type: 'subagent', id: 'collab-3:agent-1', call: 'collab-3', status: 'failed', name: 'reviewer', role: 'reviewer' },
     // No agent to be read: one row for the call itself, with no name and no role invented for it.
     { type: 'output', id: 'collab-4', text: '' },
     { type: 'subagent', id: 'collab-4', status: 'working' },
     { type: 'output', id: 'collab-5', text: '' },
-    { type: 'subagent', id: 'collab-5:reviewer', status: 'working', name: 'reviewer' },
+    { type: 'subagent', id: 'collab-5:reviewer', call: 'collab-5', status: 'working', name: 'reviewer' },
   ])
 })
 
