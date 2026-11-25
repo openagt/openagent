@@ -49,10 +49,10 @@ export async function distributionSettings(env: NodeJS.ProcessEnv = process.env)
   return (await distributionHooks(env)).settings
 }
 
-/** This computer's host, agent-driver's: where a run started from here runs. A distribution without it starts no run. */
+/** This computer's host, the `run.host` of {@link LOCAL_HOST}'s id a module gives: where a run started from here runs. A distribution without it starts no run. */
 export async function localHostOf(hooks: Hooks): Promise<RunHost> {
   const host = (await hooks.hosts()).find(one => one.id === LOCAL_HOST)
-  if (!host) throw new Error("the dashboard's distribution has no host for this computer, which agent-driver gives")
+  if (!host) throw new Error(`the dashboard's distribution has no host for this computer: none of its modules gives a run.host of the id '${LOCAL_HOST}'`)
   return host
 }
 

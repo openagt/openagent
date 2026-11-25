@@ -92,9 +92,6 @@ importers:
       '@openagt/github':
         specifier: workspace:*
         version: link:../../github
-      '@openagt/notifications-command':
-        specifier: workspace:*
-        version: link:../../notifications-command
       '@openagt/skills':
         specifier: workspace:*
         version: link:../../skills
