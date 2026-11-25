@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MutableRefObject } from 'react'
 import type { AgentMeta, AgentWorktree } from '../../src/index.js'
 import type { RunEvent } from '@openagt/hooks'
-import { onGitHostHome } from '../rpc/reads.js'
 import { useLoaded } from '../lib/use-async.js'
 import { handoffSays, useAgentHandoff } from '../lib/use-agent-handoff.js'
 import { useCheckoutStatus } from '../lib/use-checkout-status.js'
@@ -15,11 +14,12 @@ import { AgentComposer, type QueuedMessage } from './AgentComposer.js'
 import { sendNow, withdrawMessage } from '../rpc/control.js'
 import type { WaitingMessage } from './EventList.js'
 import { AgentWorkPanel, ProjectWorkRow } from './AgentWorkPanel.js'
-import { HandoffOffers, ViewsAt } from './Places.js'
+import { HandoffOffers, ViewsAt, useOptionsAt } from './Places.js'
 import { useAction } from '../lib/use-action.js'
 import { keepSending, keepWaiting, keptSending, keptWaiting, onKeptWaiting } from '../lib/draft-handoff.js'
 import { AgentFeed } from './AgentFeed.js'
 import { IssueLinks } from '../lib/markdown-links.js'
+import { useProjects } from '../lib/shell-projects.js'
 import { OpenFile, RunCalls } from './ToolCalls.js'
 import { ChatNote, ChatPane } from './ChatPane.js'
 import { LostStreamNotice } from './LostStreamNotice.js'
@@ -90,7 +90,7 @@ export function AgentView({
   naming?: boolean | undefined
   /** The session's project, said in the row above the message box. */
   projectName?: string | null | undefined
-  /** Where the agent executes: a host beside this computer's, by its id (`run.host`: GitHub Actions' `actions`, Claude Code on the web's `web`); none, or `local`, for this computer's. */
+  /** Where the agent executes: a host beside this computer's, by its id (`run.host`: a CI runner's, Claude Code on the web's `web`); none, or `local`, for this computer's. */
   target?: string | undefined
   /** The host a run just started goes to, by its name, until its card says where it runs: the row above the message box says it. */
   startedOn?: string | undefined
@@ -114,10 +114,9 @@ export function AgentView({
 }) {
   // The log on screen: the live channel's while the agent works, its archive once it has ended.
   const { archived, shown, active, feedLive } = useAgentFeed(projectId, agentId, live, events, replayed)
-  // The project's page on GitHub, where `#12` in an answer leads. Another host names its issues
-  // under another path, so its numbers stay text.
-  const gitHostHome = useLoaded(() => onGitHostHome(projectId), null, [projectId], { remember: `git-host-home:${projectId}` })
-  const issueLinks = gitHostHome?.name === 'GitHub' ? gitHostHome.url : undefined
+  // Where `#12` in an answer leads: the page the first module that links the project's references
+  // gives it (`chat.references`), by the project's repository address. With none, `#12` stays text.
+  const issueLinks = useIssueLinks(projectId)
 
   // Whether the agent is still working. A run that stops on a question ends `waiting` rather than
   // staying up, so a live run is a working one. One not known yet is neither working nor ended:
@@ -580,4 +579,17 @@ function useMessagesOnTheirWay(
     editInBox,
     giveBack,
   }
+}
+
+/** Where `#<number>` in the chat of the project `projectId` leads, as the modules that link its references say; none where no module links them. */
+function useIssueLinks(projectId: string): ((number: number) => string | undefined) | undefined {
+  const references = useOptionsAt('chat.references', projectId)
+  const listed = useProjects().find(project => project.id === projectId)
+  const remote = listed?.remote
+  const name = listed?.name
+  return useMemo(() => {
+    if (name === undefined || references.length === 0) return undefined
+    const project = { id: projectId, name, ...(remote !== undefined ? { remote } : {}) }
+    return (number: number) => references.map(({ option }) => option.issue(project, number)).find(page => page !== undefined)
+  }, [references, projectId, name, remote])
 }

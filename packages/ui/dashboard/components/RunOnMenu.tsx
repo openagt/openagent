@@ -5,8 +5,8 @@ import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel } from './ui/dropdown-menu.js'
 
 /**
- * Where the next run starts (#2394): this computer, or a host the project's modules bring (a GitHub
- * Actions runner, `run.host`). A host is a run TARGET, selected in place: picking one does not
+ * Where the next run starts (#2394): this computer, or a host the project's modules bring (a CI
+ * runner, `run.host`). A host is a run TARGET, selected in place: picking one does not
  * navigate the browser. The daemon starts the run on the host, which runs it on a machine of its own.
  */
 export type ConnectionControl = {

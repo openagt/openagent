@@ -58,7 +58,7 @@ export interface MountedModules {
 
 const VIEW_PLACES: readonly ViewPlace[] = ['app.page', 'app.overlay', 'overview.card', 'overview.line', 'chat.pane', 'chat.summary', 'chat.work', 'chat.notice', 'chat.labels', 'composer.control', 'composer.prompts', 'settings.section', 'permissions.section', 'usage.line', 'overview.notice']
 const ACTION_PLACES: readonly ActionPlace[] = ['link.menu', 'chat.handoff', 'chat.menu', 'project.menu', 'person.menu', 'attention.fix']
-const OPTION_PLACES: readonly OptionPlace[] = ['composer.auto', 'composer.where', 'composer.images', 'composer.commands']
+const OPTION_PLACES: readonly OptionPlace[] = ['composer.auto', 'composer.where', 'composer.images', 'composer.commands', 'chat.references']
 
 /** Nothing mounted at any place. */
 function nothingAt(loaded: boolean): MountedModules {

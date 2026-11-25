@@ -19,6 +19,31 @@ export interface AccountAccess {
   sendAs?(host: string, login?: string): Promise<{ ok: true; account: RepositoryAccount } | { ok: false; error: string } | undefined>
   /** The commit pull request `number` of `branch` merged as, in the repository at `dir`, read at its host; none for a repository the module does not answer for. */
   mergeCommit?(dir: string, branch: string, number: number): Promise<MergeLookup | undefined>
+  /**
+   * What a run in the repository at `dir` gets to work as `login`, one of the module's accounts at
+   * its host, else as the account runs use: the account's login and the run's environment for it;
+   * in words why not, OpenAgent having no such account among them. `dir` none: a session with no
+   * project, whose folder is on no host and which may reach the module's all the same. None for a
+   * repository the module does not answer for.
+   */
+  runAs?(dir: string | undefined, login?: string): Promise<RunAccount | { ok: false; error: string } | undefined>
+  /** The people behind these commit emails of the repository at `dir`, as its host knows them; none for a repository the module does not answer for. */
+  people?(dir: string, emails: readonly string[]): Promise<HostPerson[] | undefined>
+}
+
+/** The account a run works as at a git host: its login, and what the run's environment gets for it. */
+export interface RunAccount {
+  ok: true
+  login: string
+  env: Record<string, string>
+}
+
+/** A person of a project, as its git host knows them by a commit email: their email, login and picture. */
+export interface HostPerson {
+  email: string
+  login: string
+  /** A picture of them: an https address. */
+  avatar?: string
 }
 
 /** What a repository keeps to be sent as one of OpenAgent's accounts: the account, its host, and the git settings that make git go as it, as `[key, value]`, in order. */
@@ -51,4 +76,13 @@ export interface GitAccounts {
   sendAs(host: string, login?: string): Promise<{ ok: true; account: RepositoryAccount } | { ok: false; error: string }>
   /** The commit pull request `number` of `branch` merged as, in the repository at `dir`, as the first module answering for its host says; not merged where none does. */
   mergeCommit(dir: string, branch: string, number: number): Promise<MergeLookup>
+  /**
+   * The account a run in the repository at `dir` works as, `login` else the one runs use, as the
+   * first module answering for it says; none when no module does. With `dir` none (a session with
+   * no project), the first module that gives the account, else the first one's refusal; none when
+   * no module answers.
+   */
+  runAs(dir: string | undefined, login?: string): Promise<RunAccount | { ok: false; error: string } | undefined>
+  /** The people behind these commit emails of the repository at `dir`, as the first module answering for it says; nobody where none does. */
+  people(dir: string, emails: readonly string[]): Promise<HostPerson[]>
 }

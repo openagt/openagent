@@ -314,9 +314,11 @@ describe('Markdown diffs', () => {
 })
 
 describe('Markdown issue and pull request numbers', () => {
-  test('#12 is a link to that number on the project\'s GitHub page, where the page gives one', () => {
+  const pages = (number: number) => `https://github.com/me/shop/issues/${number}`
+
+  test('#12 is a link to the page the chat gives that number', () => {
     render(
-      <IssueLinks.Provider value="https://github.com/me/shop">
+      <IssueLinks.Provider value={pages}>
         <Markdown text={'Both merged from PRs #4 and #3.'} />
       </IssueLinks.Provider>,
     )
@@ -324,13 +326,20 @@ describe('Markdown issue and pull request numbers', () => {
     expect(screen.getByRole('link', { name: '#3' }).getAttribute('href')).toBe('https://github.com/me/shop/issues/3')
   })
 
-  test('without a GitHub page, and where the number is no reference, #12 stays text', () => {
+  test('without a page for the number, and where the number is no reference, #12 stays text', () => {
     render(<Markdown text={'PR #4 is open.'} />)
     expect(screen.queryByRole('link')).toBeNull()
     expect(screen.getByText('PR #4 is open.')).toBeTruthy()
     cleanup()
     render(
-      <IssueLinks.Provider value="https://github.com/me/shop">
+      <IssueLinks.Provider value={() => undefined}>
+        <Markdown text={'PR #4 is open.'} />
+      </IssueLinks.Provider>,
+    )
+    expect(screen.queryByRole('link')).toBeNull()
+    cleanup()
+    render(
+      <IssueLinks.Provider value={pages}>
         <Markdown text={'The colour #0f172a, C#7, a#2, see https://x.dev/a#3 and `#5`.'} />
       </IssueLinks.Provider>,
     )

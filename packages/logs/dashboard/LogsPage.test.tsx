@@ -326,7 +326,7 @@ test("each run says whose it is: their picture where the project's git host know
     // A run with no record yet says whose it is too.
     [{ id: 'r4', startedAt: at(now - 500), status: 'running', title: 'Going', person: 'ada@x.dev' }],
   )
-  vi.mocked(host.gitHostPeople).mockImplementation(async () => [{ email: 'ada@x.dev', login: 'ada', avatar: 'https://avatars.githubusercontent.com/u/1' }])
+  vi.mocked(host.people).mockImplementation(async () => [{ email: 'ada@x.dev', login: 'ada', avatar: 'https://avatars.githubusercontent.com/u/1' }])
   render(
     <ModuleHostContext.Provider value={host}>
       <LogsPage projects={[{ id: 'p1', name: 'alpha', remote: 'github.com/me/project' }]} projectId={null} path={[]} />
@@ -339,7 +339,7 @@ test("each run says whose it is: their picture where the project's git host know
   expect(within(row('Very old')).queryByRole('img')).toBeNull()
   expect(row('Very old').querySelector('span.size-5')).toBeTruthy()
   // Each person once, however many runs are theirs; and not again when the page reads its runs again.
-  expect(vi.mocked(host.gitHostPeople).mock.calls.at(-1)).toEqual(['p1', ['ada@x.dev', 'git@brillout.com']])
+  expect(vi.mocked(host.people).mock.calls.at(-1)).toEqual(['p1', ['ada@x.dev', 'git@brillout.com']])
 })
 
 test('a project that gave the whole page of 50 runs has older ones: the page says it lists the last 50; one with fewer lists every run; the one project shown is named', async () => {

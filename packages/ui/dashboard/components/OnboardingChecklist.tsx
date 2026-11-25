@@ -13,7 +13,7 @@ import { useAttention } from '../lib/use-attention.js'
 import { attentionDetail, attentionKey, useAttentionFixes } from './Attention.js'
 
 // "Discover OpenAgent", the Overview's first steps (#958): what a new install can set up, as the
-// modules say it needs setting up on this computer (`app.attention`: a GitHub account to connect, a
+// modules say it needs setting up on this computer (`app.attention`: a git host account to connect, a
 // first project to add, the tickets and the queue to populate, say). Each is there until it is done,
 // as its module tells: it cannot be ticked by clicking it, and a step done outside the dashboard
 // leaves the card all the same. Numbered, not boxes: a box invites a click that can tick nothing.

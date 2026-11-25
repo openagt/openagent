@@ -2,7 +2,7 @@ import type { ProjectRef, RunEvent, RunHost, RunOptions, RunRef, RunSummary, Run
 
 /**
  * The runs, as the shell reads them (#2394, decision 14): every `run.host` says its own, this
- * computer's and the ones beside it (a GitHub Actions runner, a cloud session), and the shell reads
+ * computer's and the ones beside it (a CI runner, a cloud session), and the shell reads
  * no run's files itself. A run here is the shell's page shape, {@link AgentMeta}, made from what its
  * host says ({@link metaOf}); what a module adds to a run's row (how its pull request stands, the
  * work it left on this machine) is that module's read, marked on it beside.
@@ -41,8 +41,6 @@ export interface AgentMeta {
   base?: string
   /** The commit the run's own work begins at: its changes are measured from it; absent, from the default branch. */
   baseCommit?: string
-  /** The account the run worked as at the git host; absent on a run recorded before it was kept. */
-  gitAccount?: string
   /** The branch the run's pull request goes into; absent, the repository's default branch. */
   prBase?: string
   /** How far the run takes its work when its agent finishes: `commit`, `branch`, `pr` or `merge`; absent on a run with none. The session's "Auto" pick shows it. */
@@ -71,7 +69,7 @@ export interface AgentMeta {
   prTitle?: string
   /** The pull requests the run opened before {@link pr}, oldest first, each marked with how it stands like {@link prState}. */
   earlierPrs?: { number: number; url: string; state?: 'open' | 'draft' | 'merged' | 'closed' }[]
-  /** Where this run executes: a host's id for a run on a host beside this computer's (`run.host`: GitHub Actions' `actions`, a cloud session's `web`), absent for one on this computer. */
+  /** Where this run executes: a host's id for a run on a host beside this computer's (`run.host`: a CI runner's, a cloud session's `web`), absent for one on this computer. */
   target?: string
   /** The model the run's agent was started with; absent when it was left on the agent's own default. */
   model?: string
@@ -87,12 +85,11 @@ const ON_ORIGIN = 'origin/'
 /** A run as its host says it, in the shell's page shape: `local` is the host that is this computer's. */
 export function metaOf(run: RunSummary, local: string): AgentMeta {
   const branches = run.options?.['git-branches']
-  const github = run.options?.github
   const branchFacts = run.facts?.['git-branches']
-  const githubFacts = run.facts?.github
+  // The run's pull requests, as the git host's module read them back into its slice of the facts.
+  const requests = run.facts?.github
   const base = branches?.base
   const branch = branchFacts?.branch
-  const gitAccount = githubFacts?.account ?? github?.account
   return {
     id: run.id,
     status: run.status === 'working' ? 'running' : run.status,
@@ -107,8 +104,7 @@ export function metaOf(run: RunSummary, local: string): AgentMeta {
     ...(run.naming ? { naming: true as const } : {}),
     ...(base !== undefined ? { base: base.startsWith(ON_ORIGIN) ? base.slice(ON_ORIGIN.length) : base } : {}),
     ...(branchFacts?.baseCommit !== undefined ? { baseCommit: branchFacts.baseCommit } : {}),
-    ...(gitAccount !== undefined ? { gitAccount } : {}),
-    ...(github?.prBase !== undefined ? { prBase: github.prBase } : {}),
+    ...(run.options?.github?.prBase !== undefined ? { prBase: run.options.github.prBase } : {}),
     ...(run.options?.publish !== undefined ? { publish: run.options.publish } : {}),
     ...(branchFacts?.landed !== undefined ? { landed: branchFacts.landed } : {}),
     ...(run.options !== undefined ? { options: run.options } : {}),
@@ -118,8 +114,8 @@ export function metaOf(run: RunSummary, local: string): AgentMeta {
     ...(run.agent?.effort !== undefined ? { effort: run.agent.effort } : {}),
     ...(run.contextTokens !== undefined ? { contextTokens: run.contextTokens } : {}),
     ...(branch !== undefined ? { branch } : {}),
-    ...(githubFacts?.pr ? { pr: githubFacts.pr } : {}),
-    ...(githubFacts?.earlierPrs ? { earlierPrs: githubFacts.earlierPrs } : {}),
+    ...(requests?.pr ? { pr: requests.pr } : {}),
+    ...(requests?.earlierPrs ? { earlierPrs: requests.earlierPrs } : {}),
     ...(run.session?.resume !== undefined ? { resumeCommand: run.session.resume } : {}),
     ...(run.saving ? { saving: true } : {}),
     ...(run.host !== local ? { target: run.host } : {}),

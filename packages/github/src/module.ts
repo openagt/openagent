@@ -2,7 +2,7 @@ import { realpathSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 import { errorMessage, nodeGitRunner, remoteHostOf, sessionFolder, sessionsHome } from '@openagt/agent-data'
-import { defineModule, PICKED_GITHUB_ACCOUNT, RunOrder, type AttentionItem, type GitAccess, type ModuleDefinition, type ProjectRun, type PullRequest, type RunContext } from '@openagt/hooks'
+import { defineModule, PICKED_GITHUB_ACCOUNT, RunOrder, type AttentionItem, type GitAccess, type ModuleDefinition, type ProjectRun, type PullRequest, type RunAccount, type RunContext } from '@openagt/hooks'
 import { cachedOpenPrs, cachedPrStates, mergeLookup, requestsRead, type OpenPr } from './pulls.js'
 
 export type { OpenPr } from './pulls.js'
@@ -10,7 +10,8 @@ import { HOST, readFacts, runEnv } from './accounts.js'
 import { nodeGhRunner } from './gh.js'
 import { homeUrlFor } from './home.js'
 import { ADD_ACCOUNT } from './ids.js'
-import { githubAccounts, hostAccounts, sendAs } from './host-accounts.js'
+import { cliAnswer, githubAccounts, hostAccounts, sendAs } from './host-accounts.js'
+import { keptPeople, type GitHubPerson } from './people.js'
 import type { GithubAccounts } from './cli.js'
 import { listRequests } from './requests.js'
 import { accountNamed, tokenOf } from './working-account.js'
@@ -18,8 +19,10 @@ import { accountNamed, tokenOf } from './working-account.js'
 /**
  * github, the module (#2394): the account a run works as on GitHub, first of its steps, and the
  * pull request its branch has, read back once the branch is, into the run's facts
- * (`RunFacts.github`), which the run's record keeps; and the account git work outside a run goes
- * as on GitHub (`account.access`): a push or a fetch a person's press makes. Its skill, with the command it teaches, is in
+ * (`RunFacts.github`), which the run's record keeps; and its accounts outside a run
+ * (`account.access`): the one git work goes as on GitHub (a push or a fetch a person's press
+ * makes), whether a run could work as one before it starts, and the people GitHub knows behind a
+ * project's commit emails. Its skill, with the command it teaches, is in
  * every run of a project on GitHub: its text says the project's pull requests are there, which is
  * wrong anywhere else.
  */
@@ -46,11 +49,22 @@ export interface GithubDeps {
   openRequests?: (dir: string) => Promise<OpenPr[]>
   /** Read how every recent request of the project at `dir` stands. */
   requestStates?: (dir: string) => Promise<unknown>
+  /** What a run, its git and gh asked in `dir`, gets to work as OpenAgent's account `login`, else the one runs use; in words why not. */
+  runAs?: (dir: string, login: string | undefined) => Promise<RunAccount | { ok: false; error: string }>
+  /** The GitHub accounts behind these commit emails of the repository at `dir`. */
+  people?: (dir: string, emails: readonly string[]) => Promise<GitHubPerson[]>
 }
 
 /** Where a run's commits are made, and go as its account: its project's repository, or a session's own folder, with the copies of its repos. */
 /** Where a run's commits are made: a project's checkouts, and the session's folder too when the run has copies of repos there; or a session's folder alone. */
 export type CommitsIn = { project: string; session?: string } | { session: string }
+
+/** The GitHub accounts behind a repository's commit emails, kept a day: `github people` in this process. */
+const githubPeople = keptPeople(async (dir, emails) => {
+  const said = await cliAnswer(['people', ...emails], dir)
+  if (!said.ok) throw new Error(said.error)
+  return said.output as GitHubPerson[]
+})
 
 export function githubModule(deps: GithubDeps = {}): ModuleDefinition {
   const requestOfBranch = deps.requestOfBranch ?? branchRequest
@@ -58,6 +72,8 @@ export function githubModule(deps: GithubDeps = {}): ModuleDefinition {
   const workAs = deps.workAs ?? openagentAccount
   const reach = deps.reach ?? runsAccountAccess
   const accounts = deps.accounts ?? githubAccounts
+  const runAs = deps.runAs ?? accountEnv
+  const people = deps.people ?? githubPeople
   return defineModule({
     name: 'github',
     hooks: {
@@ -66,6 +82,9 @@ export function githubModule(deps: GithubDeps = {}): ModuleDefinition {
         hosts: hostAccounts,
         sendAs,
         mergeCommit: async (dir, branch, number) => ((await onGithub(dir)) ? mergeLookup(dir, branch, number) : undefined),
+        // A session with no project is asked in the person's home folder: its folder is on no host, and the sessions home is not made before its first session.
+        runAs: async (dir, login) => (dir === undefined ? runAs(homedir(), login) : (await onGithub(dir)) ? runAs(dir, login) : undefined),
+        people: async (dir, emails) => ((await onGithub(dir)) ? people(dir, emails) : undefined),
       },
       'app.attention': async args => {
         if (args.project === undefined) return accountsMissing(await accounts())
@@ -86,6 +105,14 @@ export function githubModule(deps: GithubDeps = {}): ModuleDefinition {
 }
 
 export default githubModule()
+
+/** What `github env` gives a run in `dir` to work as `login`, else as the account runs use: in this process, as an agent would run it. */
+async function accountEnv(dir: string, login: string | undefined): Promise<RunAccount | { ok: false; error: string }> {
+  const said = await cliAnswer(['env', ...(login !== undefined ? ['--user', login] : [])], dir)
+  if (!said.ok) return said
+  const { env, login: named } = (said.output ?? {}) as { env?: Record<string, string>; login?: string }
+  return { ok: true, login: named ?? '', env: env ?? {} }
+}
 
 /** OpenAgent's account `user`, else the one runs use, with the token GitHub said is its own, and its name on the commits made in `commitsIn`. */
 async function openagentAccount(dir: string, user: string | undefined, commitsIn: CommitsIn): Promise<WorkingAs> {

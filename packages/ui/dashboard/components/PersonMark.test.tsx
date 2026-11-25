@@ -11,7 +11,7 @@ describe('whose letters', () => {
     expect(personName('suleiman@averotech.com')).toBe('suleiman')
     expect(personName('git@brillout.com')).toBe('brillout')
     expect(personName('someone')).toBe('someone')
-    // GitHub's own address for an account: its login, not the number before it.
+    // A git host's own address for an account: its login, not the number before it.
     expect(personName('1005638+brillout@users.noreply.github.com')).toBe('brillout')
     expect(personLetters(personName('1005638+brillout@users.noreply.github.com'))).toBe('BR')
     expect(personName('1005638+brillout@x.dev')).toBe('1005638+brillout')

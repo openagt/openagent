@@ -28,7 +28,7 @@ const keyOf = (projectId: string, person: string): string => `${projectId}\n${pe
  * last answer stays shown while new people are asked for, and is there from the first frame of the
  * next visit, so a picture already seen does not fall back to letters.
  */
-export function useGitHostPeople(wanted: readonly PersonWanted[], ask: (projectId: string, emails: string[]) => Promise<ModuleHostPerson[]>, remember: string): AccountOf {
+export function usePeople(wanted: readonly PersonWanted[], ask: (projectId: string, emails: string[]) => Promise<ModuleHostPerson[]>, remember: string): AccountOf {
   const byProject = new Map<string, Set<string>>()
   for (const { projectId, person } of wanted) if (projectId !== null && person) byProject.set(projectId, (byProject.get(projectId) ?? new Set()).add(person))
   const asked = [...byProject].map(([projectId, people]) => [projectId, [...people].sort()] as const).sort(([a], [b]) => a.localeCompare(b))

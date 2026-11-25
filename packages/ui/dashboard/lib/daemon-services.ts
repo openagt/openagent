@@ -1,4 +1,4 @@
-import { onGitHostPeople } from '../rpc/people.js'
+import { onPeople } from '../rpc/people.js'
 import { onActivity } from '../rpc/reads.js'
 import type { HostServices } from './host-services.js'
 import { readModuleAgents } from './module-agents.js'
@@ -13,7 +13,7 @@ import { sendToScreen, watchScreen } from './screen.js'
 type ShellServices = 'openAgent' | 'agentHref' | 'openPage' | 'pageHref' | 'adjustPage' | 'backToPage' | 'openSettings' | 'startRun' | 'configureRun'
 
 export const DAEMON_SERVICES: Omit<HostServices, ShellServices> = {
-  gitHostPeople: onGitHostPeople,
+  people: onPeople,
   // Asked at once by two cards, or soon again, the same runs are read once.
   agents: (projectId, wanted) => readModuleAgents(projectId, wanted),
   activity: onActivity,

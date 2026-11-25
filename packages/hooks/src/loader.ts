@@ -368,6 +368,30 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
         }
         return { pending: false }
       },
+      async runAs(dir, login) {
+        let refused: { ok: false; error: string } | undefined
+        for (const module of await onModules(undefined, undefined, 'account.access')) {
+          try {
+            const answer = await module.hooks['account.access']?.runAs?.(dir, login)
+            if (answer?.ok || (answer && dir !== undefined)) return answer
+            refused ??= answer
+          } catch (error) {
+            report(module.name, 'account.access', error)
+          }
+        }
+        return refused
+      },
+      async people(dir, emails) {
+        for (const module of await onModules(undefined, undefined, 'account.access')) {
+          try {
+            const answer = await module.hooks['account.access']?.people?.(dir, emails)
+            if (answer) return answer
+          } catch (error) {
+            report(module.name, 'account.access', error)
+          }
+        }
+        return []
+      },
     },
     async attention(args) {
       // Asked about this computer, with no project: a plugin kept per project is asked as the

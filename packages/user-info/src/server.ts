@@ -42,9 +42,9 @@ export function copyingFrom(profile: (login: string) => Promise<ProfileOutcome>)
       ...kept,
       ...(isPersonName(said.name) ? { name: said.name.trim() } : {}),
       ...(isPictureAddress(said.avatar) ? { picture: said.avatar } : {}),
-      github: said.login,
+      login: said.login,
     }
-    const changed = copied.name !== kept.name || copied.picture !== kept.picture || copied.github !== kept.github
+    const changed = copied.name !== kept.name || copied.picture !== kept.picture || copied.login !== kept.login
     if (changed) await host.settings.set(PERSON_INFO, copied)
     return { changed, login: said.login }
   }

@@ -59,6 +59,8 @@ const COMPUTER: ComputerHostDeps = {
     hosts: async () => (await distributionHooks()).gitAccounts.hosts(),
     sendAs: async (host, login) => (await distributionHooks()).gitAccounts.sendAs(host, login),
     mergeCommit: async (dir, branch, number) => (await distributionHooks()).gitAccounts.mergeCommit(dir, branch, number),
+    runAs: async (dir, login) => (await distributionHooks()).gitAccounts.runAs(dir, login),
+    people: async (dir, emails) => (await distributionHooks()).gitAccounts.people(dir, emails),
   },
 }
 

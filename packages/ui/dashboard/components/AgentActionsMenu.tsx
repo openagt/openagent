@@ -34,10 +34,10 @@ import {
 //
 // Given an agent, the agent's name is its button: the name with a small ⌄, opening to the session's
 // details, its folder, its editor, its session link, the command that resumes it, the modules'
-// items (git-branches' Remove worktree, github's Open on GitHub), and Stop, Delete.
+// items (git-branches' Remove worktree, the git host's Open on the host), and Stop, Delete.
 //
 // Given none, a ⋮ holds all of the project's: its skills, where the agents' records go, its
-// folder, its editor, and the modules' items (github's Open on GitHub and Create a repository). It stands in the same place on
+// folder, its editor, and the modules' items (the git host's Open on the host and Create a repository). It stands in the same place on
 // the "New agent session" page and on an agent's page (ProjectMenu).
 //
 // The handoff's Push / Open PR are not here: they move the work forward, and sit in the bar above

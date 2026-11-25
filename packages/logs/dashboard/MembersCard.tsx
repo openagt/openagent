@@ -58,7 +58,7 @@ export function MembersCard({ projects }: UiCardProps) {
           // The runs as the dashboard lists them, each computer's by its own word: a record stops at what was shared last.
           const people = runs ? peopleWithRuns(recorded, runs, since) : recorded
           // Each project's git host is asked of its own people: another project may be on another host.
-          const accounts = people.length ? await host.gitHostPeople(project.id, people.map(person => person.person)).catch(() => []) : []
+          const accounts = people.length ? await host.people(project.id, people.map(person => person.person)).catch(() => []) : []
           return { project: project.name, people, accounts }
         }),
       )

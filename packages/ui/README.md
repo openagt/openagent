@@ -9,6 +9,9 @@ scripted.
 It names no git host either: `@openagt/github` draws its accounts, its pull requests and their
 presses in the module places, and tells the shell how the requests it read stand
 (`RpcHost.pullRequestsRead`, `AttentionArgs.pullRequestsRead`), which the lists of runs mark them by.
+Where `#12` in a chat leads is the `chat.references` option of the module that answers for the
+project's host, and the people behind commit emails, whose pictures the lists of runs show
+(`UiHost.people`), are the `people` of its `account.access`.
 
 It names no coding agent either. Each agent's name, mark and models come from its
 `run.agent`. `@openagt/agent-driver` draws the rest in the places the shell keeps for modules:

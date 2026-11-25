@@ -110,7 +110,7 @@ export interface ModuleHost {
    * The accounts behind a project's commit emails at its git host, each with its login and picture:
    * an email the host knows nobody for, or a project with no git host, is left out. Kept a day.
    */
-  gitHostPeople(projectId: string, emails: string[]): Promise<ModuleHostPerson[]>
+  people(projectId: string, emails: string[]): Promise<ModuleHostPerson[]>
   /**
    * Start a run in one project with this prompt, with the person's own picks (which tool, which
    * model, where it runs), and land on it, unless `land` is false: then the dashboard stays where
@@ -324,7 +324,7 @@ export { PersonMark, personName } from '../components/PersonMark.js'
 export { needsWord, waitingKey, type RunNeed } from '../../src/client.js'
 export { WaitingList, holdsBack } from '../components/WaitingList.js'
 export { useWaiting, type WaitingRead } from '../lib/use-waiting.js'
-export { useGitHostPeople, personSaid } from '../lib/use-git-host-people.js'
+export { usePeople, personSaid } from '../lib/use-people.js'
 export { runName } from '../../src/client.js'
 export { SettingsFoot, SettingsItem, SettingsItems, SettingsSection, SettingsRow, SettingsRowShapes, SettingsSelectRow, ToggleRow, type SettingsOption } from '../components/SettingsRows.js'
 export { Avatar } from '../components/PersonMenu.js'

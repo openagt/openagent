@@ -511,6 +511,15 @@ export interface OptionPlaces {
     /** The commands it offers in the project `projectId` now, in the order the menus list them. */
     list(host: UiHost, projectId: string): Promise<UiCommand[]>
   }
+  /**
+   * Where a reference in a session's chat leads: `#12`, the issue or pull request of that number at
+   * the project's git host, which the project's address says (`project.remote`). The first module's
+   * that links it; with none, `#12` stays text.
+   */
+  'chat.references': {
+    /** The page of issue or pull request `number` of `project`; none for a project the module does not answer for. */
+    issue(project: UiProject, number: number): string | undefined
+  }
 }
 
 /** A command the message box offers: typed after the slash, and what it asks the agent is the command's own. */

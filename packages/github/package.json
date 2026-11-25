@@ -1,7 +1,7 @@
 {
   "name": "@openagt/github",
   "version": "0.1.14",
-  "description": "GitHub as a skill for coding agents: the project's pull requests and issues through gh, and the one command OpenAgent and the scheduler run for the git host: requests, open, merge, home.",
+  "description": "GitHub for OpenAgent: the module that works as OpenAgent's own GitHub accounts, its pull request presses and labels in the dashboard, and the github command agents and people run for the project's pull requests and issues through gh.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -23,9 +23,6 @@
   ],
   "bin": {
     "github": "bin/github"
-  },
-  "openagent": {
-    "git-host": "github"
   },
   "exports": {
     "./package.json": "./package.json",

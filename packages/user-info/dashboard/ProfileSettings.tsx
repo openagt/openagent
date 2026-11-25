@@ -23,7 +23,7 @@ export function ProfileSettings() {
   const [savedName, setSavedName] = useState(false)
   if (!person) return null
   const name = typedName ?? person.name
-  const github = typedGithub ?? person.github ?? ''
+  const github = typedGithub ?? person.login ?? ''
 
   const done = async (outcome: { ok: boolean }) => {
     if (!outcome.ok) return
@@ -90,7 +90,7 @@ export function ProfileSettings() {
       <div>
         <SettingsRow
           label="Picture"
-          description={person.avatar ? (person.github ? `From @${person.github} on GitHub.` : 'Yours.') : 'None: your initials.'}
+          description={person.avatar ? (person.login ? `From @${person.login} on GitHub.` : 'Yours.') : 'None: your initials.'}
           control={
             <div className="flex items-center gap-2">
               <Avatar person={person} size="h-8 w-8 text-xs" />

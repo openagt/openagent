@@ -123,7 +123,7 @@ export function StartAgentForm({
     onPickProject(id)
   }
 
-  // A host the project's modules bring, picked in "Run on" (a GitHub Actions runner): the start names
+  // A host the project's modules bring, picked in "Run on" (a CI runner): the start names
   // it by its id, and the daemon starts the run there.
   const host = hostTarget(useRunHosts(noProject ? null : projectId), useSelectedHost())
   // What would stop a run these picks start on this computer, as the modules say it (`app.attention`):

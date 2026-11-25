@@ -7,8 +7,9 @@
 // Settings › GitHub (`settings.section`); the pull request presses of an ended run's work, in the
 // bar above its message box (`chat.handoff`), and the run's requests at the end of the row above
 // it (`chat.labels`); the project's page on GitHub and a repository created
-// for it, in the project's menu and a session's (`project.menu`, `chat.menu`). What it reads and
-// does is its own server part's (`../src/server.ts`).
+// for it, in the project's menu and a session's (`project.menu`, `chat.menu`); and where `#12` in
+// a session's chat leads, the issue or pull request of that number (`chat.references`). What it
+// reads and does is its own server part's (`../src/server.ts`).
 import { Github } from 'lucide-react'
 import { NO_PROJECT, defineUiModule, type UiActionAt } from '@openagt/ui/module'
 import { ADD_ACCOUNT } from '../src/ids.js'
@@ -58,6 +59,7 @@ export default defineUiModule({
         sentence: `${PUBLISH_OPENING} and open its pull request, set to merge on its own once its checks pass.`,
         offered: onGithub,
       },
+      { place: 'chat.references', id: 'issues', issue: (project, number) => (project.remote?.split('/')[0] === 'github.com' ? `https://${project.remote}/issues/${number}` : undefined) },
       {
         place: 'composer.where',
         id: 'repos',

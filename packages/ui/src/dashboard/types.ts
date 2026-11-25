@@ -42,7 +42,7 @@ export interface StartAgentOptions {
   publish?: PublishPick
   /**
    * Where the run runs, by its host's id (`RunHost.id`): one of the hosts beside this computer's of
-   * the modules on in the project, such as a GitHub Actions runner. Absent, this computer. Refused
+   * the modules on in the project, such as a CI runner. Absent, this computer. Refused
    * for a session with no project.
    */
   host?: string

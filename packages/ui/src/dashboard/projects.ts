@@ -29,7 +29,7 @@ export interface ProjectSummary {
   activated: boolean
   /** Whether a pull request is a next step there: OpenAgent has an account at its remote's host. Without one, the last step is the push. */
   gitHost: boolean
-  /** Its repository's address, origin's (`github.com/me/shop`), as the hooks name it; none for a project with no remote. */
+  /** Its repository's address, origin's (`git.example.com/me/shop`), as the hooks name it; none for a project with no remote. */
   remote?: string
   /** ISO timestamp of the project's newest activity: its most recent session. */
   lastActivityAt?: string

@@ -48,7 +48,7 @@ export async function sendStartedAgain(folder: string | null): Promise<{ version
 export interface ProjectLauncher {
   /** Whether the project's repository has an `origin` remote; without one nothing can be published, so the publish menu stops at the commit. */
   remote: boolean
-  /** The address the project's repository was cloned from (`github.com/acme/shop`): its host is the git host a session pushes to, as the account it picks there. */
+  /** The address the project's repository was cloned from (`git.example.com/acme/shop`): its host is the git host a session pushes to, as the account it picks there. */
   address?: string
 }
 

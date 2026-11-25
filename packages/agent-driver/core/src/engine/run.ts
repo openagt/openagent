@@ -38,8 +38,8 @@ import { detailOf, modelOf } from './session.js'
  * One-shot: `agent-runner run <prompt>` runs on its own. A scheduler's tick spawns the same thing
  * with the marker already written and the id chosen.
  *
- * The pull request a run's branch has is read back through the git host the project declares
- * (`git-host.ts`); a project with no git host package records none.
+ * The pull request a run's branch has is read back by the module that answers for the project's
+ * git host, a step of its own; a project no module answers for records none.
  *
  * A run may be started from a branch other than origin's default (`run --base <ref>`), and with
  * its pull request going into one (`run --pr-base <branch>`); both are on its record for its whole

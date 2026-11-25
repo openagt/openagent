@@ -69,7 +69,7 @@ export function PersonMenu({ onSettings }: { onSettings: (entry?: string) => voi
             <DropdownMenuGroup>
               <DropdownMenuLabel className="flex flex-col font-normal">
                 <span className="font-medium text-foreground">{person.name}</span>
-                {person.github && <span className="font-normal">@{person.github}</span>}
+                {person.login && <span className="font-normal">@{person.login}</span>}
               </DropdownMenuLabel>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />

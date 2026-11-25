@@ -209,6 +209,8 @@ const NO_ACCOUNTS: GitAccounts = {
   hosts: async () => [],
   sendAs: async host => ({ ok: false, error: `OpenAgent has no account at ${host}` }),
   mergeCommit: async () => ({ pending: false }),
+  runAs: async () => undefined,
+  people: async () => [],
 }
 
 /**

@@ -310,6 +310,38 @@ test('git reaches a remote as the first module with an account for it says; one 
   assert.deepEqual(messages(errors), ['broken account.access: the keychain is locked', 'broken account.access: the keychain is locked'])
 })
 
+test("a run's account is the first module answering for its repository's; a session with no project takes the first given, else the first refusal", async () => {
+  const errors: HandlerError[] = []
+  const refuses = (error: string) => async () => ({ ok: false as const, error })
+  const hooks = hooksOf(
+    [
+      { module: defineModule({ name: 'gitlab', hooks: { 'account.access': { runAs: async dir => (dir === undefined ? { ok: false, error: 'no gitlab account' } : dir.includes('gitlab') ? { ok: true, login: 'lab', env: { A: 'lab' } } : undefined) } } }) },
+      { module: defineModule({ name: 'broken', hooks: { 'account.access': { runAs: async () => Promise.reject(new Error('the keychain is locked')) } } }) },
+      { module: defineModule({ name: 'github', hooks: { 'account.access': { runAs: async (dir, login) => (dir === undefined || dir.includes('github') ? { ok: true, login: login ?? 'hub', env: { A: 'hub' } } : undefined) } } }) },
+    ],
+    errors,
+  )
+  assert.deepEqual(await hooks.gitAccounts.runAs('/repos/gitlab'), { ok: true, login: 'lab', env: { A: 'lab' } })
+  assert.deepEqual(await hooks.gitAccounts.runAs('/repos/github', 'octo'), { ok: true, login: 'octo', env: { A: 'hub' } })
+  assert.equal(await hooks.gitAccounts.runAs('/repos/elsewhere'), undefined)
+  assert.deepEqual(await hooks.gitAccounts.runAs(undefined), { ok: true, login: 'hub', env: { A: 'hub' } })
+  assert.deepEqual(await hooksOf([{ module: defineModule({ name: 'a', hooks: { 'account.access': { runAs: refuses('first') } } }) }, { module: defineModule({ name: 'b', hooks: { 'account.access': { runAs: refuses('second') } } }) }], []).gitAccounts.runAs(undefined), { ok: false, error: 'first' })
+  assert.deepEqual(messages(errors), ['broken account.access: the keychain is locked', 'broken account.access: the keychain is locked', 'broken account.access: the keychain is locked'])
+})
+
+test('the people behind commit emails are the first module answering for the repository says; nobody where none does', async () => {
+  const hooks = hooksOf(
+    [
+      { module: defineModule({ name: 'gitlab', hooks: { 'account.access': { people: async dir => (dir.includes('gitlab') ? [] : undefined) } } }) },
+      { module: defineModule({ name: 'github', hooks: { 'account.access': { people: async (dir, emails) => (dir.includes('github') ? emails.map(email => ({ email, login: email.split('@')[0]! })) : undefined) } } }) },
+    ],
+    [],
+  )
+  assert.deepEqual(await hooks.gitAccounts.people('/repos/github', ['ada@x.dev']), [{ email: 'ada@x.dev', login: 'ada' }])
+  assert.deepEqual(await hooks.gitAccounts.people('/repos/gitlab', ['ada@x.dev']), [])
+  assert.deepEqual(await hooks.gitAccounts.people('/repos/elsewhere', ['ada@x.dev']), [])
+})
+
 test("the app's life: modules start where they are on, one that keeps its own row wherever it is, and stop the last first; a project added reaches the modules on in it, a removed one every module", async () => {
   const seen: string[] = []
   const errors: HandlerError[] = []
