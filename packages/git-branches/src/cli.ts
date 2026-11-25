@@ -1,18 +1,18 @@
-import { basename, resolve } from 'node:path'
-import { realpath, stat } from 'node:fs/promises'
-import { GIT_FAILED, Refused, UsageError, checkoutRoot, inRepo, nodeGitRunner, parseCommandArgs, runCommandLine, helpRows, helpText, type Command, type GitRunner } from '@openagt/agent-data'
-import { agentBranchName, agentIdFromWorktreeDir, isSafeAgentId, sessionNameOf } from './branch-names.js'
-import { branchPushed, currentBranch, isWorktreeRoot, projectRoot, worktreeBranch, worktreeClean, worktreeDirEntries, worktreePath, worktreeSize } from './worktree.js'
+import { resolve } from 'node:path'
+import { GIT_FAILED, checkoutRoot, nodeGitRunner } from './git.js'
+import type { GitRunner } from '@openagt/hooks'
+import { Refused, UsageError, inRepo, parseCommandArgs, runCommandLine, helpRows, helpText, type Command } from '@openagt/hooks/command'
+import { isSafeAgentId, sessionNameOf } from './branch-names.js'
+import { branchPushed, currentBranch, isWorktreeRoot, projectRoot, worktreeBranch, worktreeClean, worktreeDirEntries, worktreeSize } from './worktree.js'
 import { nameBranch, type NameBranchRefusal } from './name.js'
 import { createCheckout, attachCheckout } from './checkout.js'
 import { reconcileBranchLinks } from './branch-links.js'
-import { discardWorktree, reclaimWorktree, type ReclaimOutcome } from './reclaim.js'
 import { pushBranchByName, pushCheckout, type PushOutcome } from './push.js'
 import { mergeBranch, type MergeOutcome } from './merge.js'
 import { bringBranch, type BringOutcome } from './bring.js'
 import { readBranchStates } from './branch-state.js'
 import { readBranchesAhead } from './branch-ahead.js'
-import { cleanup } from './cleanup.js'
+import { discardAgent, reclaimAgent, refusalLine } from './agent-checkout.js'
 
 /**
  * The command line over the package (#1725): the same functions a caller's code calls, for an agent
@@ -46,7 +46,6 @@ ${helpRows([
   ['remove <id> [--from <commit>]', `reclaim agent <id>'s checkout, once its branch holds everything in it; the branch stays, nothing is pushed; <commit> is the one its branch started from, in place of the default branch`],
   ['       [--discard]', '... or drop it whatever it holds, uncommitted work included; the branch stays'],
   ['prune', 'remove, for every checkout'],
-  ['cleanup', `remove what this tool left in the project: prune, then .branches/ and the rules hiding this tool's files from git once no checkout is left; a checkout with uncommitted work stays, and every branch with work on it; the command a dashboard asks for when a project is removed with its files`],
 ])}
 
 ${helpText('JSON on stdout. Exit code 1 for a refusal or a git failure (the reason on stderr), 2 for a usage error.')}`
@@ -162,7 +161,7 @@ const COMMANDS: Record<string, Command<[string, GitRunner]>> = {
     const from = commitArg(values.from)
     const agentId = agentIdArg(positionals[0]!)
     const repo = await project(cwd, git)
-    const outcome = values.discard ? await discard(repo, agentId, git) : await reclaim(repo, agentId, git, from)
+    const outcome = values.discard ? await discardAgent(repo, agentId, git) : await reclaimAgent(repo, agentId, git, from)
     if (!outcome.ok) throw new Refused(outcome, refusalLine(agentId, outcome))
     // A link named after a branch that just went with its checkout is stale from this moment.
     await reconcileBranchLinks(repo, { git })
@@ -175,7 +174,7 @@ const COMMANDS: Record<string, Command<[string, GitRunner]>> = {
     const removed: string[] = []
     const skipped: { agentId: string; reason: string; detail: string }[] = []
     for (const { agentId } of await worktreeDirEntries(repo)) {
-      const outcome = await reclaim(repo, agentId, git)
+      const outcome = await reclaimAgent(repo, agentId, git)
       if (outcome.ok) removed.push(agentId)
       else skipped.push({ agentId, reason: outcome.reason, detail: refusalLine(agentId, outcome) })
     }
@@ -184,60 +183,11 @@ const COMMANDS: Record<string, Command<[string, GitRunner]>> = {
     return { ok: true, removed, skipped }
   },
 
-  async cleanup(args, cwd, git) {
-    parseCommandArgs(args, {}, 0)
-    const repo = await project(cwd, git)
-    return cleanup(repo, agentId => reclaim(repo, agentId, git).then(outcome => (outcome.ok ? undefined : refusalLine(agentId, outcome))), git)
-  },
-}
 
-/** A refusal `remove` and `prune` can add to the reclaim rule's own: there is no such checkout. */
-type RemoveRefusal = { ok: false; reason: 'no-checkout'; agentId: string }
-
-/**
- * The directory of agent `agentId`'s checkout, as it really is; none when there is no such
- * directory. The argument may be the session name a rename link carries rather than the id: the
- * link leads to the checkout itself.
- */
-async function checkoutDir(repo: string, agentId: string): Promise<string | undefined> {
-  const path = worktreePath(repo, agentId)
-  return (await stat(path).then(s => s.isDirectory(), () => false)) ? realpath(path) : undefined
-}
-
-/**
- * One agent's checkout under the reclaim rule; a missing checkout is its own refusal. The birth
- * branch is read off the checkout's own directory, never off the argument (#1757): a link's
- * name is the branch the agent chose, and that one is not the birth branch.
- */
-async function reclaim(repo: string, agentId: string, git: GitRunner, from?: string): Promise<ReclaimOutcome | RemoveRefusal> {
-  const checkout = await checkoutDir(repo, agentId)
-  if (checkout === undefined) return { ok: false, reason: 'no-checkout', agentId }
-  return reclaimWorktree(repo, checkout, { birthBranch: agentBranchName(agentIdFromWorktreeDir(basename(checkout))), ...(from !== undefined ? { from } : {}), git })
-}
-
-/** One agent's checkout dropped whatever it holds; a missing checkout is its own refusal. */
-async function discard(repo: string, agentId: string, git: GitRunner): Promise<ReclaimOutcome | RemoveRefusal> {
-  const checkout = await checkoutDir(repo, agentId)
-  if (checkout === undefined) return { ok: false, reason: 'no-checkout', agentId }
-  return discardWorktree(repo, checkout, { git })
-}
-
-/** Why a checkout stayed, as one line for a person. */
-function refusalLine(agentId: string, outcome: Extract<ReclaimOutcome, { ok: false }> | RemoveRefusal): string {
-  switch (outcome.reason) {
-    case 'no-checkout':
-      return `no checkout for agent ${agentId}`
-    case 'not-a-worktree':
-      return `agent ${agentId}'s directory is not a git worktree; left alone`
-    case 'no-branch':
-      return `agent ${agentId}'s checkout is on no branch; kept`
-    case 'dirty':
-      return `${outcome.branch} has uncommitted work; the checkout was kept`
-  }
 }
 
 /** Why a branch was not merged, as one line for a person. */
-function mergeRefusalLine(outcome: MergeOutcome & { ok: false }): string {
+export function mergeRefusalLine(outcome: MergeOutcome & { ok: false }): string {
   switch (outcome.reason) {
     case 'no-branch':
       return `no branch ${outcome.branch} on this machine`
@@ -255,7 +205,7 @@ function mergeRefusalLine(outcome: MergeOutcome & { ok: false }): string {
 }
 
 /** Why a copy's branch was not brought to its folder, as one line for a person. */
-function bringRefusalLine(outcome: BringOutcome & { ok: false }): string {
+export function bringRefusalLine(outcome: BringOutcome & { ok: false }): string {
   switch (outcome.reason) {
     case 'not-a-copy':
       return 'this is no session copy of a repo: it names no folder it was copied from'
@@ -275,7 +225,7 @@ function bringRefusalLine(outcome: BringOutcome & { ok: false }): string {
 }
 
 /** Why a branch was not pushed, as one line for a person. */
-function pushRefusalLine(subject: string, outcome: PushOutcome & { ok: false }): string {
+export function pushRefusalLine(subject: string, outcome: PushOutcome & { ok: false }): string {
   switch (outcome.reason) {
     case 'not-a-worktree':
       return `${subject} is not a git worktree`

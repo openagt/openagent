@@ -1,6 +1,5 @@
-import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
-import { defineModule, RunOrder, type ModuleDefinition, type RunContext } from '@openagt/hooks'
-import { linkSkillsInFolder, relinkCheckout, skillLink } from '@openagt/git-branches'
+import { nodeGitRunner, linkSkillsInFolder, relinkCheckout, skillLink } from '@openagt/git-branches'
+import { type GitRunner, defineModule, RunOrder, type ModuleDefinition, type RunContext } from '@openagt/hooks'
 import { leavingOut } from './left-out.js'
 
 /**

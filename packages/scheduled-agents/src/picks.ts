@@ -1,4 +1,4 @@
-import { projectId } from '@openagt/agent-data'
+import { projectId } from '@openagt/projects'
 import { createHooks, loadHandedDown, SCHEDULED_COMMANDS, type ScheduledCommands, type Settings } from '@openagt/hooks'
 import type { PacePick } from './pace.js'
 

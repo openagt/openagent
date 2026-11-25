@@ -1,7 +1,7 @@
 {
   "name": "@openagt/agent-driver",
   "version": "0.1.0",
-  "description": "OpenAgent's runs: a coding agent run from start to end in its own checkout over the distribution's steps, steered, stopped and resumed; this computer as their host; the run's record, its card and its diary; and the coding agents' accounts, the next free one taking over at a usage limit, with the skill that tells an agent how to add and list them. The coding agents themselves come from @openagt/agent-driver-<name>.",
+  "description": "OpenAgent's runs: a coding agent run from start to end in its own checkout over the distribution's steps, steered, stopped and resumed; this computer as their host, which deletes them too and sweeps the sessions with no project; the images a person's messages go with; the run's record, its card and its diary; and the coding agents' accounts, the next free one taking over at a usage limit, with the skill that tells an agent how to add and list them. The coding agents themselves come from @openagt/agent-driver-<name>.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -22,17 +22,10 @@
     "agent-runner": "bin/agent-runner",
     "account-rotation": "bin/account-rotation"
   },
-  "openagent": {
-    "cleanup": "agent-runner"
-  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
-    },
-    "./question": {
-      "types": "./dist/question.d.ts",
-      "default": "./dist/question.js"
     },
     "./record": {
       "types": "./dist/run-record.d.ts",
@@ -42,7 +35,7 @@
       "types": "./dist/engine/module.d.ts",
       "default": "./dist/engine/module.js"
     },
-    "./server": "./dist/accounts/server.js",
+    "./server": "./dist/server.js",
     "./dashboard": "./dist/dashboard/dashboard.js",
     "./SKILL.md": "./SKILL.md",
     "./package.json": "./package.json"
@@ -55,14 +48,14 @@
     "clean": "rm -rf dist dist-test"
   },
   "dependencies": {
-    "@openagt/agent-data": "workspace:*",
     "@openagt/git-branches": "workspace:*",
     "@openagt/hooks": "workspace:*",
+    "@openagt/projects": "workspace:*",
+    "@openagt/store-filesystem": "workspace:*",
     "yaml": "^2.5.0"
   },
   "devDependencies": {
     "@openagt/github": "workspace:*",
-    "@openagt/notifications-command": "workspace:*",
     "@openagt/skills": "workspace:*",
     "@tailwindcss/vite": "^4.0.0",
     "@testing-library/dom": "^10.4.1",

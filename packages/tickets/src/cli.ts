@@ -1,5 +1,8 @@
 import { join } from 'node:path'
-import { GIT_FAILED, Refused, commandReader, commandWrite, inRepo, nodeBranchFileFs, nodeGitRunner, parseCommandArgs, runCommandLine, helpRows, helpText, type BranchFileFs, type Command, type GitRunner } from '@openagt/agent-data'
+import { GIT_FAILED, nodeGitRunner } from '@openagt/git-branches'
+import { Refused, inRepo, parseCommandArgs, runCommandLine, helpRows, helpText, type Command } from '@openagt/hooks/command'
+import { commandReader, commandWrite, nodeBranchFileFs, type BranchFileFs } from '@openagt/store-filesystem'
+import type { GitRunner } from '@openagt/hooks'
 import { isTicketFile, META_FILE, nameInTickets, noTicketSaid, TICKETS_DIR, ticketLockName, ticketOfPlan, ticketPlanName, ticketStem } from './names.js'
 import { readShownTicket, readTickets, readTicketsMeta } from './tickets.js'
 import { applyClaims, applyRelease, claimHistory, claimMessage, lockOn, releaseMessage } from './locks.js'
@@ -20,9 +23,7 @@ import { holderOf } from './holder.js'
  *
  * Two flags are the dashboard's, never an agent's: `--local` on the reads (this machine's copy, no
  * fetch — the dashboard polls, and the writer on that machine keeps it synced), and `--force` on `release` (lift whoever's claim: a person's answer to a dead agent).
- * OpenAgent finds this command through the package's `openagent.tickets` declaration, and reads
- * `list --local`; the package's own module changes the tickets through it, and reads them through
- * its server part.
+ * The package's own module changes the tickets through it, and reads them through its server part.
  */
 
 export const USAGE = `usage: tickets <command>

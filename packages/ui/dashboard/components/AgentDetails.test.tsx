@@ -1,17 +1,15 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
-import type { OpenAgentEvent } from '../../src/index.js'
+import type { RunEvent } from '@openagt/hooks'
 import { AgentDetails } from './AgentDetails.js'
 
-const onModels = vi.hoisted(() =>
-  vi.fn(async () => ({ 'claude-code': { models: [{ id: 'opus', name: 'Opus 5.5', resolvedId: 'claude-opus-5-5' }] }, codex: { models: [] } })),
-)
-vi.mock('../rpc/models.js', () => ({ onModels }))
+const onCodingAgents = vi.hoisted(() => vi.fn(async () => [{ id: 'claude-code', label: 'Claude Code', logo: '<svg/>', models: { models: [{ id: 'opus', name: 'Opus 5.5', resolvedId: 'claude-opus-5-5' }] } }, { id: 'codex', label: 'Codex', models: { models: [] } }]))
+vi.mock('../rpc/agents.js', () => ({ onCodingAgents }))
 
 afterEach(cleanup)
 
-const answered: OpenAgentEvent = { kind: 'driver', event: { type: 'result', text: 'Done.' } }
-const priced = (usd: number): OpenAgentEvent => ({ kind: 'usage', costUsd: usd })
+const answered: RunEvent = { kind: 'driver', event: { type: 'result', text: 'Done.' } }
+const priced = (usd: number): RunEvent => ({ kind: 'usage', costUsd: usd })
 const shown = (label: string) => screen.getByText(label).nextSibling?.textContent
 
 describe('AgentDetails', () => {
@@ -33,7 +31,7 @@ describe('AgentDetails', () => {
 
   test('the agent and model come off the run\'s card, each by the name a person knows it by', async () => {
     render(<AgentDetails events={[]} card={{ driver: 'claude-code', model: 'opus' }} />)
-    expect(shown('Coding agent')).toBe('Claude Code')
+    await waitFor(() => expect(shown('Coding agent')).toBe('Claude Code'))
     await waitFor(() => expect(shown('Model')).toBe('Opus 5.5'))
     cleanup()
     // What a run's card holds once Claude Code named the model it ran.
@@ -41,7 +39,7 @@ describe('AgentDetails', () => {
     await waitFor(() => expect(shown('Model')).toBe('Opus 5.5'))
     cleanup()
     render(<AgentDetails events={[]} card={{ driver: 'codex' }} />)
-    expect(shown('Coding agent')).toBe('Codex')
+    await waitFor(() => expect(shown('Coding agent')).toBe('Codex'))
     expect(screen.queryByText('Model')).toBeNull()
   })
 

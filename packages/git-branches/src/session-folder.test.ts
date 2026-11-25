@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { mkdtemp, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { nodeGitRunner } from '@openagt/agent-data'
+import { nodeGitRunner } from './git.js'
 import { copiedFrom, openSessionFolder } from './session-folder.js'
 import { readBranchStates } from './branch-state.js'
 

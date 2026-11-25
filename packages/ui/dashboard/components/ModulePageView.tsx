@@ -37,11 +37,11 @@ export function ModuleSlot({ package: pkg, label, children }: { package: string;
   )
 }
 
-/** The projects a module's piece is given: of the projects handed in (every registered one, or the picked one alone), the ones that have its package, by id and name, each with whether it has a git host package. Empty when none has it: the Overview then draws no card. */
+/** The projects a module's piece is given: of the projects handed in (every registered one, or the picked one alone), the ones that have its package, by id and name, each with its repository's address. Empty when none has it: the Overview then draws no card. */
 export function projectsHaving(ids: readonly string[], projects: readonly ProjectSummary[]): UiProject[] {
   return ids.flatMap(id => {
     const project = projects.find(p => p.id === id)
-    return project ? [{ id: project.id, name: project.name, gitHost: project.gitHost }] : []
+    return project ? [{ id: project.id, name: project.name, ...(project.remote !== undefined ? { remote: project.remote } : {}) }] : []
   })
 }
 

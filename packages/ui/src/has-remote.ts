@@ -1,4 +1,5 @@
-import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
+import { nodeGitRunner } from './git.js'
+import type { GitRunner } from '@openagt/hooks'
 
 /**
  * Whether the repository at `cwd` has an `origin` remote: the one every push and pull request

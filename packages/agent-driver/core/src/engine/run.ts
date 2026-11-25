@@ -1,11 +1,10 @@
-import { errorMessage, projectId, projectNameOf, repositoryAddress, sessionsHomeOf, type GitRunner } from '@openagt/agent-data'
-import { continuationPrompt } from '../question.js'
+import { errorMessage, sessionsHomeOf, type SessionRepo } from '@openagt/git-branches'
+import { projectId } from '@openagt/projects'
+import { projectNameOf, repositoryAddress, type GitRunner, continuationPrompt, createHooks, type DistributionEntry, type ProjectRef, type RunFacts, type RunInput, type RunOptions as ModuleOptions } from '@openagt/hooks'
 import { findRun, readDiary } from '../record-store.js'
 import { type RunCard, type RunStatus } from '../record.js'
-import { createHooks, type DistributionEntry, type ProjectRef, type RunFacts, type RunInput, type RunOptions as ModuleOptions } from '@openagt/hooks'
-import type { SessionRepo } from '@openagt/git-branches'
 import { runProcess, withLeg, type Leg, type RunDeps } from './leg.js'
-import { earlierPrs, lasting, markerCard, runnerMark, type Publish, type RunnerMark } from './records.js'
+import { earlierPrs, lasting, markOptions, markerCard, runnerMark, type Publish, type RunnerMark } from './records.js'
 import type { ProjectSkillsPick } from './profile.js'
 import { withRunLock } from './run-lock.js'
 import { askName, isBareCommand, type AskedName } from './title.js'
@@ -38,8 +37,8 @@ import { detailOf, modelOf } from './session.js'
  * One-shot: `agent-runner run <prompt>` runs on its own. A scheduler's tick spawns the same thing
  * with the marker already written and the id chosen.
  *
- * The pull request a run's branch has is read back through the git host the project declares
- * (`git-host.ts`); a project with no git host package records none.
+ * The pull request a run's branch has is read back by the module that answers for the project's
+ * git host, a step of its own; a project no module answers for records none.
  *
  * A run may be started from a branch other than origin's default (`run --base <ref>`), and with
  * its pull request going into one (`run --pr-base <branch>`); both are on its record for its whole
@@ -47,7 +46,7 @@ import { detailOf, modelOf } from './session.js'
  *
  * A run started in the sessions home has no project: it works in a folder of its own there
  * (`session-folder.ts`), with no branch, no pull request and nothing to reclaim, and its record is
- * kept with the other sessions' (`@openagt/agent-data`'s sessions).
+ * kept with the other sessions' (git-branches' session folders).
  */
 
 /** Filesystem-safe, time-ordered id from an ISO start: the shape the dashboard sorts runs by. */
@@ -283,23 +282,26 @@ function recordedFacts(card: RunCard, mark: RunnerMark): RunFacts {
 
 /**
  * The run's options, one slice per module, as the run was asked them and its record keeps them,
- * over its profile's: the plugins it goes without and the project's skills it gets, where the
- * session picked none. (Its accounts were the profile's already, where the session picked none:
- * the driver is made on them, and the account at the git host is the record's.)
+ * over its profile's, slice by slice: within a module's slice, what the run was asked wins, and the
+ * profile gives the rest (the plugins it goes without, the project's skills it gets, its accounts).
  */
 function optionsOf(mark: RunnerMark, branch: string | undefined, profile: ModuleOptions = {}): ModuleOptions {
-  const branches = { ...(mark.base !== undefined ? { base: mark.base } : {}), ...(branch !== undefined ? { branch } : {}), ...(mark.repos !== undefined ? { repos: mark.repos } : {}) }
-  const github = { ...(mark.prBase !== undefined ? { prBase: mark.prBase } : {}), ...(mark.gitAccount !== undefined ? { account: mark.gitAccount } : {}) }
-  const without = mark.pluginsWithout ?? profile.plugins?.without
-  const project = mark.projectSkills ?? profile.skills?.project
-  return {
-    ...(mark.publish !== undefined ? { publish: mark.publish } : {}),
-    ...(Object.keys(branches).length > 0 ? { 'git-branches': branches } : {}),
-    ...(Object.keys(github).length > 0 ? { github } : {}),
-    ...(project !== undefined ? { skills: { project } } : {}),
-    ...(without !== undefined ? { plugins: { without } } : {}),
-    ...(mark.profile !== undefined ? { profiles: { profile: mark.profile } } : {}),
+  const options = overProfile(markOptions(mark), profile)
+  return branch !== undefined ? { ...options, 'git-branches': { ...options['git-branches'], branch } } : options
+}
+
+/** `asked` over `profile`, one level deep: a slice both have is the profile's with the asked fields over it. */
+function overProfile(asked: ModuleOptions, profile: ModuleOptions): ModuleOptions {
+  const merged: Record<string, unknown> = { ...profile, ...asked }
+  for (const [module, slice] of Object.entries(profile)) {
+    const own: unknown = (asked as Record<string, unknown>)[module]
+    if (isSlice(slice) && isSlice(own)) merged[module] = { ...slice, ...own }
   }
+  return merged as ModuleOptions
+}
+
+function isSlice(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 /** The project a run in `dir` is in, as the hooks name it; none for a run in the sessions home, which has no project. */

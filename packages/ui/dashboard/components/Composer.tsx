@@ -2,53 +2,31 @@ import { createContext, forwardRef, useContext, useEffect, useImperativeHandle, 
 import { createPortal } from 'react-dom'
 import { ArrowUp, Loader2 } from 'lucide-react'
 import type { ProjectSummary } from '../../src/index.js'
-import type { DriverName } from '../../src/client.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
-import { usePreferences, updatePreferences, useActiveProjectId } from '../lib/preferences.js'
+import { useActiveProjectId } from '../lib/preferences.js'
 import { useLoaded } from '../lib/use-async.js'
 import { Button } from './ui/button.js'
 import { cn } from '../lib/utils.js'
-import { ClaudeLogo, CodexLogo } from './driver-logos.js'
 import { onProjects } from '../rpc/projects.js'
 import { PromptEditor, type PromptDraft, type PromptEditorHandle } from './PromptEditor.js'
 import { CommandsMenu } from './CommandsMenu.js'
 import { ModuleSlot } from './ModulePageView.js'
 import { usePrompts } from '../lib/use-prompts.js'
 import { IN_BOX } from '../lib/in-box.js'
-import { DriverModelMenu, ModelWords, type DriverOption } from './DriverModelMenu.js'
 import { SessionSetupMenu, type SessionSetup } from './SessionSetup.js'
+import { ComposerControls, type ControlBox } from './Places.js'
 import { RunOnMenu } from './RunOnMenu.js'
-import { PERMISSIONS_PAGE } from '../lib/use-route.js'
-import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import { selectHost, useRunHosts, useSelectedHost } from '../lib/run-hosts.js'
 import { keepDraft, keptDraft, takePendingDraft } from '../lib/draft-handoff.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
 import { useIsMobile } from '../lib/use-mobile.js'
-import { driverOptions, modelEfforts, useModels } from '../lib/models.js'
-import { readyCommands, useProjectLauncher } from '../lib/use-project-launcher.js'
-import { AgentAccountItems, firstAccount, useAccountsOn } from './AgentAccounts.js'
+import { readyCommands, useCommands } from '../lib/use-commands.js'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipsPastBox } from './ui/tooltip.js'
-import { BoxOfRow, RowAboveBox, rowClass, rowItemClass, rowLeftClass } from './ui/row-item.js'
+import { BoxOfRow, RowAboveBox, rowClass, rowLeftClass } from './ui/row-item.js'
 import { Skeleton } from './ui/skeleton.js'
 import { Slot } from './ui/slot.js'
 import { ImageTiles } from './ImageTiles.js'
-import { imageFiles, imageNames, imagesHold, useBoxImages } from '../lib/box-images.js'
-import { IMAGES_PER_MESSAGE } from '../../src/images.js'
-
-// The driver + model tree (#650/#656/#658): each driver lists ONLY its own models, since the
-// model passes straight through to that coding agent. Picking a model in a driver's submenu sets both, so an
-// incompatible pair can't be chosen. Every entry is a real model id: a "Default" entry used to head
-// each list, and picking it stored nothing, so the menu's own answer to "which model" was "we do
-// not know" (#1143). Not choosing is still a state — it is just no longer something to pick, and
-// the trigger says so rather than naming the first model as if it had been chosen.
-// The drivers and their models are the list Settings offers too (`lib/models.ts` driverOptions):
-// what each coding agent answered when the daemon asked, so the menu offers what the agent's own
-// picker offers, by the agent's own names. Only the icons are this component's own, and the Record<DriverName, ...> shape means a new agent on OpenAgent's side is
-// a compile error here rather than a silently missing menu entry.
-const DRIVER_UI: Record<DriverName, { icon: DriverOption['icon'] }> = {
-  'claude-code': { icon: <ClaudeLogo className="h-4 w-4" /> },
-  codex: { icon: <CodexLogo className="h-4 w-4" /> },
-}
+import { imageFiles, imageNames, imagesHold, useBoxImages, useImageStore } from '../lib/box-images.js'
 
 /**
  * The message box, as Claude Code's (DECISIONS.md, his pick): the raised surface with the hairline,
@@ -72,13 +50,6 @@ export function ComposerShape() {
       {() => null}
     </Slot>
   )
-}
-
-/** The model a session runs on, as the row under its box says it: its coding agent, for the logo, the model's name and how hard it thinks. */
-export interface SessionModel {
-  driver?: DriverName | undefined
-  name?: string | undefined
-  effort?: string | undefined
 }
 
 /** What a box held, its text with its chips and its images, as `clear` hands it back for `restore`. */
@@ -110,7 +81,7 @@ export const BoxNotes = createContext<HTMLElement | null>(null)
 // The shared agent composer (#721), laid out as Claude Code's: a box one line tall when empty that
 // holds the commands menu (+), the text (the Tiptap editor, `/` `@` `#` triggers) and the submit at
 // its right; a row under it with the gear (the session's setup) and the caller's controls at the
-// left and the model at the right; and
+// left and the modules' row controls (the coding agent's model) at the right; and
 // a row above it saying where the agent starts (led by the "Run on" pick), or, inside a session,
 // where it started (`sessionRow`).
 // Factored out of the launcher (StartAgentForm) so the run-view chat (AgentComposer) gets the
@@ -125,17 +96,20 @@ export const Composer = forwardRef<ComposerHandle, {
   addContext?: ((path: string) => void) | undefined
   /** Drop a path from the Context when its `@`/`#` chip leaves the editor (#948). */
   removeContext?: ((path: string) => void) | undefined
-  /** Where the agent starts, in the row above the box after the "Run on" pick: the launcher's
-   *  project and the branch it starts from. */
+  /** Where the agent starts, in the row above the box after the "Run on" pick and the modules'
+   *  controls there (the project): the branch it starts from. */
   startsAt?: ReactNode
   /** The session's setup, behind the gear that leads the row under the box: the profile, the skills, the git host account and the Auto level. */
   setup?: SessionSetup | undefined
+  /**
+   * The box the modules' controls are drawn for (`composer.control`): the launcher's picks, or the
+   * session's. Its controls stand before `startsAt` above the box (the launcher's), in the gear's
+   * menu after the setup's lines, after the caller's controls under the box, and at that row's right.
+   */
+  controlBox?: ControlBox | undefined
   /** The caller's controls in the row under the box, after the gear: the Context picker. */
   controls?: ReactNode
-  /** Inside a session: the model it runs on, said at the right of the row under the box, where
-   *  the launcher has its select. Words, not a menu: a session keeps the model it started with. */
-  sessionModel?: SessionModel | undefined
-  /** Inside a session: how full its context is, beside the model. */
+  /** Inside a session: how full its context is, at the right of the row under the box, after the controls there. */
   sessionContext?: ReactNode
   /** Run the composed text; `later` when it was sent with Cmd/Ctrl+Enter, which a working agent reads after its turn; `images`, the names of the images it goes with. */
   onSubmit: (text: string, sent: { later: boolean; images: string[] }) => void | Promise<void>
@@ -149,8 +123,7 @@ export const Composer = forwardRef<ComposerHandle, {
   submitBusyLabel: string
   placeholder?: string | undefined
   /** Inside a session: the "Run on" pick is the launcher's, since a session already runs where it
-   *  was started, and so is the agent/model select (#831): a session is bound to the agent it
-   *  started with, so the select would only ever rewrite the *next* session's default. */
+   *  was started. */
   inAgent?: boolean | undefined
   /** Inside a session: the row above the box, which says what the launcher's row picks. */
   sessionRow?: ReactNode
@@ -169,10 +142,9 @@ export const Composer = forwardRef<ComposerHandle, {
   /** The box takes the caret when it opens. */
   autoFocus?: boolean | undefined
 }>(function Composer(
-  { files, addContext, removeContext, startsAt, setup, controls, sessionModel, sessionContext, onSubmit, onPromptChange, onLoaded, busy, submitLabel, submitBusyLabel, placeholder, inAgent = false, sessionRow, idleControl, notes, notesUnder = false, draftKey, autoFocus = false },
+  { files, addContext, removeContext, startsAt, setup, controlBox, controls, sessionContext, onSubmit, onPromptChange, onLoaded, busy, submitLabel, submitBusyLabel, placeholder, inAgent = false, sessionRow, idleControl, notes, notesUnder = false, draftKey, autoFocus = false },
   ref,
 ) {
-  const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   const [prompt, setPrompt] = useState('')
   // The panel that saves what the box holds as a prompt is open.
   const [savingPrompt, setSavingPrompt] = useState(false)
@@ -182,40 +154,22 @@ export const Composer = forwardRef<ComposerHandle, {
   // The registered projects for the `@` picker: the same list the launcher reads.
   const projects = useLoaded<ProjectSummary[]>(onProjects, [], [])
 
-  const preferences = usePreferences()
-  const model = preferences.model ?? '' // #628: empty = the coding agent's own default model
-  const driver = preferences.driver ?? 'claude-code' // which coding agent does the work (#650)
   const activeProjectId = useActiveProjectId() // the project whose commands the `/` list offers
   // The saved prompts the modules offer the box (#2394).
   const prompts = usePrompts(activeProjectId)
   const savePrompt = prompts.saver ? () => setSavingPrompt(true) : undefined
-  const launcher = useProjectLauncher(activeProjectId)
-  const commands = launcher?.commands ?? []
+  // The commands the modules offer the box (#2394).
+  const commands = useCommands(activeProjectId)
   // A session with no project runs in a folder of its own.
   const noProject = activeProjectId === SESSIONS_ID
   // The hosts beside this computer the project's modules bring, and the one picked: none for a session with no project.
   const hosts = useRunHosts(inAgent || noProject ? null : activeProjectId)
   const selectedHostId = useSelectedHost()
-  const models = useModels()
-  // Each agent's accounts, in its part of the agent picker: the one picked is the one its runs take
-  // first, so the run goes with it. An agent not installed here has none to pick, and Codex's
-  // accounts are there once it is installed or has some added, as on Settings.
-  const claudeAccounts = useAccountsOn('claude', !inAgent)
-  const codexAccounts = useAccountsOn('codex', !inAgent)
-  const accountsOf = (name: DriverName): Pick<DriverOption, 'account' | 'accounts'> => {
-    const { view, pick } = name === 'codex' ? codexAccounts : claudeAccounts
-    const answer = models?.[name]
-    const installed = answer !== undefined && !('error' in answer && answer.missing)
-    if (!view || view.accounts.length === 0 || (name === 'codex' && view.accounts.length < 2 && !installed)) return {}
-    return {
-      account: firstAccount(view),
-      accounts: <AgentAccountItems view={view} onPick={account => void pick(account)} onAdd={() => services.openPage(PERMISSIONS_PAGE)} />,
-    }
-  }
   // OpenAgent is not answering: nothing typed can be sent, and the box keeps it.
   const down = useContext(DaemonDown)
-  // The images dropped or pasted into the box, kept on this computer as they come, and with its draft.
-  const images = useBoxImages(draftKey)
+  // The images dropped or pasted into the box, kept as they come by the module that keeps them, and with its draft.
+  const imageStore = useImageStore()
+  const images = useBoxImages(draftKey, imageStore)
   // Words about what was dropped or pasted, above the box until the next drop or send.
   const [imageNote, setImageNote] = useState<string | null>(null)
   // What holds a send, whatever the box holds: the one list the arrow and the keyboard both read.
@@ -297,11 +251,12 @@ export const Composer = forwardRef<ComposerHandle, {
   }
 
   // An image dropped or pasted anywhere on the box goes with the message, above its text. A paste of
-  // words stays the editor's, as does a drop of anything else; the launcher's box takes none while it starts.
-  const takesImages = !(busy && !inAgent)
+  // words stays the editor's, as does a drop of anything else; the launcher's box takes none while it
+  // starts, and no box takes one where no module keeps images.
+  const takesImages = imageStore !== undefined && !(busy && !inAgent)
   const addImages = (files: File[]) => {
     const left = images.add(files)
-    setImageNote(left > 0 ? `${IMAGES_PER_MESSAGE} images go with one message at most: ${left === 1 ? 'one was' : `${left} were`} left out.` : null)
+    setImageNote(left > 0 ? `${imageStore?.option.perMessage ?? 0} images go with one message at most: ${left === 1 ? 'one was' : `${left} were`} left out.` : null)
     editorRef.current?.focus()
   }
   const [dragging, setDragging] = useState(false)
@@ -357,19 +312,6 @@ export const Composer = forwardRef<ComposerHandle, {
     />
   )
 
-  // The agent/model select. Every value is preferences-backed and global: what it picks is what the
-  // next start runs on, wherever that start is made.
-  const driverModelEl = !inAgent && (
-    <DriverModelMenu
-      drivers={driverOptions(models).map(d => ({ ...d, ...DRIVER_UI[d.value as DriverName], ...accountsOf(d.value as DriverName) }))}
-      driver={driver}
-      model={model}
-      onChange={(a, m) => updatePreferences({ driver: a, model: m })}
-      // How hard that model may think, in the same menu: the levels are the model's own.
-      effort={{ levels: modelEfforts(models, driver, model), level: preferences.effort || undefined, onChange: effort => updatePreferences({ effort: effort ?? '' }) }}
-      busy={busy}
-    />
-  )
   // Commands and saved prompts get a visible surface (#948): load, save and delete in one menu,
   // instead of loading only behind typing `/`.
   const commandsEl = (
@@ -460,6 +402,7 @@ export const Composer = forwardRef<ComposerHandle, {
         ) : (
           <RowAboveBox>
             {runOnEl}
+            {controlBox && <ComposerControls at="start" box={controlBox} />}
             {startsAt}
           </RowAboveBox>
         )}
@@ -488,27 +431,23 @@ export const Composer = forwardRef<ComposerHandle, {
         </div>
 
         {/* How it runs, under the box (his pick): the gear and the caller's controls at the left, the
-            model at the right, each end's item starting or ending on the box's own edge. The left
+            modules' row controls (the model) at the right, each end's item starting or ending on the box's own edge. The left
             side is the one that gives way: a longer label there never moves the model or the page below. */}
         <TooltipsPastBox value={surface}>
           <div className={cn('mt-1', rowClass)}>
             <div className={rowLeftClass}>
-              {setup && <SessionSetupMenu setup={setup} box={surface} busy={busy} />}
-              <BoxOfRow.Provider value={surface}>{controls}</BoxOfRow.Provider>
+              {setup && <SessionSetupMenu setup={setup} box={surface} busy={busy} controls={controlBox} />}
+              <BoxOfRow.Provider value={surface}>
+                {controls}
+                {controlBox && <ComposerControls at="context" box={controlBox} />}
+              </BoxOfRow.Provider>
             </div>
-            {driverModelEl ||
-              // Only with something in it: an empty one would still take the row's gap, and the
-              // row's last item would end off the row's end.
-              ((sessionModel !== undefined || sessionContext) && (
-                <span className="flex shrink-0 items-center">
-                  {sessionModel !== undefined && (
-                    <span className={rowItemClass}>
-                      <ModelWords icon={sessionModel.driver ? DRIVER_UI[sessionModel.driver].icon : undefined} name={sessionModel.name} effort={sessionModel.effort} />
-                    </span>
-                  )}
-                  {sessionContext}
-                </span>
-              ))}
+            {controlBox && (
+              <BoxOfRow.Provider value={surface}>
+                <ComposerControls at="row" box={controlBox} />
+              </BoxOfRow.Provider>
+            )}
+            {sessionContext && <span className="flex shrink-0 items-center">{sessionContext}</span>}
           </div>
         </TooltipsPastBox>
         {/* Last, so the box is the first thing drawn; laid over the page above the prompt area all the same. */}

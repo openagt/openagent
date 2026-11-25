@@ -14,6 +14,7 @@ test("the distribution's modules load from its own install, the store's and the 
     'store-filesystem',
     'store-git-repository',
     'store-git-branch',
+    'projects',
     'git-branches',
     'github',
     'skills',

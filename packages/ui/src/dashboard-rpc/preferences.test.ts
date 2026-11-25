@@ -38,9 +38,9 @@ test('patchPreferences hands back what the store merged (#1148)', async () => {
   })
 
   // The merged result is the point: the caller adopts it, which is how a stale tab converges.
-  assert.deepEqual(await patchPreferences({ driver: 'codex' }), {
+  assert.deepEqual(await patchPreferences({ recentsSort: 'name' }), {
     ok: true,
-    preferences: { theme: 'dark', driver: 'codex' },
+    preferences: { theme: 'dark', recentsSort: 'name' },
   })
 })
 

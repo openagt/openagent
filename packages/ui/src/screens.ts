@@ -1,4 +1,4 @@
-import type { OpenAgentEvent } from './events.js'
+import type { RunEvent } from '@openagt/hooks'
 
 /**
  * Which of a run's `screen` lines are live and which are hidden. Live: the newest line at its
@@ -8,8 +8,8 @@ import type { OpenAgentEvent } from './events.js'
  * long. Every `ended` and `until` line is hidden: the screen going, and it staying, are said by
  * its line being live or not.
  */
-export function foldScreenRows(events: readonly OpenAgentEvent[], now: number = Date.now()): { live: Set<OpenAgentEvent>; hidden: Set<OpenAgentEvent> } {
-  const hidden = new Set<OpenAgentEvent>()
+export function foldScreenRows(events: readonly RunEvent[], now: number = Date.now()): { live: Set<RunEvent>; hidden: Set<RunEvent> } {
+  const hidden = new Set<RunEvent>()
   const newest = new Map<string, number>()
   /** Per address, where the newest line that keeps it past the run's end is, and until when. */
   const kept = new Map<string, { at: number; until: number }>()
@@ -27,7 +27,7 @@ export function foldScreenRows(events: readonly OpenAgentEvent[], now: number = 
       kept.set(e.url, { at, until: Date.parse(e.until) })
     } else newest.set(e.url, at)
   })
-  const live = new Set<OpenAgentEvent>()
+  const live = new Set<RunEvent>()
   for (const [url, at] of newest) {
     const stays = kept.get(url)
     if (at > lastEnd || (stays !== undefined && stays.at > lastEnd && stays.until > now)) live.add(events[at]!)
@@ -36,7 +36,7 @@ export function foldScreenRows(events: readonly OpenAgentEvent[], now: number = 
 }
 
 /** Where a run's live screen answers: the address of its newest live `screen` line, or nothing. */
-export function liveScreen(events: readonly OpenAgentEvent[], now: number = Date.now()): string | undefined {
+export function liveScreen(events: readonly RunEvent[], now: number = Date.now()): string | undefined {
   const { live } = foldScreenRows(events, now)
   for (let at = events.length - 1; at >= 0; at--) {
     const e = events[at]!

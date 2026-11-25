@@ -1,15 +1,14 @@
 import { useContext } from 'react'
-import type { SendAsHost } from '../rpc/personal-folder.js'
+import type { HostAccounts } from '@openagt/hooks'
 import { PERMISSIONS_PAGE } from '../lib/use-route.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
-import { useAddGitAccount } from './AddGitAccount.js'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select.js'
 
 // The account OpenAgent sends a repository as (Rom's design: OpenAgent never uses the person's own
 // login): one of its own accounts at the repository's host, picked where sending is turned on.
 
 /** The login a select starts on: the one already kept, else the one runs use, else the first. */
-export function firstSendAs(host: SendAsHost | undefined, kept?: string): string | undefined {
+export function firstSendAs(host: HostAccounts | undefined, kept?: string): string | undefined {
   if (!host || host.logins.length === 0) return undefined
   if (kept !== undefined && host.logins.includes(kept)) return kept
   return host.runs ?? host.logins[0]
@@ -17,20 +16,18 @@ export function firstSendAs(host: SendAsHost | undefined, kept?: string): string
 
 /**
  * "Send as": OpenAgent's accounts at `host`, by login. With none there, the line says so and its
- * press adds one, in the dialog, which is then the one picked: nothing is sent as the person's own
- * login. With no host known, the press opens the Permissions page.
+ * press opens the Permissions page, where one is added: nothing is sent as the person's own login.
  */
-export function SendAs({ host, value, onChange, disabled = false, label = 'Send as' }: { host: SendAsHost | undefined; value: string | undefined; onChange: (login: string) => void; disabled?: boolean; label?: string }) {
+export function SendAs({ host, value, onChange, disabled = false, label = 'Send as' }: { host: HostAccounts | undefined; value: string | undefined; onChange: (login: string) => void; disabled?: boolean; label?: string }) {
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
-  const adding = useAddGitAccount(login => onChange(login))
   if (!host || host.logins.length === 0) {
     return (
       <p className="text-xs text-warning">
         OpenAgent has no account{host ? ` at ${host.host}` : ''} to send it as, and never uses your own login.{' '}
-        <button type="button" className="underline underline-offset-2" onClick={host ? () => adding.add(host.host) : () => services.openPage(PERMISSIONS_PAGE)}>
-          {host ? 'Add one' : 'Add one in Permissions'}
+        <button type="button" className="underline underline-offset-2" onClick={() => services.openPage(PERMISSIONS_PAGE)}>
+          Add one in Permissions
         </button>
-        .{adding.dialog}
+        .
       </p>
     )
   }

@@ -4,8 +4,8 @@ import { userInfo } from 'node:os'
 import { readPerson } from './person.js'
 
 test("the person is their own: name, picture and the GitHub login they were copied from, and git's email; no git host is asked", async () => {
-  const person = await readPerson({ info: async () => ({ name: 'Suleiman Shahbari', picture: 'https://avatars.githubusercontent.com/u/1', github: 'suleimansh' }), gitName: async () => assert.fail('git is not asked'), gitEmail: async () => 'suleiman@averotech.com' })
-  assert.deepEqual(person, { name: 'Suleiman Shahbari', email: 'suleiman@averotech.com', avatar: 'https://avatars.githubusercontent.com/u/1', github: 'suleimansh', own: true })
+  const person = await readPerson({ info: async () => ({ name: 'Suleiman Shahbari', picture: 'https://avatars.githubusercontent.com/u/1', login: 'suleimansh' }), gitName: async () => assert.fail('git is not asked'), gitEmail: async () => 'suleiman@averotech.com' })
+  assert.deepEqual(person, { name: 'Suleiman Shahbari', email: 'suleiman@averotech.com', avatar: 'https://avatars.githubusercontent.com/u/1', login: 'suleimansh', own: true })
 })
 
 test("with no name set, git's name, else this computer's user; a picture of their own still shows; git's email when it has one", async () => {

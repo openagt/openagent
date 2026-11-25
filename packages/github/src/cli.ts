@@ -1,4 +1,6 @@
-import { Refused, UsageError, errorMessage, nodeGitRunner, parseCommandArgs, runCommandLine, helpRows, helpText, type Command, type Failure, type GitRunner } from '@openagt/agent-data'
+import { Refused, UsageError, parseCommandArgs, runCommandLine, helpRows, helpText, type Command, type Failure } from '@openagt/hooks/command'
+import { errorMessage, nodeGitRunner } from '@openagt/git-branches'
+import type { GitRunner } from '@openagt/hooks'
 import { hasBrew, installCommand, nodeGhRunner, type GhRunner } from './gh.js'
 import { listRequests } from './requests.js'
 import { openRequest, type OpenOutcome } from './open.js'
@@ -16,10 +18,10 @@ import { jobFiles, jobState, startJob, type JobState } from './job.js'
 import { accountNamed, tokenOf, workingGh } from './working-account.js'
 
 /**
- * The command line over the package (#1820): the same functions for an agent in a shell, and for
- * OpenAgent and the scheduler, which run this command as the project's git host provider,
- * declared in package.json as `"openagent": { "git-host": "github" }`. One implementation, every
- * surface a caller. It answers as every OpenAgent command does (`runCommandLine`).
+ * The command line over the package (#1820): the same functions for an agent in a shell or a
+ * person, and for the module itself, which runs them in its own process (`cliAnswer`). One
+ * implementation, every surface a caller. It answers as every OpenAgent command does
+ * (`runCommandLine`).
  *
  * Every command acts on the repository the working directory is in: `gh` finds the repository
  * and its remote from there, as it does for a person.
@@ -138,6 +140,67 @@ async function gitHostAnswer<T>(what: string, ask: () => Promise<T>): Promise<T>
 /** The logo OpenAgent draws the host's card with. */
 const LOGO = readFileSync(new URL('../assets/github.svg', import.meta.url), 'utf8').trim()
 
+/** One of OpenAgent's own GitHub accounts, as the Permissions page lists it. */
+export interface GithubAccount {
+  login: string
+  /** The one OpenAgent's runs use. */
+  runs: boolean
+  /** Whether GitHub still takes its login. */
+  ok: boolean
+  /** Its public picture: an https address. */
+  avatar: string
+}
+
+/** OpenAgent's GitHub accounts and what is missing for them: what `accounts` answers, and what the Permissions page is drawn from. */
+export interface GithubAccounts {
+  host: typeof HOST
+  name: typeof GIT_HOST_NAME
+  requestWord: 'pull request'
+  /** Its logo, an SVG. */
+  logo: string
+  tool: 'gh'
+  installed: boolean
+  /** The command a press installs gh with, shown under the button; none where gh is here, or GitHub makes none for this computer. */
+  install?: string
+  accounts: GithubAccount[]
+  /** A login waiting for the browser's yes: the code the person types, and where. */
+  loggingIn?: LoggingIn
+  /** The install a press started is going on. */
+  installing?: true
+  /** Why the last install failed, while gh is still not here. */
+  installFailed?: string
+}
+
+/** OpenAgent's GitHub accounts, read with gh in `cwd`: each one asked of GitHub, the one runs use, and gh's own state. */
+export async function readAccounts(cwd: string, deps: CliDeps = {}): Promise<GithubAccounts> {
+  return accountsOf({ ...realServices(), ...deps, cwd, stderr: () => {} })
+}
+
+async function accountsOf({ cwd, gh, env, hasBrew, underWay, installing }: Context): Promise<GithubAccounts> {
+  const root = accountsRoot(env)
+  await settleAdded(root, gh, cwd).catch(() => undefined)
+  const state = await ghState(root, cwd, gh)
+  const accounts = state.installed ? state.accounts : []
+  const runs = runsAccount(accounts, picksPath(env))
+  const loggingIn = state.installed ? underWay() : undefined
+  const install = installing()
+  const installWith = state.installed ? undefined : installCommand(await hasBrew())
+  return {
+    host: HOST,
+    name: GIT_HOST_NAME,
+    requestWord: 'pull request',
+    logo: LOGO,
+    tool: 'gh',
+    installed: state.installed,
+    ...(installWith !== undefined ? { install: installWith } : {}),
+    // Each one's public picture, so a page shows whose it is with no login asked.
+    accounts: accounts.map(a => ({ ...a, runs: a.login === runs, avatar: `https://github.com/${encodeURIComponent(a.login)}.png?size=64` })),
+    ...(loggingIn ? { loggingIn } : {}),
+    // The install a press started: going on, or why it failed while gh is still not here.
+    ...(install?.running ? { installing: true } : !state.installed && install?.failed !== undefined ? { installFailed: install.failed } : {}),
+  }
+}
+
 const COMMANDS: Record<string, Command<[Context]>> = {
   requests: asOpenAgent(async (args, { cwd, gh }) => {
     const { values } = parseCommandArgs(args, { branch: { type: 'string' }, state: { type: 'string' }, since: { type: 'string' } }, 0)
@@ -204,32 +267,10 @@ const COMMANDS: Record<string, Command<[Context]>> = {
     return { ok: true, url, name: GIT_HOST_NAME }
   },
 
-  async accounts(args, { cwd, gh, env, hasBrew, underWay, installing }) {
+  async accounts(args, ctx) {
     const { values } = parseCommandArgs(args, { host: { type: 'string' } }, 0)
     if (values.host !== undefined && values.host.toLowerCase() !== HOST) throw new Refused({ ok: false, reason: 'not-mine', host: values.host }, `this package answers for ${HOST}, not ${values.host}`)
-    const root = accountsRoot(env)
-    await settleAdded(root, gh, cwd).catch(() => undefined)
-    const state = await ghState(root, cwd, gh)
-    const accounts = state.installed ? state.accounts : []
-    const runs = runsAccount(accounts, picksPath(env))
-    const loggingIn = state.installed ? underWay() : undefined
-    const install = installing()
-    const installWith = state.installed ? undefined : installCommand(await hasBrew())
-    return {
-      ok: true,
-      host: HOST,
-      name: GIT_HOST_NAME,
-      requestWord: 'pull request',
-      logo: LOGO,
-      tool: 'gh',
-      installed: state.installed,
-      ...(installWith !== undefined ? { install: installWith } : {}),
-      // Each one's public picture, so a page shows whose it is with no login asked.
-      accounts: accounts.map(a => ({ ...a, runs: a.login === runs, avatar: `https://github.com/${encodeURIComponent(a.login)}.png?size=64` })),
-      ...(loggingIn ? { loggingIn } : {}),
-      // The install a press started: going on, or why it failed while gh is still not here.
-      ...(install?.running ? { installing: true } : !state.installed && install?.failed !== undefined ? { installFailed: install.failed } : {}),
-    }
+    return { ok: true, ...(await accountsOf(ctx)) }
   },
 
   async use(args, { cwd, gh, env }) {

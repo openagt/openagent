@@ -19,3 +19,8 @@ export function startedAtFromAgentId(id: string): string | undefined {
   const match = /^(\d{4}-\d{2}-\d{2}T\d{2})-(\d{2})-(\d{2})-(\d{3})Z$/.exec(id)
   return match ? `${match[1]}:${match[2]}:${match[3]}.${match[4]}Z` : undefined
 }
+
+/** Whether a string can name a run: letters, digits, `-` and `_`, nothing a path can climb out with. */
+export function isRunId(id: string): boolean {
+  return /^[A-Za-z0-9_-]+$/.test(id)
+}

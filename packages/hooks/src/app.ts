@@ -1,6 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import type { GitAccess } from './account.js'
 import type { ProjectRef } from './project.js'
-import type { RunOptions, RunQuestion } from './run.js'
+import type { GivenSkill } from './loader.js'
+import type { PullRequestRead, RunOptions, RunQuestion, RunSummary, SkillArgs } from './run.js'
 import type { Settings } from './settings.js'
 import type { Store } from './store.js'
 
@@ -18,6 +20,53 @@ export interface AppContext {
   readonly signal: AbortSignal
   /** Where the app answers on this computer, for a module's own process to call it at; none before the app started. */
   readonly url?: string
+  /** How git reaches `remote`, an https address, as one of the modules' accounts (`account.access`); none when no module has one for it. */
+  gitAccess(remote: string): Promise<GitAccess | undefined>
+  /** Tell the other modules the list of projects changed: what the module that keeps the list does. */
+  readonly lifecycle: ProjectsLifecycle
+  /** The skills the modules give a run, as the app's `skills` answers them: with `every`, every module's, the plugins that are off too. */
+  skills(args: SkillArgs, opts?: { every?: boolean }): Promise<GivenSkill[]>
+  /**
+   * The runs of `project`, or with none the sessions with no project's, as every host the modules
+   * give there lists them (`run.host`): a working run as it stands now. A host that cannot list
+   * them throws, so "no runs" is never a guess.
+   */
+  runs(project?: ProjectRef): Promise<RunSummary[]>
+}
+
+/**
+ * How the module that keeps the list of projects tells every module that it changed, through the
+ * app: the others start their work in a project added, and clean up after one removed.
+ */
+export interface ProjectsLifecycle {
+  /** `project` was added to the list: the modules on in it are told (`AppLifecycle.projectAdded`). */
+  added(project: ProjectRef): Promise<void>
+  /** Why `project` may not be taken off the list now, in words, as the first module that refuses it says (`AppLifecycle.refuseRemoval`: an agent at work in it); nothing when it may. */
+  refusal(project: ProjectRef): Promise<string | undefined>
+  /** `project` was taken off the list: every module is told, each cleaning up its own data (`AppLifecycle.projectRemoved`), and what they removed and kept is answered. */
+  removed(project: ProjectRef, removal: ProjectRemoval): Promise<CleanupReport>
+}
+
+/** How a project is removed: off the list alone, or with what OpenAgent left in its folder (`files`), a person's box in the Remove dialog. */
+export interface ProjectRemoval {
+  files: boolean
+}
+
+/** What one module removed of what it left in a removed project's folder, and what it left there, each with why, by its path from the project's root. */
+export interface ProjectCleanup {
+  removed: string[]
+  kept: { path: string; reason: string }[]
+}
+
+/** What every module removed and kept, and, in words, what could not be cleaned up: one line for each module that refused or failed. */
+export interface CleanupReport extends ProjectCleanup {
+  failed: string[]
+}
+
+/** A project, and whether it was added to the list just now. */
+export interface GivenFolder {
+  project: ProjectRef
+  added: boolean
 }
 
 /** What the app says of itself as it starts its modules ({@link AppContext}). */
@@ -40,8 +89,31 @@ export interface AppLifecycle {
   stopping?(): void | Promise<void>
   /** A project was added: called for the modules that are on in it. */
   projectAdded?(project: ProjectRef, app: AppContext): void | Promise<void>
-  /** A project was removed: called for every module, each cleaning up its own data. */
-  projectRemoved?(project: ProjectRef, app: AppContext): void | Promise<void>
+  /**
+   * A module wrote the project's data from outside this process's store: its server's act, or its
+   * command, which writes as a one-shot writer (straight to origin, for a project whose data is
+   * shared). Called for the modules on in it, the shell waiting on them before it answers the act:
+   * a store that keeps the data elsewhere takes it in now, so the next read shows the change.
+   */
+  projectWritten?(project: ProjectRef, app: AppContext): void | Promise<void>
+  /**
+   * A project is to be taken off the list: why the module refuses it now, in words (a run of its
+   * own at work there); nothing when it may go. Asked of every module, on in the project or not,
+   * before any is told it was removed: the first that refuses keeps it on the list.
+   */
+  refuseRemoval?(project: ProjectRef, app: AppContext): string | undefined | Promise<string | undefined>
+  /**
+   * A project was removed: called for every module, each cleaning up its own data, and, with
+   * `removal.files`, what it left in the project's folder, answering what it removed and kept
+   * there. One that may not clean up now (a run of its own is alive there) throws why, in words.
+   */
+  projectRemoved?(project: ProjectRef, app: AppContext, removal: ProjectRemoval): void | ProjectCleanup | Promise<void | ProjectCleanup>
+  /**
+   * The folder `openagent` was typed in, handed over by the command: the project that holds it,
+   * or the folder made one and added to the list (`added`); nothing when it is no project's to
+   * be, a folder outside any repository. The first module that answers is the one.
+   */
+  folderGiven?(folder: string, app: AppContext): Promise<GivenFolder | undefined>
 }
 
 /**
@@ -60,8 +132,8 @@ export interface AppRoute {
 /** What a route's path may be: `/_`, then a name of lower-case words joined by dashes. */
 export const ROUTE_PATH = /^\/_[a-z][a-z0-9]*(-[a-z0-9]+)*$/
 
-/** What fixes an item: one of the module's own `ui.action`s, by its id, or a page to open. */
-export type AttentionFix = { label: string; action: string } | { label: string; href: string }
+/** What fixes an item: one of the module's own `ui.action`s, by its id, a page to open, or an entry of Settings to open, by its id (`?settings=<id>`). */
+export type AttentionFix = { label: string; action: string } | { label: string; href: string } | { label: string; settings: string }
 
 /** How a list marks an item at a glance: a question to answer, a pull request to merge, a branch never published, files never committed. */
 export type AttentionMark = 'question' | 'pull-request' | 'branch' | 'changes'
@@ -69,13 +141,21 @@ export type AttentionMark = 'question' | 'pull-request' | 'branch' | 'changes'
 /**
  * Something that needs the person: something to set up, or something waiting on them. A list
  * shows it as a row: what is needed, what it is about, then the rest; a row of an item about a
- * run opens the run, else what fixes it.
+ * run opens the run, else what fixes it. A `note` needs nothing of them: it says how a project
+ * stands where nothing is wrong with it ("Records kept on this machine"), and the shell draws the
+ * project's notes under its name.
  */
 export interface AttentionItem {
-  kind: 'setup' | 'waiting'
-  /** What it is about: this computer, the project asked about, or one of its runs. */
+  kind: 'setup' | 'waiting' | 'note'
+  /**
+   * What it is about: this computer, the project asked about, or a run: one of its runs (`run`),
+   * or, with no `run`, the run the options asked with would start, which it stops. The shell draws
+   * the `setup` items about this computer in its onboarding card and the person's menu, those
+   * about the project on the project's pages, and those about the run to start above the message
+   * box that would start it.
+   */
   scope: 'computer' | 'project' | 'run'
-  /** The run it is about, for an item about a run. */
+  /** The run it is about, for an item about one of the project's runs. */
   run?: string
   /**
    * Which of the module's items about the project this is: the same thing said again keeps its
@@ -98,13 +178,17 @@ export interface AttentionItem {
 
 /**
  * What a module is asked what needs the person with: the project shown, the run options picked
- * when there are some, and, with a project, its runs that wait on the person.
+ * when there are some, and, with a project, its runs that wait on the person. Its runs themselves
+ * are the app's to list (`AppContext.runs`).
  */
 export interface AttentionArgs {
   project?: ProjectRef
+  /** The options picked in a launcher whose run would start on this computer: a host beside it says what stops a run there in its own check. */
   options?: RunOptions
   /** The project's runs that ended waiting on the person, newest first, each with what it waits on. */
   waiting?: () => Promise<WaitingRun[]>
+  /** Say how pull requests stand, as the module just read them at its git host: the lists of runs mark each run's requests by it. */
+  pullRequestsRead?(prs: readonly PullRequestRead[]): void
 }
 
 /** A run that ended waiting on the person, as a module that says what needs them reads it. */
@@ -118,8 +202,13 @@ export interface WaitingRun {
   questions: RunQuestion[]
 }
 
-/** What needs the person, as one module sees it. */
-export type AppAttention = (args: AttentionArgs) => AttentionItem[] | Promise<AttentionItem[]>
+/**
+ * What needs the person, as one module sees it, handed what its life in the app is (`app`): the
+ * projects it is on in among them. Asked with no project, about this computer: a plugin kept per
+ * project is asked as the distribution starts it, and also where it is on in one of the projects,
+ * and says what it says of them all.
+ */
+export type AppAttention = (args: AttentionArgs, app: AppContext) => AttentionItem[] | Promise<AttentionItem[]>
 
 /** An item, with the module that said it: the one whose `ui.action` its fix names. */
 export interface Attention extends AttentionItem {

@@ -1,4 +1,5 @@
-import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
+import { nodeGitRunner } from '@openagt/git-branches'
+import type { GitRunner } from '@openagt/hooks'
 // Per-file git status for the Changes pane (#492): the working-tree state of each changed file,
 // untracked, modified or deleted. A single `git status --porcelain` read, mapped to repo-relative
 // path -> state. Forgiving: a non-repo / failed git yields `{}`.

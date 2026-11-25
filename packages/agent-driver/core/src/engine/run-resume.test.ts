@@ -6,9 +6,8 @@ import { appendInbox } from '../inbox.js'
 import { FakeDriver } from '../fake.js'
 import { findRun, readDiary } from '../record-store.js'
 import { promptSent } from '../session-support.js'
-import { chainStore, enabledSetting, settingsIn, type Driver, type DriverSession, type DriverStartOptions } from '@openagt/hooks'
+import { chainStore, defineModule, enabledSetting, RunOrder, settingsIn, type Driver, type DriverSession, type DriverStartOptions } from '@openagt/hooks'
 import { memoryStore } from '@openagt/hooks/testing'
-import { NOTIFY_COMMAND, notificationsCommand } from '@openagt/notifications-command/module'
 import { worktreePath } from '@openagt/git-branches'
 import { inboxPath } from './live-card.js'
 import { acquireRunLock, releaseRunLock } from './run-lock.js'
@@ -371,39 +370,56 @@ test('a resumed run whose record names no conversation goes on in a fresh one th
   }
 })
 
-test("the person's command, notifications-command's, runs when a run ends waiting and when it ends done with a new pull request, never again for the same one", async () => {
+test("a plugin's steps get each leg of a run as it starts and as it ends, its pull request and its first prompt; switched off, none", async () => {
   const repo = await testRepo()
   try {
-    const out = join(repo, '..', 'notified.txt')
-    // The plugin switched on on this computer, with the person's command: what its Settings entry saves.
+    // A plugin of this computer's, a stand-in of the test's own for one such as notifications-command:
+    // it notes what its steps are handed, where that one reads the pull request a leg starts with
+    // and how the run ended.
+    const seen: string[] = []
+    const plugin = defineModule({
+      name: 'notes-the-run',
+      plugin: { scope: 'computer' },
+      hooks: {
+        'run.step': [
+          { order: RunOrder.CLONE, name: 'note the start', run: ctx => void seen.push(`start|${ctx.facts.github?.pr?.url ?? ''}`) },
+          {
+            order: RunOrder.NOTIFY,
+            name: 'note the end',
+            run: ctx => {
+              const end = ctx.outcome
+              seen.push(`end|${end?.status}|${end?.status === 'waiting' ? end.question : ''}|${ctx.facts.github?.pr?.url ?? ''}|${ctx.project?.name}|${ctx.prompt}`)
+            },
+          },
+        ],
+      },
+    })
     const store = memoryStore()
     const settings = settingsIn(chainStore([store]))
-    await settings.set(NOTIFY_COMMAND, `printf '%s|%s|%s|%s\\n' "$STATUS" "$QUESTION" "$PR_URL" "$MESSAGE" >> '${out}'`)
-    await settings.set(enabledSetting('notifications-command', 'computer', false), true)
-    const modules = (gitHost?: GitHost) => testModules({ store, ...(gitHost ? { gitHost } : {}), also: [notificationsCommand()] })
-    const lines = async () => (await readFile(out, 'utf8').catch(() => '')).split('\n').filter(Boolean)
+    await settings.set(enabledSetting('notes-the-run', 'computer', false), true)
+    const modules = (gitHost?: GitHost) => testModules({ store, ...(gitHost ? { gitHost } : {}), also: [plugin] })
 
     const asking = new FakeDriver({ turns: [{ text: QUESTION }], sessionId: 's-ask' })
     const first = await runCommand(repo, { prompt: '/work-queue', driver: asking, now: () => NOW, modules: modules() })
     assert.equal(first.status, 'waiting')
-    assert.deepEqual(await lines(), ['waiting|Ship it?||repo: "/work-queue" is waiting for you: Ship it?'])
+    assert.deepEqual(seen.splice(0), ['start|', 'end|waiting|Ship it?||repo|/work-queue'])
 
     const gitHost = fakeGitHost('agent-fix-it')
     gitHost.open()
     const second = await resumeRun(repo, { id: first.id, answer: 'Approve', driver: committingDriver(), now: () => NOW, modules: modules(gitHost) })
     assert.equal(second.status, 'done')
-    assert.deepEqual((await lines())[1], 'done||https://example.com/x/y/pull/12|repo: "/work-queue" opened a pull request: https://example.com/x/y/pull/12', "the message names the run's first prompt, not the answer that continued it")
+    assert.deepEqual(seen.splice(0), ['start|', 'end|done||https://example.com/x/y/pull/12|repo|/work-queue'], "the run's first prompt, not the answer that continued it")
 
-    // Continued again, the same pull request: nothing new for the person.
+    // Continued again: this leg starts with the pull request the last one opened.
     const third = await resumeRun(repo, { id: first.id, text: 'one more thing', driver: new FakeDriver({ turns: [{ text: 'Done.' }] }), now: () => NOW, modules: modules(gitHost) })
     assert.equal(third.status, 'done')
-    assert.equal((await lines()).length, 2)
+    assert.deepEqual(seen.splice(0), ['start|https://example.com/x/y/pull/12', 'end|done||https://example.com/x/y/pull/12|repo|/work-queue'])
 
-    // Switched off, the plugin runs nothing, whatever the run's end.
-    await settings.set(enabledSetting('notifications-command', 'computer', false), false)
+    // Switched off on this computer, its steps are no run's, whatever the run's end.
+    await settings.set(enabledSetting('notes-the-run', 'computer', false), false)
     const fourth = await runCommand(repo, { prompt: '/work-queue', driver: new FakeDriver({ turns: [{ text: QUESTION }], sessionId: 's-ask-2' }), now: () => new Date(NOW.getTime() + 60_000), modules: modules() })
     assert.equal(fourth.status, 'waiting')
-    assert.equal((await lines()).length, 2)
+    assert.deepEqual(seen, [])
   } finally {
     await removeRepo(repo)
   }

@@ -1,10 +1,10 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { sessionInfo, agentErrors } from './agent-view.js'
-import type { OpenAgentEvent } from './events.js'
+import type { RunEvent } from '@openagt/hooks'
 
 test('sessionInfo merges the opening session with the latest session-update link (#431)', () => {
-  const events: OpenAgentEvent[] = [
+  const events: RunEvent[] = [
     { kind: 'session', driver: 'claude', workspace: '/repo', fake: false },
     { kind: 'session-update', sessionId: 'sess-1', sessionLink: 'https://claude.ai/code/sess-1' },
   ]
@@ -15,7 +15,7 @@ test('sessionInfo merges the opening session with the latest session-update link
 })
 
 test('sessionInfo keeps the workspace the run used, so a removed worktree is still nameable (#1195)', () => {
-  const events: OpenAgentEvent[] = [
+  const events: RunEvent[] = [
     { kind: 'session', driver: 'claude', workspace: '/repo/.openagent/worktrees/run-1', fake: false },
     { kind: 'session-update', sessionId: 'sess-1' },
   ]
@@ -27,7 +27,7 @@ test('sessionInfo keeps the workspace the run used, so a removed worktree is sti
 
 test('agentErrors folds the errors the agent reported, oldest first (#1500)', () => {
   assert.deepEqual(agentErrors([]), [])
-  const events: OpenAgentEvent[] = [
+  const events: RunEvent[] = [
     { kind: 'error', headline: 'gh is not logged in', detail: 'ran `gh auth status`' },
     { kind: 'branch', branch: 'agent-update-tickets' },
     { kind: 'error', headline: 'tickets/meta.json has no lastImportedAt' },
@@ -39,7 +39,7 @@ test('agentErrors folds the errors the agent reported, oldest first (#1500)', ()
 })
 
 test('agentErrors also counts the error lines the run\'s tool writes in the diary: first line the headline, the rest the detail', () => {
-  const events: OpenAgentEvent[] = [
+  const events: RunEvent[] = [
     { kind: 'driver', event: { type: 'text', text: 'working' } },
     { kind: 'driver', event: { type: 'error', message: 'claude exited with code 1\nstderr: not logged in\n' } },
     { kind: 'error', headline: 'gh is not logged in' },

@@ -1,4 +1,5 @@
-import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
+import { nodeGitRunner } from './git.js'
+import type { GitRunner } from '@openagt/hooks'
 import { isAgentBranch } from './branch-names.js'
 import { commitOf, detectBase, parsePorcelain, soft } from './branch-state.js'
 import { checkoutsByBranch, repoHasRemote } from './worktree.js'

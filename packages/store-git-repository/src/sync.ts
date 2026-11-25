@@ -1,6 +1,7 @@
-import { errorMessage, personalFolderSyncs, readSharing, withPersonalFolder } from '@openagt/agent-data'
+import { errorMessage } from '@openagt/git-branches'
+import { personalFolderSyncs } from './folder-sync.js'
+import { readSharing, withPersonalFolder, foldersOf } from '@openagt/store-filesystem'
 import type { AppAttention, AppLifecycle } from '@openagt/hooks'
-import { foldersOf } from '@openagt/store-filesystem'
 
 /**
  * The person's folder kept in step with their repository (#1582, #1599), the module's own work
@@ -23,7 +24,7 @@ export const NOT_SYNCING = 'Not syncing with your repository'
 export interface FolderSyncDeps {
   /** Whether the folder syncs with a repository: the plugin's row, which may turn on while the app runs. */
   syncs?: () => Promise<boolean>
-  /** The real one takes in the repository and sends what waits (`@openagt/agent-data`). */
+  /** The real one takes in the repository and sends what waits (`folder-sync.ts`). */
   sync?: SyncFolder
   /** Whether a project keeps its data in the folder: one it does not share on its own branch. */
   keptHere?: (dir: string) => Promise<boolean>

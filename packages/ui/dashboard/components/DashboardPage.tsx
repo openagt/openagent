@@ -2,36 +2,27 @@ import type { ActiveAgent, Waiting } from '../../src/index.js'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { flushSync } from 'react-dom'
 import { SlidersHorizontal } from 'lucide-react'
-import { Quota } from './Quota.js'
 import { Button } from './ui/button.js'
 import { updatePreferences, usePreferences, usePreferencesLoaded } from '../lib/preferences.js'
 import { OnboardingChecklist } from './OnboardingChecklist.js'
-import { AgentUpdates } from './AgentUpdates.js'
+import { OpenAgentUpdate } from './OpenAgentUpdate.js'
+import { useNamesRuns } from '../lib/agents.js'
 import { Agents } from './Agents.js'
 import { useRunsDoing } from '../lib/use-doing.js'
-import { useModuleCards, type OverviewCard } from './ModuleCards.js'
+import { OverviewNotices, useModuleCards, type OverviewCard } from './ModuleCards.js'
 import { CardGrid, EditOverview, TakeOffMark, UnderCards, type Under } from './CustomizeOverview.js'
 import { ALL_PROJECTS, arrangeCards } from '../../src/client.js'
 import type { ProjectSummary } from '../../src/index.js'
 import type { ReadState } from '../lib/use-async.js'
-import type { ListedPage } from '../lib/use-modules.js'
 import { Page } from './Page.js'
 import { overlayOpen, pressed } from '../lib/shortcut.js'
 import { LinePart, NEEDS_YOU_ID, WORKING_ID, counted, scrollToPart } from './LinePart.js'
-import { YourProfilesPart } from './YourProfilesPart.js'
 import { useIsMobile } from '../lib/use-mobile.js'
-
-/**
- * The place in the line under the title that the Overview leaves for the packages' parts: its own
- * stand at 1, 2 and from 4 on. A package's part that names another order still stands there; this is
- * only where the line waits for them.
- */
-const PACKAGES_PLACE = 3
 
 // The Overview landing page (#1139): what a new install can still set up ("Discover OpenAgent") while a step is open,
 // the box that starts a session, then a focused at-a-glance
-// board — what needs a human (the Human Queue, `ui-card-waiting`'s card), then usage and the agents
-// working now, then the other cards the installed packages declare, in two columns (#1818: the
+// board — what needs a human (the Human Queue, `ui-card-waiting`'s card) with the notices under it, then the agents
+// working now and the account's usage, then the other cards the installed packages declare, in two columns (#1818: the
 // queue package's AI Queue, the tickets package's hot tickets, the scheduler package's
 // Automations). A card with nothing to show says so in its middle, a sentence under a quiet glyph ("No agent is at work.").
 // OpenAgent's own cards are projections of the same .openagent files over the shell's own polls
@@ -46,53 +37,38 @@ const PACKAGES_PLACE = 3
 // rendered only by the design gallery from then on, and the daemon went on computing their inputs
 // for nobody. Both are in the history, where a component nothing renders belongs.
 export function DashboardPage({
-  onSelectProject,
   onSelectAgent,
-  onAgentStarted,
   waiting,
   waitingState,
   active,
   projects,
   scope,
-  onProjectAdded,
-  listedPages,
   start,
 }: {
   /** The box that starts a session (StartAgentForm), the page's first part: in the picked project, else in none. */
   start: ReactNode
-  onSelectProject: (id: string) => void
   /** Open one session (project + run): the Agents rows link straight to a session. */
   onSelectAgent: (projectId: string, agentId: string) => void
-  /** Where a session the onboarding checklist starts lands (#1169): on that session. */
-  onAgentStarted: (projectId: string, intent: string, agentId: string) => void
   /** What waits on the person, already only the picked project's when one is picked. */
   waiting: readonly Waiting[]
   /** What is known of what waits on the person: until it is read, by this visit or an earlier one, its part of the line has no count, and no card is drawn after the card of it. */
   waitingState: ReadState
   /** Every agent going right now, across the projects, and what is known of it. */
   active: { active: ActiveAgent[]; state: ReadState }
-  /** Every registered project. The usage bar is given all of them: usage is the account's, not a project's. */
+  /** Every registered project. */
   projects: ProjectSummary[]
   /** The one project the page shows (#1513), or null for all: the agents at work and the packages' cards show only its, and a card of a package it does not have is not drawn. */
   scope: string | null
-  /** A project was added from the first steps: the app reads its projects again. */
-  onProjectAdded: () => void
-  /** The modules' pages as the sidebar lists them, null where none is known yet: which projects have the Queue and the Tickets, before the packages' code is in. */
-  listedPages: readonly ListedPage[] | null
 }) {
   // Its ✕ hides it (#958), and a switch in Settings › Appearance shows it again.
   const onboardingDismissed = usePreferences().onboardingDismissed ?? false
-  const namesRuns = usePreferences().nameRuns !== false
+  const namesRuns = useNamesRuns()
   const working = active.active.filter(agent => scope === null || agent.projectId === scope)
   const doing = useRunsDoing(working)
   const shownProjects = scope === null ? projects : projects.filter(project => project.id === scope)
   // Every card the Overview can show here, each with the widths it stands at; the person's layout
   // for this page (the picked project's, else all projects') orders them, sizes them, and hides some.
   const { cards: moduleCards, line: moduleLine, loaded: modulesLoaded } = useModuleCards(shownProjects)
-  const queueComing = !modulesLoaded && moduleLine.length === 0 && listedPages?.some(page => page.id === 'queue' && shownProjects.some(project => page.projects.includes(project.id))) === true
-  // Until the pages are known (a browser's first visit) nor any package's part is in, whether the queue's part comes is
-  // not known: the parts after its place wait, so a part coming in before them pushes nothing.
-  const placeKnown = modulesLoaded || moduleLine.length > 0 || listedPages !== null
   // What the number counts, mark by mark: "1 question, 1 to publish".
   const counts = waitingCounts(waiting)
   // The card of what needs the person, a module's: the agents' updates stand under it, and the cards after
@@ -101,7 +77,7 @@ export function DashboardPage({
   const needsYou = needsYouCard?.id
   const needsYouWaits = needsYouCard !== undefined && (waitingState === 'unknown' || needsYouCard.holding === true)
   // How things stand, in one line under the title, each part a link to where it is: what needs the
-  // person, who is at work, the queue's own part (its package's, by its order) and the person's agents.
+  // person, who is at work, then the modules' parts, each by its order.
   const line: { id: string; order: number; node: ReactNode }[] = [
     {
       id: 'needs-you',
@@ -126,12 +102,7 @@ export function DashboardPage({
         </LinePart>
       ),
     },
-    // Until the packages' code is in, the queue's part waits in its place, as wide as it, where the sidebar's pages say a
-    // shown project has the Queue: a part that came after the line was drawn would lengthen it (on a phone pushing the
-    // Customize press and the page under it), and a place no part takes would shorten it.
-    ...(queueComing ? [{ id: 'packages', order: PACKAGES_PLACE, node: <LinePart reading shape="4 queued">{null}</LinePart> }] : moduleLine),
-    // The person's agents (Rom's design: an agent is a name, skills and accounts): how many, by name, a press from their page.
-    ...(placeKnown ? [{ id: 'your-profiles', order: 4, node: <YourProfilesPart /> }] : []),
+    ...moduleLine,
   ].sort((one, other) => one.order - other.order)
   const cards: OverviewCard[] = [
     // Under what needs the person, what is at work and the usage a half each (his pick: the usage's sentence needs the room), then a column two thirds wide down the page's left and one a third wide
@@ -152,7 +123,6 @@ export function DashboardPage({
         </div>
       ),
     },
-    { id: 'usage', label: 'Usage', order: 9, width: '1/2', minWidth: '1/3', node: <Quota projects={projects} /> },
     // The cards the installed packages declare (#1818): a package's own summary of its data, only
     // when one of the projects shown (every registered one, or the picked one alone) has the package.
     ...moduleCards,
@@ -192,8 +162,16 @@ export function DashboardPage({
     updatePreferences({ overviewLayouts: rest })
   }
 
-  // What needs the person leads the cards; the agents' updates come right under it, wherever the layout puts it.
-  const underNeedsYou: Under = { card: needsYou, node: <AgentUpdates /> }
+  // What needs the person leads the cards; the notices come right under it, wherever the layout puts it: OpenAgent's own update, then the modules'.
+  const underNeedsYou: Under = {
+    card: needsYou,
+    node: (
+      <>
+        <OpenAgentUpdate />
+        <OverviewNotices projects={shownProjects} />
+      </>
+    ),
+  }
 
   return (
     <Page
@@ -240,7 +218,7 @@ export function DashboardPage({
       {/* Arranging keeps the parts in their order and where they stand: the updates stay, and what arranging adds comes after the parts. */}
       <div className="space-y-10">
         {/* What a new install can still set up, first while a step is open (his pick): a session cannot start before its first one. */}
-        {!onboardingDismissed && <OnboardingChecklist projects={projects} onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} onProjectAdded={onProjectAdded} listedPages={listedPages} />}
+        {!onboardingDismissed && <OnboardingChecklist />}
         {/* The page's own, before every card (his and Rom's pick): arranging the cards neither moves it nor takes it off. */}
         {start}
         {!layoutRead ? null : editing ? (

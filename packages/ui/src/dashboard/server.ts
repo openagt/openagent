@@ -16,8 +16,7 @@ export interface DashboardOptions {
   /** Port to bind. Default `4200`; pass `0` for an ephemeral port. */
   port?: number
   /**
-   * What every RPC acts through (rpc-serve.ts): the daemon's own closures, a Start among them, and
-   * its long-lived sources, the quota's among them, which the dashboard stops when it closes.
+   * What every RPC acts through (rpc-serve.ts): the daemon's own closures, a Start among them.
    */
   context: DashboardContext
   /**
@@ -67,7 +66,7 @@ export interface Dashboard {
  * mounts its RPC surface at `/_rpc` — the calls and the live-event stream. The dashboard reads a
  * run's own diary over that stream and steers the run through the files its tool reads, so there is
  * no in-process event stream here; the server is a static-bundle + RPC host. The RPCs run in the
- * daemon's own process, so `sendStart` / `sendAddProject` call the daemon's own closures through
+ * daemon's own process, so `sendStart` / `sendStartedAgain` call the daemon's own closures through
  * {@link DashboardOptions.context}.
  */
 export async function startDashboard(opts: DashboardOptions): Promise<Dashboard> {
@@ -81,7 +80,7 @@ export async function startDashboard(opts: DashboardOptions): Promise<Dashboard>
 
   // A broken install ships no built bundle (the published package always does), so serve
   // 503 for everything rather than stand up a half-wired mount. Returning here lets the
-  // main path below treat the bundle, mount, and quota as present with no re-checks.
+  // main path below treat the bundle and mount as present with no re-checks.
   if (!clientBundleDir) {
     const server = createServer((_req, res) => {
       res.writeHead(503, { 'content-type': 'text/plain' })
@@ -168,10 +167,6 @@ export async function startDashboard(opts: DashboardOptions): Promise<Dashboard>
   const server = createServer(handle)
   const secureServer = opts.secure ? createSecureServer({ key: opts.secure.key, cert: opts.secure.cert }, handle) : undefined
   const close = async () => {
-    // Stop polling with the server: the usage panel polls for the dashboard's whole life, not just
-    // during an agent, to show where the account stands while nothing runs (#533), so nothing
-    // else would ever end it.
-    context.quota.stop()
     await Promise.all([closeServer(server), secureServer ? closeServer(secureServer) : undefined])
   }
   const dashboard = await listenDashboard(server, port, close)

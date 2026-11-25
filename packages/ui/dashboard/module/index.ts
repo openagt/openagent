@@ -14,14 +14,21 @@
 import { createContext, useContext } from 'react'
 import type { Activity as ActivityItem, AgentStatus, ProjectionRead, Waiting as WaitingItem } from '../../src/index.js'
 import type { ModuleAgent, ModuleAgentsWanted } from '../../src/dashboard/module-agents.js'
-import { callModule, runComputerCommand, runModuleCommand } from '../rpc/modules.js'
-import type { ModuleCallResult, ModuleCommandResult } from '../rpc/modules.js'
+import { callModule, runComputerCommand, runModuleCommand, type ModuleCallResult, type ModuleCommandResult } from '../rpc/modules.js'
 import type { ComputerRpcClient, RpcClient } from '@openagt/hooks/rpc'
 import { DaemonDown } from '../lib/use-daemon-health.js'
+import { SESSIONS_ID } from '../../src/project-address.js'
 
 export type { ModuleCallResult, ModuleCommandResult, ActivityItem, AgentStatus, ModuleAgent, ModuleAgentsWanted, ProjectionRead, WaitingItem }
 export type * from '@openagt/hooks/ui'
 export { defineUiModule } from '@openagt/hooks/ui'
+
+/**
+ * The project a module's server part is called in where its box has no project of its own: a
+ * session with no project, and a profile's editor, which is for any project. Its host's project is
+ * none there, and its folder is no project's.
+ */
+export const NO_PROJECT = SESSIONS_ID
 
 /** What starting a run answered: the run's id, or in words why there is none. */
 export type StartRunResult = { ok: true; agentId: string } | { ok: false; error: string }
@@ -102,7 +109,7 @@ export interface ModuleHost {
    * The accounts behind a project's commit emails at its git host, each with its login and picture:
    * an email the host knows nobody for, or a project with no git host, is left out. Kept a day.
    */
-  gitHostPeople(projectId: string, emails: string[]): Promise<ModuleHostPerson[]>
+  people(projectId: string, emails: string[]): Promise<ModuleHostPerson[]>
   /**
    * Start a run in one project with this prompt, with the person's own picks (which tool, which
    * model, where it runs), and land on it, unless `land` is false: then the dashboard stays where
@@ -217,13 +224,12 @@ export { Slot, PanelShape, RowShapes, SentenceShape, WordsShape, type SlotRead }
 export { PartDescription } from '../components/PartDescription.js'
 export { Input } from '../components/ui/input.js'
 export { GaugeFace } from '../components/ui/gauge.js'
-export { ClaudeLogo, CodexLogo } from '../components/driver-logos.js'
 export { cn } from '../lib/utils.js'
+export { PR_MARKS, prStateOf, type PrState } from '../lib/pr-marks.js'
 export { inPlace } from '../lib/in-place.js'
 export { runWord, runSaid, runTone, runLineTone, runState } from '../lib/run-words.js'
 export { RunMark } from '../components/RunMark.js'
 export { usePolled, useLoaded, useAskOn, forgetRemembered, type ReadState } from '../lib/use-async.js'
-export { useSpendOffset } from '../components/Quota.js'
 /** For a read of runs: read again the moment the runs of a project (of every one, `undefined`) change, as the dashboard's own lists are. */
 export { runsAgain } from '../lib/runs-changed.js'
 export { useKeptDraft } from '../lib/draft-handoff.js'
@@ -244,7 +250,52 @@ export { Separator } from '../components/ui/separator.js'
 export { DiffStat } from '../components/DiffStat.js'
 export { ScrollArea } from '../components/ui/scroll-area.js'
 export { Tooltip, TooltipTrigger, TooltipContent } from '../components/ui/tooltip.js'
-export { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from '../components/ui/dropdown-menu.js'
+export {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+  MenuMark,
+  MENU_BODY_CLASS,
+  MENU_ITEM_CLASS,
+  MENU_POPUP_CLASS,
+  MENU_TRIGGER_OPEN_CLASS,
+} from '../components/ui/dropdown-menu.js'
+// A searchable list in a popup, drawn as the module draws it: the same Base UI as the dashboard's pickers.
+export { Combobox } from '@base-ui/react/combobox'
+export { usePickerSearch } from '../components/ui/picker-search.js'
+export { usePopupPosition } from '../components/ui/popup-placement.js'
+export { OptionLabel } from '../components/ui/option-label.js'
+// The message box's rows, as a control there draws its item (`composer.control`).
+export { rowButtonClass, rowItemClass, RowChevron, RowSaid, RowItem, BoxOfRow } from '../components/ui/row-item.js'
+// A line of the gear's menu under the message box (`composer.control` at `setup`).
+export { SetupLine, SetupPress, SetupSaid } from '../components/SessionSetup.js'
+// The places a module draws itself: a profile's editor draws every control of the message box, the usage card the usage bar's line.
+export { ComposerControls, HandoffOffers, ViewsAt, useViewsAt, useControlsSaid, useOptionsAt, type ControlBox, type ControlsSaid } from '../components/Places.js'
+export { ModuleSlot } from '../components/ModulePageView.js'
+// A row of the panel of a session's work above its message box (`chat.work`): a repo's name, its branch, what it holds, its next steps.
+export { WorkRow } from '../components/AgentWorkPanel.js'
+/** For a read of what a pick for every next run decides (the profile picked under the box): read again the moment one is saved, which its control tells. */
+export { nextRunAgain, tellNextRunPicked } from '../lib/next-run-picked.js'
+/** Keep the page's entry while something typed would be lost by leaving it: Back asks first, and so does the browser on a reload. */
+export { holdEntry } from '../lib/use-route.js'
+// The projects the shell lists, and the word a module that changes the list sends it (the projects module's).
+export { useProjects, projectsChanged, type ProjectsChange } from '../lib/shell-projects.js'
+export { useProjectLabel } from '../lib/project-labels.js'
+export type { ProjectSummary } from '../../src/dashboard/projects.js'
+export { inWords } from '../lib/in-words.js'
+export { formatBytes } from '../../src/format-bytes.js'
+/** For a read of what the plugins give: read again the moment a plugin is switched in Settings. */
+export { pluginsAgain } from '../lib/plugins-switched.js'
 export { ContextMenu, ContextMenuTrigger } from '../components/ui/context-menu.js'
 export { PaneTitle, PaneActions } from '../components/PaneHeader.js'
 export { Page, PageColumn, PagePresses } from '../components/Page.js'
@@ -266,24 +317,31 @@ export { Markdown, InlineMarkdown, ModuleBlock } from '../components/Markdown.js
 export { FileLinks, IssueLinks } from '../lib/markdown-links.js'
 export { wordShownAt } from '../lib/use-steady-text.js'
 export { StartAgentButton, StartAgentPress, type StartMenuItem } from '../components/StartAgentButton.js'
-export { UpdateTicketsButton } from '../components/UpdateTicketsButton.js'
 export { ButtonGroup, ButtonGroupSeparator } from '../components/ui/button-group.js'
 export { LinkActions, useLinkActions, type LinkActionOffer, type ProjectLinks, type LinkTargets } from '../components/LinkActions.js'
 export { PersonMark, personName } from '../components/PersonMark.js'
-export { needsWord, waitingKey, type RunNeed } from '../../src/client.js'
+export { waitingKey } from '../../src/client.js'
 export { WaitingList, holdsBack } from '../components/WaitingList.js'
 export { useWaiting, type WaitingRead } from '../lib/use-waiting.js'
-export { useGitHostPeople, personSaid } from '../lib/use-git-host-people.js'
+export { usePeople, personSaid } from '../lib/use-people.js'
 export { runName } from '../../src/client.js'
 export { SettingsFoot, SettingsItem, SettingsItems, SettingsSection, SettingsRow, SettingsRowShapes, SettingsSelectRow, ToggleRow, type SettingsOption } from '../components/SettingsRows.js'
 export { Avatar } from '../components/PersonMenu.js'
 export { usePerson, personChanged } from '../lib/use-person.js'
-export { AgentFix, useAgentState } from '../components/Logins.js'
+export { CommandLine, FixAction, Linked, PackageLogo, type FixVariant } from '../components/Logins.js'
+// A "Send as" select of OpenAgent's accounts at a host (`RpcHost.accounts`).
+export { SendAs, firstSendAs } from '../components/SendAs.js'
+export { ModuleFixPress } from '../components/Attention.js'
+export { PathStrip } from '../components/PathStrip.js'
 
-export { Dialog } from '../components/ui/dialog.js'
-export { useCodingAgents, type CodingAgent } from '../lib/models.js'
-export { MAX_SPEND_OFFSET } from '../../src/preference-defaults.js'
-export { formatRelative, formatDateTime, formatDuration, formatAge, formatDay } from '../lib/format-date.js'
+export { Dialog, BACKDROP_CLASS, DIALOG_POPUP_CLASS, DIALOG_PRESSES_CLASS } from '../components/ui/dialog.js'
+// A question that is a dialog of its own, drawn as the module draws it: the same Base UI as the dashboard's confirmations.
+export { AlertDialog } from '@base-ui/react/alert-dialog'
+export { useCodingAgents, type CodingAgent } from '../lib/agents.js'
+export { effortLabel } from '../lib/effort.js'
+export { FocusHome } from '../lib/focus-home.js'
+export { MAX_SPEND_OFFSET } from '@openagt/hooks/ui'
+export { formatRelative, formatDateTime, formatDuration, formatDurationLong, formatAge, formatDay, formatResetDay, formatResetTooltip } from '../lib/format-date.js'
 export { useNarrow } from '../lib/use-narrow.js'
 export { useIsMobile, isMobileScreen } from '../lib/use-mobile.js'
 export { Waiting } from '../components/Waiting.js'

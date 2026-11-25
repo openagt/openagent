@@ -1,18 +1,18 @@
-import type { OpenAgentEvent } from '../../src/index.js'
+import type { RunEvent } from '@openagt/hooks'
 import { describe, expect, test } from 'vitest'
 import { arrange, callRow, callSubagents, subagentRows, subagentWait, subagentEvents, stepWords, subagentSteps, type SubagentRow, type SubagentStep } from './subagents.js'
 
 describe('subagentSteps', () => {
-  const at = (time: string): OpenAgentEvent => ({ kind: 'log', message: time, at: `2026-10-01T10:${time}.000Z` }) as OpenAgentEvent
-  const turn = (time: string): OpenAgentEvent => ({ kind: 'driver', event: { type: 'start', prompt: 'go on' }, at: `2026-10-01T10:${time}.000Z` })
-  const isTurn = (e: OpenAgentEvent) => e.kind === 'driver' && e.event.type === 'start'
+  const at = (time: string): RunEvent => ({ kind: 'log', message: time, at: `2026-10-01T10:${time}.000Z` }) as RunEvent
+  const turn = (time: string): RunEvent => ({ kind: 'driver', event: { type: 'start', prompt: 'go on' }, at: `2026-10-01T10:${time}.000Z` })
+  const isTurn = (e: RunEvent) => e.kind === 'driver' && e.event.type === 'start'
   /** A subagent of the coding agent's own, started at `startedAt`, and ended at `endedAt` when given. */
   const row = (id: string, startedAt: string, endedAt?: string) => callRow({ id, status: endedAt ? 'ended' : 'working', calls: 0, startedAt, ...(endedAt ? { endedAt } : {}) }, true, startedAt)
   const placed = (groups: Map<number, SubagentStep[]>) => [...groups].map(([index, steps]) => [index, steps.map(step => step.row.key)])
   const NO_REPORTS = new Map<string, string>()
 
   test('a subagent goes before the first event written after it started; one started after the last event goes at the end', () => {
-    const events = [turn('00:00'), at('02:00'), turn('02:30'), { kind: 'log', message: 'no time' } as OpenAgentEvent, turn('04:00')]
+    const events = [turn('00:00'), at('02:00'), turn('02:30'), { kind: 'log', message: 'no time' } as RunEvent, turn('04:00')]
     const groups = subagentSteps(events, [row('d', '2026-10-01T10:09:00.000Z'), row('a', '2026-10-01T10:01:00.000Z'), row('c', '2026-10-01T10:03:00.000Z')], NO_REPORTS, isTurn)
     expect(placed(groups)).toEqual([
       [1, ['call:a']],
@@ -31,9 +31,9 @@ describe('subagentSteps', () => {
   })
 
   test('one started after the agent said something is a group of its own, after those words', () => {
-    const said = (time: string): OpenAgentEvent => ({ kind: 'driver', event: { type: 'text', text: 'Both are running.' }, at: `2026-10-01T10:${time}.000Z` })
+    const said = (time: string): RunEvent => ({ kind: 'driver', event: { type: 'text', text: 'Both are running.' }, at: `2026-10-01T10:${time}.000Z` })
     const events = [turn('00:00'), at('01:10'), said('01:40'), at('02:40'), said('03:00')]
-    const parts = (e: OpenAgentEvent) => isTurn(e) || (e.kind === 'driver' && e.event.type === 'text')
+    const parts = (e: RunEvent) => isTurn(e) || (e.kind === 'driver' && e.event.type === 'text')
     const groups = subagentSteps(events, [row('a', '2026-10-01T10:01:05.000Z'), row('b', '2026-10-01T10:01:30.000Z'), row('c', '2026-10-01T10:02:30.000Z')], NO_REPORTS, parts)
     expect(placed(groups)).toEqual([
       [1, ['call:a', 'call:b']],
@@ -42,8 +42,8 @@ describe('subagentSteps', () => {
   })
 
   test('what they sent when they ended goes in the same line, until the agent says something', () => {
-    const said = (time: string): OpenAgentEvent => ({ kind: 'driver', event: { type: 'text', text: 'One is back.' }, at: `2026-10-01T10:${time}.000Z` })
-    const parts = (e: OpenAgentEvent) => isTurn(e) || (e.kind === 'driver' && e.event.type === 'text')
+    const said = (time: string): RunEvent => ({ kind: 'driver', event: { type: 'text', text: 'One is back.' }, at: `2026-10-01T10:${time}.000Z` })
+    const parts = (e: RunEvent) => isTurn(e) || (e.kind === 'driver' && e.event.type === 'text')
     const rows = [row('a', '2026-10-01T10:01:00.000Z', '2026-10-01T10:02:00.000Z'), row('b', '2026-10-01T10:02:30.000Z', '2026-10-01T10:02:40.000Z'), row('c', '2026-10-01T10:02:50.000Z', '2026-10-01T10:02:55.000Z')]
     const events = [turn('00:00'), said('01:30'), said('04:00')]
     const steps = subagentSteps(events, rows, new Map([['call:a', 'A found it.'], ['call:b', 'B found it.']]), parts)
@@ -63,7 +63,7 @@ describe('subagentSteps', () => {
 })
 
 describe('callSubagents and subagentEvents', () => {
-  const ev = (event: Extract<OpenAgentEvent, { kind: 'driver' }>['event'], at: string): OpenAgentEvent => ({ kind: 'driver', event, at: `2026-10-01T10:${at}.000Z` })
+  const ev = (event: Extract<RunEvent, { kind: 'driver' }>['event'], at: string): RunEvent => ({ kind: 'driver', event, at: `2026-10-01T10:${at}.000Z` })
   const call = ev({ type: 'action', label: 'Agent', id: 'toolu_a' }, '00:10')
   const started = ev({ type: 'subagent', id: 'toolu_a', status: 'working', name: 'Map the pages' }, '00:10')
   const named = ev({ type: 'subagent', id: 'toolu_a', status: 'working', name: 'Map the pages', model: 'claude-haiku-5-5' }, '00:11')
@@ -80,7 +80,7 @@ describe('callSubagents and subagentEvents', () => {
   })
 
   test("one still working when its run's process ended is over, stopped, also once a message continues the run; a new prompt alone ends none", () => {
-    const end: OpenAgentEvent = { kind: 'end', ok: false, stopped: true, at: '2026-10-01T10:00:30.000Z' }
+    const end: RunEvent = { kind: 'end', ok: false, stopped: true, at: '2026-10-01T10:00:30.000Z' }
     const continued = ev({ type: 'start', prompt: 'And the footer too.' }, '01:00')
     expect(callSubagents([call, started, read, end, continued])[0]).toMatchObject({ status: 'stopped', endedAt: '2026-10-01T10:00:30.000Z' })
     expect(subagentRows([call, started, read, end, continued], true)[0]).toMatchObject({ status: 'stopped', working: false })
@@ -92,16 +92,16 @@ describe('callSubagents and subagentEvents', () => {
   test("what the chat passes over: the subagent's events, its call and that call's answer, and all it said and did; never the run's own steps", () => {
     const events = [call, started, named, read, grep, said, answered, ended, own]
     expect([...subagentEvents(events)]).toEqual([call, started, named, read, grep, said, answered, ended])
-    // On Codex the call is the part of the subagent's id before the colon.
-    const codexCall = ev({ type: 'action', label: 'collabAgentToolCall', id: 'item_1' }, '00:10')
-    const codexAgent = ev({ type: 'subagent', id: 'item_1:t1', status: 'working' }, '00:10')
-    expect([...subagentEvents([codexCall, codexAgent, own])]).toEqual([codexCall, codexAgent])
+    // A call that starts several subagents is the one their `call` names.
+    const several = ev({ type: 'action', label: 'spawn', id: 'item_1' }, '00:10')
+    const first = ev({ type: 'subagent', id: 'item_1:t1', call: 'item_1', status: 'working' }, '00:10')
+    expect([...subagentEvents([several, first, own])]).toEqual([several, first])
   })
 })
 
 
 describe('subagentWait', () => {
-  const ev = (event: Extract<OpenAgentEvent, { kind: 'driver' }>['event'], at: string): OpenAgentEvent => ({ kind: 'driver', event, at: `2026-10-01T10:${at}.000Z` })
+  const ev = (event: Extract<RunEvent, { kind: 'driver' }>['event'], at: string): RunEvent => ({ kind: 'driver', event, at: `2026-10-01T10:${at}.000Z` })
   const prompt = ev({ type: 'start', prompt: 'two subagents, then a story' }, '00:00')
   const said = ev({ type: 'text', text: 'I\'ll start both.' }, '00:02')
   const callA = ev({ type: 'action', label: 'Agent', id: 'a' }, '00:03')
@@ -140,9 +140,9 @@ describe('subagentWait', () => {
     expect(subagentWait([prompt, callA, startA, own, done, endA, backA, thinks])).toEqual({ waiting: false, wokeAt: '2026-10-01T10:00:10.000Z' })
   })
 
-  test('on Codex the call that starts a subagent is the part of its id before the colon', () => {
-    const call = ev({ type: 'action', label: 'collabAgentToolCall', id: 'item_1' }, '00:03')
-    const start = ev({ type: 'subagent', id: 'item_1:t1', status: 'working' }, '00:03')
+  test('the call that starts a subagent is the one its `call` names', () => {
+    const call = ev({ type: 'action', label: 'spawn', id: 'item_1' }, '00:03')
+    const start = ev({ type: 'subagent', id: 'item_1:t1', call: 'item_1', status: 'working' }, '00:03')
     const back = ev({ type: 'output', id: 'item_1', text: 'done' }, '00:09')
     expect(subagentWait([prompt, start, call, back]).waiting).toBe(true)
   })

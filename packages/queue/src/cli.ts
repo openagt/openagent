@@ -1,5 +1,8 @@
 import { join } from 'node:path'
-import { GIT_FAILED, Refused, UsageError, commandReader, commandWrite, nodeBranchFileFs, nodeGitRunner, parseCommandArgs, runCommandLine, helpRows, helpText, type Command, type GitRunner } from '@openagt/agent-data'
+import { GIT_FAILED, nodeGitRunner } from '@openagt/git-branches'
+import { Refused, UsageError, parseCommandArgs, runCommandLine, helpRows, helpText, type Command } from '@openagt/hooks/command'
+import { commandReader, commandWrite, nodeBranchFileFs } from '@openagt/store-filesystem'
+import type { GitRunner } from '@openagt/hooks'
 import { QUEUE_FILE } from './names.js'
 import { appendQueueEntry, insertQueueEntry, parseQueueEntries, removeQueueEntry } from './queue.js'
 
@@ -17,8 +20,7 @@ import { appendQueueEntry, insertQueueEntry, parseQueueEntries, removeQueueEntry
  *
  * The package's own module changes the queue through the same command, as an agent does, and
  * reads it through its server part. `--local` reads this machine's copy (the directory a writer
- * writes to) with no fetch, fast enough to poll: the package declares the command as OpenAgent's
- * queue provider (`"openagent": { "queue": "queue" }`), which reads `queue --local`.
+ * writes to) with no fetch, fast enough to poll.
  */
 
 export const USAGE = `usage: queue [command]

@@ -4,11 +4,12 @@ import { mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { cleanup } from './cleanup.js'
-import { runCli } from './cli.js'
+import type { AppContext } from '@openagt/hooks'
+import agentDriver from './module.js'
 import { acquireRunLock, releaseRunLock, runStderrPath } from './run-lock.js'
 import { git, removeRepo, testRepo } from './test-repo.js'
 
-// `cleanup` on a real repository with a real remote: the tool's own files go, and nothing else
+// The clean-up of a project removed with its files (`app.lifecycle`'s `projectRemoved`), on a real repository with a real remote: the tool's own files go, and nothing else
 // in the project or on the remote changes.
 
 const exists = (path: string): Promise<boolean> => stat(path).then(() => true, () => false)
@@ -100,22 +101,42 @@ test('files git tracks are never removed', async () => {
   }
 })
 
-test('the command answers what the function answers, and a refusal exits 1 with a line for a person', async () => {
+test('a project taken off the list with its files: the module removes what the function removes, and is refused in words while a run is alive; without its files nothing goes', async () => {
   const repo = await testRepo()
+  const removed = agentDriver.hooks['app.lifecycle']!.projectRemoved!
+  const project = { id: 'repo-1', dir: repo, name: 'repo' }
+  const asked: unknown[] = []
+  const app = { skills: async (...args: unknown[]) => (asked.push(args), []) } as unknown as AppContext
   try {
     await ranOnce(repo, 'r1')
+    assert.equal(await removed(project, app, { files: false }), undefined)
+    assert.equal(await exists(join(repo, '.agent-runner')), true)
+
     await acquireRunLock(repo, 'r2', { pid: process.pid, isAlive: () => true })
-    const out: string[] = []
-    const err: string[] = []
-    const io = { cwd: repo, stdout: (line: string) => out.push(line), stderr: (line: string) => err.push(line) }
-    assert.equal(await runCli(['cleanup'], io), 1)
-    assert.deepEqual(JSON.parse(out.join('')), { ok: false, reason: 'running', runs: ['r2'] })
-    assert.equal(err.join(''), 'a run is still working here (r2): stop it first')
+    await assert.rejects(async () => removed(project, app, { files: true }), { message: 'a run is still working here (r2): stop it first' })
 
     await releaseRunLock(repo, 'r2', process.pid)
-    out.length = 0
-    assert.equal(await runCli(['cleanup'], io), 0)
-    assert.deepEqual(JSON.parse(out.join('')), { ok: true, removed: ['.agent-runner/runs', '.agent-runner'], kept: [] })
+    assert.deepEqual(await removed(project, app, { files: true }), { removed: ['.agent-runner/runs', '.agent-runner'], kept: [] })
+    assert.deepEqual(asked, [[{ project }, { every: true }]], "every module's skills are asked, for the rules hiding their links")
+  } finally {
+    await removeRepo(repo)
+  }
+})
+
+test('a project is not taken off the list while a run\'s process holds its lock there; a lock a dead process left does not count', async () => {
+  const repo = await testRepo()
+  const refuse = agentDriver.hooks['app.lifecycle']!.refuseRemoval!
+  const project = { id: 'repo-1', dir: repo, name: 'repo' }
+  const app = {} as AppContext
+  try {
+    assert.equal(await refuse(project, app), undefined, 'no run ever ran here')
+    await ranOnce(repo, 'r1')
+    assert.equal(await refuse(project, app), undefined, 'a run that ended holds no lock')
+    await acquireRunLock(repo, 'r2', { pid: process.pid, isAlive: () => true })
+    assert.equal(await refuse(project, app), 'An agent is working in this project. Stop it, then remove the project.')
+    await releaseRunLock(repo, 'r2', process.pid)
+    await writeFile(join(repo, '.agent-runner', 'runs', 'r3.lock'), `${2 ** 31 - 1}\n`)
+    assert.equal(await refuse(project, app), undefined)
   } finally {
     await removeRepo(repo)
   }

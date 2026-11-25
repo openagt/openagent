@@ -1,15 +1,14 @@
 import { join } from 'node:path'
-import type { CleanupReport } from './dashboard/types.js'
 import { DISTRIBUTION_ENV, distributionItems, packageDirOf, type DistributionEntry, type DistributionPackage, type ModuleDefinition, type PluginInfo, type ProjectRef } from '@openagt/hooks'
-import { declaring, projectId, readManifest, runPackageCommand, type ProjectPackage, type ProvidedCommand, type ProvidedCommandLookup } from '@openagt/agent-data'
+import { projectId } from './project-id.js'
+import { readManifest, type ProjectPackage } from './package-command.js'
 import { distributionHooks, projectRefAt } from './distribution-hooks.js'
 
 /**
  * The packages the dashboard brings (#2394): the ones its distribution lists, resolved from the
  * distribution's own install (`@openagt/dashboard`'s), so a project installs nothing for them and
- * an empty folder starts an agent and shows it. Each comes through the same contract: a module
- * by its `./dashboard` export, a provider of a kind of data by its `openagent` key. A plugin's
- * package is there only where its Enabled row is on (`@openagt/hooks`). Nothing in `ui` names a
+ * an empty folder starts an agent and shows it. Each comes through the same contract, its module's
+ * hooks. A plugin's package is there only where its Enabled row is on (`@openagt/hooks`). Nothing in `ui` names a
  * package, and a project's own dependencies bring none.
  */
 
@@ -66,13 +65,17 @@ async function readPackages(file: string): Promise<OwnPackage[]> {
   return packages
 }
 
-/** The packages of `of` that are on: one with no module, or a core module's, always; a plugin's where its Enabled row is on, in `project` for one kept per project. */
+/**
+ * The packages of `of` that are on: one with no module, or a core module's, always; a plugin's where
+ * its Enabled row is on, in `project` for one kept per project. A plugin that keeps its own row is
+ * there either way: its row is switched on its own Settings entry, which its package brings.
+ */
 async function onPackages(of: OwnPackage['of'], project?: ProjectRef): Promise<OwnPackage[]> {
   const hooks = await distributionHooks()
   const on = new Set(await hooks.on(project))
   return (await distributionPackages()).filter(pkg => {
     const module = hooks.ofPackage(pkg.name)
-    return pkg.of === of && (module === undefined || on.has(module))
+    return pkg.of === of && (module === undefined || module.plugin?.row !== undefined || on.has(module))
   })
 }
 
@@ -96,66 +99,4 @@ export async function projectsPackages(): Promise<OwnPackage[]> {
 /** The packages that are this computer's ({@link DashboardPackage.for}), a plugin's where it is on. */
 export async function computerPackages(): Promise<OwnPackage[]> {
   return onPackages('the computer')
-}
-
-/**
- * The kinds every project reads whatever its plugins say: the runs' records, which agent-driver
- * keeps, read through logs' command until agent-driver reads them itself.
- */
-const EVERY_PROJECT_KINDS: readonly string[] = ['runs']
-
-/**
- * What provides `kind` in the project at `root`: the one package it has that declares it
- * (`"openagent": { "<kind>": "<command>" }`). Two that both do are the distribution's mistake,
- * which the project's banner says.
- */
-export async function lookupProvided(root: string, kind: string): Promise<ProvidedCommandLookup> {
-  const providers = declaring(EVERY_PROJECT_KINDS.includes(kind) ? await projectsPackages() : await packagesOf(root), kind)
-  if (providers.length === 1) return { command: providers[0]! }
-  if (providers.length === 0) return {}
-  return { problem: `${providers.length} packages of the distribution provide ${kind}: ${providers.map(p => p.package).join(', ')}` }
-}
-
-/** {@link lookupProvided}'s command, for a caller that only needs to run it. */
-export async function providedCommand(root: string, kind: string): Promise<ProvidedCommand | undefined> {
-  return (await lookupProvided(root, kind)).command
-}
-
-/**
- * Have every package that declares a clean-up remove what it left in the project at `root`: a
- * package declares `"openagent": { "cleanup": "<command>" }`, and `<command> cleanup`, run in the
- * project, answers `{ ok: true, removed, kept }`. Every package of the distribution is asked, also
- * one this project no longer has (what it left stays its own to remove), each whatever the one
- * before answered. A package that refuses, fails or answers something else is one line in
- * `failed`, in words.
- */
-export async function runCleanups(root: string): Promise<CleanupReport> {
-  const report: CleanupReport = { removed: [], kept: [], failed: [] }
-  for (const command of declaring(await distributionPackages(), 'cleanup')) {
-    const result = await runPackageCommand(root, command, ['cleanup'])
-    if (!result.ok) {
-      report.failed.push(`${command.package}: ${result.error}`)
-      continue
-    }
-    const answer = readCleanupAnswer(result.output)
-    if (!answer) {
-      report.failed.push(`${command.package}: its clean-up answered something else than what it removed and kept`)
-      continue
-    }
-    report.removed.push(...answer.removed)
-    report.kept.push(...answer.kept)
-  }
-  return report
-}
-
-/** A clean-up's answer, read strictly: anything else is not one. */
-function readCleanupAnswer(output: unknown): Pick<CleanupReport, 'removed' | 'kept'> | undefined {
-  if (!output || typeof output !== 'object') return undefined
-  const { ok, removed, kept } = output as { ok?: unknown; removed?: unknown; kept?: unknown }
-  if (ok !== true || !Array.isArray(removed) || !Array.isArray(kept)) return undefined
-  if (!removed.every(path => typeof path === 'string')) return undefined
-  const isKept = (entry: unknown): entry is { path: string; reason: string } =>
-    Boolean(entry) && typeof entry === 'object' && typeof (entry as { path?: unknown }).path === 'string' && typeof (entry as { reason?: unknown }).reason === 'string'
-  if (!kept.every(isKept)) return undefined
-  return { removed: [...removed] as string[], kept: kept.map(entry => ({ path: entry.path, reason: entry.reason })) }
 }

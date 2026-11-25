@@ -1,10 +1,10 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { act, read, rpcKind, type ComputerRpcClient, type RpcClient, type RpcComputerHost, type RpcHost } from './rpc.js'
-import { memorySettings, rpcHost } from './testing.js'
+import { computerRpcHost, memorySettings, rpcHost } from './testing.js'
 
 const SETTINGS = memorySettings()
-const HOST: RpcHost = rpcHost({ settings: SETTINGS, root: '/work/shop', run: async () => undefined, mergeCommit: async () => ({ pending: false }) })
+const HOST: RpcHost = rpcHost({ settings: SETTINGS, root: '/work/shop', run: async () => undefined })
 
 // A module's server part, as a UI part's client is typed by it.
 const server = {
@@ -41,7 +41,7 @@ test("a module of the computer's is called in no project: its client takes the i
     rename: act(async (_host: RpcComputerHost, input: { name: string }) => input.name.toUpperCase()),
     files: server.files,
   }
-  assert.equal(await computer.pace({ settings: SETTINGS }, {}), true)
+  assert.equal(await computer.pace(computerRpcHost({ settings: SETTINGS }), {}), true)
   const calls: unknown[] = []
   const client = new Proxy({}, { get: (_target, name) => async (input: unknown) => (calls.push([name, input]), name === 'pace' ? true : 'ADA') }) as ComputerRpcClient<typeof computer>
   const pace: boolean = await client.pace({})

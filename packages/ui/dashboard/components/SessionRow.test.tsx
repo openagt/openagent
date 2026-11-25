@@ -10,26 +10,42 @@ vi.mock('./ui/tooltip.js', () => ({
 }))
 
 const { SessionRow } = await import('./SessionRow.js')
+const { fakeHost, mountedOf, renderWithHost } = await import('../module/testing.js')
 
 afterEach(cleanup)
 
-const facts = { runsOn: 'This machine', elsewhere: false, projectName: 'site', startedFrom: 'main', worksOn: 'agent-fix-login' }
+const facts = { runsOn: 'This machine', elsewhere: false, projectName: 'site' }
 /** The items' words as the row shows them: what only a screen reader hears left out. */
 const words = (container: HTMLElement) =>
   [...container.querySelectorAll<HTMLElement>('[data-hover]')].map(item => [...item.childNodes].filter(node => !(node instanceof HTMLElement && node.classList.contains('sr-only'))).map(node => node.textContent).join(''))
 
 describe('a session\'s row above the box', () => {
-  test('where it runs, the project, the branch: each said in words the keyboard stops on, none a menu, and nothing else, as the launcher\'s row (the setup and the model are under the box)', () => {
+  test('where it runs and the project: each said in words the keyboard stops on, none a menu, and nothing else, as the launcher\'s row (the setup and the model are under the box; the branch is a module\'s control)', () => {
     const { container } = render(<SessionRow {...facts} />)
-    expect(words(container)).toEqual(['This machine', 'site', 'main'])
+    expect(words(container)).toEqual(['This machine', 'site'])
     expect(container.querySelector('button')).toBeNull()
     for (const item of container.querySelectorAll<HTMLElement>('[data-hover]')) expect(item.tabIndex).toBe(0)
   })
 
-  test("the run's pull requests stand at the row's right end, after the side that gives way, so the last one ends on the box's edge and stays whole in a narrow box; none, nothing there", () => {
-    const { container, rerender } = render(<SessionRow {...facts} prs={[{ number: 4, url: 'https://x/pull/4', state: 'merged' }, { number: 5, url: 'https://x/pull/5', state: 'OPEN' }]} />)
-    const row = container.firstElementChild!
-    const links = screen.getAllByRole('link')
+  test("the modules' labels of the run (`chat.labels`: github's pull requests) stand at the row's right end, after the side that gives way, so the last one ends on the box's edge and stays whole in a narrow box; none, nothing there", async () => {
+    const labels = {
+      place: 'chat.labels' as const,
+      id: 'prs',
+      package: 'a-labels-module',
+      projects: [],
+      computer: true as const,
+      View: ({ agentId }: { agentId: string }) => (
+        // Whole at every width, as github's labels keep themselves.
+        <span className="flex shrink-0">
+          <a href="https://x/pull/4">#4</a>
+          <a href={`https://x/pull/${agentId}`}>#5</a>
+        </span>
+      ),
+    }
+    const run = { projectId: 'p1', agentId: '5', working: false }
+    const { container, rerender } = renderWithHost(<SessionRow {...facts} run={run} />, fakeHost('a-labels-module'), mountedOf({ views: { 'chat.labels': [labels] } }))
+    const links = await screen.findAllByRole('link')
+    const row = container.querySelector('[data-hover]')!.parentElement!.parentElement!
     expect(links.map(link => link.textContent)).toEqual(['#4', '#5'])
     expect(row.lastElementChild!.contains(links[1]!)).toBe(true)
     expect(row.lastElementChild!.className.split(' ')).toContain('shrink-0')
@@ -38,7 +54,7 @@ describe('a session\'s row above the box', () => {
     expect(row.firstElementChild!.textContent).toContain('site')
     rerender(<SessionRow {...facts} />)
     expect(screen.queryByRole('link')).toBeNull()
-    expect(container.firstElementChild!.childElementCount).toBe(1)
+    expect(row.childElementCount).toBe(1)
   })
 
   test('a session with no project says where it runs alone: its repos are under the box, as Context', () => {
@@ -53,28 +69,9 @@ describe('a session\'s row above the box', () => {
     expect(words(container)).toEqual(['This machine'])
   })
 
-  test('no project name yet, or no branch to vouch for: no word for it, never a guess', () => {
-    const { container, rerender } = render(<SessionRow {...facts} projectName={null} />)
+  test('no project name yet: no word for it, never a guess', () => {
+    const { container } = render(<SessionRow {...facts} projectName={null} />)
     expect(words(container)).toEqual(['This machine'])
-    rerender(<SessionRow {...facts} startedFrom={undefined} />)
-    expect(words(container)).toEqual(['This machine', 'site'])
-  })
-
-  test.each([
-    ['main', 'agent-fix-login', 'Started from main, works on agent-fix-login'],
-    ['main', undefined, 'Started from main'],
-    ['agent-work', 'agent-work', 'Started from agent-work'],
-  ])('the branch\'s hover, started from %s, working on %s', (startedFrom, worksOn, says) => {
-    render(<SessionRow {...facts} startedFrom={startedFrom} worksOn={worksOn} />)
-    expect(screen.getAllByRole('tooltip').map(tip => tip.textContent)).toContain(says)
-    // A screen reader hears the words and their hover together.
-    expect(screen.getByText(`. ${says}`).closest('[data-hover]')!.textContent).toBe(`${startedFrom}. ${says}`)
-  })
-
-  test('the branch it says is the one it started from, not the one it works on, which only its hover names', () => {
-    const { container } = render(<SessionRow {...facts} />)
-    expect(words(container)).toContain('main')
-    expect(words(container).join()).not.toContain('agent-fix-login')
   })
 
   test('a host says what it is: its name, and the mark of not being this computer', () => {

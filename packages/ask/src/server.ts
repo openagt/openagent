@@ -1,4 +1,4 @@
-import { continuationPrompt, skipPrompt } from '@openagt/agent-driver/question'
+import { continuationPrompt, skipPrompt } from '@openagt/hooks'
 import { act, type RpcHost } from '@openagt/hooks/rpc'
 import type { InboxLine } from '@openagt/hooks'
 

@@ -36,7 +36,7 @@ afterEach(() => {
 test('a project with no run recorded says so where the runs would stand, and lists none', async () => {
   render(
     <ModuleHostContext.Provider value={hostWith([])}>
-      <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
+      <LogsPage projects={[{ id: 'p1', name: 'alpha', remote: 'github.com/me/project' }]} projectId={null} path={[]} />
     </ModuleHostContext.Provider>,
   )
   expect(await screen.findByText('No runs recorded yet. A run is listed here from the moment an agent starts on this project.')).toBeTruthy()
@@ -47,7 +47,7 @@ test('the page is the projects\' own: a session with no project is not listed, w
   const host = hostWith([{ id: 'r1', startedAt: at(now - 2000), endedAt: at(now), status: 'done', title: 'In the project' }], [], [{ id: 's1', startedAt: at(now - 1000), status: 'waiting', title: 'Greeting exchange' }])
   const page = (projectId: string | null) => (
     <ModuleHostContext.Provider value={host}>
-      <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={projectId} path={[]} />
+      <LogsPage projects={[{ id: 'p1', name: 'alpha', remote: 'github.com/me/project' }]} projectId={projectId} path={[]} />
     </ModuleHostContext.Provider>
   )
   const every = render(page(null))
@@ -70,7 +70,7 @@ test('the runs cut by day, each day with what its runs cost; a run by its name, 
   ])
   const page = (
     <ModuleHostContext.Provider value={host}>
-      <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
+      <LogsPage projects={[{ id: 'p1', name: 'alpha', remote: 'github.com/me/project' }]} projectId={null} path={[]} />
     </ModuleHostContext.Provider>
   )
   const { unmount } = render(page)
@@ -112,7 +112,7 @@ test("a run's name is a link to the run: the keyboard reaches it, it opens the r
   const host = hostWith([{ id: 'r1', startedAt: at(now - 1000), endedAt: at(now), status: 'done', title: 'Login page' }])
   render(
     <ModuleHostContext.Provider value={host}>
-      <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
+      <LogsPage projects={[{ id: 'p1', name: 'alpha', remote: 'github.com/me/project' }]} projectId={null} path={[]} />
     </ModuleHostContext.Provider>,
   )
   const link = await screen.findByRole('link', { name: 'Login page' })
@@ -130,7 +130,7 @@ test("each status is the sidebar's mark and word: a waiting run's hexagon is in 
   ])
   render(
     <ModuleHostContext.Provider value={host}>
-      <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
+      <LogsPage projects={[{ id: 'p1', name: 'alpha', remote: 'github.com/me/project' }]} projectId={null} path={[]} />
     </ModuleHostContext.Provider>,
   )
   const mark = (title: string) => screen.getAllByText(title)[0]!.closest('li')!.querySelector('svg')!.getAttribute('class')
@@ -156,7 +156,7 @@ test("a run whose pull request merged reads as the sidebar's merged run, its num
   )
   render(
     <ModuleHostContext.Provider value={host}>
-      <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
+      <LogsPage projects={[{ id: 'p1', name: 'alpha', remote: 'github.com/me/project' }]} projectId={null} path={[]} />
     </ModuleHostContext.Provider>,
   )
   const row = (title: string) => screen.getAllByText(title)[0]!.closest('li')!
@@ -183,7 +183,7 @@ test("a run stands as its sidebar row does: one that waits on the person waits, 
   shell.items = [{ kind: 'waiting', module: 'github', scope: 'run', run: 'r1', id: open.url, words: 'Needs merge', title: 'Open request', detail: '#50', mark: 'pull-request', projectId: 'p1', projectName: 'alpha' }]
   render(
     <ModuleHostContext.Provider value={host}>
-      <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
+      <LogsPage projects={[{ id: 'p1', name: 'alpha', remote: 'github.com/me/project' }]} projectId={null} path={[]} />
     </ModuleHostContext.Provider>,
   )
   const row = (title: string) => screen.getAllByText(title)[0]!.closest('li')!
@@ -212,7 +212,7 @@ test("a row's press opens the run: Answer where its question waits, Review for a
   ])
   render(
     <ModuleHostContext.Provider value={host}>
-      <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
+      <LogsPage projects={[{ id: 'p1', name: 'alpha', remote: 'github.com/me/project' }]} projectId={null} path={[]} />
     </ModuleHostContext.Provider>,
   )
   fireEvent.click(await screen.findByRole('button', { name: 'Answer: Asks' }))
@@ -227,7 +227,7 @@ test('a run waiting on a question took nothing yet: its end so far is only its l
   ])
   render(
     <ModuleHostContext.Provider value={host}>
-      <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
+      <LogsPage projects={[{ id: 'p1', name: 'alpha', remote: 'github.com/me/project' }]} projectId={null} path={[]} />
     </ModuleHostContext.Provider>,
   )
   const row = (title: string) => screen.getAllByText(title)[0]!.closest('li')!.textContent
@@ -239,7 +239,7 @@ test('a run waiting on a question took nothing yet: its end so far is only its l
 test('a run goes by the name every list gives it: with no short name and no prompt, its branch; with none of these, its id', async () => {
   render(
     <ModuleHostContext.Provider value={hostWith([{ id: 'r1', startedAt: at(now - 1000), status: 'done', branch: 'agent-fix-header' }, { id: 'r2', startedAt: at(now - 2000), status: 'done' }])}>
-      <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
+      <LogsPage projects={[{ id: 'p1', name: 'alpha', remote: 'github.com/me/project' }]} projectId={null} path={[]} />
     </ModuleHostContext.Provider>,
   )
   expect((await screen.findAllByRole('link', { name: 'agent-fix-header' })).length).toBeGreaterThan(0)
@@ -250,7 +250,7 @@ test("a run's branch keeps its ending where its column is too narrow: runs start
   const branches = ['agent-2026-11-15T18-12-13-950Z', 'agent-2026-11-15T18-12-19-219Z']
   render(
     <ModuleHostContext.Provider value={hostWith(branches.map((branch, i) => ({ id: `r${i}`, startedAt: at(now - i * 1000), status: 'done', title: `Run ${i}`, branch })))}>
-      <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
+      <LogsPage projects={[{ id: 'p1', name: 'alpha', remote: 'github.com/me/project' }]} projectId={null} path={[]} />
     </ModuleHostContext.Provider>,
   )
   for (const branch of branches) {
@@ -264,7 +264,7 @@ test("a run's branch keeps its ending where its column is too narrow: runs start
 test('a second visit opens with the last list at once, while the runs are read again, faded once that read has been out a second', async () => {
   const page = (host: FakeHost) => (
     <ModuleHostContext.Provider value={host}>
-      <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
+      <LogsPage projects={[{ id: 'p1', name: 'alpha', remote: 'github.com/me/project' }]} projectId={null} path={[]} />
     </ModuleHostContext.Provider>
   )
   render(page(hostWith([{ id: 'r1', startedAt: at(now - 1000), endedAt: at(now), status: 'done', title: 'Login page' }])))
@@ -287,7 +287,7 @@ test('the runs the dashboard lists show while the records are still read, with n
   })
   render(
     <ModuleHostContext.Provider value={host}>
-      <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
+      <LogsPage projects={[{ id: 'p1', name: 'alpha', remote: 'github.com/me/project' }]} projectId={null} path={[]} />
     </ModuleHostContext.Provider>,
   )
   expect(screen.getByText('Loading…')).toBeTruthy()
@@ -306,7 +306,7 @@ test('each run as the dashboard says it stands: a record that still says running
   )
   render(
     <ModuleHostContext.Provider value={host}>
-      <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
+      <LogsPage projects={[{ id: 'p1', name: 'alpha', remote: 'github.com/me/project' }]} projectId={null} path={[]} />
     </ModuleHostContext.Provider>,
   )
   const added = (await screen.findAllByText('Not recorded yet'))[0]!.closest('li')!
@@ -326,10 +326,10 @@ test("each run says whose it is: their picture where the project's git host know
     // A run with no record yet says whose it is too.
     [{ id: 'r4', startedAt: at(now - 500), status: 'running', title: 'Going', person: 'ada@x.dev' }],
   )
-  vi.mocked(host.gitHostPeople).mockImplementation(async () => [{ email: 'ada@x.dev', login: 'ada', avatar: 'https://avatars.githubusercontent.com/u/1' }])
+  vi.mocked(host.people).mockImplementation(async () => [{ email: 'ada@x.dev', login: 'ada', avatar: 'https://avatars.githubusercontent.com/u/1' }])
   render(
     <ModuleHostContext.Provider value={host}>
-      <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
+      <LogsPage projects={[{ id: 'p1', name: 'alpha', remote: 'github.com/me/project' }]} projectId={null} path={[]} />
     </ModuleHostContext.Provider>,
   )
   const row = (title: string) => screen.getAllByText(title)[0]!.closest('li')!
@@ -339,14 +339,14 @@ test("each run says whose it is: their picture where the project's git host know
   expect(within(row('Very old')).queryByRole('img')).toBeNull()
   expect(row('Very old').querySelector('span.size-5')).toBeTruthy()
   // Each person once, however many runs are theirs; and not again when the page reads its runs again.
-  expect(vi.mocked(host.gitHostPeople).mock.calls.at(-1)).toEqual(['p1', ['ada@x.dev', 'git@brillout.com']])
+  expect(vi.mocked(host.people).mock.calls.at(-1)).toEqual(['p1', ['ada@x.dev', 'git@brillout.com']])
 })
 
 test('a project that gave the whole page of 50 runs has older ones: the page says it lists the last 50; one with fewer lists every run; the one project shown is named', async () => {
   const cards = (count: number) => Array.from({ length: count }, (_, index) => ({ id: `r${index}`, startedAt: at(now - index * 1000), endedAt: at(now - index * 1000 + 500), status: 'done', intent: `run ${index}` }))
   const page = (host: FakeHost) => (
     <ModuleHostContext.Provider value={host}>
-      <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
+      <LogsPage projects={[{ id: 'p1', name: 'alpha', remote: 'github.com/me/project' }]} projectId={null} path={[]} />
     </ModuleHostContext.Provider>
   )
   render(page(hostWith(cards(50))))
@@ -359,30 +359,28 @@ test('a project that gave the whole page of 50 runs has older ones: the page say
   expect(screen.queryByText(/^The last 50 runs/)).toBeNull()
 })
 
-test("a run whose work never left this machine says what it needs in the sidebar's words: a commit, else a push, or a pull request where the project can open one", async () => {
+test("a run whose work never left this machine says what it needs as what waits on its run says it, and how much", async () => {
   const host = hostWith(
     [],
     [
-      { id: 'r1', startedAt: at(now - 3000), endedAt: at(now), status: 'done', title: 'Committed a login page', name: 'agent-1', unpublished: 1 },
-      { id: 'r2', startedAt: at(now - 2000), endedAt: at(now), status: 'done', title: 'Left files', name: 'agent-2', uncommitted: 2, unpublished: 3 },
+      { id: 'r1', startedAt: at(now - 3000), endedAt: at(now), status: 'done', title: 'Committed a login page', name: 'agent-1' },
+      { id: 'r2', startedAt: at(now - 2000), endedAt: at(now), status: 'done', title: 'Left files', name: 'agent-2' },
       { id: 'r3', startedAt: at(now - 1000), endedAt: at(now), status: 'done', title: 'Pushed', name: 'agent-3' },
     ],
   )
-  const page = (gitHost: boolean) => (
+  const said = (run: string, words: string, detail: string, mark: 'changes' | 'branch') => ({ kind: 'waiting' as const, module: 'git-branches', scope: 'run' as const, run, id: `${mark}:${run}`, words, detail, mark, projectId: 'p1', projectName: 'alpha' })
+  shell.items = [said('r1', 'Needs push', '1 commit', 'branch'), said('r2', 'Needs commit', '2 files', 'changes')]
+  render(
     <ModuleHostContext.Provider value={host}>
-      <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost }]} projectId={null} path={[]} />
-    </ModuleHostContext.Provider>
+      <LogsPage projects={[{ id: 'p1', name: 'alpha' }]} projectId={null} path={[]} />
+    </ModuleHostContext.Provider>,
   )
-  render(page(false))
   const row = async (name: string) => (await screen.findAllByText(name))[0]!.closest('li')!
   // Two facts of the line, joined by its one dot as its others are.
   expect((await row('Committed a login page')).textContent).toContain('Needs push·1 commit')
   expect((await row('Left files')).textContent).toContain('Needs commit·2 files')
   expect((await row('Pushed')).textContent).not.toMatch(/Needs/)
-  cleanup()
-  forgetRemembered()
-  render(page(true))
-  expect((await row('Committed a login page')).textContent).toContain('Needs PR·1 commit')
+  shell.items = []
 })
 
 test("each project's newest 50 runs are read through the server part; a project whose read fails is named with why, and the others still show", async () => {
@@ -393,8 +391,8 @@ test("each project's newest 50 runs are read through the server part; a project 
     <ModuleHostContext.Provider value={fakeHost('@openagt/logs', { call, agents: async () => [] })}>
       <LogsPage
         projects={[
-          { id: 'p1', name: 'alpha', gitHost: true },
-          { id: 'p2', name: 'beta', gitHost: true },
+          { id: 'p1', name: 'alpha', remote: 'github.com/me/project' },
+          { id: 'p2', name: 'beta', remote: 'github.com/me/project' },
         ]}
         projectId={null}
         path={[]}

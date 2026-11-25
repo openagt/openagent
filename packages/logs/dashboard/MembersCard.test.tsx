@@ -20,14 +20,14 @@ function hostWith(people: unknown[], accounts: ModuleHostPerson[], runs?: unknow
       if (!runs) throw new Error('no runs listed')
       return runs as ModuleAgent[]
     },
-    gitHostPeople: async () => accounts,
+    people: async () => accounts,
   })
 }
 
 const show = (host: ModuleHost) =>
   render(
     <ModuleHostContext.Provider value={host}>
-      <MembersCard projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} />
+      <MembersCard projects={[{ id: 'p1', name: 'alpha', remote: 'github.com/me/project' }]} />
     </ModuleHostContext.Provider>,
   )
 
@@ -47,7 +47,7 @@ test("each member by the name git knows, their picture where the git host knows 
   expect(within(rom).getByText('Romuald Brillout').getAttribute('title')).toBe('git@brillout.com · brillout')
   expect(within(rom).getByText('1 commit')).toBeTruthy()
   // The git host is asked of the project's own emails.
-  expect(host.gitHostPeople).toHaveBeenCalledWith('p1', ['git@brillout.com', 's@a.dev', 'new@z.dev'])
+  expect(host.people).toHaveBeenCalledWith('p1', ['git@brillout.com', 's@a.dev', 'new@z.dev'])
   // No account known: the letters.
   const fresh = screen.getByRole('listitem', { name: 'new' })
   expect(fresh.querySelector('img')).toBeNull()
@@ -127,11 +127,11 @@ test('a member with runs that wait on an answer says so beside the ones working'
 test("each project's people of the last 30 days are read through the server part; a project whose read fails counts no one, and the others still do", async () => {
   const call = vi.fn(async (projectId: string) => (projectId === 'p2' ? { ok: false as const, error: 'not a repository' } : { ok: true as const, output: [person('s@a.dev', { name: 'Suleiman Shahbari', runs: 2 })] }))
   render(
-    <ModuleHostContext.Provider value={fakeHost('@openagt/logs', { call, agents: async () => [], gitHostPeople: async () => [] })}>
+    <ModuleHostContext.Provider value={fakeHost('@openagt/logs', { call, agents: async () => [], people: async () => [] })}>
       <MembersCard
         projects={[
-          { id: 'p1', name: 'alpha', gitHost: true },
-          { id: 'p2', name: 'beta', gitHost: true },
+          { id: 'p1', name: 'alpha', remote: 'github.com/me/project' },
+          { id: 'p2', name: 'beta', remote: 'github.com/me/project' },
         ]}
       />
     </ModuleHostContext.Provider>,

@@ -11,7 +11,7 @@ const { flow, start, runIn } = smoke()
 /** The calls to one of the daemon's RPCs, each held unanswered until `answer`. */
 function hold(page: Page, name: string) {
   const held: Route[] = []
-  const ready = page.route(`**/_rpc/${name}`, route => void held.push(route))
+  const ready = page.route(url => url.pathname === `/_rpc/${name}`, route => void held.push(route))
   return {
     ready,
     count: () => held.length,
@@ -39,7 +39,7 @@ async function waits(page: Page, call: ReturnType<typeof hold>, press: () => Pro
 
 test('Remove in "Remove project" keeps the keyboard while it waits and takes no second press', needsChrome, async () => {
   await flow('waiting-remove', async page => {
-    const remove = hold(page, 'sendRemoveProject')
+    const remove = hold(page, '%40openagt%2Fprojects/removeProject')
     await page.getByRole('button', { name: 'Project actions' }).click()
     await page.getByRole('menuitem', { name: 'Remove project…' }).click()
     await waits(page, remove, () => page.getByRole('alertdialog').getByRole('button', { name: 'Remove', exact: true }).click(), /^Removing…$/)
@@ -48,7 +48,7 @@ test('Remove in "Remove project" keeps the keyboard while it waits and takes no 
 
 test("Save in the profile editor keeps the keyboard while it waits and takes no second press", needsChrome, async () => {
   await flow('waiting-save', async page => {
-    const save = hold(page, 'sendSaveProfile')
+    const save = hold(page, `${encodeURIComponent('@openagt/profiles')}/saveProfile`)
     await page.getByRole('link', { name: 'Profiles', exact: true }).click()
     await page.getByRole('button', { name: 'New profile' }).click()
     await page.getByRole('dialog').getByRole('textbox').first().fill('Reviewer')
@@ -59,12 +59,12 @@ test("Save in the profile editor keeps the keyboard while it waits and takes no 
 test('Next in "Add project" keeps the keyboard while it waits and takes no second press', needsChrome, async () => {
   await flow('waiting-next', async page => {
     // The address is read once as the panel opens: that read is refused, so the form with Next stands.
-    const next = hold(page, 'onCloneTarget')
+    const next = hold(page, '%40openagt%2Fprojects/cloneTargetFor')
     let reads = 0
-    await page.route('**/_rpc/onCloneTarget', route =>
+    await page.route(url => url.pathname === '/_rpc/%40openagt%2Fprojects/cloneTargetFor', route =>
       ++reads === 1 ? route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'not read yet' }) }) : route.fallback(),
     )
-    await page.getByLabel('Project: shop').click()
+    await page.getByLabel('The session works in', { exact: true }).click()
     await page.getByLabel('Search projects and repos').fill('github.com/demo/elsewhere')
     await page.getByRole('option', { name: /github\.com\/demo\/elsewhere/ }).click()
     const form = page.getByRole('dialog', { name: 'Add project' })
@@ -75,7 +75,8 @@ test('Next in "Add project" keeps the keyboard while it waits and takes no secon
 
 test('Escape in a question over a working run closes the question and stops nothing', needsChrome, async () => {
   await flow('escape-question', async page => {
-    await page.route('**/_rpc/onRepositoryOffer', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ret: { repository: 'demo/shop', name: 'GitHub' } }) }))
+    // github's offer of a repository for the project, as its server part would answer it.
+    await page.route(`**/_rpc/${encodeURIComponent('@openagt/github')}/repositoryOffer`, route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ret: { ok: true, output: { repository: 'demo/shop' } } }) }))
     let stops = 0
     await page.route('**/_rpc/sendStop', route => (stops++, route.fallback()))
     await start(page, 'hold the escape')
@@ -85,8 +86,9 @@ test('Escape in a question over a working run closes the question and stops noth
     await page.getByRole('menuitem', { name: 'Create a repository on GitHub…' }).click()
     const question = page.getByRole('alertdialog', { name: 'Create a private repository on GitHub?' })
     await question.waitFor()
-    // The menu that opened it gone, as it is by the time a person has read the question.
-    await page.locator('[role="menu"]').waitFor({ state: 'detached' })
+    // The menu that opened it gone, as it is by the time a person has read the question. Found by its
+    // item: the session's gear menu stays mounted, shut, for what its lines say.
+    await page.locator('[role="menu"]', { hasText: 'Create a repository on GitHub' }).waitFor({ state: 'detached' })
     await page.keyboard.press('Escape')
     await question.waitFor({ state: 'detached' })
     await page.waitForTimeout(500)
@@ -98,14 +100,13 @@ test('Escape in a question over a working run closes the question and stops noth
 test("a git account forgotten from its row leaves the keyboard in its host's section", needsChrome, async () => {
   await flow('forget-account', async page => {
     let forgotten = false
-    const account = (login: string) => ({ login, ok: true })
-    await page.route('**/_rpc/onGitHosts', route =>
-      route.fulfill({
-        contentType: 'application/json',
-        body: JSON.stringify({ ret: { hosts: [{ host: 'github.com', projects: ['shop'], provider: { name: 'GitHub', requestWord: 'pull request', tool: 'gh', installed: true, install: 'gh', accounts: forgotten ? [account('alice')] : [account('alice'), account('bob')] } }] } }),
-      }),
+    const account = (login: string) => ({ login, runs: login === 'alice', ok: true, avatar: '' })
+    // github's own calls (`@openagt/github`), as its server part would answer them.
+    const answer = (output: unknown) => ({ contentType: 'application/json', body: JSON.stringify({ ret: { ok: true, output } }) })
+    await page.route(`**/_rpc/${encodeURIComponent('@openagt/github')}/accounts`, route =>
+      route.fulfill(answer({ host: 'github.com', name: 'GitHub', requestWord: 'pull request', logo: '<svg/>', tool: 'gh', installed: true, install: 'gh', accounts: forgotten ? [account('alice')] : [account('alice'), account('bob')], projects: ['shop'] })),
     )
-    await page.route('**/_rpc/sendForgetGitHostAccount', route => ((forgotten = true), route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ret: { ok: true } }) })))
+    await page.route(`**/_rpc/${encodeURIComponent('@openagt/github')}/forget`, route => ((forgotten = true), route.fulfill(answer({ ok: true }))))
     await page.reload()
     await page.getByRole('link', { name: 'Permissions', exact: true }).click()
     await page.getByRole('button', { name: 'More for @bob' }).click()
@@ -138,7 +139,7 @@ async function typedOnPicker(page: Page, name: string, search: string, unchanged
 
 test("a letter typed on the sidebar's project picker starts its search and picks nothing", needsChrome, async () => {
   await flow('typed-sidebar-picker', async page => {
-    await typedOnPicker(page, 'Project: shop', 'Search projects and repos', button => button.getAttribute('aria-label'))
+    await typedOnPicker(page, 'Project: shop', 'Search projects', button => button.getAttribute('aria-label'))
   })
 })
 
@@ -150,22 +151,20 @@ test("a letter typed on the launcher's project picker starts its search and pick
 
 test("a letter typed on the launcher's branch picker starts its search and picks nothing", needsChrome, async () => {
   await flow('typed-branch-picker', async page => {
-    // The demo's project has no origin, so its launcher offers no branch: this one says it has one.
-    await page.route('**/_rpc/onCommands', async route => {
-      const answer = await (await route.fetch()).json()
-      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ret: { ...answer.ret, startFrom: { main: 'main', local: 'main' } } }) })
-    })
-    await page.route('**/_rpc/onStartBranches', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ret: { branches: ['black', 'blue'] } }) }))
+    // The demo's project has no origin, so git-branches offers no branch to start from: here it says it has one.
+    const answer = (output: unknown) => ({ contentType: 'application/json', body: JSON.stringify({ ret: { ok: true, output } }) })
+    await page.route('**/_rpc/%40openagt%2Fgit-branches/startPlaces', route => route.fulfill(answer({ main: 'main', local: 'main' })))
+    await page.route('**/_rpc/%40openagt%2Fgit-branches/startBranches', route => route.fulfill(answer({ branches: ['black', 'blue'] })))
     await page.reload()
     await page.getByLabel('The agent starts from', { exact: true }).waitFor()
     await typedOnPicker(page, 'The agent starts from', 'Search branches', button => button.textContent())
   })
 })
 
-test("a letter typed on a no-project session's Context starts its search and ticks nothing", needsChrome, async () => {
+test("a letter typed on a no-project session's Repos starts its search and ticks nothing", needsChrome, async () => {
   await flow('typed-repos-context', async page => {
     await page.getByLabel('The session works in', { exact: true }).click()
     await page.getByRole('option', { name: 'No project' }).click()
-    await typedOnPicker(page, 'Context', 'Search repos', button => button.textContent())
+    await typedOnPicker(page, 'Repos', 'Search repos', button => button.textContent())
   })
 })

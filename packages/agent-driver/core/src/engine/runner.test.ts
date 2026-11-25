@@ -6,12 +6,12 @@ import { join } from 'node:path'
 import { FakeDriver } from '../fake.js'
 import { findRun } from '../record-store.js'
 import { accountsPath, addAccount } from '../accounts/accounts.js'
-import { PROFILES, RunOrder, chainStore, settingsIn, type DistributionEntry, type RunContext, type AccountRotation, type Driver, type DriverTurn } from '@openagt/hooks'
+import { PROFILES, RunOrder, chainStore, settingsIn, type DistributionEntry, type RunContext, type RunOptions, type AccountRotation, type Driver, type DriverTurn } from '@openagt/hooks'
 import { memoryStore } from '@openagt/hooks/testing'
 import { markerCard, writeMarker } from './records.js'
 import { runCommand } from './run.js'
 import { ACCOUNT_ENV, GIT_ACCOUNT_ENV, detachResume, detachRun, driverFor, readyToRun, resumeArgs, resumeProject, runArgs } from './runner.js'
-import { PLUGINS_WITHOUT_ENV, PROFILE_ENV, PROJECT_SKILLS_ENV } from '@openagt/agent-data'
+import { PLUGINS_WITHOUT_ENV, PROFILE_ENV, PROJECT_SKILLS_ENV } from './names.js'
 import { handDownAgents, removeRepo, testRepo } from './test-repo.js'
 import { fakeGithub, testAgent, testModules } from './run-test-support.js'
 import { NAME_FILE_ENV, TITLE_SYSTEM } from './title.js'
@@ -221,30 +221,33 @@ test('a resumed run continues on the tool its record names, and a Codex run with
   }
 })
 
-test("a run goes without the plugins its profile leaves out, where the session picked none; the session's pick goes over them, none of them too", async () => {
+test("a run goes without the plugins its profile leaves out, where the session picked none; the session's pick goes over them, none of them too; another module's slice of the profile reaches the run", async () => {
   const repo = await testRepo()
   try {
     const store = memoryStore()
-    await settingsIn(chainStore([store])).set(PROFILES, [{ id: 'quiet', name: 'Quiet', options: { plugins: { without: ['logs'] } } }])
-    const seen: { without: readonly string[] | undefined; skills: string[] }[] = []
-    const looking = { name: 'looking', hooks: { 'run.step': [{ order: RunOrder.CONTEXT, name: 'look', run: (ctx: RunContext) => void seen.push({ without: ctx.options.plugins?.without, skills: ctx.skills.map(skill => skill.name) }) }] } }
+    // `looking` stands for any module whose control put a slice in the profile.
+    const quiet = { plugins: { without: ['logs'] }, looking: { note: 'quiet' } } as RunOptions
+    await settingsIn(chainStore([store])).set(PROFILES, [{ id: 'quiet', name: 'Quiet', options: quiet }])
+    const seen: { without: readonly string[] | undefined; skills: string[]; note: string | undefined }[] = []
+    const noteOf = (ctx: RunContext): string | undefined => (ctx.options as Record<string, { note?: string } | undefined>)['looking']?.note
+    const looking = { name: 'looking', hooks: { 'run.step': [{ order: RunOrder.CONTEXT, name: 'look', run: (ctx: RunContext) => void seen.push({ without: ctx.options.plugins?.without, skills: ctx.skills.map(skill => skill.name), note: noteOf(ctx) }) }] } }
     const modules = testModules({ store, also: [looking] })
     const codex = (): Driver => ({ id: 'codex', namingModel: 'gpt-5.6-luna', start: opts => new FakeDriver({ turns: [{ text: 'Read.' }], sessionId: 's-codex' }).start(opts) })
     // Started as `runProject` starts it, on the profile's options as the store keeps them.
     const run = (at: number, picks: { pluginsWithout?: string[] }) =>
-      runCommand(repo, { prompt: 'Read the docs', driver: codex(), host: 'this-box', pid: 4242, now: () => new Date(NOW.getTime() + at), modules, profile: 'quiet', profileOptions: { plugins: { without: ['logs'] } }, ...picks })
+      runCommand(repo, { prompt: 'Read the docs', driver: codex(), host: 'this-box', pid: 4242, now: () => new Date(NOW.getTime() + at), modules, profile: 'quiet', profileOptions: quiet, ...picks })
     const onProfile = await run(0, {})
     const none = await run(1000, { pluginsWithout: [] })
     const ask = await run(2000, { pluginsWithout: ['ask'] })
     // A resume reads the profile its record names through the store.
     await resumeProject(repo, { id: onProfile.id, text: 'And the tests?' }, { driverFor: codex, modules })
     assert.deepEqual(
-      seen.map(({ without, skills }) => ({ without, logs: skills.includes('logs'), ask: skills.includes('ask') })),
+      seen.map(({ without, skills, note }) => ({ without, logs: skills.includes('logs'), ask: skills.includes('ask'), note })),
       [
-        { without: ['logs'], logs: false, ask: true },
-        { without: [], logs: true, ask: true },
-        { without: ['ask'], logs: true, ask: false },
-        { without: ['logs'], logs: false, ask: true },
+        { without: ['logs'], logs: false, ask: true, note: 'quiet' },
+        { without: [], logs: true, ask: true, note: 'quiet' },
+        { without: ['ask'], logs: true, ask: false, note: 'quiet' },
+        { without: ['logs'], logs: false, ask: true, note: 'quiet' },
       ],
     )
     assert.equal((await findRun(repo, onProfile.id))?.caller?.['pluginsWithout'], undefined, "the profile's, not the session's: its record names no pick")

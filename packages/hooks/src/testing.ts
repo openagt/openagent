@@ -1,10 +1,13 @@
 // `@openagt/hooks/testing`: fakes of the hooks, so a module is tested alone: a store kept in
-// memory, a host whose runs a test drives, a run's context for a step, and the host a server
-// part's function is handed.
+// memory, a host whose runs a test drives, a run's context for a step, the app a module's life is
+// told, and the host a server part's function is handed.
 import { StoreOrder } from './order.js'
 import type { InboxLine } from './agent.js'
-import type { RpcHost } from './rpc.js'
-import type { RunContext, RunEvent, RunFound, RunHost, RunInput, RunRef, RunRequest, RunStatus, RunSummary } from './run.js'
+import type { GitAccounts } from './account.js'
+import type { AppContext } from './app.js'
+import type { RpcComputerHost, RpcHost } from './rpc.js'
+import type { RunFeedEvent } from './run-event.js'
+import type { RunContext, RunFound, RunHost, RunInput, RunRef, RunRequest, RunStatus, RunSummary } from './run.js'
 import { settingsIn, type Settings } from './settings.js'
 import { chainStore, changesOf, checkPath, isUnder, messageOf, scopeKey, type Scope, type Store, type StoreBackend } from './store.js'
 
@@ -89,9 +92,9 @@ export interface FakeHost extends RunHost {
   /** The lines said to a working run, in order. */
   readonly steered: readonly { id: string; line: InboxLine }[]
   readonly stopped: readonly { id: string; force: boolean }[]
-  events(run: RunRef, signal: AbortSignal): AsyncIterable<RunEvent>
+  events(run: RunRef, signal: AbortSignal): AsyncIterable<RunFeedEvent>
   /** A run's next event: its streams get it. */
-  emit(id: string, event: RunEvent): void
+  emit(id: string, event: RunFeedEvent): void
   /** A run ends: its streams end after the events they have not read yet. */
   end(id: string, status: Exclude<RunStatus, 'working'>): void
   /** Where a run's work is, as `find` answers it from then on: a run the host started is found with nothing known of its work until then. */
@@ -99,7 +102,7 @@ export interface FakeHost extends RunHost {
 }
 
 export function fakeHost(opts: { id?: string; label?: string } = {}): FakeHost {
-  const runs = new Map<string, { summary: RunSummary; events: RunEvent[]; waiting: Set<() => void> }>()
+  const runs = new Map<string, { summary: RunSummary; events: RunFeedEvent[]; waiting: Set<() => void> }>()
   const requests: RunRequest[] = []
   const resumed: { id: string; input: RunInput }[] = []
   const steered: { id: string; line: InboxLine }[] = []
@@ -136,7 +139,7 @@ export function fakeHost(opts: { id?: string; label?: string } = {}): FakeHost {
     async start(request) {
       requests.push(request)
       const id = `run-${next++}`
-      const summary: RunSummary = { id, status: 'working', startedAt: new Date().toISOString(), prompt: request.prompt, ...(request.project !== undefined ? { project: request.project.id } : {}) }
+      const summary: RunSummary = { id, host: opts.id ?? 'fake', status: 'working', startedAt: new Date().toISOString(), prompt: request.prompt, ...(request.project !== undefined ? { project: request.project.id } : {}) }
       runs.set(id, { summary, events: [], waiting: new Set() })
       return { id }
     },
@@ -150,11 +153,11 @@ export function fakeHost(opts: { id?: string; label?: string } = {}): FakeHost {
       stopped.push({ id, force: stopOpts?.force ?? false })
       end(id, 'stopped')
     },
-    async list(project) {
+    async list(project, wanted = {}) {
       return [...runs.values()]
         .reverse()
         .map(run => run.summary)
-        .filter(summary => summary.project === project?.id)
+        .filter(summary => summary.project === project?.id && (!wanted.ids || wanted.ids.includes(summary.id)) && (wanted.since === undefined || summary.startedAt >= wanted.since))
     },
     async find({ id }) {
       return places.get(id) ?? (runs.has(id) ? { changedNothing: false } : undefined)
@@ -201,14 +204,51 @@ export function fakeRun(given: Partial<Omit<RunContext, 'store' | 'settings'>> &
   }
 }
 
+/** OpenAgent's accounts for a test: none at any host, so nothing can be sent. */
+const NO_ACCOUNTS: GitAccounts = {
+  hosts: async () => [],
+  sendAs: async host => ({ ok: false, error: `OpenAgent has no account at ${host}` }),
+  mergeCommit: async () => ({ pending: false }),
+  runAs: async () => undefined,
+  people: async () => [],
+}
+
+/**
+ * The host a function of a module of the computer's is handed, for its server tests: settings in
+ * memory, no project registered, no account at any git host nor for any remote, and a list of
+ * projects whose changes nobody is told of and that refuses no removal, unless `given` says otherwise.
+ */
+export function computerRpcHost(given: Partial<RpcComputerHost> = {}): RpcComputerHost {
+  return {
+    settings: memorySettings(),
+    projects: async () => [],
+    accounts: NO_ACCOUNTS,
+    gitAccess: async () => undefined,
+    lifecycle: { added: async () => {}, refusal: async () => undefined, removed: async () => ({ removed: [], kept: [], failed: [] }) },
+    ...given,
+  }
+}
+
+/**
+ * The app a module's life is told (`app.lifecycle`), for its tests: no project, a store and settings
+ * in memory, never aborted, and the rest as {@link computerRpcHost}'s, with no skill given and no
+ * run, unless `given` says otherwise.
+ */
+export function fakeApp(given: Partial<AppContext> = {}): AppContext {
+  const store = given.store ?? chainStore([memoryStore()])
+  const { gitAccess, lifecycle } = computerRpcHost()
+  return { projects: async () => [], store, settings: settingsIn(store), signal: new AbortController().signal, gitAccess, lifecycle, skills: async () => [], runs: async () => [], ...given }
+}
+
 /**
  * The host a function of a project's module is handed, for the module's server tests: the project
- * `project` at `/work/project`, settings in memory, and no run, merge or question known, and every
- * line said refused, unless `given` says how it answers.
+ * `project` at `/work/project`, settings in memory, and no run, merge, question or account known,
+ * and every line said and every landing written down refused, unless `given` says how it answers.
  */
 export function rpcHost(given: Partial<RpcHost> = {}): RpcHost {
   return {
-    settings: memorySettings(),
+    ...computerRpcHost(),
+    projects: async () => [{ id: 'project', name: 'project', dir: '/work/project' }],
     root: '/work/project',
     project: async () => ({ id: 'project', name: 'project', dir: '/work/project' }),
     run: async () => undefined,
@@ -217,6 +257,11 @@ export function rpcHost(given: Partial<RpcHost> = {}): RpcHost {
     say: async () => {
       throw new Error('no run of this test takes a line')
     },
+    record: async () => {
+      throw new Error('no run of this test keeps a record')
+    },
+    pullRequestsRead: () => {},
+    modulesOn: async () => [],
     ...given,
   }
 }

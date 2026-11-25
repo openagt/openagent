@@ -1,6 +1,8 @@
 import { lstat, mkdir, readlink, realpath, stat, symlink, unlink } from 'node:fs/promises'
 import { dirname, isAbsolute, join } from 'node:path'
-import { excludeFromGit, nodeGitRunner, type GitRunner } from '@openagt/agent-data'
+import { excludeFromGit } from './git-exclude.js'
+import { nodeGitRunner } from './git.js'
+import type { GitRunner } from '@openagt/hooks'
 
 /**
  * A package's command, linked into a checkout that has none: each command at

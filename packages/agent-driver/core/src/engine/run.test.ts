@@ -56,7 +56,7 @@ test('a run: marker, checkout, the live card, the prompt once, the record, the c
     assert.equal(card['intent'], '/work-queue')
     assert.equal(card['model'], 'opus', 'before the agent has run, the card holds the model it was given')
     assert.equal(card['branch'], 'agent-2026-09-16T14-01-00-000Z')
-    assert.deepEqual(card['caller'], { runner: { host: 'this-box', pid: 4242, baseCommit: mainAt }, pid: 4242, host: 'this-box', baseCommit: mainAt, kind: 'prompt', workspace: seen.cwd })
+    assert.deepEqual(card['caller'], { runner: { host: 'this-box', pid: 4242, baseCommit: mainAt }, pid: 4242, host: 'this-box', options: { 'agent-driver': { driver: 'fake', model: 'opus' } }, baseCommit: mainAt, kind: 'prompt', workspace: seen.cwd }, 'the agent it runs on is said as the options it was asked, for the control under the message box')
 
     // The checkout went: the branch stays here, unpushed, and the record says where the work is.
     assert.equal(await stat(worktreePath(repo, outcome.id)).then(() => true, () => false), false)

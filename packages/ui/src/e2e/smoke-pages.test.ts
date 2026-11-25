@@ -106,10 +106,12 @@ test("the files a # lists stay on a phone's screen, each with its name whole", n
 
 test('a repository on the computer is added as a project from the picker, and its runs are scripted as the demo\u2019s own', needsChrome, async () => {
   await flow('add-project', async page => {
-    await page.getByLabel('Project: shop').click()
+    const picker = page.getByRole('combobox', { name: 'The session works in', exact: true })
+    await picker.click()
     await page.getByRole('option', { name: /blog/ }).click()
     await page.getByRole('button', { name: 'I trust it, add it' }).click()
-    await page.getByLabel('Project: blog').waitFor()
+    // The launcher picks the project added.
+    await picker.filter({ hasText: 'blog' }).waitFor()
     const projects = await demo().call<Array<{ path: string }>>('onProjects')
     assert.ok(projects.some(project => project.path === demo().toAdd), 'the daemon has the project')
     // The add kept the lines the demo gave the folder: nothing stands in the way of a start, as the

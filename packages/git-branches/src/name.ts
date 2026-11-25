@@ -1,6 +1,6 @@
-import { errorMessage, nodeGitRunner, type GitRunner } from '@openagt/agent-data'
-import { DATA_BRANCH } from '@openagt/agent-data/names'
-import { AGENT_BRANCH_PREFIX, isAgentBranch } from './branch-names.js'
+import { errorMessage, nodeGitRunner } from './git.js'
+import type { GitRunner } from '@openagt/hooks'
+import { DATA_BRANCH, AGENT_BRANCH_PREFIX, isAgentBranch } from './branch-names.js'
 import { currentBranch, isWorktreeRoot } from './worktree.js'
 
 /**

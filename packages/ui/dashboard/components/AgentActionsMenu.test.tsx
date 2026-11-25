@@ -1,19 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import type { ReactElement } from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
-// The ⋮ menu holds the git host / folder / editor / Stop / Remove / Delete actions, so it pulls
+// The ⋮ menu holds the folder / editor / Stop / Delete actions, so it pulls
 // their RPC + editor reads; stub them.
-const onGitHostHome = vi.fn(async () => ({ url: 'https://github.com/o/r', name: 'GitHub' }) as { url: string; name: string } | null)
-const onRepositoryOffer = vi.fn(async () => null as { repository: string; name: string } | null)
-const sendCreateRepository = vi.fn(async () => ({ ok: true, url: 'https://github.com/me/shop' }) as unknown)
 const sendOpenInApp = vi.fn(async () => ({ ok: true as const }))
 const sendStop = vi.fn(async (): Promise<{ ok: true } | { ok: false; error: string }> => ({ ok: true }))
-const sendRemoveWorktree = vi.fn(async () => ({ ok: true as const }))
 const sendDeleteAgent = vi.fn(async () => ({ ok: true as const }))
-const sendRemoveProject = vi.fn(async (_projectId: string, _files: boolean) => ({ ok: true }) as unknown)
-vi.mock('../rpc/reads.js', () => ({ onGitHostHome, onRepositoryOffer }))
-vi.mock('../rpc/projects.js', () => ({ sendShareRecords: vi.fn(), sendRemoveProject }))
 const openSettings = vi.hoisted(() => vi.fn())
 vi.mock('../lib/host-services.js', async importOriginal => {
   const actual = await importOriginal<typeof import('../lib/host-services.js')>()
@@ -22,9 +14,7 @@ vi.mock('../lib/host-services.js', async importOriginal => {
 vi.mock('../rpc/control.js', () => ({
   sendOpenInApp,
   sendStop,
-  sendRemoveWorktree,
   sendDeleteAgent,
-  sendCreateRepository,
 }))
 // The editor picker (#727) lives in the menu's editor submenu; stub the preference store and the
 // detected-editors read so the tests drive a fixed set.
@@ -35,18 +25,15 @@ vi.mock('../lib/preferences.js', () => ({ usePreferences: () => prefs, updatePre
 vi.mock('../lib/editors.js', () => ({ useDetectedEditors: () => detectedEditors }))
 
 const { AgentActionsMenu } = await import('./AgentActionsMenu.js')
+const { ModulesContext, mountedOf } = await import('../lib/use-modules.js')
+type MountedAction<P extends import('@openagt/hooks/ui').ActionPlace> = import('../lib/use-modules.js').MountedAction<P>
 const { useStop } = await import('../lib/use-stop.js')
-const { ProjectRemovedReport } = await import('./RemoveProjectDialog.js')
 
 const openMenu = () => fireEvent.click(screen.getByRole('button', { name: /session actions/i }))
 
 beforeEach(() => {
   sendOpenInApp.mockClear()
   sendDeleteAgent.mockClear()
-  sendCreateRepository.mockClear()
-  sendCreateRepository.mockResolvedValue({ ok: true, url: 'https://github.com/me/shop' })
-  onRepositoryOffer.mockClear()
-  onRepositoryOffer.mockResolvedValue(null)
   updatePreferences.mockClear()
   prefs = {}
   detectedEditors = []
@@ -54,24 +41,17 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('AgentActionsMenu (#toolbar-menu)', () => {
-  test('the session\'s menu holds what belongs to the session, and the project\'s page on its git host after what opens the session\'s own', async () => {
-    render(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} label="my session" onDeleted={vi.fn()} />)
+  test("the session's menu holds what belongs to the session, and the modules' items after what opens the session's own", async () => {
+    const home: MountedAction<'chat.menu'> = { place: 'chat.menu', id: 'open-on-github', label: 'Open on GitHub', offer: () => ({ href: 'https://github.com/o/r' }), package: '@openagt/github', module: 'github', projects: ['p1'] }
+    render(
+      <ModulesContext.Provider value={mountedOf({ actions: { 'chat.menu': [home] } })}>
+        <AgentActionsMenu projectId="p1" agentId="run-1" events={[]} label="my session" onDeleted={vi.fn()} />
+      </ModulesContext.Provider>,
+    )
     openMenu()
     // No retained worktree here, so the folder item names the project root it will actually open.
     await waitFor(() => expect(screen.getByText('Open on GitHub')).toBeTruthy())
     expect(screen.getAllByRole('menuitem').map(item => item.textContent!.trim())).toEqual(['Open project folder', 'Open in editor', 'Open on GitHub', 'Delete session…'])
-    expect(screen.getByText('Open on GitHub').closest('a')!.getAttribute('href')).toBe('https://github.com/o/r')
-    // The offer of a repository is the project's own page's.
-    expect(onRepositoryOffer).not.toHaveBeenCalled()
-  })
-
-  test('a project with no page on a git host adds no item to the session\'s menu', async () => {
-    onGitHostHome.mockResolvedValueOnce(null)
-    render(<AgentActionsMenu projectId="p-none" agentId="run-1" events={[]} onDeleted={vi.fn()} />)
-    openMenu()
-    await waitFor(() => expect(onGitHostHome).toHaveBeenCalledWith('p-none'))
-    await screen.findByText('Open project folder')
-    expect(screen.queryByText(/^Open on /)).toBeNull()
   })
 
   test('opening the folder addresses this session, whichever checkout it resolves to', async () => {
@@ -108,15 +88,15 @@ describe('AgentActionsMenu (#toolbar-menu)', () => {
       { kind: 'session', driver: 'claude', workspace: '/repo/.openagent/worktrees/run-1', fake: false },
       { kind: 'session-update', sessionId: '45015d11-755b-423c-ae71-8dbfd54f7cce' },
     ] as never
-    render(<AgentActionsMenu projectId="p1" agentId="run-1" events={events} onDeleted={vi.fn()} />)
+    // The command is the run's coding agent's to say, and comes with the run's read.
+    const resume = "mkdir -p '/repo/.openagent/worktrees/run-1' && cd '/repo/.openagent/worktrees/run-1' && claude --resume 45015d11-755b-423c-ae71-8dbfd54f7cce"
+    render(<AgentActionsMenu projectId="p1" agentId="run-1" events={events} onDeleted={vi.fn()} resumeCommand={resume} />)
     openMenu()
     // The id is visible in its own right: it is the only handle on the conversation off-dashboard.
     expect(await screen.findByText('45015d11')).toBeTruthy()
     fireEvent.click(screen.getByText('Copy resume command'))
     await waitFor(() =>
-      expect(writeText).toHaveBeenCalledWith(
-        "mkdir -p '/repo/.openagent/worktrees/run-1' && cd '/repo/.openagent/worktrees/run-1' && claude --resume 45015d11-755b-423c-ae71-8dbfd54f7cce",
-      ),
+      expect(writeText).toHaveBeenCalledWith(resume),
     )
     // And it says so, since a click that only fills the clipboard shows nothing otherwise.
     await waitFor(() => expect(screen.getByText('Copied')).toBeTruthy())
@@ -280,8 +260,7 @@ describe('the menu with no session: the project home (#809)', () => {
     render(<AgentActionsMenu projectId="p1" events={[]} />)
     expect(screen.queryByRole('button', { name: /session actions/i })).toBeNull()
     openProjectMenu()
-    expect(await screen.findByText('Open on GitHub')).toBeTruthy()
-    fireEvent.click(screen.getByText('Open folder'))
+    fireEvent.click(await screen.findByText('Open folder'))
     await waitFor(() => expect(sendOpenInApp).toHaveBeenCalledWith('p1', 'files', undefined))
   })
 
@@ -353,65 +332,6 @@ describe('the editor picker in the menu (#727)', () => {
   })
 })
 
-describe('Where the agent data is, in the project\u2019s menu', () => {
-  test('the project\u2019s menu opens the project\u2019s Agent data page; a session\u2019s menu has no such item', async () => {
-    render(<AgentActionsMenu projectId="p1" events={[]} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Project actions' }))
-    fireEvent.click(await screen.findByText('Agent data\u2026'))
-    expect(openSettings).toHaveBeenCalledWith('project-agent-data', 'p1')
-    cleanup()
-
-    render(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} />)
-    fireEvent.click(screen.getByRole('button', { name: /session actions/i }))
-    await waitFor(() => expect(screen.getByText('Open project folder')).toBeTruthy())
-    expect(screen.queryByText('Agent data\u2026')).toBeNull()
-  })
-})
-
-describe('Create a repository, for a project that lives on this machine only', () => {
-  const openProjectMenu = () => fireEvent.click(screen.getByRole('button', { name: 'Project actions' }))
-
-  test('the project menu offers it only when the project is offered a repository, and asks before creating', async () => {
-    onRepositoryOffer.mockResolvedValue({ repository: 'me/shop', name: 'GitHub' })
-    render(<AgentActionsMenu projectId="p1" events={[]} />)
-    openProjectMenu()
-    fireEvent.click(await screen.findByText('Create a repository on GitHub…'))
-    await waitFor(() => expect(screen.getByText('Create a private repository on GitHub?')).toBeTruthy())
-    expect(screen.getByText('me/shop')).toBeTruthy()
-    expect(sendCreateRepository).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: 'Create and push' }))
-    await waitFor(() => expect(sendCreateRepository).toHaveBeenCalledWith('p1'))
-    // The project is asked again: it has a page on its git host now, and nothing left to create.
-    await waitFor(() => expect(onRepositoryOffer.mock.calls.length).toBeGreaterThan(1))
-  })
-
-  test('a refusal stays in the dialog in the provider\'s words; no offer, no item; a session\'s menu never offers it', async () => {
-    onRepositoryOffer.mockResolvedValue({ repository: 'me/shop', name: 'GitHub' })
-    sendCreateRepository.mockResolvedValue({ ok: false, error: 'the repository could not be created: Name already exists on this account' })
-    render(<AgentActionsMenu projectId="p1" events={[]} />)
-    openProjectMenu()
-    fireEvent.click(await screen.findByText('Create a repository on GitHub…'))
-    fireEvent.click(await screen.findByRole('button', { name: 'Create and push' }))
-    await waitFor(() => expect(screen.getByText(/Name already exists on this account/)).toBeTruthy())
-    cleanup()
-
-    onRepositoryOffer.mockResolvedValue(null)
-    render(<AgentActionsMenu projectId="p1" events={[]} />)
-    openProjectMenu()
-    await waitFor(() => expect(screen.getByText('Open folder')).toBeTruthy())
-    expect(screen.queryByText(/Create a repository/)).toBeNull()
-    cleanup()
-
-    onRepositoryOffer.mockClear()
-    onRepositoryOffer.mockResolvedValue({ repository: 'me/shop', name: 'GitHub' })
-    render(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} />)
-    fireEvent.click(screen.getByRole('button', { name: /session actions/i }))
-    await waitFor(() => expect(screen.getByText('Open project folder')).toBeTruthy())
-    expect(screen.queryByText(/Create a repository/)).toBeNull()
-    expect(onRepositoryOffer).not.toHaveBeenCalled()
-  })
-})
-
 // An agent's page has one menu, whose button is the session's name.
 describe('the menu of an agent\'s page', () => {
   test('the session\'s menu button is the session\'s name with a small arrow; the whole name on hover', () => {
@@ -467,133 +387,5 @@ describe('the menu of an agent\'s page', () => {
     openMenu()
     await waitFor(() => expect(screen.getByText('Open project folder')).toBeTruthy())
     expect(screen.queryByText(/details/)).toBeNull()
-  })
-
-  test('"Remove worktree" says the worktree\'s size on disk beside it', async () => {
-    render(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} label="x" retainedWorktree size="1.2 MB" />)
-    openMenu()
-    expect((await screen.findByText('Remove worktree')).closest('[role=menuitem]')!.textContent!.trim()).toBe('Remove worktree1.2 MB')
-  })
-})
-
-describe('Remove project, in the project’s menu', () => {
-  const openProjectMenu = () => fireEvent.click(screen.getByRole('button', { name: 'Project actions' }))
-  // The shell says "Project removed", over the page it moves on to.
-  const renderInShell = (menu: ReactElement) => render(<ProjectRemovedReport>{menu}</ProjectRemovedReport>)
-
-  test('it asks first, says nothing in the folder is deleted and what stays, then removes the project, says so, and tells the page', async () => {
-    sendRemoveProject.mockClear()
-    sendRemoveProject.mockResolvedValue({ ok: true })
-    const onProjectRemoved = vi.fn()
-    renderInShell(<AgentActionsMenu projectId="p1" events={[]} onProjectRemoved={onProjectRemoved} />)
-    openProjectMenu()
-    fireEvent.click(await screen.findByText('Remove project…'))
-    await waitFor(() => expect(screen.getByText('Remove this project?')).toBeTruthy())
-    const dialog = screen.getByRole('alertdialog')
-    expect(dialog.textContent).toMatch(/Nothing in the folder is deleted/)
-    for (const kept of ['.openagent', '.branches', '.agent-runner', '~/.openagent', 'agent-data']) expect(dialog.textContent).toContain(kept)
-    expect(dialog.textContent).toMatch(/Add the folder again to bring\s+the project back/)
-    // The box is there, not ticked, and what it would delete is not said until it is.
-    expect(screen.getByRole('checkbox').getAttribute('aria-checked')).toBe('false')
-    expect(dialog.textContent).toContain('Also delete OpenAgent’s files in this folder')
-    expect(dialog.textContent).not.toMatch(/This deletes/)
-    expect(sendRemoveProject).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
-    await waitFor(() => expect(sendRemoveProject).toHaveBeenCalledWith('p1', false))
-    await waitFor(() => expect(screen.getByText('Project removed')).toBeTruthy())
-    expect(screen.getByRole('alertdialog').textContent).toMatch(/nothing in the folder was deleted\. Add the folder again to bring the project back/)
-    await waitFor(() => expect(onProjectRemoved).toHaveBeenCalledTimes(1))
-    fireEvent.click(screen.getByRole('button', { name: 'Done' }))
-    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
-  })
-
-  test('with the box ticked it says what goes and what never does, removes with the files, and shows what went and what stayed', async () => {
-    sendRemoveProject.mockClear()
-    sendRemoveProject.mockResolvedValue({
-      ok: true,
-      cleanup: {
-        removed: ['.branches/agent-data', 'branch agent-data', '.openagent'],
-        kept: [{ path: '.branches/agent-1', reason: 'agent-1 has uncommitted work; the checkout was kept' }],
-        failed: ['my-tool: took too long'],
-      },
-    })
-    const onProjectRemoved = vi.fn()
-    renderInShell(<AgentActionsMenu projectId="p1" events={[]} onProjectRemoved={onProjectRemoved} />)
-    openProjectMenu()
-    fireEvent.click(await screen.findByText('Remove project…'))
-    fireEvent.click(await screen.findByRole('checkbox'))
-    const dialog = screen.getByRole('alertdialog')
-    await waitFor(() => expect(dialog.textContent).toMatch(/This deletes, on this machine/))
-    expect(dialog.textContent).not.toMatch(/Nothing in the folder is deleted/)
-    expect(dialog.textContent).toMatch(/Your files and your commits stay\./)
-    expect(dialog.textContent).toMatch(/An agent that waits for your answer cannot be\s+continued after this/)
-    expect(dialog.textContent).toMatch(/A tool that\s+worked in the project removes its own files too/)
-    expect(dialog.textContent).toMatch(/A scheduler\s+you set to keep running is not stopped/)
-    expect(dialog.textContent).toMatch(/The agents’ conversations go with them/)
-    expect(dialog.textContent).toMatch(/this is\s+their only copy/)
-    expect(dialog.textContent).toMatch(/It never touches the remote, your files, your commits, a branch with work on it, or a file git tracks/)
-    expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Remove and delete' }))
-    await waitFor(() => expect(sendRemoveProject).toHaveBeenCalledWith('p1', true))
-
-    await waitFor(() => expect(screen.getByText('Project removed')).toBeTruthy())
-    const report = screen.getByRole('alertdialog').textContent ?? ''
-    for (const line of ['Deleted', '.branches/agent-data', 'branch agent-data', '.openagent', 'Kept', '.branches/agent-1: agent-1 has uncommitted work; the checkout was kept', 'Could not be cleaned', 'my-tool: took too long']) {
-      expect(report).toContain(line)
-    }
-    await waitFor(() => expect(onProjectRemoved).toHaveBeenCalledTimes(1))
-  })
-
-  test('once removed, the focus is on "Done", the dialog’s one way on', async () => {
-    sendRemoveProject.mockClear()
-    sendRemoveProject.mockResolvedValue({ ok: true })
-    renderInShell(<AgentActionsMenu projectId="p1" events={[]} onProjectRemoved={vi.fn()} />)
-    openProjectMenu()
-    fireEvent.click(await screen.findByText('Remove project…'))
-    fireEvent.click(await screen.findByRole('button', { name: 'Remove' }))
-    await waitFor(() => expect(screen.getByText('Project removed')).toBeTruthy())
-    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Done' })))
-    cleanup()
-  })
-
-  test('a box ticked and then cancelled is unticked the next time the dialog opens', async () => {
-    sendRemoveProject.mockClear()
-    render(<AgentActionsMenu projectId="p1" events={[]} onProjectRemoved={vi.fn()} />)
-    openProjectMenu()
-    fireEvent.click(await screen.findByText('Remove project…'))
-    fireEvent.click(await screen.findByRole('checkbox'))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Remove and delete' })).toBeTruthy())
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
-    openProjectMenu()
-    fireEvent.click(await screen.findByText('Remove project…'))
-    expect((await screen.findByRole('checkbox')).getAttribute('aria-checked')).toBe('false')
-    expect(screen.getByRole('button', { name: 'Remove' })).toBeTruthy()
-    expect(sendRemoveProject).not.toHaveBeenCalled()
-    cleanup()
-  })
-
-  test('a refusal is said in the dialog and the page is not told; with nobody to tell, or in a session’s menu, it is not offered', async () => {
-    sendRemoveProject.mockClear()
-    sendRemoveProject.mockResolvedValue({ ok: false, error: 'An agent is working in this project. Stop it, then remove the project.' })
-    const onProjectRemoved = vi.fn()
-    render(<AgentActionsMenu projectId="p1" events={[]} onProjectRemoved={onProjectRemoved} />)
-    openProjectMenu()
-    fireEvent.click(await screen.findByText('Remove project…'))
-    fireEvent.click(await screen.findByRole('button', { name: 'Remove' }))
-    await waitFor(() => expect(screen.getByText(/An agent is working in this project/)).toBeTruthy())
-    expect(onProjectRemoved).not.toHaveBeenCalled()
-    cleanup()
-
-    render(<AgentActionsMenu projectId="p1" events={[]} />)
-    openProjectMenu()
-    await waitFor(() => expect(screen.getByText('Open folder')).toBeTruthy())
-    expect(screen.queryByText('Remove project…')).toBeNull()
-    cleanup()
-
-    render(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} onDeleted={vi.fn()} onProjectRemoved={onProjectRemoved} />)
-    fireEvent.click(screen.getByRole('button', { name: /session actions/i }))
-    await waitFor(() => expect(screen.getByText('Open in editor')).toBeTruthy())
-    expect(screen.queryByText('Remove project…')).toBeNull()
   })
 })

@@ -34,25 +34,25 @@ describe('preferences', () => {
     const { usePreferences, updatePreferences } = await import('./preferences.js')
 
     const { result } = renderHook(() => usePreferences())
-    // The load is in flight; the person turns run naming off before it resolves.
-    act(() => updatePreferences({ nameRuns: false }))
-    expect(result.current.nameRuns).toBe(false)
+    // The load is in flight; the person turns the agent's thinking on before it resolves.
+    act(() => updatePreferences({ showThinking: true }))
+    expect(result.current.showThinking).toBe(true)
 
     // The load now resolves with the server's pre-toggle value; the toggle must win.
     await act(async () => {
-      resolveLoad({ nameRuns: true })
+      resolveLoad({ showThinking: false })
       await Promise.resolve()
     })
-    expect(result.current.nameRuns).toBe(false)
+    expect(result.current.showThinking).toBe(true)
   })
 
   test('the initial load populates the cache when no optimistic write raced it', async () => {
-    onPreferences.mockResolvedValue({ nameRuns: false, showThinking: true })
+    onPreferences.mockResolvedValue({ onboardingDismissed: true, showThinking: true })
     const { usePreferences } = await import('./preferences.js')
 
     const { result } = renderHook(() => usePreferences())
     await flush()
-    expect(result.current).toEqual({ nameRuns: false, showThinking: true })
+    expect(result.current).toEqual({ onboardingDismissed: true, showThinking: true })
   })
 
   test('a screen can tell the preferences not read yet from the preferences read', async () => {
@@ -63,10 +63,10 @@ describe('preferences', () => {
     const { result } = renderHook(() => ({ preferences: usePreferences(), loaded: usePreferencesLoaded() }))
     expect(result.current.loaded).toBe(false)
     await act(async () => {
-      resolveLoad({ startFrom: { p1: { kind: 'local' } } })
+      resolveLoad({ publish: 'pr' })
       await Promise.resolve()
     })
-    expect(result.current).toEqual({ preferences: { startFrom: { p1: { kind: 'local' } } }, loaded: true })
+    expect(result.current).toEqual({ preferences: { publish: 'pr' }, loaded: true })
   })
 
   // A stale tab reverting settings it never touched (#1148).

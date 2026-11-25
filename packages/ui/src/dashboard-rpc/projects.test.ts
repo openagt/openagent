@@ -4,14 +4,14 @@ import { execFileSync } from 'node:child_process'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { addProject, listProjects } from '../registry.js'
+import { listProjects } from '../distribution-hooks.js'
+import { listTestProject } from '../test-projects.js'
 import type { RunHost } from '@openagt/hooks'
 import { fakeHost } from '@openagt/hooks/testing'
 import type { ProjectState } from '../project-state.js'
 import { provideTestContext } from './test-context.js'
-import { onCommands, onProjects, onRunHosts, onStartBranches, onStartCheck, sendAddProject, sendRemoveProject, sendShareRecords } from './projects.js'
+import { onCommands, onProjects, onRunHosts, onStartCheck } from './projects.js'
 import { SESSIONS_ID } from '../project-address.js'
-import { onProjectAgentData } from './project-agent-data.js'
 
 // Against the real registry, pointed at a temp $XDG_CONFIG_HOME so the user's own is never touched.
 async function registered(): Promise<{ dir: string; restore: () => Promise<void> }> {
@@ -21,7 +21,7 @@ async function registered(): Promise<{ dir: string; restore: () => Promise<void>
   await mkdir(process.env.XDG_CONFIG_HOME, { recursive: true })
   const project = join(dir, 'app')
   await mkdir(project)
-  await addProject(project, new Date().toISOString())
+  await listTestProject(project)
   return {
     dir: project,
     restore: async () => {
@@ -32,10 +32,10 @@ async function registered(): Promise<{ dir: string; restore: () => Promise<void>
   }
 }
 
-test('onProjects carries what each project’s state says: its errors, and nothing when there are none; why its data stays here, if it does (#1500)', async () => {
+test('onProjects carries what each project’s state says: its errors, and nothing when there are none; what the modules note of it, if they do (#1500)', async () => {
   const { dir, restore } = await registered()
   try {
-    let state: ProjectState = { errors: [] }
+    let state: ProjectState = { errors: [], notes: [] }
     const asked: string[] = []
     provideTestContext({ projectState: async project => (asked.push(project.path), state) })
 
@@ -45,211 +45,39 @@ test('onProjects carries what each project’s state says: its errors, and nothi
     assert.deepEqual(asked, [dir], "each project's state is asked by its folder")
 
     const stranded = { id: 'store-git-branch:data-sync', title: 'Not syncing with the remote', message: 'the data branch could not be pushed: permission denied', since: '2026-08-20T10:00:00.000Z' }
-    state = { errors: [stranded] }
+    state = { errors: [stranded], notes: [] }
     const [listed] = await onProjects()
     assert.deepEqual(listed?.errors, [stranded])
-    assert.equal('local' in listed!, false, 'a project whose data reaches its remote carries no note')
+    assert.equal('notes' in listed!, false, 'a project nothing notes carries no notes field')
 
-    state = { errors: [], local: 'no-remote' }
-    assert.equal((await onProjects())[0]?.local, 'no-remote')
-    state = { errors: [], local: 'kept' }
-    assert.equal((await onProjects())[0]?.local, 'kept')
+    const here = { id: 'store-filesystem:data-here', words: 'Local only, no remote' }
+    state = { errors: [], notes: [here] }
+    assert.deepEqual((await onProjects())[0]?.notes, [here])
   } finally {
     await restore()
   }
 })
 
-test('onStartBranches lists what origin has now, by asking origin: not the main branch, not the records\' branch, not this clone\'s old copies; and says so where origin cannot be read', async () => {
+test('onCommands says whether the project has a remote, and its address only with a remote', async () => {
   const { dir, restore } = await registered()
-  const origin = await realpath(await mkdtemp(join(tmpdir(), 'openagent-start-branches-')))
-  const git = (cwd: string, ...args: string[]) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { cwd, encoding: 'utf8' })
+  const git = (...args: string[]): string => execFileSync('git', args, { cwd: dir, encoding: 'utf8' })
   try {
     provideTestContext()
     const id = (await listProjects())[0]!.id
-    git(origin, 'init', '-q', '--bare', '-b', 'main')
-    git(dir, 'init', '-q', '-b', 'main')
-    git(dir, 'commit', '-q', '--allow-empty', '-m', 'first')
-    git(dir, 'remote', 'add', 'origin', origin)
-    git(dir, 'push', '-q', 'origin', 'main', 'main:agent-data', 'main:agent-fix-it', 'main:feature/x', 'main:old')
-    git(dir, 'fetch', '-q', 'origin')
-    git(dir, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
-    git(origin, 'update-ref', '-d', 'refs/heads/old')
-    // A branch only this clone has is no published one.
-    git(dir, 'branch', 'mine')
-    assert.deepEqual(await onStartBranches(id), { branches: ['agent-fix-it', 'feature/x'] })
-
-    git(dir, 'remote', 'set-url', 'origin', join(origin, 'nowhere'))
-    assert.deepEqual(await onStartBranches(id), {})
-    assert.equal(await onStartBranches('no-such-project'), null)
-  } finally {
-    await restore()
-    await rm(origin, { recursive: true, force: true })
-  }
-})
-
-test('a command is waiting for the branch the launcher\'s pick starts agents from: the main branch, the folder\'s own, or a branch of origin\'s', async () => {
-  const { dir, restore } = await registered()
-  const origin = await realpath(await mkdtemp(join(tmpdir(), 'openagent-waiting-')))
-  const git = (cwd: string, ...args: string[]) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { cwd, encoding: 'utf8' })
-  const skill = async (name: string) => {
-    await mkdir(join(dir, '.agents', 'skills', name), { recursive: true })
-    await writeFile(join(dir, '.agents', 'skills', name, 'SKILL.md'), `---\nname: ${name}\ndescription: ${name}\ndisable-model-invocation: true\n---\nIt.\n`)
-  }
-  try {
-    provideTestContext()
-    const id = (await listProjects())[0]!.id
-    git(origin, 'init', '-q', '--bare', '-b', 'main')
-    git(dir, 'init', '-q', '-b', 'main')
-    git(dir, 'commit', '-q', '--allow-empty', '-m', 'first')
-    git(dir, 'remote', 'add', 'origin', origin)
-    git(dir, 'push', '-q', 'origin', 'main')
-    git(dir, 'fetch', '-q', 'origin')
-    git(dir, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
-    // On a branch of origin's only.
-    git(dir, 'checkout', '-q', '-b', 'feature-x')
-    await skill('on-feature')
-    git(dir, 'add', '.agents')
-    git(dir, 'commit', '-q', '-m', 'on-feature')
-    git(dir, 'push', '-q', 'origin', 'feature-x')
-    git(dir, 'checkout', '-q', 'main')
-    git(dir, 'branch', '-D', 'feature-x')
-    // Committed in the folder only, and written in the folder only.
-    git(dir, 'checkout', '-q', '-b', 'mine')
-    await skill('on-mine')
-    git(dir, 'add', '.agents')
-    git(dir, 'commit', '-q', '-m', 'on-mine')
-    await skill('uncommitted')
-    await skill('on-feature')
-    const waits = async (from?: { kind: 'local' } | { kind: 'published'; branch: string }) => Object.fromEntries(((await onCommands(id, from))?.commands ?? []).map(command => [command.name, command.waiting]))
-
-    assert.deepEqual(await waits(), { 'on-feature': 'main', 'on-mine': 'main', uncommitted: 'main' })
-    assert.deepEqual(await waits({ kind: 'local' }), { 'on-feature': 'mine', 'on-mine': undefined, uncommitted: 'mine' })
-    assert.deepEqual(await waits({ kind: 'published', branch: 'feature-x' }), { 'on-feature': undefined, 'on-mine': 'feature-x', uncommitted: 'feature-x' })
-    assert.deepEqual(await waits({ kind: 'published', branch: '--upload-pack=x' }), { 'on-feature': 'main', 'on-mine': 'main', uncommitted: 'main' }, 'a word that is no branch name is no pick')
-  } finally {
-    await restore()
-    await rm(origin, { recursive: true, force: true })
-  }
-})
-
-// The launcher's branch menu is offered only where the pick would be obeyed: a real
-// repository, its branches changed one step at a time.
-test('onCommands names the two branches an agent can start from only when the repository has a remote and the folder is on a branch', async () => {
-  const { dir, restore } = await registered()
-  const git = (...args: string[]): string => execFileSync('git', args, { cwd: dir, encoding: 'utf8', env: { ...process.env, GIT_AUTHOR_NAME: 'T', GIT_AUTHOR_EMAIL: 't@example.com', GIT_COMMITTER_NAME: 'T', GIT_COMMITTER_EMAIL: 't@example.com' } })
-  try {
-    provideTestContext()
-    const id = (await listProjects())[0]!.id
-    const startFrom = async () => (await onCommands(id))?.startFrom
     git('init', '-q', '-b', 'main')
-    git('commit', '-q', '--allow-empty', '-m', 'first')
-    git('checkout', '-q', '-b', 'my/work')
-    assert.equal(await startFrom(), undefined, 'no remote: one place to start from, nothing to pick')
-    assert.equal((await onCommands(id))?.address, undefined, 'no remote: no address, so no git host to push to')
-
+    assert.deepEqual(await onCommands(id), { remote: false }, 'no remote: no address')
     git('remote', 'add', 'origin', 'https://example.com/x.git')
-    git('update-ref', 'refs/remotes/origin/main', 'main')
-    assert.deepEqual(await startFrom(), { main: 'main', local: 'my/work' })
-
-    git('checkout', '-q', 'main')
-    assert.deepEqual(await startFrom(), { main: 'main', local: 'main' }, 'on the default branch itself: the local one may hold commits that are not pushed')
-
-    git('checkout', '-q', '--detach')
-    assert.equal(await startFrom(), undefined, 'the folder is on no branch')
-
-    git('checkout', '-q', 'main')
-    assert.deepEqual(await onCommands(id), { commands: [], gitHost: false, remote: true, address: 'example.com/x', startFrom: { main: 'main', local: 'main' } })
+    assert.deepEqual(await onCommands(id), { remote: true, address: 'example.com/x' })
     assert.equal(await onCommands('no-such-project'), null)
   } finally {
     await restore()
   }
 })
 
-test('the records switch: in your folder until turned on, and a remote that refuses turns it back off', async () => {
-  const { dir, restore } = await registered()
-  const git = (cwd: string, ...args: string[]): string => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], env: { ...process.env, GIT_AUTHOR_NAME: 'T', GIT_AUTHOR_EMAIL: 't@example.com', GIT_COMMITTER_NAME: 'T', GIT_COMMITTER_EMAIL: 't@example.com' } })
-  const remote = await realpath(await mkdtemp(join(tmpdir(), 'openagent-records-remote-')))
-  const branchesOn = (bare: string) => git(bare, 'for-each-ref', '--format=%(refname)', 'refs/heads').trim()
-  const where = async (id: string) => {
-    const data = await onProjectAgentData(id)
-    return data && `${data.place}${data.canShare ? '' : ', no remote'}`
-  }
-  try {
-    provideTestContext()
-    const id = (await listProjects())[0]!.id
-    git(dir, 'init', '-q', '-b', 'main')
-    git(dir, 'config', 'user.email', 't@example.com')
-    git(dir, 'config', 'user.name', 'T')
-    git(dir, 'commit', '-q', '--allow-empty', '-m', 'first')
-    assert.equal(await where(id), 'personal, no remote')
-    assert.equal(await onProjectAgentData('no-such-project'), null)
-    // Nothing to share with: refused, and the setting is not left on for a remote made later.
-    assert.deepEqual(await sendShareRecords(id, true), { ok: false, error: 'this project has no remote to share with' })
-    assert.equal(execFileSync('git', ['config', '--local', '--default', 'unset', '--get', 'agent-data.share'], { cwd: dir, encoding: 'utf8' }).trim(), 'unset')
-
-    git(remote, 'init', '-q', '--bare')
-    git(dir, 'remote', 'add', 'origin', remote)
-    assert.equal(await where(id), 'personal', 'a remote alone shares nothing')
-
-    // Turned on: what is there goes out at once.
-    assert.deepEqual(await sendShareRecords(id, true), { ok: true })
-    assert.equal(await where(id), 'repository')
-    assert.equal(branchesOn(remote), 'refs/heads/agent-data')
-
-    // Turned off: in your folder again.
-    assert.deepEqual(await sendShareRecords(id, false), { ok: true })
-    assert.equal(await where(id), 'personal')
-
-    // A remote that refuses the push: said in its words, and the switch is back to off.
-    git(dir, 'remote', 'set-url', 'origin', join(remote, 'gone'))
-    git(join(dir, '.branches', 'agent-data'), 'commit', '-q', '--allow-empty', '-m', 'kept here')
-    const refused = await sendShareRecords(id, true)
-    assert.ok(!refused.ok && /could not be pushed/.test(refused.error))
-    assert.equal(await where(id), 'personal')
-
-    assert.deepEqual(await sendShareRecords('no-such-project', true), { ok: false, error: 'this project has no local path on this server' })
-  } finally {
-    await restore()
-    await rm(remote, { recursive: true, force: true })
-  }
-})
-
-test('sendAddProject adds the path, trimmed, with the agents\u2019 records kept on this machine', async () => {
-  const seen: [string, boolean][] = []
-  provideTestContext({
-    addProject: (path, share) => {
-      seen.push([path, share])
-      return { ok: true, alreadyActivated: false }
-    },
-  })
-  await sendAddProject(' /repos/a ')
-  assert.deepEqual(seen, [['/repos/a', false]])
-  assert.deepEqual(await sendAddProject('  '), { ok: false, error: 'a project path is required' })
-})
-
-test('sendRemoveProject hands the project’s id to the daemon, with whether its files go too, and answers what it answers; no id is refused before the daemon is asked', async () => {
-  const asked: string[] = []
-  const cleanup = { removed: ['.openagent'], kept: [], failed: [] }
-  provideTestContext({
-    removeProject: (id, files) => {
-      asked.push(files ? `${id} with files` : id)
-      if (files) return { ok: true, cleanup }
-      return id === 'busy-1' ? { ok: false, error: 'An agent is working in this project. Stop it, then remove the project.' } : { ok: true }
-    },
-  })
-  assert.deepEqual(await sendRemoveProject('app-1', false), { ok: true })
-  assert.deepEqual(await sendRemoveProject('app-2', true), { ok: true, cleanup })
-  // Only a plain `true` deletes anything.
-  assert.deepEqual(await sendRemoveProject('app-3', 'yes' as unknown as boolean), { ok: true })
-  assert.deepEqual(await sendRemoveProject('busy-1', false), { ok: false, error: 'An agent is working in this project. Stop it, then remove the project.' })
-  assert.deepEqual(await sendRemoveProject('', true), { ok: false, error: 'a project id is required' })
-  assert.deepEqual(asked, ['app-1', 'app-2 with files', 'app-3', 'busy-1'])
-})
 
 test("the launcher's check is this computer's host's, for the agent picked, and a Start drawing near: the run's naming session is started for its project and agent", async () => {
   const { dir, restore } = await registered()
   try {
-    const near: [string, string | undefined][] = []
     const asked: unknown[] = []
     const host: RunHost = {
       ...fakeHost(),
@@ -259,15 +87,11 @@ test("the launcher's check is this computer's host's, for the agent picked, and 
         return { problems: ['Claude Code is not logged in.'], warnings: [], fix: { kind: 'log-in', command: 'claude login', problem: 'Claude Code is not logged in.' }, ownLoggedOut: true }
       },
     }
-    provideTestContext({ prepareStart: (projectId, driver) => void near.push([projectId, driver]), host })
+    provideTestContext({ host })
     const id = (await listProjects())[0]!.id
     assert.deepEqual(await onStartCheck(id), { problems: ['Claude Code is not logged in.'], warnings: [], fix: { kind: 'log-in', command: 'claude login', problem: 'Claude Code is not logged in.' } })
-    assert.deepEqual(await onStartCheck(id, 'codex'), { problems: [], warnings: ['the check broke'] }, 'a check that breaks is said, and stops nothing')
+    assert.deepEqual(await onStartCheck(id, { 'agent-driver': { driver: 'codex' } }), { problems: [], warnings: ['the check broke'] }, 'a check that breaks is said, and stops nothing')
     assert.deepEqual(asked, [[dir, {}], [dir, { 'agent-driver': { driver: 'codex' } }]])
-    assert.deepEqual(near, [
-      [id, undefined],
-      [id, 'codex'],
-    ])
     provideTestContext({ host: fakeHost() })
     assert.equal(await onStartCheck(id), null, 'a host with no check says nothing')
   } finally {
@@ -288,9 +112,9 @@ test('"Run on" offers the hosts beside this computer of the modules on in a proj
     const id = (await listProjects())[0]!.id
     assert.deepEqual(await onRunHosts(id), [{ id: 'actions', label: 'GitHub Actions' }])
     assert.deepEqual(inProject, [dir])
-    assert.deepEqual(await onStartCheck(id, 'claude-code', 'actions'), { problems: ['Its repository has no workflow openagent-agent.yml yet.'], warnings: [] })
+    assert.deepEqual(await onStartCheck(id, { 'agent-driver': { driver: 'claude-code' } }, 'actions'), { problems: ['Its repository has no workflow openagent-agent.yml yet.'], warnings: [] })
     assert.deepEqual(asked, [[dir, { 'agent-driver': { driver: 'claude-code' } }]])
-    assert.equal(await onStartCheck(id, 'claude-code', 'claude-web'), null, 'a host the project has not says nothing: the Start refuses it')
+    assert.equal(await onStartCheck(id, { 'agent-driver': { driver: 'claude-code' } }, 'claude-web'), null, 'a host the project has not says nothing: the Start refuses it')
     assert.deepEqual(await onRunHosts(SESSIONS_ID), [])
     assert.deepEqual(await onRunHosts('nowhere-1'), [])
     assert.deepEqual(inProject, [dir, dir, dir], 'a session and an unknown project ask for none')

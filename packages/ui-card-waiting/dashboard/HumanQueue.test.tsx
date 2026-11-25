@@ -12,7 +12,7 @@ vi.mock('@openagt/ui/module', async original => ({
 
 const { HumanQueue } = await import('./HumanQueue.js')
 
-const project = (id: string) => ({ id, name: id, gitHost: true })
+const project = (id: string) => ({ id, name: id, remote: 'github.com/me/project' })
 const question = (projectId: string, run: string, words = 'Which way?'): WaitingItem => ({ kind: 'waiting', module: 'ask', scope: 'run', run, id: `${run}:q`, words: 'Needs answer', title: `Run ${run}`, detail: words, mark: 'question', projectId, projectName: projectId })
 const request = (projectId: string, number: number): WaitingItem => ({
   kind: 'waiting',

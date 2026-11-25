@@ -1,5 +1,6 @@
 import { dirname, join } from 'node:path'
-import { nodeGitRunner, originDefaultBranch, type GitRunner } from '@openagt/agent-data'
+import { nodeGitRunner, originDefaultBranch } from '@openagt/git-branches'
+import type { GitRunner } from '@openagt/hooks'
 
 /**
  * Which of a project's skills a run gets: a run's checkout starts from a branch, so a skill in the

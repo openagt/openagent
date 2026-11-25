@@ -2,19 +2,20 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { makeWorld } from './harness.js'
 import { runModuleCommand } from '../dashboard-rpc/modules.js'
-import { DATA_BRANCH, pullFileBranch } from '@openagt/agent-data'
-import { onDashboard, onQueue } from '../dashboard-rpc/reads.js'
+import { DATA_BRANCH } from '@openagt/git-branches'
+import { pullFileBranch } from '@openagt/store-filesystem'
+import { onAttention } from '../dashboard-rpc/attention.js'
+import { callModule } from '../dashboard-rpc/module-calls.js'
 
 // The roadmap stories (README.md): tickets are proposals, the agent queue holds confirmed work —
 // the propose -> decide half of the loop the Tickets page and the AI Queue card drive. Both are a
-// project package's (#1774): OpenAgent reads each through the command that package declares,
-// for what it composes across them (the onboarding step, the queue total), and writes
-// neither; the packages' own modules read and change them in the browser through the same
-// commands. Working the queue is the scheduler's: it starts an agent when the branch moves, and
+// project package's (#1774, #2394): OpenAgent reads neither, and writes neither; the packages' own
+// modules read them through their server parts, change them in the browser through their commands,
+// and say what the onboarding asks of them (`app.attention`). Working the queue is the scheduler's: it starts an agent when the branch moves, and
 // that agent reads the skills itself.
 
 const TICKET_FILE = '2026-08-01_login-page.md'
-/** The fixture's provider packages: the modules' commands are these packages' own. */
+/** The fixture's module packages: the modules' commands are these packages' own. */
 const QUEUE_PACKAGE = '@openagt/queue'
 const TICKETS_PACKAGE = '@openagt/tickets'
 const TICKET = [
@@ -37,7 +38,7 @@ interface TicketRow {
   lockedBy?: string
 }
 
-test('browse the ticket backlog: the module reads the list and one ticket through the tickets command, OpenAgent reads the provider (#697/#1144/#1774)', async () => {
+test('browse the ticket backlog: the module reads the list and one ticket through the tickets command (#697/#1144/#1774)', async () => {
   const world = await makeWorld()
   const rpc = world.rpc
   try {
@@ -66,11 +67,9 @@ test('browse the ticket backlog: the module reads the list and one ticket throug
     const escaped = await rpc(runModuleCommand)(project.id, TICKETS_PACKAGE, ['show', '../escape.md', '--local'])
     assert.equal(escaped.ok, false, 'a path that is no ticket filename is refused')
 
-    // OpenAgent itself reads only what it composes: the onboarding step sees the project
-    // provides tickets and has some.
-    const dashboard = await rpc(onDashboard)()
-    const stat = dashboard.projects.find(p => p.projectId === project.id)
-    assert.deepEqual({ has: stat?.hasTickets, provides: stat?.providesTickets }, { has: true, provides: true })
+    // The project has tickets: the tickets do not ask to be populated among the first steps.
+    const { items } = await rpc(onAttention)(null)
+    assert.deepEqual(items.filter(item => item.module === 'tickets'), [])
   } finally {
     await world.close()
   }
@@ -112,7 +111,7 @@ test("a claim released by hand from the module is the tickets command's own act,
   }
 })
 
-test('the queue is read through the project\'s queue provider, the boards show a queued ticket, and the queue module\'s action is seen at once (#1164/#1774)', async () => {
+test('the queue is read through the queue module, the boards show a queued ticket, and the queue module\'s action is seen at once (#1164/#1774)', async () => {
   const world = await makeWorld()
   const rpc = world.rpc
   try {
@@ -127,19 +126,20 @@ test('the queue is read through the project\'s queue provider, the boards show a
     const synced = await pullFileBranch(project.cwd, DATA_BRANCH)
     assert.equal(synced.ok, true, `the fixture's data branch did not converge: ${synced.ok ? '' : synced.error}`)
 
-    // OpenAgent reads it by running the provider the fixture's package declares (`queue --local`).
-    const queue = await rpc(onQueue)()
-    const projectQueue = queue.find(q => q.projectId === project.id)
-    assert.deepEqual(projectQueue?.entries, [`[Login page](tickets/${TICKET_FILE})`], 'the entry, as the command prints it')
+    // The queue's own server part reads it, as its page and its card do.
+    const entries = async () => {
+      const read = await rpc(callModule)(project.id, QUEUE_PACKAGE, 'entries', {})
+      return read.ok ? (read.output as { entry: string }[]).map(one => one.entry) : read.error
+    }
+    assert.deepEqual(await entries(), [`[Login page](tickets/${TICKET_FILE})`], 'the entry, as the command prints it')
 
     // The queue package's "Add to queue" action, as the dashboard runs it: the package's own
     // command, marked as an act. The command writes as a remote writer, straight to origin;
-    // OpenAgent then converges this machine's copy and re-reads, so the boards show the entry at
+    // OpenAgent then converges this machine's copy, so the boards show the entry at
     // once, in its own lower section, not at the daemon's next sync.
     const added = await rpc(runModuleCommand)(project.id, QUEUE_PACKAGE, ['add', '[Dark mode](tickets/2026-08-02_dark-mode.md)', '--priority', '3'], undefined, true)
     assert.equal(added.ok, true, `the add failed: ${added.ok ? '' : added.error}`)
-    const after = await rpc(onQueue)()
-    assert.deepEqual(after.find(q => q.projectId === project.id)?.entries, [`[Login page](tickets/${TICKET_FILE})`, '[Dark mode](tickets/2026-08-02_dark-mode.md)'])
+    assert.deepEqual(await entries(), [`[Login page](tickets/${TICKET_FILE})`, '[Dark mode](tickets/2026-08-02_dark-mode.md)'])
   } finally {
     await world.close()
   }

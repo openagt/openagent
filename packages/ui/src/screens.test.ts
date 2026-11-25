@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import type { OpenAgentEvent } from './events.js'
+import type { RunEvent } from '@openagt/hooks'
 import { foldScreenRows, liveScreen } from './screens.js'
 
 const at = (n: number) => `http://127.0.0.1:${n}/?t=x`
-const shown = (url: string, label = 'browser'): OpenAgentEvent => ({ kind: 'screen', url, label })
-const gone = (url: string): OpenAgentEvent => ({ kind: 'screen', url, label: 'browser · closed', ended: true })
+const shown = (url: string, label = 'browser'): RunEvent => ({ kind: 'screen', url, label })
+const gone = (url: string): RunEvent => ({ kind: 'screen', url, label: 'browser · closed', ended: true })
 /** What the browser writes when it outlives its run: the live view stays until then. */
-const kept = (url: string, until: string): OpenAgentEvent => ({ kind: 'screen', url, label: 'browser', until })
+const kept = (url: string, until: string): RunEvent => ({ kind: 'screen', url, label: 'browser', until })
 const NOW = Date.parse('2026-10-15T12:00:00.000Z')
 const soon = new Date(NOW + 60_000).toISOString()
 const past = new Date(NOW - 60_000).toISOString()
@@ -25,7 +25,7 @@ test('a run\'s live screen is its newest open one, until it closes or the run en
 })
 
 test('a browser that outlives its run keeps its screen until it says, and no longer', () => {
-  const ended: OpenAgentEvent = { kind: 'end', ok: true }
+  const ended: RunEvent = { kind: 'end', ok: true }
   assert.equal(liveScreen([shown(at(1)), ended, kept(at(1), soon)], NOW), at(1), 'the person still has the page the run left')
   assert.equal(liveScreen([shown(at(1)), ended, kept(at(1), past)], NOW), undefined, 'the time it was kept for has passed')
   assert.equal(liveScreen([shown(at(1)), ended, kept(at(1), soon), gone(at(1))], NOW), undefined, 'the browser closed before that time')

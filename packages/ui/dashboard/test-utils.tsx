@@ -1,84 +1,54 @@
-import { useRef, type ReactNode } from 'react'
 import { fireEvent, screen, waitFor } from '@testing-library/react'
-import { SessionSetupMenu } from './components/SessionSetup.js'
-import { continuationPrompt } from '@openagt/agent-driver/question'
-import { mountedOf, type Mounted, type MountedModules } from './lib/use-modules.js'
+import { continuationPrompt, type AgentCalls } from '@openagt/hooks'
+import { mountedOf, type Mounted, type MountedModules, type MountedOption } from './lib/use-modules.js'
 import type { UiMarkdownProps, UiQuestionProps, UiRender } from './module/index.js'
 
+// The gear and its lines, a tooltip's hover and a menu's opening: the SDK's own test helpers, which a module's tests use too.
+import { openMenu } from './module/testing.js'
+export { hoverTooltip, openMenu, GearMenu, gear, setupLine, openSetupLine } from './module/testing.js'
+
 /**
- * Hover a tooltip trigger and hand back the tooltip it opens (#1149).
- *
- * Every hint in the dashboard is the custom tooltip now, so a test that used to read a `title`
- * attribute off an element has to hover like a user instead: Base UI opens on `mouseenter` +
- * a move, and portals the popup out of the trigger's subtree.
+ * A coding agent's words for its calls (`RunAgent.calls`), as the chat's tests word theirs: Claude
+ * Code's tools and its MCP naming, which the chat's own tests draw their calls with.
  */
-export async function hoverTooltip(trigger: Element): Promise<HTMLElement> {
-  // Re-fire the hover pair on every retry rather than once up front (#1398): a pair dispatched
-  // before the trigger's listeners are attached opens nothing, and a single findByRole then
-  // waits out its timeout on a tooltip that will never come ("Unable to find role=tooltip" on a
-  // loaded CI runner, fine locally). Repeating the events is idempotent for a hover.
-  return await waitFor(
-    () => {
-      fireEvent.mouseEnter(trigger)
-      fireEvent.mouseMove(trigger)
-      return screen.getByRole('tooltip')
-    },
-    { timeout: 5000 },
-  )
+export const SAMPLE_CALLS: AgentCalls = {
+  tools: {
+    Bash: { verb: 'Ran', doing: 'Running', kind: 'command' },
+    Read: { verb: 'Read', doing: 'Reading', kind: 'read', detail: 'path' },
+    Edit: { verb: 'Edited', doing: 'Editing', kind: 'edit', detail: 'path' },
+    Write: { verb: 'Wrote', doing: 'Writing', kind: 'edit', detail: 'path' },
+    Grep: { verb: 'Searched', doing: 'Searching', kind: 'search', detail: 'query' },
+    Glob: { verb: 'Searched', doing: 'Searching', kind: 'find', detail: 'query' },
+    WebSearch: { verb: 'Searched the web', doing: 'Searching the web', kind: 'web', detail: 'query' },
+    WebFetch: { verb: 'Fetched', doing: 'Fetching', kind: 'other' },
+    Skill: { verb: 'Ran skill', doing: 'Running skill', kind: 'skill', detail: 'slash' },
+    Task: { verb: 'Started agent', doing: 'Starting agent', kind: 'other', detail: 'task' },
+    Agent: { verb: 'Started agent', doing: 'Starting agent', kind: 'other', detail: 'task' },
+    TodoWrite: { verb: 'Updated todos', doing: 'Updating todos', kind: 'other' },
+    ToolSearch: { verb: 'Loaded tools', doing: 'Loading tools', kind: 'other' },
+  },
+  families: [{ pattern: 'mcp__(.+?)__(.+)', verb: 'Used $1:', doing: 'Using $1:', target: '$2', kind: 'other' }],
 }
 
 /**
- * Open a dropdown menu by its trigger and wait until the trigger reports it open (#1699).
- *
- * Clicked until it opens rather than once and hoped: these are Base UI menus, and a click landing
- * before the trigger's own handlers are live is silently a no-op — the trigger stays at
- * `aria-expanded="false"` and the search that follows then hunts for an item that was never
- * rendered. Rare enough to pass locally every time and still fail on a loaded CI runner. Retrying
- * is safe because the guard only ever clicks a shut menu, so it cannot toggle one back closed; a
- * menu that genuinely will not open still fails here, on the timeout.
+ * A module that keeps the images a message goes with (`composer.images`), as agent-driver's does:
+ * `keep` stands in for its server part, and a kept image is shown from `/_images/<name>`.
  */
-export async function openMenu(trigger: Element): Promise<void> {
-  await waitFor(() => {
-    if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger)
-    if (trigger.getAttribute('aria-expanded') !== 'true') throw new Error('the menu did not open')
-  })
-}
-
-/**
- * The gear under a message box around `lines` of its menu (SessionSetup.tsx): a line is a part of
- * that menu and is drawn only inside it. `said` is what the gear's hover says.
- */
-export function GearMenu({ lines, said = '', warn, busy = false }: { lines: ReactNode; said?: string; warn?: boolean; busy?: boolean }) {
-  const box = useRef<HTMLDivElement>(null)
-  return (
-    <>
-      <div ref={box} />
-      <SessionSetupMenu setup={{ lines, said, warn }} box={box} busy={busy} />
-    </>
-  )
-}
-
-/** The gear's button. */
-export const gear = (): HTMLElement => screen.getByRole('button', { name: 'Session setup' })
-
-/**
- * Open the gear's menu and hand back its line named `label` ("Profile", "When it finishes"): the
- * line's own words are its label, then its value ("Profile: Default").
- */
-export async function setupLine(label: string): Promise<HTMLElement> {
-  await openMenu(gear())
-  return await waitFor(() => {
-    const line = screen.getAllByRole('menuitem').find(item => item.textContent?.startsWith(`${label}: `))
-    if (!line) throw new Error(`the gear's menu has no "${label}" line`)
-    return line
-  })
-}
-
-/** Open the list of the gear's line named `label`, and hand the line back. */
-export async function openSetupLine(label: string): Promise<HTMLElement> {
-  const line = await setupLine(label)
-  await openMenu(line)
-  return line
+export function imageStore(keep: MountedOption<'composer.images'>['keep'] = async () => ({ ok: false, error: 'not kept' })): MountedOption<'composer.images'> {
+  return {
+    place: 'composer.images',
+    id: 'images',
+    package: '@acme/images',
+    projects: [],
+    computer: true,
+    types: ['image/png', 'image/jpeg', 'image/gif', 'image/webp'],
+    kinds: 'PNG, JPEG, GIF or WebP',
+    maxBytes: 3.75 * 1024 * 1024,
+    maxEdge: 8000,
+    perMessage: 20,
+    keep,
+    src: name => `/_images/${name}`,
+  }
 }
 
 /**

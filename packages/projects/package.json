@@ -1,0 +1,63 @@
+{
+  "name": "@openagt/projects",
+  "version": "0.0.1",
+  "description": "The projects of OpenAgent: the list of projects on this computer, a project added by its folder, by its repository's address (cloned) or from the folder the openagent command was typed in, and removed with what each module kept for it; the project picker with the repos on this computer, Settings › Repos' folders, and the run's step that tells the agent where its repos are.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openagt/openagent.git",
+    "directory": "packages/projects"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json",
+    "./module": {
+      "types": "./dist/module.d.ts",
+      "default": "./dist/module.js"
+    },
+    "./server": "./dist/server.js",
+    "./dashboard": "./dist/dashboard/dashboard.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && vite build -c dashboard/vite.config.ts",
+    "prepack": "node -e \"if(!process.env.npm_config_user_agent?.startsWith('pnpm/')){console.error('Pack and publish with pnpm: it replaces workspace:* with the real version, npm does not');process.exit(1)}\"",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p dashboard/tsconfig.json",
+    "test": "tsc -p tsconfig.test.json && node ../../scripts/test-node.mjs && cd dashboard && vitest run",
+    "clean": "rm -rf dist dist-test"
+  },
+  "dependencies": {
+    "@openagt/git-branches": "workspace:*",
+    "@openagt/hooks": "workspace:*",
+    "@openagt/store-filesystem": "workspace:*"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.0.0",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/node": "^20.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.3",
+    "jsdom": "^29.1.1",
+    "lucide-react": "^0.469.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.0.0",
+    "vitest": "^4.1.10"
+  }
+}

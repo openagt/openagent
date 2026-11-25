@@ -1,5 +1,5 @@
 import { MODULE_NAME } from './module.js'
-import type { RunOptions } from './run.js'
+import type { AgentDriverOptions, RunOptions } from './run.js'
 import { defineSetting } from './settings.js'
 
 // The catalog (#2394): the settings modules own and other modules read, declared here beside the
@@ -16,8 +16,8 @@ export interface PersonInfo {
   name?: string
   /** A picture of them: an https address. */
   picture?: string
-  /** The GitHub login the name and picture were last copied from. */
-  github?: string
+  /** The login at a git host the name and picture were last copied from. */
+  login?: string
 }
 
 /** What a person may be called: one line, at most 60 characters. */
@@ -42,11 +42,11 @@ export const PERSON_INFO = defineSetting<PersonInfo>({
   default: {},
   parse: value => {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
-    const { name, picture, github } = value as Record<string, unknown>
+    const { name, picture, login } = value as Record<string, unknown>
     return {
       ...(isPersonName(name) ? { name: name.trim() } : {}),
       ...(isPictureAddress(picture) ? { picture } : {}),
-      ...(typeof github === 'string' && github ? { github } : {}),
+      ...(typeof login === 'string' && login ? { login } : {}),
     }
   },
 })
@@ -101,6 +101,29 @@ export const PROFILES = defineSetting<Profile[]>({
   parse: value => (Array.isArray(value) ? value.flatMap(item => profileFrom(item) ?? []) : undefined),
 })
 
+/**
+ * profiles': the profile a run started on this computer is on when its options name none, the
+ * one picked under the message box for every next run, by its id; Default when unset.
+ */
+export const PICKED_PROFILE = defineSetting<string | undefined>({
+  key: 'profiles.picked',
+  scope: 'computer',
+  default: undefined,
+  parse: value => (isProfileId(value) && value !== DEFAULT_PROFILE ? value : undefined),
+})
+
+/**
+ * github's: the GitHub account every next run started on this computer works as where its options
+ * name none, one of OpenAgent's own, by its login, picked under the message box; the one runs use
+ * (Permissions › Use for runs) when unset, or when it names an account this computer no longer has.
+ */
+export const PICKED_GITHUB_ACCOUNT = defineSetting<string | undefined>({
+  key: 'github.account',
+  scope: 'computer',
+  default: undefined,
+  parse: value => (typeof value === 'string' && /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/.test(value) ? value : undefined),
+})
+
 /** Every profile, as a list shows them: Default first, as saved or built in, then the others by name. */
 export function profilesIn(saved: readonly Profile[]): Profile[] {
   const others = saved.filter(profile => profile.id !== DEFAULT_PROFILE).sort((a, b) => a.name.localeCompare(b.name))
@@ -113,35 +136,83 @@ export function profileOf(saved: readonly Profile[], id: string | undefined): Pr
   return (id !== undefined ? all.find(profile => profile.id === id) : undefined) ?? all[0]!
 }
 
-/** A saved profile, read strictly: the options a profile holds, each as it should be; anything else there is left out. */
+/**
+ * A saved profile, read: each module's slice as it was saved, so a profile keeps whatever the
+ * modules' controls put in it. The fields the run engine takes from a profile as they are, the
+ * coding agent with its model and effort, the accounts and the skills and plugins picks, are read
+ * strictly: one that is not as it should be is left out, and so is a slice left with nothing.
+ */
 function profileFrom(value: unknown): Profile | undefined {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
-  const { id, name, options } = value as Record<string, unknown>
+  if (!isMap(value)) return undefined
+  const { id, name, options } = value
   if (!isProfileId(id) || typeof name !== 'string' || !name.trim()) return undefined
-  const given = typeof options === 'object' && options !== null ? (options as Record<string, unknown>) : {}
-  const slice = (key: string): Record<string, unknown> => {
-    const part = given[key]
-    return typeof part === 'object' && part !== null && !Array.isArray(part) ? (part as Record<string, unknown>) : {}
-  }
-  const text = (value: unknown): string | undefined => (typeof value === 'string' && value.trim() ? value.trim() : undefined)
-  const names = (value: unknown): string[] | undefined => (Array.isArray(value) && value.length > 0 && value.every(one => typeof one === 'string' && one.trim()) ? [...(value as string[])] : undefined)
-  const account = text(slice('github')['account'])
-  const claude = names(slice('agent-driver')['claude'])
-  const codex = names(slice('agent-driver')['codex'])
-  const project = slice('skills')['project']
-  const skills = project === 'none' ? 'none' : names(project)
-  const without = names(slice('plugins')['without'])?.filter(one => MODULE_NAME.test(one))
-  return {
-    id,
-    name: name.trim(),
-    options: {
-      ...(account !== undefined ? { github: { account } } : {}),
-      ...(claude || codex ? { 'agent-driver': { ...(claude ? { claude } : {}), ...(codex ? { codex } : {}) } } : {}),
-      ...(skills !== undefined ? { skills: { project: skills } } : {}),
-      ...(without !== undefined && without.length > 0 ? { plugins: { without } } : {}),
-    },
-  }
+  const slices = Object.entries(isMap(options) ? options : {}).flatMap(([module, slice]): [string, Record<string, unknown>][] => {
+    if (module === 'profiles' || !MODULE_NAME.test(module) || !isMap(slice)) return []
+    const kept = checkedSlice(module, slice)
+    return Object.keys(kept).length > 0 ? [[module, kept]] : []
+  })
+  return { id, name: name.trim(), options: Object.fromEntries(slices) as RunOptions }
 }
+
+/** A module's slice of a saved profile: the fields {@link profileFrom} reads strictly, each kept only as it should be, and the others as saved. */
+function checkedSlice(module: string, slice: Record<string, unknown>): Record<string, unknown> {
+  const kept: Record<string, unknown> = { ...slice }
+  const names = (value: unknown): string[] | undefined => (Array.isArray(value) && value.length > 0 && value.every(one => typeof one === 'string' && one.trim()) ? [...(value as string[])] : undefined)
+  const text = (value: unknown): string | undefined => (typeof value === 'string' && value.trim() ? value.trim() : undefined)
+  const keep = (field: string, read: (value: unknown) => unknown): void => {
+    if (!(field in kept)) return
+    const value = read(kept[field])
+    if (value === undefined) delete kept[field]
+    else kept[field] = value
+  }
+  if (module === 'github') keep('account', text)
+  if (module === 'agent-driver') {
+    for (const field of ['driver', 'model', 'effort']) keep(field, text)
+    keep('claude', names)
+    keep('codex', names)
+  }
+  if (module === 'skills') keep('project', value => (value === 'all' || value === 'none' ? value : names(value)))
+  if (module === 'plugins') {
+    keep('without', value => {
+      const plugins = names(value)?.filter(one => MODULE_NAME.test(one))
+      return plugins !== undefined && plugins.length > 0 ? plugins : undefined
+    })
+  }
+  return kept
+}
+
+/** What is picked for every next run of a coding agent's: the agent, its model and how hard it thinks. */
+export type AgentPick = Pick<AgentDriverOptions, 'driver' | 'model' | 'effort'>
+
+/**
+ * agent-driver's: the coding agent, the model and the effort picked under the message box for
+ * every next run on this computer, which a run started here is on where its options name none. A
+ * part that is not valid reads as unset, and the rest stays.
+ */
+export const PICKED_AGENT = defineSetting<AgentPick>({
+  key: 'agent-driver.picked',
+  scope: 'computer',
+  default: {},
+  parse: value => {
+    if (!isMap(value)) return undefined
+    const word = (part: unknown): string | undefined => (typeof part === 'string' && /^[\w.:/-]+$/.test(part) ? part : undefined)
+    const driver = word(value['driver'])
+    const model = word(value['model'])
+    const effort = word(value['effort'])
+    return { ...(driver !== undefined ? { driver } : {}), ...(model !== undefined ? { model } : {}), ...(effort !== undefined ? { effort } : {}) }
+  },
+})
+
+/**
+ * agent-driver's: each run started on this computer is named by a small model, in a few words; off,
+ * a run is listed by what it was asked. A Start that brings a name of its own is named that.
+ */
+export const NAME_RUNS = defineSetting<boolean>({
+  key: 'agent-driver.name-runs',
+  scope: 'computer',
+  default: true,
+  parse: value => (typeof value === 'boolean' ? value : undefined),
+})
 
 /**
  * How often at most a scheduled command starts on a computer, where a person set it there:
@@ -180,6 +251,52 @@ export const SCHEDULED_COMMANDS = defineSetting<Record<string, ScheduledCommands
   },
 })
 
+/**
+ * Whether `value` names a branch the way git lets a branch be named (`git check-ref-format
+ * --branch`), told without running git. A branch a run starts from ends up on a command line, so a
+ * word that could be read there as an option (a leading `-`), or that git would read as something
+ * other than one branch (`a..b`, `x@{1}`, `HEAD`), is not a name.
+ */
+export function isBranchName(value: unknown): value is string {
+  if (typeof value !== 'string' || value === '' || value.length > 255) return false
+  if (value === 'HEAD' || value === '@' || value.startsWith('-')) return false
+  // What git refuses anywhere in a ref: a space, a control character, and the characters its
+  // revision syntax uses.
+  if (/[\x00-\x20\x7f~^:?*[\\]/.test(value) || value.includes('..') || value.includes('@{')) return false
+  if (value.endsWith('.')) return false
+  return value.split('/').every(part => part !== '' && !part.startsWith('.') && !part.endsWith('.lock'))
+}
+
+/**
+ * Where a project's runs start their own branch, when it is not origin's default branch: the
+ * branch the project's folder is on, whatever that is by then, or one of origin's branches, by name.
+ */
+export type StartFrom = { kind: 'local' } | { kind: 'published'; branch: string }
+
+/** The cap on the projects {@link START_FROM} keeps, so a hand-edited file cannot bloat. */
+const START_FROM_LIMIT = 200
+
+/**
+ * git-branches': where every next run of a project started on this computer starts from, picked in
+ * the row above the launcher's box, by the project's id; a project with none starts from origin's
+ * default branch. A run whose options name a branch to start from (`GitBranchesOptions.base`)
+ * starts there instead. A pick that is not one reads as none.
+ */
+export const START_FROM = defineSetting<Record<string, StartFrom>>({
+  key: 'git-branches.startFrom',
+  scope: 'computer',
+  default: {},
+  parse: value => {
+    if (!isMap(value)) return undefined
+    const picks = Object.entries(value).flatMap(([id, pick]): [string, StartFrom][] => {
+      if (id === '' || !isMap(pick)) return []
+      if (pick['kind'] === 'local') return [[id, { kind: 'local' }]]
+      return pick['kind'] === 'published' && isBranchName(pick['branch']) ? [[id, { kind: 'published', branch: pick['branch'] }]] : []
+    })
+    return Object.fromEntries(picks.slice(0, START_FROM_LIMIT))
+  },
+})
+
 /** Where a person changes {@link SCHEDULED_COMMANDS}: scheduled-agents' page, by its segment and its name. */
 export const SCHEDULED_COMMANDS_PAGE = { segment: 'automations', label: 'Automations' } as const
 
@@ -202,3 +319,41 @@ function paceFrom(value: unknown): SchedulePace | undefined {
 function isMap(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
+
+/** One project on this computer's list, as the projects module keeps it. */
+export interface ProjectRecord {
+  /** Stable, URL-safe, made from its folder's path: what every address and read names it by. */
+  id: string
+  /** Its folder: an absolute path. */
+  path: string
+  /** When it was added, ISO. */
+  addedAt: string
+}
+
+/** The most projects a list keeps, so a hand-edited file cannot bloat. */
+const MOST_PROJECTS = 500
+
+/**
+ * projects' (#2394): the projects on this computer's list, in the order they were added. The shell
+ * reads it for its sidebar and its routes, and to find a project's folder by its id; the projects
+ * module alone writes it. A record that is not one is left out, and of two with one folder the
+ * first stays.
+ */
+export const PROJECTS = defineSetting<ProjectRecord[]>({
+  key: 'projects.list',
+  scope: 'computer',
+  default: [],
+  parse: value => {
+    if (!Array.isArray(value)) return undefined
+    const seen = new Set<string>()
+    return value
+      .flatMap((item): ProjectRecord[] => {
+        if (!isMap(item)) return []
+        const { id, path, addedAt } = item
+        if (typeof id !== 'string' || !id || typeof path !== 'string' || !path.startsWith('/') || typeof addedAt !== 'string' || seen.has(path)) return []
+        seen.add(path)
+        return [{ id, path, addedAt }]
+      })
+      .slice(0, MOST_PROJECTS)
+  },
+})

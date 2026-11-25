@@ -1,0 +1,126 @@
+import { useState } from 'react'
+import { CircleAlert, Loader2 } from 'lucide-react'
+import { Button, ModuleFixPress, SendAs, firstSendAs, useModuleHost } from '@openagt/ui/module'
+import type { HostAccounts } from '@openagt/hooks'
+import { server, type BackupGap } from './calls.js'
+import { backupChanged, useBackup } from './use-backup.js'
+
+// Settings › Your agent data, at its top: the agents' data that is not backed up, and the fix, here
+// (his pick over a trip to the Permissions page): with no account of OpenAgent's at the host, the
+// press of the module answering for it that adds one; with one, "Back up as" and the press that
+// sends what waited. The person picks the account, even
+// when there is only one: nothing is sent as an account they did not name.
+
+/** OpenAgent's accounts at `host` among `hosts`, as a "Back up as" select offers them: none there when it has none. */
+export function accountsAt(hosts: readonly HostAccounts[], host: string): HostAccounts {
+  return hosts.find(row => row.host === host) ?? { host, logins: [] }
+}
+
+export function BackupNotice({ onChanged }: { onChanged?: () => void }) {
+  const { view, reload } = useBackup()
+  if (!view || view.gaps.length === 0) return null
+  const byHost = new Map<string, BackupGap[]>()
+  for (const gap of view.gaps) byHost.set(gap.host, [...(byHost.get(gap.host) ?? []), gap])
+  return (
+    // The banners' strip, on a tinted fill with no edge; its words in the text's colour, its mark in the warning's.
+    <section aria-label="Not backed up" className="mb-4 space-y-3 rounded-lg bg-warning/10 p-3">
+      <p className="flex items-center gap-2 text-sm font-medium">
+        <CircleAlert className="size-4 shrink-0 text-warning" aria-hidden />
+        Not backed up
+      </p>
+      {[...byHost].map(([host, gaps]) => {
+        const at = accountsAt(view.hosts, host)
+        return (
+          <div key={host} className="space-y-2">
+            <p className="text-xs text-muted-foreground">
+              {`OpenAgent backs up to ${host} with an account of its own, never your own login. Until then, changes are kept on this computer.`}
+            </p>
+            {at.logins.length === 0 ? (
+              <>
+                <ul className="space-y-1">
+                  {gaps.map(gap => (
+                    <li key={gap.kind + (gap.projectId ?? '')} className="text-sm">
+                      <GapWords gap={gap} />
+                    </li>
+                  ))}
+                </ul>
+                {/* The press of the module answering for the host adds one, here (his pick over a trip to the Permissions page). */}
+                {at.add ? <ModuleFixPress fix={at.add} onFixed={() => void reload()} /> : <SendAs host={at} value={undefined} onChange={() => {}} />}
+              </>
+            ) : (
+              <ul className="space-y-2">
+                {gaps.map(gap => (
+                  <GapRow key={gap.kind + (gap.projectId ?? '')} gap={gap} at={at} onChanged={onChanged} />
+                ))}
+              </ul>
+            )}
+          </div>
+        )
+      })}
+    </section>
+  )
+}
+
+/** What is not backed up: whose data, where to, and what waits. */
+function GapWords({ gap }: { gap: BackupGap }) {
+  const whose = gap.kind === 'personal' ? 'Your agent data' : `${gap.project}’s shared data`
+  const waiting = gap.waiting ? ` · ${gap.waiting} ${gap.waiting === 1 ? 'change' : 'changes'} waiting` : ''
+  return (
+    <>
+      <span className="font-medium">{whose}</span>
+      <span className="text-muted-foreground">
+        {' to '}
+        {gap.url ? (
+          <a href={gap.url} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-foreground">
+            {gap.address}
+          </a>
+        ) : (
+          gap.address
+        )}
+        {waiting}
+      </span>
+    </>
+  )
+}
+
+function GapRow({ gap, at, onChanged }: { gap: BackupGap; at: HostAccounts; onChanged: (() => void) | undefined }) {
+  const calls = server(useModuleHost())
+  const [picked, setPicked] = useState<string | undefined>()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | undefined>()
+  const login = picked !== undefined && at.logins.includes(picked) ? picked : firstSendAs(at)
+  const backUp = async () => {
+    if (login === undefined) return
+    setBusy(true)
+    setError(undefined)
+    try {
+      const done = await calls.backUp(gap.kind === 'project' ? { kind: 'project', projectId: gap.projectId!, login } : { kind: 'personal', login })
+      if (!done.ok) setError(done.error)
+      backupChanged()
+      onChanged?.()
+    } catch {
+      setError('Could not back it up.')
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <li className="space-y-1.5 text-sm">
+      <p>
+        <GapWords gap={gap} />
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <SendAs host={at} value={login} onChange={setPicked} disabled={busy} label="Back up as" />
+        <Button size="sm" disabled={busy || login === undefined} onClick={() => void backUp()}>
+          {busy && <Loader2 className="size-3 animate-spin" aria-hidden />}
+          {busy ? 'Backing up…' : 'Back up'}
+        </Button>
+      </div>
+      {error !== undefined && (
+        <p role="alert" className="text-xs text-danger">
+          {error}
+        </p>
+      )}
+    </li>
+  )
+}

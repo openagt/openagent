@@ -1,17 +1,12 @@
 import { SESSIONS_ID } from '../../src/project-address.js'
 import { useContext, useEffect, useRef, useState } from 'react'
-import type { GitHostHome, OpenAgentEvent, RepositoryOffer } from '../../src/index.js'
+import type { RunEvent } from '@openagt/hooks'
 import { sessionInfo } from '../../src/client.js'
 import { RevealedTitle } from './RevealedTitle.js'
-import { MoreVertical, ChevronDown, FolderOpen, Code, Check, ExternalLink, Square, FolderX, Trash2, Copy, CloudUpload, Database, Info } from 'lucide-react'
-import { onGitHostHome, onRepositoryOffer } from '../rpc/reads.js'
-import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
-import { PROJECT_AGENT_DATA_ENTRY } from './ProjectAgentDataSettings.js'
+import { MoreVertical, ChevronDown, FolderOpen, Code, Check, ExternalLink, Square, Trash2, Copy, Info } from 'lucide-react'
 import {
   sendOpenInApp,
-  sendRemoveWorktree,
   sendDeleteAgent,
-  sendCreateRepository,
 } from '../rpc/control.js'
 import { useLoaded } from '../lib/use-async.js'
 import { buttonVariants } from './ui/button.js'
@@ -20,10 +15,9 @@ import { useStop } from '../lib/use-stop.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
 import { cn } from '../lib/utils.js'
 import { describeSessionLink } from '../lib/session-link.js'
-import { buildResumeCommand } from '../lib/resume-command.js'
 import { PreferredEditorItems } from './PreferredEditorItems.js'
 import { ConfirmDialog } from './ui/confirm-dialog.js'
-import { RemoveProjectDialog } from './RemoveProjectDialog.js'
+import { useMenuActions } from './Places.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import {
   DropdownMenu,
@@ -39,11 +33,11 @@ import {
 // The menus of a page's top bar.
 //
 // Given an agent, the agent's name is its button: the name with a small ⌄, opening to the session's
-// details, its folder, its editor, the project's page on its git host, its session link, the command
-// that resumes it, and Stop, Remove worktree, Delete.
+// details, its folder, its editor, its session link, the command that resumes it, the modules'
+// items (git-branches' Remove worktree, the git host's Open on the host), and Stop, Delete.
 //
-// Given none, a ⋮ holds all of the project's: its git host page, its skills, the offer of a
-// repository, where the agents' records go, its folder, its editor. It stands in the same place on
+// Given none, a ⋮ holds all of the project's: its skills, where the agents' records go, its
+// folder, its editor, and the modules' items (the git host's Open on the host and Create a repository). It stands in the same place on
 // the "New agent session" page and on an agent's page (ProjectMenu).
 //
 // The handoff's Push / Open PR are not here: they move the work forward, and sit in the bar above
@@ -57,15 +51,13 @@ export function AgentActionsMenu({
   label,
   naming = false,
   retainedWorktree = false,
-  onWorktreeRemoved,
   onDeleted,
-  onProjectRemoved,
   details,
-  size,
+  resumeCommand,
 }: {
   projectId: string
   agentId?: string | null | undefined
-  events: OpenAgentEvent[]
+  events: RunEvent[]
   /** The run works, as its page knows it: before its feed shows the leg a message continued it with, too. */
   live?: boolean
   /** The session's name: what the session's menu reads. Not known yet, a grey bar holds its place. */
@@ -73,16 +65,12 @@ export function AgentActionsMenu({
   /** The session's name is still coming (a run just started): when it arrives it comes in letter by letter. A name that was only slow to load comes in plain. */
   naming?: boolean
   retainedWorktree?: boolean
-  onWorktreeRemoved?: (() => void) | undefined
   onDeleted?: (() => void) | undefined
-  /** Told once the project is off the list; given, the project's menu offers "Remove project". */
-  onProjectRemoved?: (() => void) | undefined
   /** The session's details strip under the bar (its coding agent, its spend): the session's menu shows and hides it. */
   details?: { open: boolean; onToggle: () => void } | undefined
-  /** The size on disk of the session's worktree, said beside "Remove worktree". */
-  size?: string | undefined
+  /** The command that picks the session's agent session back up in a terminal, as its coding agent says it (#1195); none where it has none. */
+  resumeCommand?: string | undefined
 }) {
-  const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   // Given an agent, this is its page's menu, under the session's name; with none, the ⋮ of a page with no session.
   const session = !!agentId
   const info = sessionInfo(events)
@@ -95,11 +83,6 @@ export function AgentActionsMenu({
   // there once the worktree is gone.
   const hasOwnFolder = live || retainedWorktree
 
-  // What to put on the clipboard to pick this session back up in a terminal (#1195). `mkdir -p`
-  // leads because the directory is usually gone by the time you want it: the CLI finds a session
-  // by the cwd it ran in, so the path has to exist again before `--resume` can see it. Recreating
-  // it empty is enough to read the conversation back.
-  const resumeCommand = buildResumeCommand(info)
   // Flash a confirmation for a beat, the same feedback the CopyButton gives, since a click that
   // only fills the clipboard has nothing else to show for itself.
   const [copied, setCopied] = useState(false)
@@ -113,18 +96,8 @@ export function AgentActionsMenu({
       copiedTimer.current = setTimeout(() => setCopied(false), 1500)
     })
   }
-  // Remembered per project, under the key a session's page reads: a run started here finds it there at once.
-  // Asked again after a repository is created: the project has a page on its git host from then on.
-  const [created, setCreated] = useState(0)
-  const home = useLoaded<GitHostHome | null>(() => onGitHostHome(projectId), null, [projectId, created], { remember: `git-host-home:${projectId}` })
-  // A project that lives on this machine only may be offered a repository on a host; the project's
-  // menu offers it, a session's does not. Creating one puts the project's code on a server under
-  // the person's account, so it is asked once more before it happens.
-  const offer = useLoaded<RepositoryOffer | null>(session ? null : () => onRepositoryOffer(projectId), null, [projectId, session, created])
-  const [confirmCreate, setConfirmCreate] = useState(false)
   // Removing a project takes it off the dashboard's list and deletes nothing in its folder; it is
   // asked once more, and the question says what stays.
-  const [confirmRemove, setConfirmRemove] = useState(false)
 
   // Per session, as in the composer: the page keeps this menu from one session to the next, and an answer is the session's it was pressed in.
   const { busy, error, run } = useAction(agentId ?? '')
@@ -137,12 +110,6 @@ export function AgentActionsMenu({
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   const openApp = (target: 'files' | 'editor') => run(() => sendOpenInApp(projectId, target, agentId ?? undefined), 'Failed to open.')
-  const removeWorktree = () => {
-    if (!agentId) return
-    void run(() => sendRemoveWorktree(projectId, agentId), 'Could not remove the worktree.').then(outcome => {
-      if (outcome.ok) onWorktreeRemoved?.()
-    })
-  }
 
   // A name the run was being given comes in letter by letter, as the session's row in the list does.
   // Per session: the next one opened has a name of its own, and was not waited for because this one's was.
@@ -152,20 +119,14 @@ export function AgentActionsMenu({
   const name = label?.trim() || agentId
   // What the button is called: the menu acts on one session, or, with none, on the project.
   const title = session ? 'Session actions' : 'Project actions'
-  // A session with no project keeps its folder, its work: it goes only with the session, by Delete.
-  const removable = retainedWorktree && !live && !!agentId && projectId !== SESSIONS_ID
   const deletable = !!onDeleted && !live && !!agentId
-  // The project's page on its git host: the first item of the project's menu, and in a session's
-  // menu after what opens the session's own.
-  const homeItem = home && (
-    <DropdownMenuItem render={<a href={home.url} target="_blank" rel="noreferrer" />}>
-      <ExternalLink className="h-3.5 w-3.5 shrink-0" /> Open on {home.name}
-    </DropdownMenuItem>
-  )
+  // What the modules offer in the session's menu (`chat.menu`), or in the project's (`project.menu`), asked again as it opens.
+  const [open, setOpen] = useState(false)
+  const offered = useMenuActions(session ? 'chat.menu' : 'project.menu', session ? { projectId, agentId: agentId! } : projectId !== SESSIONS_ID ? { projectId } : null, projectId, open)
 
   return (
     <>
-      <DropdownMenu>
+      <DropdownMenu open={open} onOpenChange={setOpen}>
         {session ? (
           // The session's name is the menu's button: the name, cut short when the bar is tight, and a
           // small ⌄. A name not known yet is a grey bar in its place, so the bar is laid out the
@@ -205,17 +166,6 @@ export function AgentActionsMenu({
               <Info className="h-3.5 w-3.5 shrink-0" /> {details.open ? 'Hide details' : 'Show details'}
             </DropdownMenuItem>
           )}
-          {!session && homeItem}
-          {offer && (
-            <DropdownMenuItem onClick={() => setConfirmCreate(true)}>
-              <CloudUpload className="h-3.5 w-3.5 shrink-0" /> Create a repository on {offer.name}…
-            </DropdownMenuItem>
-          )}
-          {!session && (
-            <DropdownMenuItem onClick={() => services.openSettings(PROJECT_AGENT_DATA_ENTRY, projectId)}>
-              <Database className="h-3.5 w-3.5 shrink-0" /> Agent data…
-            </DropdownMenuItem>
-          )}
           {/* Named for what it actually opens (#1195): once a session's worktree is gone this
               resolves to the project root, and calling that "the session's folder" was a lie the
               user could not see. */}
@@ -243,7 +193,6 @@ export function AgentActionsMenu({
               <PreferredEditorItems busy={busy} />
             </DropdownMenuSubContent>
           </DropdownMenuSub>
-          {session && homeItem}
           {sessionLink && (
             <DropdownMenuItem render={<a href={sessionLink.href} target="_blank" rel="noreferrer" />}>
               <ExternalLink className="h-3.5 w-3.5 shrink-0" /> {sessionLink.label.replace(' ↗', '')}
@@ -261,7 +210,7 @@ export function AgentActionsMenu({
                 <Copy className="h-3.5 w-3.5 shrink-0" />
               )}
               <span className="flex-1">
-                {copied ? 'Copied' : info.workspace ? 'Copy resume command' : 'Copy session id'}
+                {copied ? 'Copied' : 'Copy resume command'}
               </span>
               <span className="ml-auto pl-3 font-mono text-xs text-muted-foreground">
                 {info.sessionId.slice(0, 8)}
@@ -269,8 +218,10 @@ export function AgentActionsMenu({
             </DropdownMenuItem>
           )}
 
-          {/* A rule only above something: a menu with nothing to stop, remove or delete ends on its last item. */}
-          {(live || removable || deletable) && <DropdownMenuSeparator />}
+          {offered.items}
+
+          {/* A rule only above something: a menu with nothing to stop or delete ends on its last item. */}
+          {(live || deletable) && <DropdownMenuSeparator />}
 
           {live && (
             <DropdownMenuItem disabled={stopping || down} onClick={stopSession}>
@@ -278,54 +229,17 @@ export function AgentActionsMenu({
             </DropdownMenuItem>
           )}
 
-          {removable && (
-            <DropdownMenuItem disabled={busy} onClick={() => removeWorktree()}>
-              <FolderX className="h-3.5 w-3.5 shrink-0" /> <span className="flex-1">Remove worktree</span>
-              {size && <span className="ml-auto pl-3 text-xs text-muted-foreground">{size}</span>}
-            </DropdownMenuItem>
-          )}
           {deletable && (
             <DropdownMenuItem onClick={() => setConfirmDelete(true)} className="text-danger">
               <Trash2 className="h-3.5 w-3.5 shrink-0" /> Delete session…
             </DropdownMenuItem>
           )}
 
-          {/* Last, and apart: the one item of the project's menu that takes something away. */}
-          {onProjectRemoved && !session && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setConfirmRemove(true)} className="text-danger">
-                <Trash2 className="h-3.5 w-3.5 shrink-0" /> Remove project…
-              </DropdownMenuItem>
-            </>
-          )}
-
           {(error ?? stopError) && <p className="px-2 py-1.5 text-xs text-danger">{error ?? stopError}</p>}
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {offer && (
-        <ConfirmDialog
-          open={confirmCreate}
-          onOpenChange={setConfirmCreate}
-          title={`Create a private repository on ${offer.name}?`}
-          body={
-            <>
-              This creates the private repository <span className="font-medium text-foreground">{offer.repository}</span> on your{' '}
-              {offer.name} account and pushes this project to it. The project&rsquo;s code leaves this machine.
-            </>
-          }
-          confirmLabel="Create and push"
-          confirmBusyLabel="Creating…"
-          fallbackError="Could not create the repository."
-          destructive={false}
-          onConfirm={() => sendCreateRepository(projectId)}
-          onSuccess={() => setCreated(n => n + 1)}
-        />
-      )}
-      {onProjectRemoved && !session && (
-        <RemoveProjectDialog projectId={projectId} open={confirmRemove} onOpenChange={setConfirmRemove} onRemoved={onProjectRemoved} />
-      )}
+      {offered.overlay}
       {onDeleted && agentId && (
         <ConfirmDialog
           open={confirmDelete}

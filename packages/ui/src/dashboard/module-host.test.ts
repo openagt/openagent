@@ -3,19 +3,27 @@ import { test } from 'node:test'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { memorySettings } from '@openagt/hooks/testing'
-import { callModuleFunction, functionKind, serverHost, MAX_CALL_INPUT, type ServerHostDeps } from './module-host.js'
+import { computerRpcHost, memorySettings } from '@openagt/hooks/testing'
+import { callModuleFunction, computerHost, functionKind, serverHost, MAX_CALL_INPUT, type AppOfHost, type ServerHostDeps } from './module-host.js'
+import { pullRequestState } from './pr-states.js'
 
-const SETTINGS = memorySettings()
+/** The app a host is made of in a test: settings in memory, no account, and a lifecycle that tells nobody. */
+const SETTINGS: AppOfHost = { settings: memorySettings(), gitAccess: async () => undefined, lifecycle: computerRpcHost().lifecycle }
 
 /** A project whose runs' host knows nothing of any run: what a call about none is given. */
 const NO_RUNS: ServerHostDeps = {
+  projects: async () => [{ id: 'p', name: 'p', dir: '/p' }],
+  accounts: { hosts: async () => [], sendAs: async () => ({ ok: false, error: 'no account' }), mergeCommit: async () => ({ pending: false }), runAs: async () => undefined, people: async () => [] },
   project: async () => ({ id: 'p', name: 'p', dir: '/p' }),
   find: async () => undefined,
   questions: async () => [],
   say: async () => {
     throw new Error('unknown session')
   },
+  record: async () => {
+    throw new Error('unknown session')
+  },
+  modulesOn: async () => [],
 }
 
 test('a function is given the project it is called in, as its caller reads it, and none in a session with no project', async () => {
@@ -49,18 +57,15 @@ test("a run's open questions and a line said to it go through its host, by the r
   assert.deepEqual(said, [[run, { kind: 'answer', question: 'Which one?', answer: 'A' }]])
 })
 
-test('a merge lookup says "still asking" only while the git host has not answered at all', async () => {
-  const answering = (value: { number: number; mergeCommit?: string; headRefOid?: string }[] | undefined, pending: boolean): ServerHostDeps => ({
-    ...NO_RUNS,
-    prs: async () => ({ value: value as never, pending }),
-  })
-  assert.deepEqual(await serverHost('/p', SETTINGS, answering(undefined, true)).mergeCommit('b', 1), { pending: true })
-  assert.deepEqual(await serverHost('/p', SETTINGS, answering([{ number: 1, mergeCommit: 'abc' }], true)).mergeCommit('b', 1), { pending: false, commit: 'abc' })
-  assert.deepEqual(await serverHost('/p', SETTINGS, answering([{ number: 2, mergeCommit: 'abc' }], false)).mergeCommit('b', 1), { pending: false })
-  // The last commit of the branch the request merged rides along when the git host says it.
-  assert.deepEqual(await serverHost('/p', SETTINGS, answering([{ number: 1, mergeCommit: 'abc', headRefOid: 'def' }], false)).mergeCommit('b', 1), { pending: false, commit: 'abc', head: 'def' })
-  assert.deepEqual(await serverHost('/p', SETTINGS, answering([{ number: 1, headRefOid: 'def' }], false)).mergeCommit('b', 1), { pending: false })
-  assert.deepEqual(await serverHost('/p', SETTINGS, { ...NO_RUNS, prs: async () => Promise.reject(new Error('offline')) }).mergeCommit('b', 1), { pending: false })
+test("what a press did is written down on a run by its id alone, as a module's facts, and how pull requests stand is kept for the lists of runs", async () => {
+  const written: unknown[][] = []
+  const host = serverHost('/p', SETTINGS, { ...NO_RUNS, record: async (...args) => void written.push(args) })
+  await host.record('r1', { github: { pr: { number: 5, url: 'https://github.com/o/r/pull/5' } } })
+  await assert.rejects(host.record('../etc', { github: { pr: { number: 5, url: 'u' } } }), /unknown session/)
+  await assert.rejects(host.record('r1', null as never), /one slice per module/)
+  assert.deepEqual(written, [['r1', { github: { pr: { number: 5, url: 'https://github.com/o/r/pull/5' } } }]])
+  host.pullRequestsRead([{ url: 'https://github.com/o/r/pull/5', state: 'merged', title: 'A fix' }])
+  assert.deepEqual(pullRequestState('https://github.com/o/r/pull/5'), { state: 'merged', title: 'A fix' })
 })
 
 test('a function is called with the host and the input, and whatever goes wrong answers an error; whether it reads or acts is its own word', async () => {
@@ -96,4 +101,23 @@ export default { echo }`,
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
+})
+
+test("a host passes the app's word on: the modules' accounts, and a project added or removed told to every module", async () => {
+  const told: string[] = []
+  const project = { id: 'p', name: 'p', dir: '/p' }
+  const host = computerHost({
+    settings: memorySettings(),
+    gitAccess: async remote => (remote === 'https://example.com/o/r' ? { env: { GIT_AUTHOR_NAME: 'octo-agent' } } : undefined),
+    lifecycle: {
+      added: async added => void told.push(`added ${added.id}`),
+      refusal: async () => 'An agent is working in this project.',
+      removed: async (removed, { files }) => (told.push(`removed ${removed.id}${files ? ' with its files' : ''}`), { removed: ['.branches'], kept: [], failed: [] }),
+    },
+  }, NO_RUNS)
+  assert.deepEqual(await host.gitAccess('https://example.com/o/r'), { env: { GIT_AUTHOR_NAME: 'octo-agent' } })
+  await host.lifecycle.added(project)
+  assert.equal(await host.lifecycle.refusal(project), 'An agent is working in this project.')
+  assert.deepEqual(await host.lifecycle.removed(project, { files: true }), { removed: ['.branches'], kept: [], failed: [] })
+  assert.deepEqual(told, ['added p', 'removed p with its files'])
 })

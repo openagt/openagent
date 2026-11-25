@@ -7,7 +7,7 @@ import { useModuleCards } from './ModuleCards.js'
 
 afterEach(cleanup)
 
-const projects = [{ id: 'p1', name: 'alpha', path: '/p1', activated: true, gitHost: true }] as ProjectSummary[]
+const projects = [{ id: 'p1', name: 'alpha', path: '/p1' }] as ProjectSummary[]
 const card = (pkg: string, id: string, needsYou?: true): MountedView<'overview.card'> => ({
   place: 'overview.card',
   package: pkg,

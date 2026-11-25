@@ -189,6 +189,35 @@ test('a run goes without the plugins its options name: none of their steps, skil
   assert.deepEqual((await hooks.skills({ project: P2 }, { every: true })).map(skill => skill.name), ['github', 'browser'], "a clean-up asks every module's skills, a plugin that is off too")
 })
 
+test('asked about this computer, a plugin kept per project is asked where it is on in a project, and handed the projects it is on in', async () => {
+  const told: string[][] = []
+  const hooks = hooksOf([
+    {
+      module: defineModule({
+        name: 'tickets',
+        plugin: { scope: 'project' },
+        hooks: {
+          'app.attention': async (_args, app) => {
+            const projects = await app.projects()
+            told.push(projects.map(project => project.id))
+            return [{ kind: 'setup', scope: 'computer', words: 'Populate the tickets' }]
+          },
+        },
+      }),
+    },
+  ])
+  assert.deepEqual(await hooks.attention({}), { items: [], whole: true }, 'on in no project, nothing is asked')
+  await hooks.setEnabled('tickets', true, P2)
+  assert.deepEqual(await hooks.attention({}), { items: [{ kind: 'setup', scope: 'computer', words: 'Populate the tickets', module: 'tickets' }], whole: true })
+  assert.deepEqual(await hooks.attention({ options: { plugins: { without: ['tickets'] } } }), { items: [], whole: true }, 'nor where the options go without it')
+  assert.deepEqual(told, [['p2']])
+})
+
+test('asked about this computer, a plugin kept per project that the distribution starts on is asked, as on in no project yet', async () => {
+  const hooks = hooksOf([{ module: defineModule({ name: 'ask', plugin: { scope: 'project' }, hooks: { 'app.attention': () => [{ kind: 'waiting', scope: 'run', run: 's1', words: 'Needs answer' }] } }), on: true }])
+  assert.deepEqual(await hooks.attention({}), { items: [{ kind: 'waiting', scope: 'run', run: 's1', words: 'Needs answer', module: 'ask' }], whole: true })
+})
+
 test('a second skill, coding agent or host of one name is left out and told; a handler that throws is told, and the others are still asked', async () => {
   const errors: HandlerError[] = []
   const hooks = hooksOf(
@@ -281,13 +310,46 @@ test('git reaches a remote as the first module with an account for it says; one 
   assert.deepEqual(messages(errors), ['broken account.access: the keychain is locked', 'broken account.access: the keychain is locked'])
 })
 
-test("the app's life: modules start where they are on, one that keeps its own row wherever it is, and stop the last first; a project added reaches the modules on in it, a removed one every module", async () => {
+test("a run's account is the first module answering for its repository's; a session with no project takes the first given, else the first refusal", async () => {
+  const errors: HandlerError[] = []
+  const refuses = (error: string) => async () => ({ ok: false as const, error })
+  const hooks = hooksOf(
+    [
+      { module: defineModule({ name: 'gitlab', hooks: { 'account.access': { runAs: async dir => (dir === undefined ? { ok: false, error: 'no gitlab account' } : dir.includes('gitlab') ? { ok: true, login: 'lab', env: { A: 'lab' } } : undefined) } } }) },
+      { module: defineModule({ name: 'broken', hooks: { 'account.access': { runAs: async () => Promise.reject(new Error('the keychain is locked')) } } }) },
+      { module: defineModule({ name: 'github', hooks: { 'account.access': { runAs: async (dir, login) => (dir === undefined || dir.includes('github') ? { ok: true, login: login ?? 'hub', env: { A: 'hub' } } : undefined) } } }) },
+    ],
+    errors,
+  )
+  assert.deepEqual(await hooks.gitAccounts.runAs('/repos/gitlab'), { ok: true, login: 'lab', env: { A: 'lab' } })
+  assert.deepEqual(await hooks.gitAccounts.runAs('/repos/github', 'octo'), { ok: true, login: 'octo', env: { A: 'hub' } })
+  assert.equal(await hooks.gitAccounts.runAs('/repos/elsewhere'), undefined)
+  assert.deepEqual(await hooks.gitAccounts.runAs(undefined), { ok: true, login: 'hub', env: { A: 'hub' } })
+  assert.deepEqual(await hooksOf([{ module: defineModule({ name: 'a', hooks: { 'account.access': { runAs: refuses('first') } } }) }, { module: defineModule({ name: 'b', hooks: { 'account.access': { runAs: refuses('second') } } }) }], []).gitAccounts.runAs(undefined), { ok: false, error: 'first' })
+  assert.deepEqual(messages(errors), ['broken account.access: the keychain is locked', 'broken account.access: the keychain is locked', 'broken account.access: the keychain is locked'])
+})
+
+test('the people behind commit emails are the first module answering for the repository says; nobody where none does', async () => {
+  const hooks = hooksOf(
+    [
+      { module: defineModule({ name: 'gitlab', hooks: { 'account.access': { people: async dir => (dir.includes('gitlab') ? [] : undefined) } } }) },
+      { module: defineModule({ name: 'github', hooks: { 'account.access': { people: async (dir, emails) => (dir.includes('github') ? emails.map(email => ({ email, login: email.split('@')[0]! })) : undefined) } } }) },
+    ],
+    [],
+  )
+  assert.deepEqual(await hooks.gitAccounts.people('/repos/github', ['ada@x.dev']), [{ email: 'ada@x.dev', login: 'ada' }])
+  assert.deepEqual(await hooks.gitAccounts.people('/repos/gitlab', ['ada@x.dev']), [])
+  assert.deepEqual(await hooks.gitAccounts.people('/repos/elsewhere', ['ada@x.dev']), [])
+})
+
+test("the app's life: modules start where they are on, one that keeps its own row wherever it is, and stop the last first; a project added or written reaches the modules on in it, a removed one every module", async () => {
   const seen: string[] = []
   const errors: HandlerError[] = []
   const lifecycle = (name: string): AppLifecycle => ({
     started: async (app: AppContext) => void seen.push(`${name} started in ${(await app.projects()).map(project => project.id).join(',') || 'none'}`),
     stopping: () => void seen.push(`${name} stopping`),
     projectAdded: project => void seen.push(`${name} added ${project.id}`),
+    projectWritten: project => void seen.push(`${name} wrote ${project.id}`),
     projectRemoved: project => void seen.push(`${name} removed ${project.id}`),
   })
   const hooks = hooksOf(
@@ -318,6 +380,7 @@ test("the app's life: modules start where they are on, one that keeps its own ro
   await hooks.setEnabled('github-auto-reply', true, P2)
   await hooks.started({ signal: new AbortController().signal, url: 'http://127.0.0.1:4200' })
   await hooks.projectAdded({ id: 'p3', name: 'Three', dir: '/projects/three' })
+  await hooks.projectWritten(P2)
   await hooks.projectRemoved(P1)
   await hooks.stopping()
   assert.deepEqual(seen, [
@@ -326,6 +389,9 @@ test("the app's life: modules start where they are on, one that keeps its own ro
     'folder sync started in p1,p2',
     'projects added p3',
     'scheduler added p3',
+    'projects wrote p2',
+    'auto-reply wrote p2',
+    'scheduler wrote p2',
     'projects removed p1',
     'auto-reply removed p1',
     'notifications-command removed p1',
@@ -435,4 +501,81 @@ test('with no store in the distribution, a plugin is off, and why is told', asyn
   const hooks = createHooks([{ module: defineModule({ name: 'notifications-command', plugin: { scope: 'computer' }, hooks: {} }), on: true }], { onError: error => errors.push(error) })
   assert.equal(await hooks.enabled('notifications-command'), false)
   assert.deepEqual(messages(errors), ['notifications-command enabled: No store keeps the computer data'])
+})
+
+test('a project removed with its files: each module answers what it removed and kept there, one that refuses is a line of what failed, and the others still clean up', async () => {
+  const errors: HandlerError[] = []
+  const said: boolean[] = []
+  const hooks = hooksOf(
+    [
+      { module: defineModule({ name: 'git-branches', hooks: { 'app.lifecycle': { projectRemoved: (_project, _app, { files }) => (said.push(files), files ? { removed: ['.branches'], kept: [{ path: '.branches/agent-1', reason: 'uncommitted work' }] } : undefined) } } }) },
+      {
+        module: defineModule({
+          name: 'agent-driver',
+          hooks: {
+            'app.lifecycle': {
+              projectRemoved: () => {
+                throw new Error('a run is still working here')
+              },
+            },
+          },
+        }),
+      },
+      { module: defineModule({ name: 'scheduled-agents', hooks: { 'app.lifecycle': { projectRemoved: () => ({ removed: ['.scheduler'], kept: [] }) } } }) },
+    ],
+    errors,
+  )
+  assert.deepEqual(await hooks.projectRemoved(P1, { files: true }), {
+    removed: ['.branches', '.scheduler'],
+    kept: [{ path: '.branches/agent-1', reason: 'uncommitted work' }],
+    failed: ['agent-driver: a run is still working here'],
+  })
+  assert.deepEqual(await hooks.projectRemoved(P1), { removed: ['.scheduler'], kept: [], failed: ['agent-driver: a run is still working here'] })
+  assert.deepEqual(said, [true, false])
+})
+
+test("the folder the command was typed in: the first module that answers makes it a project, and the modules on in it are told when it was added just now", async () => {
+  const added: string[] = []
+  const hooks = hooksOf([
+    { module: defineModule({ name: 'other', hooks: { 'app.lifecycle': { folderGiven: async () => undefined, projectAdded: project => void added.push(`other ${project.id}`) } } }) },
+    { module: defineModule({ name: 'projects', hooks: { 'app.lifecycle': { folderGiven: async folder => ({ project: { ...P2, dir: folder }, added: folder === '/projects/two' }) } } }) },
+  ])
+  assert.deepEqual(await hooks.folderGiven('/projects/two'), { project: P2, added: true })
+  assert.deepEqual(await hooks.folderGiven('/projects/two/src').then(given => given?.added), false)
+  assert.deepEqual(added, ['other p2'])
+})
+
+test('a project may not go while a module refuses it: the first refusal is said, one that cannot tell refuses in its words, and with none refusing it may', async () => {
+  const errors: HandlerError[] = []
+  const asked: string[] = []
+  const refusing = (name: string, reason: (project: ProjectRef) => string | undefined): DistributionEntry => ({
+    module: defineModule({ name, hooks: { 'app.lifecycle': { refuseRemoval: project => (asked.push(name), reason(project)) } } }),
+  })
+  const quiet = hooksOf([refusing('free', () => undefined)])
+  assert.equal(await quiet.lifecycle.refusal(P1), undefined)
+  const busy = hooksOf([refusing('free', () => undefined), refusing('runs', project => `An agent is working in ${project.name}.`), refusing('later', () => 'not asked')])
+  asked.length = 0
+  assert.equal(await busy.lifecycle.refusal(P1), 'An agent is working in One.')
+  assert.deepEqual(asked, ['free', 'runs'], 'the first refusal is the answer')
+  const broken = hooksOf([refusing('runs', () => { throw new Error('the locks could not be read') })], errors)
+  assert.equal(await broken.lifecycle.refusal(P1), 'runs could not tell whether the project may go: the locks could not be read')
+  assert.deepEqual(errors.map(error => `${error.module} ${error.hook}`), ['runs app.lifecycle.refuseRemoval'])
+})
+
+test("a module's app lists the runs of a project, or of no project, as every host there lists them", async () => {
+  const here = fakeHost({ id: 'here' })
+  const there = fakeHost({ id: 'there' })
+  const seen: AppContext[] = []
+  const hooks = hooksOf([
+    { module: defineModule({ name: 'agent-driver', hooks: { 'run.host': [here] } }) },
+    { module: defineModule({ name: 'host-elsewhere', hooks: { 'run.host': [there] } }) },
+    { module: defineModule({ name: 'git-branches', hooks: { 'app.attention': (_args, app) => (seen.push(app), []) } }) },
+  ])
+  await here.start({ project: P1, prompt: 'one', options: {} })
+  await there.start({ project: P1, prompt: 'two', options: {} })
+  await here.start({ prompt: 'none', options: {} })
+  await hooks.attention({ project: P1 })
+  const app = seen[0]!
+  assert.deepEqual((await app.runs(P1)).map(run => `${run.host}: ${run.prompt}`), ['here: one', 'there: two'])
+  assert.deepEqual((await app.runs()).map(run => run.prompt), ['none'])
 })

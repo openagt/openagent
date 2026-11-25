@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url'
-import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
+import { nodeGitRunner } from '@openagt/git-branches'
+import { type GitRunner, createHooks, loadHandedDown } from '@openagt/hooks'
 import { projectOf } from '@openagt/agent-driver'
-import { createHooks, loadHandedDown } from '@openagt/hooks'
 import type { Unlisted } from './schedule.js'
 
 /** A skill a plugin on in the project gives its runs: its name, its folder, and the plugin. */

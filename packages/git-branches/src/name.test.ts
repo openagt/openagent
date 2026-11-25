@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { realpath } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import type { GitRunner } from '@openagt/agent-data'
+import type { GitRunner } from '@openagt/hooks'
 import { nameBranch } from './name.js'
 
 test('nameBranch: a rename lost to a sibling naming the same thing at the same moment takes the next suffix (review)', async () => {

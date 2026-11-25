@@ -1,6 +1,6 @@
 import { realpath, stat } from 'node:fs/promises'
 import { dirname, join, normalize, sep } from 'node:path'
-import { packageBins, runPackageCommand, type PackageCommandResult, type ProjectPackage } from '@openagt/agent-data'
+import { packageBins, runPackageCommand, type PackageCommandResult, type ProjectPackage } from './package-command.js'
 import { computerPackages, packagesOf, projectsPackages } from './distribution-packages.js'
 
 /**

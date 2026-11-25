@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { GitRunner } from '@openagt/agent-data'
+import type { GitRunner } from '@openagt/hooks'
 import { fetchingAsRunsAccount } from './scheduler.js'
 
 /** git as a fake: origin is `url`; every call is written down. */

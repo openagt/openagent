@@ -1,6 +1,7 @@
 import type { ReactNode, RefObject } from 'react'
 import { Settings } from 'lucide-react'
 import { cn } from '../lib/utils.js'
+import { ComposerControls, useControlsSaid, type ControlBox } from './Places.js'
 import { rowButtonClass } from './ui/row-item.js'
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipsPastBox } from './ui/tooltip.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from './ui/dropdown-menu.js'
@@ -17,24 +18,30 @@ export interface SessionSetup {
 
 /**
  * The gear under the message box, first in its row (DECISIONS.md, his pick): the session's setup in
- * one menu, "This session". A line each for the profile, the skills, the git host account and, set
- * apart, what the agent does when it finishes; each says its value and opens its list. The menu
+ * one menu, "This session". First the modules' lines, then the caller's: the git host account and,
+ * set apart, what the agent does when it finishes; each says its value and opens its list. The menu
  * stands above the box on its left edge, and covers none of it: what is typed stays in view.
  */
-export function SessionSetupMenu({ setup, box, busy }: { setup: SessionSetup; /** The message box, which the menu stands above. */ box: RefObject<HTMLElement | null>; busy: boolean }) {
+export function SessionSetupMenu({ setup, box, busy, controls }: { setup: SessionSetup; /** The message box, which the menu stands above. */ box: RefObject<HTMLElement | null>; busy: boolean; /** The box the modules' lines are drawn for (`composer.control` at `setup`), before the caller's. */ controls?: ControlBox | undefined }) {
+  // The modules' lines stay mounted with the menu shut, saying what they pick for the gear's hover.
+  const { said, onSaid } = useControlsSaid(`${controls?.in}:${controls?.projectId}:${controls?.agentId}`)
+  const lines = Object.values(said)
+  const tip = [...lines.map(line => line.words), setup.said].filter(Boolean).join(' · ')
+  const warn = setup.warn || lines.some(line => line.warn)
   return (
     <DropdownMenu>
       <Tooltip>
-        <TooltipTrigger render={<DropdownMenuTrigger type="button" disabled={busy} aria-label="Session setup" className={cn(rowButtonClass, 'shrink-0', setup.warn && 'text-warning')} />}>
+        <TooltipTrigger render={<DropdownMenuTrigger type="button" disabled={busy} aria-label="Session setup" className={cn(rowButtonClass, 'shrink-0', warn && 'text-warning')} />}>
           <Settings className="size-4 shrink-0" aria-hidden />
         </TooltipTrigger>
-        <TooltipContent>{setup.said}</TooltipContent>
+        <TooltipContent>{tip}</TooltipContent>
       </Tooltip>
-      <DropdownMenuContent side="top" align="start" anchor={box} className="w-[21rem] max-w-[calc(100vw-2rem)]">
+      <DropdownMenuContent side="top" align="start" anchor={box} keepMounted={controls !== undefined} className="w-[21rem] max-w-[calc(100vw-2rem)]">
         {/* A hover inside the menu stands by its own line, not past the box as the row's do. */}
         <TooltipsPastBox value={null}>
           <DropdownMenuGroup>
             <DropdownMenuLabel className="font-normal">This session</DropdownMenuLabel>
+            {controls && <ComposerControls at="setup" box={controls} onSaid={onSaid} />}
             {setup.lines}
           </DropdownMenuGroup>
         </TooltipsPastBox>

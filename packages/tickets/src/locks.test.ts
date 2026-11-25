@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { join } from 'node:path'
-import type { FileBranchWrite } from '@openagt/agent-data'
+import type { FileBranchWrite } from '@openagt/store-filesystem'
 import { claimTickets, releaseTicket, lockContent, lockHolder, claimMessage, releaseMessage, claimHistory } from './locks.js'
 import type { TicketDeps, TicketsFunnel } from './store.js'
 

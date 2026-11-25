@@ -1,7 +1,7 @@
-import type { OpenAgentEvent } from './events.js'
+import type { RunEvent } from '@openagt/hooks'
 
 // Derived agent state for the dashboard's overview cards (#431): the errors a run hit and the
-// live session link — each a pure projection of the same OpenAgentEvent stream the log renders,
+// live session link — each a pure projection of the same RunEvent stream the log renders,
 // so the live dashboard and a past-agent replay show the identical summary. Kept here (not in the
 // dashboard) so it is unit-tested against the real event shapes.
 
@@ -23,7 +23,7 @@ export interface AgentError {
  * A fold over the log rather than state of its own: an error is an event that happened, so the
  * list only ever grows, and reopening a finished agent shows exactly what it showed while it ran.
  */
-export function agentErrors(events: readonly OpenAgentEvent[]): AgentError[] {
+export function agentErrors(events: readonly RunEvent[]): AgentError[] {
   const errors: AgentError[] = []
   for (const event of events) {
     if (event.kind === 'error') {
@@ -46,7 +46,7 @@ export interface SessionInfo {
    *
    * Taken from the event rather than the filesystem on purpose: an agent that finishes cleanly has
    * its worktree removed (`tearDownWorktree`), so the event is the only surviving record of where
-   * the session lived — and that path is exactly what `claude --resume` needs to find it again.
+   * the session lived — and that path is exactly what its CLI's resume needs to find it again.
    */
   workspace?: string
 }
@@ -56,7 +56,7 @@ export interface SessionInfo {
  * event, then the id and any deep link from the latest `session-update`. Null before the
  * session opens. The link is what the old dashboard surfaced as "open session".
  */
-export function sessionInfo(events: readonly OpenAgentEvent[]): SessionInfo | null {
+export function sessionInfo(events: readonly RunEvent[]): SessionInfo | null {
   let info: SessionInfo | null = null
   for (const event of events) {
     if (event.kind === 'session') {

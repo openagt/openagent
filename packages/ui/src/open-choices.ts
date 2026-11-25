@@ -1,4 +1,4 @@
-import type { ChoiceRequest, OpenAgentEvent } from './events.js'
+import type { ChoiceRequest, RunEvent } from '@openagt/hooks'
 
 /** The `choice` event carries the full request; strip the `kind` discriminant. */
 type ChoiceEvent = { kind: 'choice' } & ChoiceRequest
@@ -15,7 +15,7 @@ type ChoiceEvent = { kind: 'choice' } & ChoiceRequest
  * checkout kept, and the answer resumes it. A run that died holding a question ends otherwise,
  * and its question goes with it (#1359): nobody would read the pick.
  */
-export function pendingChoices(events: readonly OpenAgentEvent[]): ChoiceRequest[] {
+export function pendingChoices(events: readonly RunEvent[]): ChoiceRequest[] {
   const open = new Map<string, ChoiceRequest>()
   for (const event of events) {
     if (event.kind === 'choice-resolved') open.delete(event.id)

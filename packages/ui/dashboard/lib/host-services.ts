@@ -20,7 +20,7 @@ export const INERT_HOST_SERVICES: HostServices = {
   adjustPage() {},
   backToPage() {},
   openSettings() {},
-  async gitHostPeople() {
+  async people() {
     return []
   },
   async startRun() {

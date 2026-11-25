@@ -13,7 +13,7 @@ import { runsAgain, useRunsPace } from './runs-changed.js'
 // builds every project's queue and tickets too, beside it.
 
 /** Stable initial, so the poll does not churn on every render. */
-const IDLE: Overview = { active: [], queueOpen: 0, recent: [] }
+const IDLE: Overview = { active: [], recent: [] }
 
 /** Every agent going right now, across the projects, and what is known of it. */
 export function useActiveAgents(): { active: ActiveAgent[]; state: ReadState } {

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { forgetRemembered } from '../lib/use-async.js'
+import { forgetRemembered, usePolled } from '../lib/use-async.js'
+import { pluginsAgain } from '../lib/plugins-switched.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import type { ReactNode } from 'react'
 
@@ -10,12 +11,11 @@ const sendSwitchPlugin = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/plugins.js', () => ({ onComputerPlugins, onProjectPlugins, sendSwitchPlugin }))
 const onModules = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/modules.js', () => ({ onModules }))
-const onSkillChoices = vi.hoisted(() => vi.fn())
-vi.mock('../rpc/skill-choices.js', () => ({ onSkillChoices, onProjectSkillNames: vi.fn() }))
+// A module's read of what the plugins give, which reads again when one is switched (a Skills count).
+const onSkillChoices = vi.fn()
 
 const { ComputerPluginsSettings, ProjectPluginsSettings } = await import('./PluginsSettings.js')
 const { useModules } = await import('../lib/use-modules.js')
-const { useSkillChoices } = await import('./SkillsMenu.js')
 
 afterEach(() => {
   cleanup()
@@ -52,7 +52,7 @@ describe('Settings › Plugins', () => {
     sendSwitchPlugin.mockResolvedValue({ ok: true })
     function Page() {
       useModules()
-      useSkillChoices('p1')
+      usePolled(() => onSkillChoices(), undefined, 30_000, [], undefined, pluginsAgain)
       return (
         <>
           <ComputerPluginsSettings />

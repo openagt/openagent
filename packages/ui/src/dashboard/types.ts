@@ -1,24 +1,13 @@
-import type { LinkedPr } from './pull-requests.js'
+import type { RunOptions } from '@openagt/hooks'
+
 import type { PublishPick } from '../publish-levels.js'
 
 // The dashboard's request/result vocabulary (#345/#396/#475): the shapes the Start / Add /
 // Preview RPCs speak. They live here, on neither the HTTP server nor the RPC mount, so both —
 // plus the RPCs themselves — depend on this leaf rather than on each other.
 
-/** The outcome of removing a retained worktree (#737). */
-export type RemoveWorktreeResult = { ok: true } | { ok: false; error: string }
-
 /** The outcome of deleting a session — its records and worktree (#1032). */
 export type DeleteAgentResult = { ok: true } | { ok: false; error: string }
-
-/**
- * The outcome of an add-project attempt (#396): registered, or was already, or why not.
- * `noRemote` says the person asked to share the agents' records and the repository has no remote
- * to share with: they are kept on this machine.
- */
-export type AddProjectResult =
-  | { ok: true; alreadyActivated: boolean; noRemote?: true; /** For a project added by its repository's address: the folder it is in. */ path?: string }
-  | { ok: false; error: string }
 
 /**
  * The project a folder `openagent` was started in is, on the dashboard's list: the listed project
@@ -36,108 +25,28 @@ export interface StartedProject {
 export type StartedInResult = ({ ok: true } & StartedProject) | { ok: false; error: string }
 
 /**
- * What removing OpenAgent's files from a project's folder did: what went, what stayed with the
- * reason, and what could not be done, each line in words for a person. Paths are from the
- * project's root.
- */
-export interface CleanupReport {
-  removed: string[]
-  kept: { path: string; reason: string }[]
-  failed: string[]
-}
-
-/** The outcome of removing a project from the list: gone from it, with what the clean-up did when one was asked for, or why not. */
-export type RemoveProjectResult = { ok: true; cleanup?: CleanupReport } | { ok: false; error: string }
-
-/**
  * What a Start carries besides its prompt: the person's picks, handed to the run's host as the run
  * options, each module's slice (#2394, decision 12). Absent leaves each to the run's own default.
  */
 export interface StartAgentOptions {
-  /** The images the prompt goes with, by the names the dashboard kept them under (`sendImage`): the agent looks at them with it. Only a run on this computer takes them. */
+  /**
+   * The run's options as the controls under the message box picked them (`composer.control`): one
+   * slice per module, each read by its module's steps, which refuse a slice that is not what they
+   * take. What is picked here goes over the picks below.
+   */
+  options?: RunOptions
+  /** The images the prompt goes with, by the names they were kept under (`composer.images`): the agent looks at them with it. Only a run on this computer takes them. */
   images?: string[]
-  /** The model to run on. */
-  model?: string
-  /** How hard that model may think, by the coding agent's own names (`medium`, `high`, …): what the model lists as its efforts. */
-  effort?: string
-  /** Which coding agent the run is on: `claude-code` or `codex`. */
-  driver?: string
   /** The person's saved pick of how far the run takes its work when the agent finishes. Absent, none is saved: the daemon starts the run at `commit`. A saved pick the project is not offered is held to the furthest the project goes with no pull request. */
   publish?: PublishPick
   /**
-   * What the agent's own branch starts from, from the launcher's branch menu. A branch's name: that
-   * branch as this computer has it, commits that are not pushed included ("My local branch"). A
-   * `publishedBase`: that branch as origin has it, fetched at the Start; one origin no longer has,
-   * or an origin that cannot be read, refuses the Start. Absent, origin's default branch. A word
-   * that is no branch name refuses the Start.
-   */
-  base?: string
-  /**
-   * The branch the run's pull request goes into, from the launcher's Auto menu, kept on the run's
-   * record for its agent and the Open PR press. Absent, the repository's default branch. A word
-   * that is no branch name refuses the Start.
-   */
-  prBase?: string
-  /**
    * Where the run runs, by its host's id (`RunHost.id`): one of the hosts beside this computer's of
-   * the modules on in the project, such as a GitHub Actions runner. Absent, this computer. Refused
+   * the modules on in the project, such as a CI runner. Absent, this computer. Refused
    * for a session with no project.
    */
   host?: string
-  /**
-   * The repos a session with no project has as context, by their folders on this computer: each is
-   * copied into the session's folder. Refused for a project, which works in its own checkout.
-   */
-  repos?: string[]
-  /**
-   * The account at the git host this session works as, by its login: one of the accounts this
-   * computer has there. Absent, the one its runs use. The run's record keeps it, and a resume goes
-   * on as it.
-   */
-  account?: string
-  /**
-   * The profile the session is on, by its id: a name and a saved set of run options, kept with the
-   * person. Absent, Default. The run's record keeps it, and a resume goes on with it.
-   */
-  profile?: string
-  /** The plugins on in the project the session goes without, by name: the "Skills" menu's picks for this session, none of them for an empty list. Absent, its profile's. */
-  pluginsWithout?: string[]
-  /**
-   * Which of the project's own skills stay in the session's checkout: `all`, `none`, or their
-   * names. Absent, its profile's, and every one when that names none. Refused for a session with no
-   * project. The run's record keeps these two, and a resume goes on with them.
-   */
-  projectSkills?: 'all' | 'none' | string[]
 }
 
-/**
- * The outcome of a Start attempt (#345): the id of the run the run's host began, or why there is
- * none. `driver` is the coding agent that runs it.
- */
-export type StartAgentResult = { ok: true; agentId: string; driver?: string } | { ok: false; error: string }
+/** The outcome of a Start attempt (#345): the id of the run the run's host began, or why there is none. */
+export type StartAgentResult = { ok: true; agentId: string } | { ok: false; error: string }
 
-/**
- * Where a session is working (#798): its checkout, its branch, and what it is holding. Read by
- * the dashboard so a session's action bar can say which worktree it has, rather than leaving the
- * user to infer it from an agent id.
- *
- * Only what is true of the run: once its checkout is gone there is no tree to be clean or dirty,
- * so {@link checkout} is absent and the branch is the one the run recorded.
- */
-export interface AgentWorktree {
-  /** The run's own checkout while it exists. */
-  checkout?: {
-    /** Absolute path of the checkout. */
-    path: string
-    /** Uncommitted changes present in it. */
-    dirty: boolean
-    /** Size on disk, bytes. Only read once nothing is writing to it, and best-effort even then. */
-    sizeBytes?: number
-  }
-  /** The branch the run's work is on: its checkout's while it has one, else the one it recorded. */
-  branch?: string
-  /** The PR opened for this run's branch (#809), when there is one. */
-  pr?: LinkedPr
-  /** The PR is not known yet, rather than absent (#1028): the lookup is still running. */
-  prPending?: boolean
-}

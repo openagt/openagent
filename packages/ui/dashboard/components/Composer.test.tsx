@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { createRef } from 'react'
 import type { Preferences } from '../../src/index.js'
 import { resetRunHostsForTest } from '../lib/run-hosts.js'
-import { hoverTooltip, openMenu } from '../test-utils.js'
+import { hoverTooltip, imageStore, openMenu } from '../test-utils.js'
 import { ModulesContext, mountedOf, type MountedView } from '../lib/use-modules.js'
 import { forgetRemembered } from '../lib/use-async.js'
 import type { UiPrompt, UiPromptSaveProps } from '../module/index.js'
@@ -19,15 +19,12 @@ vi.mock('../lib/preferences.js', () => ({
 }))
 // The editor picker (#727) detects installed editors over an RPC; stub it to none in the test.
 vi.mock('../lib/editors.js', () => ({ useDetectedEditors: () => [] }))
-// Composer loads its own projects for the `@` picker (#743) and the project's commands for the
-// `/` list; stub the reads.
+// Composer loads its own projects for the `@` picker (#743); stub the reads.
 const onCommands = vi.hoisted(() => vi.fn())
 // The hosts beside this computer the project's modules bring: none unless a test says.
 const onRunHosts = vi.hoisted(() => vi.fn(async () => [] as { id: string; label: string }[]))
 vi.mock('../rpc/projects.js', () => ({ onProjects: () => Promise.resolve([]), onCommands, onRunHosts }))
 // An image dropped or pasted is kept by the dashboard: here the call answers what the test says.
-const sendImage = vi.hoisted(() => vi.fn())
-vi.mock('../rpc/control.js', async original => ({ ...(await original<object>()), sendImage }))
 
 // Stub the Tiptap editor (it needs a real DOM/ProseMirror): a plain input driving onChange, a
 // "type-submit" button firing onSubmit, and a ref exposing the same handle the composer calls.
@@ -70,7 +67,7 @@ vi.mock('./PromptEditor.js', async () => {
     }, [ready, props.initialText])
     return (
       <div>
-        <input aria-label="prompt" value={held} onChange={e => put(e.target.value)} disabled={props.disabled} data-seed-focus={String(props.initialFocus ?? true)} data-replaced={props.replacedText} data-label={props.label} />
+        <input aria-label="prompt" value={held} onChange={e => put(e.target.value)} disabled={props.disabled} data-seed-focus={String(props.initialFocus ?? true)} data-replaced={props.replacedText} data-label={props.label} data-commands={(props.commands ?? []).map((c: { name: string }) => c.name).join(' ')} />
         <button type="button" onClick={() => props.onSubmit()}>
           editor-submit
         </button>
@@ -82,6 +79,9 @@ vi.mock('./PromptEditor.js', async () => {
   })
   return { PromptEditor }
 })
+
+/** The commands the `/` menu offers, as the editor was handed them. */
+const editorCommands = (): string[] => ((screen.getByLabelText('prompt') as HTMLInputElement).dataset.commands ?? '').split(' ').filter(Boolean)
 
 /** What the editor is actually holding, as opposed to what Start would submit. */
 const editorText = (): string => (screen.getByLabelText('prompt') as HTMLInputElement).value
@@ -112,26 +112,34 @@ beforeEach(async () => {
   resetRunHostsForTest()
   onRunHosts.mockResolvedValue([])
   onCommands.mockReset()
-  onCommands.mockResolvedValue({ commands: [{ name: 'work-queue', description: 'Work the agent queue' }], gitHost: true, remote: true, address: 'github.com/acme/shop' })
+  onCommands.mockResolvedValue({ gitHost: true, remote: true, address: 'github.com/acme/shop' })
 })
 afterEach(cleanup)
 
 /** The project's modules bring a host beside this computer: "Run on" offers it. */
 const withHost = () => onRunHosts.mockResolvedValue([{ id: 'actions', label: 'GitHub Actions' }])
 
-// The driver/model trigger names both in its own label (#1143): with no model pinned it is a logo
-// and a chevron, so the name cannot come from the rendered text the way it used to.
-const agentTrigger = () => screen.getByRole('button', { name: /^Coding agent: / })
+/** A module's control at the right of the row under the box: the coding agent's model, say. */
+const ROW_CONTROL: MountedView<'composer.control'> = { place: 'composer.control', id: 'model', at: 'row', package: 'a-module', projects: [], computer: true, View: () => <button type="button">a-model</button> }
+const rowControl = () => screen.getByRole('button', { name: 'a-model' })
+
+/** The composer with {@link ROW_CONTROL} mounted, in a launcher's box. */
+function renderWithRowControl(over: Partial<Parameters<typeof Composer>[0]> = {}) {
+  render(
+    <ModulesContext.Provider value={mountedOf({ views: { 'composer.control': [ROW_CONTROL] } })}>
+      <Composer files={[]} onSubmit={vi.fn()} busy={false} submitLabel="Send" submitBusyLabel="Sending…" controlBox={{ in: 'launcher', options: {}, onChange: () => {}, busy: false }} {...over} />
+    </ModulesContext.Provider>,
+  )
+}
 
 describe('Composer (#721)', () => {
-  test('renders the commands menu, the agent/model select and the submit button; with no host beside this machine, no "Run on"', async () => {
+  test('renders the commands menu and the submit button; with no host beside this machine, no "Run on"', async () => {
     renderComposer({ submitLabel: 'Start session' })
     // Commands have a visible surface (#948): the `/` menu stays the fast path, the button is
     // the discoverable one.
     expect(screen.getByRole('button', { name: 'Commands' })).toBeTruthy()
     await waitFor(() => expect(onRunHosts).toHaveBeenCalledWith('p1'))
     expect(screen.queryByRole('button', { name: /^Run on: / })).toBeNull()
-    expect((await hoverTooltip(agentTrigger())).textContent).toContain('Coding agent: Claude Code')
     // The launcher's send is the session's arrow, named for what it does, shown once the prompt has text.
     expect(screen.queryByRole('button', { name: /Start session/ })).toBeNull()
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'x' } })
@@ -155,11 +163,8 @@ describe('Composer (#721)', () => {
     expect(screen.getByRole('button', { name: /^Run on: / }).textContent).toBe('This machine')
   })
 
-  test('in a session (#831) there is no agent/model select, and the rest of the row stays', () => {
+  test('in a session (#831) the row stays', () => {
     const { onSubmit } = renderComposer({ inAgent: true })
-    // An in-session composer: the session is bound to the agent it started with, so offering the
-    // select there would only ever rewrite the next session's default.
-    expect(screen.queryByRole('button', { name: /^Coding agent: / })).toBeNull()
     expect(screen.getByRole('button', { name: 'Commands' })).toBeTruthy()
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'follow-up' } })
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
@@ -218,11 +223,27 @@ describe('Composer (#721)', () => {
     expect(onPromptChange).toHaveBeenLastCalledWith('hi')
   })
 
-  test('a command picked from the menu loads as its slash line, and what is sent is that line plus the argument typed after it', async () => {
+  /** A module offering the project's commands (`composer.commands`): one ready, one waiting to reach the branch runs start from. */
+  function commandsModule() {
+    const list = vi.fn(async () => [{ name: 'work-queue', description: 'Work the agent queue' }, { name: 'ship', waiting: 'main' }])
+    const entry = { place: 'composer.commands' as const, id: 'commands', list, package: '@acme/skills', module: 'skills', projects: ['p1'] }
+    return { list, modules: mountedOf({ options: { 'composer.commands': [entry] } }) }
+  }
+
+  test("a command a module offers, picked from the menu, loads as its slash line, and what is sent is that line plus the argument typed after it; one still waiting is said so, and the `/` menu leaves it out", async () => {
+    forgetRemembered()
     const onLoaded = vi.fn()
-    const { onSubmit } = renderComposer({ onLoaded })
-    await waitFor(() => expect(onCommands).toHaveBeenCalledWith('p1'))
+    const onSubmit = vi.fn()
+    const { list, modules } = commandsModule()
+    render(
+      <ModulesContext.Provider value={modules}>
+        <Composer files={[]} onSubmit={onSubmit} onLoaded={onLoaded} busy={false} submitLabel="Send" submitBusyLabel="Sending…" />
+      </ModulesContext.Provider>,
+    )
+    await waitFor(() => expect(list).toHaveBeenCalledWith(expect.objectContaining({ package: '@acme/skills' }), 'p1'))
+    await waitFor(() => expect(editorCommands()).toEqual(['work-queue']))
     fireEvent.click(screen.getByRole('button', { name: 'Commands' }))
+    expect(await screen.findByText('waiting to reach main')).toBeTruthy()
     fireEvent.click(await screen.findByText('/work-queue'))
     expect(editorText()).toBe('/work-queue ')
     expect(onLoaded).toHaveBeenCalledWith('/work-queue', false)
@@ -286,10 +307,21 @@ describe('Composer (#721)', () => {
 
   test('with no module offering saved prompts, the Commands menu has none and no way to save one (#2394)', async () => {
     forgetRemembered()
-    render(<Composer files={[]} onSubmit={vi.fn()} busy={false} submitLabel="Send" submitBusyLabel="Sending…" />)
+    render(
+      <ModulesContext.Provider value={commandsModule().modules}>
+        <Composer files={[]} onSubmit={vi.fn()} busy={false} submitLabel="Send" submitBusyLabel="Sending…" />
+      </ModulesContext.Provider>,
+    )
     await openMenu(screen.getByRole('button', { name: 'Commands' }))
     expect(await screen.findByText('/work-queue')).toBeTruthy()
     expect(screen.queryByRole('menuitem', { name: /Save prompt/ })).toBeNull()
+  })
+
+  test('with no module offering commands, the Commands menu says the project has none', async () => {
+    forgetRemembered()
+    renderComposer()
+    await openMenu(screen.getByRole('button', { name: 'Commands' }))
+    expect(await screen.findByText('This project has no commands.')).toBeTruthy()
   })
 
   // #1139: a draft carried across a navigation lands in sessionStorage; the launcher seeds it into
@@ -470,13 +502,13 @@ describe('the box', () => {
     expect(cls.filter(c => c.includes('outline') || c.includes('ring') || c.includes('border-primary'))).toEqual([])
   })
 
-  test('it holds the commands menu, the text and the submit: the model and "Run on" are outside it, on rows of their own', async () => {
+  test('it holds the commands menu, the text and the submit: the modules\' row controls and "Run on" are outside it, on rows of their own', async () => {
     withHost()
-    renderComposer()
+    renderWithRowControl()
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'x' } })
     expect(box().contains(screen.getByRole('button', { name: 'Send' }))).toBe(true)
     expect(box().contains(commands())).toBe(true)
-    expect(box().contains(agentTrigger())).toBe(false)
+    expect(box().contains(rowControl())).toBe(false)
     expect(box().contains(await screen.findByRole('button', { name: /^Run on: / }))).toBe(false)
     cleanup()
     renderComposer({ inAgent: true })
@@ -505,21 +537,21 @@ describe('the box', () => {
 const runOn = () => screen.getByRole('button', { name: /^Run on: / })
 
 describe('the rows around the box', () => {
-  test('where the agent starts is a row above the box: "Run on", then the caller\'s words; under it, the gear, then the caller\'s controls, and the model at the right', async () => {
+  test('where the agent starts is a row above the box: "Run on", then the caller\'s words; under it, the gear, then the caller\'s controls, and the modules\' row controls at the right', async () => {
     withHost()
-    renderComposer({ startsAt: <span>a-place</span>, controls: <span>a-control</span>, setup: { said: 'Profile Default · 3 skills', lines: <span>a-line</span> } })
+    renderWithRowControl({ startsAt: <span>a-place</span>, controls: <span>a-control</span>, setup: { said: 'Profile Default · 3 skills', lines: <span>a-line</span> } })
     await screen.findByRole('button', { name: /^Run on: / })
     const above = box().previousElementSibling!
     const under = box().nextElementSibling!
     const place = screen.getByText('a-place')
     const control = screen.getByText('a-control')
     const gear = screen.getByRole('button', { name: 'Session setup' })
-    const select = agentTrigger()
+    const select = rowControl()
     // The gear leads the row, on the box's left edge; its lines are in its menu, not in the row.
     expect(under.contains(gear)).toBe(true)
     expect(gear.parentElement!.firstElementChild).toBe(gear)
     expect(gear.compareDocumentPosition(control) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(screen.queryByText('a-line')).toBeNull()
+    expect(under.contains(screen.getByText('a-line'))).toBe(false)
     expect(above.contains(runOn())).toBe(true)
     expect(above.contains(place)).toBe(true)
     expect(runOn().compareDocumentPosition(place) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
@@ -540,11 +572,11 @@ describe('the rows around the box', () => {
     expect(under.lastElementChild).toBe(select)
   })
 
-  test('with nothing of the caller\'s, the row above still carries "Run on", and the row under the select', async () => {
+  test('with nothing of the caller\'s, the row above still carries "Run on", and the row under the modules\' controls', async () => {
     withHost()
-    renderComposer()
+    renderWithRowControl()
     expect(box().previousElementSibling!.contains(await screen.findByRole('button', { name: /^Run on: / }))).toBe(true)
-    expect(box().nextElementSibling!.contains(agentTrigger())).toBe(true)
+    expect(box().nextElementSibling!.contains(rowControl())).toBe(true)
   })
 
   test("the gear's menu opens above the box, holds the caller's lines under \"This session\", and its hover says them with the menu shut; with no setup there is no gear", async () => {
@@ -560,23 +592,10 @@ describe('the rows around the box', () => {
     expect(screen.queryByRole('button', { name: 'Session setup' })).toBeNull()
   })
 
-  test('in a session the model is said in words where the select would be, as the select says it, and is no button: the logo, the name, and the effort smaller', () => {
-    renderComposer({ inAgent: true, sessionModel: { driver: 'claude-code', name: 'Opus 5.5', effort: 'High' } })
-    const row = box().nextElementSibling!
-    const said = screen.getByText('Opus 5.5')
-    expect(row.contains(said)).toBe(true)
-    expect(said.closest('button')).toBeNull()
-    expect(said.className).toContain('font-medium')
-    expect(said.previousElementSibling!.querySelector('svg')).toBeTruthy()
-    expect(screen.getByText('High').className).toContain('text-xs')
-    expect(screen.queryByRole('button', { name: /^Coding agent: / })).toBeNull()
+  test("a session's words of its own close the row under the box", () => {
+    renderComposer({ inAgent: true, sessionContext: <span>a-context</span> })
+    expect(box().nextElementSibling!.lastElementChild!.textContent).toBe('a-context')
   })
-
-  test('a session whose model is not known says none', () => {
-    renderComposer({ inAgent: true })
-    expect(box().nextElementSibling!.textContent).toBe('')
-  })
-
 })
 
 describe('in a session', () => {
@@ -601,6 +620,18 @@ describe('images', () => {
     fireEvent.paste(screen.getByLabelText('prompt'), { clipboardData: { files, types: [...(text !== undefined ? ['text/plain'] : []), 'Files'], getData: () => text ?? '' } })
   const drop = (files: File[]) => fireEvent.drop(box(), { dataTransfer: { files, types: ['Files'] } })
   const tiles = () => screen.queryAllByRole('button', { name: /^Open image / })
+  // The module that keeps the images: its keep stands in for its server part.
+  const sendImage = vi.fn()
+  const store = imageStore((_host, image) => sendImage(image.type, image.data))
+  const renderComposer = (over: Partial<Parameters<typeof Composer>[0]> = {}) => {
+    const onSubmit = vi.fn()
+    render(
+      <ModulesContext.Provider value={mountedOf({ options: { 'composer.images': [store] } })}>
+        <Composer files={[]} onSubmit={onSubmit} busy={false} submitLabel="Send" submitBusyLabel="Sending…" {...over} />
+      </ModulesContext.Provider>,
+    )
+    return { onSubmit }
+  }
 
   beforeEach(() => {
     sendImage.mockReset()
@@ -672,7 +703,7 @@ describe('images', () => {
     await waitFor(() => expect(JSON.parse(localStorage.getItem('oa.draft-images:p1:run-1') ?? '[]')).toEqual([kept(4)]))
     cleanup()
     renderComposer({ inAgent: true, draftKey: 'p1:run-1', ref })
-    expect(screen.getByRole('list', { name: 'Images' }).querySelector('img')!.getAttribute('src')).toBe(`/_rpc/images/${kept(4)}`)
+    expect(screen.getByRole('list', { name: 'Images' }).querySelector('img')!.getAttribute('src')).toBe(`/_images/${kept(4)}`)
     let draft: ReturnType<ComposerHandle['clear']> | undefined
     act(() => void (draft = ref.current!.clear()))
     expect(draft!.images).toEqual([kept(4)])
@@ -680,6 +711,13 @@ describe('images', () => {
     expect(localStorage.getItem('oa.draft-images:p1:run-1')).toBeNull()
     act(() => ref.current!.restore(draft!))
     expect(tiles()).toHaveLength(1)
+  })
+
+  test('where no module keeps images, a box takes none: a pasted image stays out of it', () => {
+    render(<Composer files={[]} onSubmit={vi.fn()} busy={false} submitLabel="Send" submitBusyLabel="Sending…" inAgent />)
+    paste([image()])
+    expect(tiles()).toHaveLength(0)
+    expect(sendImage).not.toHaveBeenCalled()
   })
 
   test('a click on a tile shows the image large over the page; its X and Esc close it', async () => {

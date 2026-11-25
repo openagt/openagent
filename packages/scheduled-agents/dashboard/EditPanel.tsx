@@ -328,7 +328,7 @@ export function EditPanel({
         <RunsOnFields command={scheduled} schedulerModel={schedulerModel} agents={codingAgents} agent={runsOn.agent} model={runsOn.model} disabled={saving} onChange={next => (setRunsOn(next), setFailed(undefined))} />
       </Section>
       <Section title="What its runs publish">
-        <PublishField gitHost={project.gitHost} own={isOwn(scheduled)} pick={publish} disabled={saving} onChange={next => (setPublish(next), setFailed(undefined))} />
+        <PublishField gitHost={project.remote !== undefined} own={isOwn(scheduled)} pick={publish} disabled={saving} onChange={next => (setPublish(next), setFailed(undefined))} />
         {scheduled.each && <p className="text-sm text-muted-foreground">{EACH_KEEPS_OWN}.</p>}
       </Section>
       <p className="text-sm">{problem ?? (dirty ? sentence : `${sentence} Nothing is changed yet.`)}</p>

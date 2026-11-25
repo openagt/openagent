@@ -1,87 +1,25 @@
 import { accentOf, isCodeFont, isDocumentFont, isFont, isPalette, type Accent, type CodeFont, type DocumentFont, type Font, type Palette } from './appearance.js'
 import { sanitizeOverviewLayouts, type OverviewLayouts } from './overview-layout.js'
-import { dirname, isAbsolute, join, resolve } from 'node:path'
-import { projectId } from '@openagt/agent-data'
-import { DEFAULT_PROFILE, isProfileId } from '@openagt/hooks'
-import { isBranchName } from './branch-name.js'
-import { isDriverName } from './driver-names.js'
+import { dirname, join } from 'node:path'
 import { isPublishPick, type PublishPick } from './publish-levels.js'
 import { nodeFs } from './node-fs.js'
 
 /**
- * The multi-project registry (#390): the list of projects the user has
- * installed OpenAgent into, kept as a single JSON file `.bashrc`-style —
- * `$HOME/.openagent.json` — so it is the user's responsibility to re-create
- * per machine. The same file also holds the user's dashboard preferences (#410),
- * so the daemon owns one user file and the UI never needs localStorage.
+ * The user's dashboard preferences (#410), kept as a single JSON file `.bashrc`-style —
+ * `$HOME/.openagent.json` — so the daemon owns one user file and the UI never needs
+ * localStorage. The list of projects is the projects module's (`PROJECTS`, in the store).
  */
 
-/** One registered project. */
-export interface ProjectRecord {
-  /** Stable, URL-safe id derived from the path. */
-  id: string
-  /** Absolute repo path. */
-  path: string
-  /** ISO timestamp the project was added. */
-  addedAt: string
-}
-
-/** The cap on the projects `startFrom` lists, so a hand-edited file cannot bloat. */
-const START_FROM_LIMIT = 200
-
 /**
- * Where agents started from the launcher start, when it is not the project's main branch: the
- * branch the project's folder is on, whatever that is by then, or one of origin's branches, by name.
- */
-export type StartFromPick = { kind: 'local' } | { kind: 'published'; branch: string }
-
-/** A value read as a {@link StartFromPick}: nothing for anything else, a word that is no branch name included. */
-export function startFromPick(value: unknown): StartFromPick | undefined {
-  if (typeof value !== 'object' || value === null) return undefined
-  const { kind, branch } = value as { kind?: unknown; branch?: unknown }
-  if (kind === 'local') return { kind }
-  return kind === 'published' && isBranchName(branch) ? { kind, branch } : undefined
-}
-
-/**
- * The dashboard's Global options (#410), persisted next to the project list so they
+ * The dashboard's Global options (#410), persisted in the registry file so they
  * survive restarts without localStorage — the daemon reads/writes them, the SPA reads
  * them over `POST /_rpc/onPreferences`. Mostly flat booleans mirroring the Start form's
  * toggles; every field is optional and absent means off, except where a field documents its
  * own default below.
  */
 export interface Preferences {
-  /** The model to run on (#628), e.g. `opus` / `sonnet`, handed to the run. Absent = the coding agent's own default. */
-  model?: string
-  /**
-   * How hard that model may think, by the coding agent's own names (`low`, `medium`, `high`, …),
-   * handed to the run. Absent = the agent's own default. Kept whatever the model:
-   * a model that does not take one simply never shows it, and the pick stays for the one that does.
-   */
-  effort?: string
-  /** Which coding agent a run starts on (#650): `claude-code` or `codex`, handed to the run. Absent = the run's own default, Claude Code. */
-  driver?: string
   /** How far a run started from the dashboard publishes its work: `nothing`, or the level handed to the run, `commit`, `branch`, `pr` or `merge`. The launcher's menu shows it and writes it. Absent = none saved: the daemon decides where a Start goes. */
   publish?: PublishPick
-  /**
-   * Where an agent started from the launcher starts, per project, by its id: "My local branch",
-   * or a branch of origin's. The launcher's branch menu shows it and writes it. **A project not
-   * listed starts from its main branch**, so the default stores nothing.
-   */
-  startFrom?: Record<string, StartFromPick>
-  /**
-   * The profile a run started from the launcher is on, by its id. The launcher's "Profile" pick
-   * writes it. **Absent = Default.**
-   */
-  profile?: string
-  /**
-   * Name each run: a small model is asked for the two to five words a list of runs shows in place
-   * of the first line of the prompt (agent-driver's `engine/title.ts`). It is one short turn of the
-   * cheapest model with no tools, measured at a thirtieth of a cent a run, and it is the only
-   * money OpenAgent spends on something a person only looks at — so it can be turned off, and the
-   * run keeps the person's own words. **Absent = on.**
-   */
-  nameRuns?: boolean
   /**
    * How the sidebar orders its list of runs: `created` (newest started first), `updated` (the one
    * that last did something first, as Claude Code's list does by default) or `name`. **Absent =
@@ -131,16 +69,10 @@ export interface Preferences {
   overviewLayouts?: OverviewLayouts
 }
 
-/** The persisted registry file shape (#410): the project list plus the user preferences. */
+/** The persisted registry file shape (#410): the user preferences. */
 export interface Registry {
-  projects: ProjectRecord[]
   preferences: Preferences
-  /** The folders the person added to look for repos in, besides the home folder (dashboard/repos.ts), absolute. */
-  repoFolders?: string[]
 }
-
-/** The cap on added repo folders, so a hand-edited file cannot make a crawl of everything. */
-const MAX_REPO_FOLDERS = 50
 
 /** A read/write handle for the user preferences, wired into the dashboard's context by the daemon. */
 export interface PreferencesStore {
@@ -191,27 +123,6 @@ function nodeRegistryFs(): RegistryFs {
   return { read, write, mkdir, rename, chmod }
 }
 
-/** True when `value` is a well-formed {@link ProjectRecord}. */
-function isRecord(value: unknown): value is ProjectRecord {
-  if (typeof value !== 'object' || value === null) return false
-  const record = value as Record<string, unknown>
-  return typeof record.id === 'string' && typeof record.path === 'string' && typeof record.addedAt === 'string'
-}
-
-/** Keep well-formed records, deduped by resolved path (first wins). */
-function dedupeProjects(values: unknown[]): ProjectRecord[] {
-  const seen = new Set<string>()
-  const projects: ProjectRecord[] = []
-  for (const value of values) {
-    if (!isRecord(value)) continue
-    const key = resolve(value.path)
-    if (seen.has(key)) continue
-    seen.add(key)
-    projects.push(value)
-  }
-  return projects
-}
-
 /** The boolean keys of {@link Preferences}, computed so the table below cannot drift from the type. */
 type BooleanPreferenceKey = {
   [K in keyof Preferences]-?: NonNullable<Preferences[K]> extends boolean ? K : never
@@ -226,7 +137,6 @@ type BooleanPreferenceKey = {
  */
 const BOOLEAN_PREFERENCES: Record<BooleanPreferenceKey, true> = {
   onboardingDismissed: true,
-  nameRuns: true,
   showThinking: true,
   recentsPerson: true,
   recentsAgent: true,
@@ -246,27 +156,8 @@ function sanitizePreferences(value: unknown): Preferences {
   for (const key of PREFERENCE_KEYS) {
     if (typeof input[key] === 'boolean') preferences[key] = input[key] as boolean
   }
-  // `model` (#628) is a free-form string preference; the rest are booleans. A blank string is "no
-  // choice", same as absent, so it is dropped rather than persisted. So is the literal word
-  // "Default": that was a picker *label* whose stored value was empty (#1143), and a file carrying
-  // it as the value — hand-edited, or written by a build that mistook the two — would otherwise be
-  // handed to the CLI as `--model Default` and fail the turn on a word nobody chose.
-  const model = typeof input['model'] === 'string' ? input['model'].trim() : ''
-  if (model && model.toLowerCase() !== 'default') preferences.model = model
-  // `effort` is free-form too: the levels come from the agent's own model list, and a level this
-  // version has never heard of still belongs to the agent that offered it.
-  const effort = typeof input['effort'] === 'string' ? input['effort'].trim() : ''
-  if (effort) preferences.effort = effort.slice(0, 20)
-  // `driver` (#650) is constrained to the known set so junk never reaches the agent; the set is the
-  // shared node-free vocabulary (driver-names.ts).
-  if (isDriverName(input['driver'] as string | undefined)) preferences.driver = input['driver'] as string
   // `publish` is constrained to the picks the launcher's menu lists.
   if (isPublishPick(input['publish'])) preferences.publish = input['publish']
-  // `profile` names a profile by its id; Default is the absent entry.
-  const profile = typeof input['profile'] === 'string' ? input['profile'].trim() : ''
-  if (isProfileId(profile) && profile !== DEFAULT_PROFILE) preferences.profile = profile
-  const startFrom = sanitizeStartFrom(input['startFrom'])
-  if (Object.keys(startFrom).length) preferences.startFrom = startFrom
   // `editor` (#727) is a free-form CLI name, trimmed and length-capped so junk / a huge string
   // never lands in the file. A blank string is "no choice" (fall back to env / `code`), so dropped.
   if (typeof input['editor'] === 'string' && input['editor'].trim())
@@ -291,21 +182,6 @@ function sanitizePreferences(value: unknown): Preferences {
   return preferences
 }
 
-/**
- * Keep only the projects set to start from the local branch: a map from a project's id to the one
- * word `local`. Any other value is dropped (the main branch is the absent entry), and the map is
- * capped at {@link START_FROM_LIMIT} projects. An id is not checked against the project list: a
- * project removed and added again has the same id, and its pick with it.
- */
-function sanitizeStartFrom(value: unknown): Record<string, StartFromPick> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return {}
-  const picks = Object.entries(value).flatMap(([id, from]) => {
-    const pick = startFromPick(from)
-    return id !== '' && pick ? [[id, pick] as const] : []
-  })
-  return Object.fromEntries(picks.slice(0, START_FROM_LIMIT))
-}
-
 /** Whether a value reads as a computer's own name: the letters a host name has, at a host name's length. A page shows it. */
 export function isHostName(value: unknown): value is string {
   return typeof value === 'string' && /^[A-Za-z0-9._-]{1,253}$/.test(value)
@@ -313,14 +189,13 @@ export function isHostName(value: unknown): value is string {
 
 /**
  * Read the whole registry. Forgiving: a missing / unreadable / malformed file — or one in a shape
- * this no longer writes — yields an empty registry, never throws. Projects are deduped by resolved
- * path and unknown preference fields are dropped.
+ * this no longer writes — yields an empty registry, never throws. Unknown preference fields are dropped.
  */
 export async function readRegistry(
   env: NodeJS.ProcessEnv = process.env,
   fs: RegistryFs = nodeRegistryFs(),
 ): Promise<Registry> {
-  const empty: Registry = { projects: [], preferences: {} }
+  const empty: Registry = { preferences: {} }
   let parsed: unknown
   try {
     parsed = JSON.parse(await fs.read(registryPath(env)))
@@ -328,14 +203,7 @@ export async function readRegistry(
     return empty
   }
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return empty
-  const obj = parsed as Record<string, unknown>
-  const projects = Array.isArray(obj.projects) ? dedupeProjects(obj.projects) : []
-  const repoFolders = Array.isArray(obj.repoFolders) ? [...new Set(obj.repoFolders.filter((folder): folder is string => typeof folder === 'string' && isAbsolute(folder)))].slice(0, MAX_REPO_FOLDERS) : []
-  return {
-    projects,
-    preferences: sanitizePreferences(obj.preferences),
-    ...(repoFolders.length ? { repoFolders } : {}),
-  }
+  return { preferences: sanitizePreferences((parsed as Record<string, unknown>).preferences) }
 }
 
 /**
@@ -343,24 +211,18 @@ export async function readRegistry(
  *
  * Atomic (#991): the JSON goes to a temp file beside the real one and is then renamed over it.
  * A direct write truncates first, so a crash, a kill or a full disk mid-write left a half file —
- * and {@link readRegistry} reports a malformed file as an empty registry, so every project and
+ * and {@link readRegistry} reports a malformed file as an empty registry, so every
  * preference vanished silently. A failed write now only ever damages the temp file. The temp is
  * left behind on failure rather than swept up: one stray file is the cheaper half of that trade.
  *
  * Written owner-only (#1095): a default-umask 0644 in a shared home would hand the person's
- * projects and preferences to every other account on the machine.
+ * preferences to every other account on the machine.
  * The mode is set on the temp file, before the rename — narrowing after it would leave a window
  * where the real path is readable. Best-effort: a filesystem with no permission bits still writes.
  */
 async function writeRegistry(registry: Registry, env: NodeJS.ProcessEnv, fs: RegistryFs): Promise<void> {
   const file = registryPath(env)
-  const { projects, preferences, repoFolders } = registry
-  const contents = {
-    projects,
-    preferences,
-    ...(repoFolders?.length ? { repoFolders } : {}),
-  }
-  const json = JSON.stringify(contents, null, 2)
+  const json = JSON.stringify({ preferences: registry.preferences }, null, 2)
   await fs.mkdir(dirname(file))
   const temp = `${file}.${process.pid}.tmp`
   await fs.write(temp, json)
@@ -370,8 +232,8 @@ async function writeRegistry(registry: Registry, env: NodeJS.ProcessEnv, fs: Reg
 
 /**
  * Serializes the read-modify-write mutators below (#991). Each reads the whole registry, edits it
- * and writes it back, and one daemon runs several concurrently: a project added while the
- * dashboard's savePreferences RPC writes through {@link registryPreferencesStore}. Interleaved, the later write was computed from a read taken
+ * and writes it back, and one daemon runs several concurrently: two of the dashboard's
+ * savePreferences RPCs writing through {@link registryPreferencesStore}. Interleaved, the later write was computed from a read taken
  * before the earlier one landed, so it silently dropped it. One tail promise for the module, not
  * one per file: the writes are small, and the registry is a single file per machine anyway.
  */
@@ -388,91 +250,6 @@ function serialize<T>(mutate: () => Promise<T>): Promise<T> {
   return result
 }
 
-/**
- * Read the registry's project list. Forgiving: a missing / unreadable / malformed
- * file yields `[]`, never throws. Deduped by resolved path, first wins.
- */
-export async function listProjects(
-  env: NodeJS.ProcessEnv = process.env,
-  fs: RegistryFs = nodeRegistryFs(),
-): Promise<ProjectRecord[]> {
-  return (await readRegistry(env, fs)).projects
-}
-
-/**
- * Register a project. Idempotent by resolved path: when the path is already
- * registered, the existing record is returned untouched (addedAt survives);
- * otherwise the new record is appended and the file written back (preferences preserved).
- */
-export async function addProject(
-  path: string,
-  addedAt: string,
-  env: NodeJS.ProcessEnv = process.env,
-  fs: RegistryFs = nodeRegistryFs(),
-): Promise<ProjectRecord> {
-  return serialize(async () => {
-    const absolute = resolve(path)
-    const registry = await readRegistry(env, fs)
-    const existing = registry.projects.find(project => resolve(project.path) === absolute)
-    if (existing) return existing
-
-    const record: ProjectRecord = { id: projectId(absolute), path: absolute, addedAt }
-    registry.projects.push(record)
-    await writeRegistry(registry, env, fs)
-    return record
-  })
-}
-
-/**
- * Take a project off the list, by id. Answers the record that was removed, or `undefined` when
- * no project has that id. Only the list changes: nothing in the project's folder is touched, so
- * a project whose folder is gone is removed like any other.
- */
-export async function removeProject(
-  id: string,
-  env: NodeJS.ProcessEnv = process.env,
-  fs: RegistryFs = nodeRegistryFs(),
-): Promise<ProjectRecord | undefined> {
-  return serialize(async () => {
-    const registry = await readRegistry(env, fs)
-    const removed = registry.projects.find(project => project.id === id)
-    if (!removed) return undefined
-    registry.projects = registry.projects.filter(project => project.id !== id)
-    await writeRegistry(registry, env, fs)
-    return removed
-  })
-}
-
-/** The folders the person added to look for repos in (dashboard/repos.ts). Forgiving, like {@link listProjects}. */
-export async function listRepoFolders(env: NodeJS.ProcessEnv = process.env, fs: RegistryFs = nodeRegistryFs()): Promise<string[]> {
-  return (await readRegistry(env, fs)).repoFolders ?? []
-}
-
-/** Add a folder to look for repos in, by its absolute path; one already there is not added again. */
-export async function addRepoFolder(folder: string, env: NodeJS.ProcessEnv = process.env, fs: RegistryFs = nodeRegistryFs()): Promise<void> {
-  return serialize(async () => {
-    const absolute = resolve(folder)
-    const registry = await readRegistry(env, fs)
-    const folders = registry.repoFolders ?? []
-    if (folders.includes(absolute) || folders.length >= MAX_REPO_FOLDERS) return
-    registry.repoFolders = [...folders, absolute]
-    await writeRegistry(registry, env, fs)
-  })
-}
-
-/** Stop looking for repos in a folder the person added; one not there changes nothing. */
-export async function removeRepoFolder(folder: string, env: NodeJS.ProcessEnv = process.env, fs: RegistryFs = nodeRegistryFs()): Promise<void> {
-  return serialize(async () => {
-    const registry = await readRegistry(env, fs)
-    const folders = registry.repoFolders ?? []
-    if (!folders.includes(folder)) return
-    const kept = folders.filter(one => one !== folder)
-    if (kept.length) registry.repoFolders = kept
-    else delete registry.repoFolders
-    await writeRegistry(registry, env, fs)
-  })
-}
-
 /** The user's dashboard preferences (#410), or `{}` when none are stored. */
 export async function readPreferences(
   env: NodeJS.ProcessEnv = process.env,
@@ -481,7 +258,7 @@ export async function readPreferences(
   return (await readRegistry(env, fs)).preferences
 }
 
-/** Persist the dashboard preferences (#410), sanitized, preserving the project list. */
+/** Persist the dashboard preferences (#410), sanitized. */
 export async function writePreferences(
   preferences: Preferences,
   env: NodeJS.ProcessEnv = process.env,

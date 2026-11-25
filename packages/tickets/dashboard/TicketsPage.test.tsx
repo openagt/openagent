@@ -26,7 +26,7 @@ const render = (mounted: MountedModules = modules()) => {
   const answers: Answers = {}
   for (const g of groups) answers[g.projectId] = { list: g.tickets, meta: {} }
   host = fakeHost(answers)
-  return renderWithHost(<TicketsPage projects={groups.map(g => ({ id: g.projectId, name: g.projectName, gitHost: true }))} />, host, mounted)
+  return renderWithHost(<TicketsPage projects={groups.map(g => ({ id: g.projectId, name: g.projectName, remote: 'github.com/me/project' }))} />, host, mounted)
 }
 /** The starts the host was asked for: `[projectId, prompt]` each. */
 const started = () => host.startRun.mock.calls.map(([projectId, prompt]) => [projectId, prompt])
@@ -143,7 +143,7 @@ describe('TicketsPage (#1144)', () => {
     const reads: (() => void)[] = []
     slow.call.mockImplementation(() => new Promise(resolve => reads.push(() => resolve({ ok: false, error: 'read too late' }))))
     try {
-      renderWithHost(<TicketsPage projects={[{ id: 'p1', name: 'Alpha', gitHost: true }]} />, slow, modules())
+      renderWithHost(<TicketsPage projects={[{ id: 'p1', name: 'Alpha', remote: 'github.com/me/project' }]} />, slow, modules())
       const row = screen.getByText('Do the thing')
       expect(row.closest('[data-stale]')).toBeNull()
       await waitFor(() => expect(row.closest('[data-stale]')).not.toBeNull(), { timeout: 2000 })
@@ -199,7 +199,7 @@ describe('TicketsPage (#1144)', () => {
   test("a claim naming one of the project's runs reads as its session name and opens the run (#1748)", async () => {
     const run = { id: '2026-08-30T10-00-00-000Z', name: 'login-page', status: 'running' as const, startedAt: '2026-08-30T10:00:00.000Z' }
     host = fakeHost({ p1: { list: [ticket({ locked: true, lockedBy: run.id })], meta: {} } }, { p1: [run] })
-    renderWithHost(<TicketsPage projects={[{ id: 'p1', name: 'Alpha', gitHost: true }]} />, host, modules())
+    renderWithHost(<TicketsPage projects={[{ id: 'p1', name: 'Alpha', remote: 'github.com/me/project' }]} />, host, modules())
     // Named as its run, and how that run stands.
     fireEvent.click(await screen.findByRole('button', { name: 'Claimed by login-page: working' }))
     expect(host.openAgent).toHaveBeenCalledWith('p1', run.id)

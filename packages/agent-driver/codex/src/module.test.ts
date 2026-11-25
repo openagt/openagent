@@ -53,3 +53,9 @@ test("ready: skills in ~/.agents/skills are no warning while runs load the perso
     await rm(dir, { recursive: true, force: true })
   }
 })
+
+test("a session is picked back up in a terminal by Codex's own command, in the folder it ran in", () => {
+  const agent = codexAgent()
+  assert.equal(agent.resumeCommand?.({ id: 'sess-1', cwd: '/repo/w' }), "mkdir -p '/repo/w' && cd '/repo/w' && codex resume sess-1")
+  assert.equal(agent.resumeCommand?.({ id: 'sess-1' }), 'codex resume sess-1')
+})

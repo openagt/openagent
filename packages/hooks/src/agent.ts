@@ -4,6 +4,8 @@
  * `agent-driver-codex`) implement it; agent-driver holds what they build it with.
  */
 
+import type { AgentCalls } from './calls.js'
+
 /**
  * The **driver** seam: the one abstraction a coding-agent CLI is wrapped behind.
  * A driver treats the CLI (Claude Code, Codex) as a **black box**: hand it a
@@ -77,18 +79,37 @@ export interface RunAgent {
   readonly id: string
   /** Its name for a person: `Claude Code`. */
   readonly label: string
+  /** Its mark, as SVG markup drawn in the text's colour (`fill="currentColor"`): beside its name, wherever a run on it is shown. */
+  readonly logo?: string
+  /** Its program on this computer, for its updates: the command it runs as (`claude`), and the npm package its versions come out under. */
+  readonly program?: { readonly bin: string; readonly npm: string }
   /** It asks the person with a tool of its own ({@link Driver.ownQuestionTool}): its runs get no skill that teaches asking. */
   readonly ownQuestionTool?: boolean
+  /** How its tool calls read in the chat, by the labels its `action` events give them: none, each is said by its label. */
+  readonly calls?: AgentCalls
   /**
    * Its accounts on this computer: the list its turns take, the accounts a person added for it in
    * OpenAgent beside its own login, and a profile's picks among them (`RunOptions['agent-driver']`).
    * None: it runs on whatever login it has.
    */
   readonly accounts?: AgentLogins
+  /**
+   * The models it offers, by its own names, as it lists them on the account its runs take first:
+   * asked once for each account, as its picker would, and again with `fresh` (a new version can
+   * offer other models). Rejects where it cannot say, with the error's `code` `ENOENT` where its
+   * program is not on this computer.
+   */
+  models?(opts?: { fresh?: boolean }): Promise<DriverModel[]>
   /** What would stop a run on it here, asked before a run spends a checkout: its CLI missing or logged out. */
   ready(opts: RunAgentReadyOptions): Promise<DriverReadiness>
   /** The driver one run's sessions start on, unrestricted: nobody is there to approve what its agent does in the run's checkout. */
   driver(opts: RunAgentOptions): Driver
+  /**
+   * The command that picks one of its sessions back up in a person's terminal (`claude --resume
+   * <id>`): `cwd` is the folder the session ran in, which may be gone by then. None: its sessions
+   * are not picked up outside a run.
+   */
+  resumeCommand?(session: { id: string; cwd?: string }): string
 }
 
 /** What a coding agent's readiness is asked with. */
@@ -572,11 +593,12 @@ export type DriverEvent =
    * own tool, and a reader shows it as one row that is live and then is over.
    *
    * `id` is stable across the same subagent's updates, so a reader replaces its row rather than
-   * appending a second one. On Claude Code it is the `Agent` call's `tool_use` id — one call is one
-   * subagent — and the events the subagent's own messages make carry it as their `subagent`. On
+   * appending a second one, and the events the subagent's own messages make carry it as their
+   * `subagent`. `call` is the id of the `action` that started it, when that is not `id`: a driver
+   * whose one call can start several subagents gives each an id of its own and the call's as
+   * `call`. On Claude Code `id` is the `Agent` call's `tool_use` id — one call is one subagent. On
    * Codex it is the `collabAgentToolCall` item's id and the agent's own thread id (its nickname, or
-   * its place in the list, when the item names no thread) joined by a colon, because one Codex call
-   * can concern several agents at once.
+   * its place in the list, when the item names no thread) joined by a colon, and `call` the item's.
    *
    * `status` is the only part a reader may gate a row on: `working` while it runs, `ended` once it
    * is over, `failed` when it did not go through (Codex's `declined` reads as `failed` too). A
@@ -591,9 +613,9 @@ export type DriverEvent =
    *
    * Emitted **beside** the `action` and `output` events of the same call, which both drivers go on
    * emitting unchanged: whoever renders this event renders one row for the subagent and skips
-   * those two for the same call — the same `id`, or on Codex the part of it before the colon.
+   * those two for the same call: the one `call` names, else the one of the same `id`.
    */
-  | { type: 'subagent'; id: string; status: 'working' | 'ended' | 'failed'; name?: string; role?: string; model?: string; prompt?: string; tokens?: number; toolUses?: number }
+  | { type: 'subagent'; id: string; call?: string; status: 'working' | 'ended' | 'failed'; name?: string; role?: string; model?: string; prompt?: string; tokens?: number; toolUses?: number }
   /** How many tokens the turn has gone through so far, its subagents' too, when its CLI says. */
   | { type: 'tokens'; tokens: number }
   /** The agent began to think: until what it thinks comes to a message or a call, it is thinking. */

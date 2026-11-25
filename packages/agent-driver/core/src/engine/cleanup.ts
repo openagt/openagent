@@ -1,14 +1,14 @@
 import { lstat, readdir, rm, rmdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import { nodeGitRunner, repositoryCheckouts, unexcludeFromGit, type GitRunner } from '@openagt/agent-data'
+import { nodeGitRunner, repositoryCheckouts, unexcludeFromGit } from '@openagt/git-branches'
+import type { GitRunner } from '@openagt/hooks'
 import { RUNNER_CONFIG, RUNNER_DIR, RUNS_DIR } from './names.js'
-import { isPidAlive, lockHolder } from './run-lock.js'
+import { isPidAlive, runsAlive } from './run-lock.js'
 
 /**
- * `cleanup`: what this tool left in a project, removed, for a person who takes the project out of
- * a dashboard and asks for the tool's files to go too. The tool removes its own and nothing else:
- * a dashboard asks for it by the `cleanup` kind the package declares under `openagent` in its
- * package.json, and holds no list of this tool's files.
+ * What this tool left in a project, removed, for a person who takes the project off the list and
+ * asks for the tool's files to go too (`app.lifecycle`'s `projectRemoved`, `module.ts`). The tool
+ * removes its own and nothing else: the projects module holds no list of this tool's files.
  *
  * What goes is the runs' locks and stderr files, one by one, and then the directories they left
  * empty. The settings file is the person's own writing and stays, and so does anything else
@@ -51,12 +51,7 @@ export async function cleanup(repo: string, deps: CleanupDeps = {}): Promise<Cle
   if (kind === 'none') return { ok: true, removed, kept }
   if (kind !== 'directory') return { ok: true, removed, kept: [{ path: RUNNER_DIR, reason: NOT_OURS }] }
 
-  const running: string[] = []
-  for (const name of await names(runs)) {
-    if (!name.endsWith('.lock')) continue
-    const id = name.slice(0, -'.lock'.length)
-    if ((await lockHolder(repo, id, isAlive)) !== undefined) running.push(id)
-  }
+  const running = await runsAlive(repo, isAlive)
   if (running.length > 0) return { ok: false, reason: 'running', runs: running }
 
   const runsKind = await kindOf(runs)

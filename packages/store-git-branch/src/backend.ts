@@ -1,19 +1,6 @@
-import {
-  DATA_BRANCH,
-  ensureFileBranch,
-  fileBranchPath,
-  listBranchFiles,
-  nodeGitRunner,
-  openBranchReader,
-  readBranchFile,
-  readSharing,
-  withFileBranch,
-  writeFileBranchDetached,
-  type BranchReader,
-  type FileBranchDeps,
-} from '@openagt/agent-data'
+import { DATA_BRANCH, nodeGitRunner } from '@openagt/git-branches'
+import { ensureFileBranch, fileBranchPath, listBranchFiles, openBranchReader, readBranchFile, readSharing, withFileBranch, writeFileBranchDetached, type BranchReader, type FileBranchDeps, filesIn, listIn, watchIn, writeIn } from '@openagt/store-filesystem'
 import { changesOf, StoreOrder, type ProjectRef, type Scope, type Store, type StoreBackend, type StoreContext } from '@openagt/hooks'
-import { filesIn, listIn, watchIn, writeIn } from '@openagt/store-filesystem'
 
 /**
  * A shared project's data on its repository's `agent-data` branch: the project the person shares

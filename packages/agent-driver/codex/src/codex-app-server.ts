@@ -86,8 +86,8 @@ function collabAgents(item: Record<string, unknown>): { key?: string; name?: str
  * The subagents one collab item describes, one event each: the names and roles come from its
  * `agentsStates`, the model and the prompt from the item. A row's id is the item's id and the
  * agent's own thread joined, because one call can concern several agents and the item id alone
- * could not tell them apart; an item whose agents cannot be read at all is still one row, for the
- * status and the prompt it does carry.
+ * could not tell them apart, and its `call` is the item's id; an item whose agents cannot be read
+ * at all is still one row, for the status and the prompt it does carry.
  */
 function codexSubagents(item: Record<string, unknown>, completed: boolean): Extract<DriverEvent, { type: 'subagent' }>[] {
   const itemId = typeof item['id'] === 'string' && item['id'] !== '' ? item['id'] : undefined
@@ -103,7 +103,7 @@ function codexSubagents(item: Record<string, unknown>, completed: boolean): Extr
     const key = agent.key ?? String(index)
     return {
       ...common,
-      id: itemId === undefined ? key : `${itemId}:${key}`,
+      ...(itemId === undefined ? { id: key } : { id: `${itemId}:${key}`, call: itemId }),
       ...(agent.name !== undefined ? { name: oneLine(agent.name) } : {}),
       ...(agent.role !== undefined ? { role: oneLine(agent.role) } : {}),
     }

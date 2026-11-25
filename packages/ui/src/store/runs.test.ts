@@ -1,175 +1,105 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { DISTRIBUTION_ENV } from '@openagt/hooks'
-import { providedCommand } from '../distribution-packages.js'
-import { parseRunCard, providedRuns } from './runs.js'
+import { LOCAL_HOST, type RunEvent, type RunHost, type RunSummary } from '@openagt/hooks'
+import { fakeHost } from '@openagt/hooks/testing'
+import { eventsOf, type AnyDiaryLine } from '@openagt/agent-driver'
+import { doingOf, metaOf, readRun, readRunEvents, readRuns, type RunHosts } from './runs.js'
+import { agentIdFromStartedAt, startedAtFromAgentId } from '../agent-id.js'
 
-// The finished-runs contract (#1774): a package of the distribution declares `"openagent": { "runs": "<command>" }`
-// and OpenAgent reads finished runs by running that command. These tests use real processes:
-// a tiny provider script that logs each call it answers, in a throwaway project.
+const summary = (id: string, over: Partial<RunSummary> = {}): RunSummary => ({ id, host: LOCAL_HOST, status: 'done', startedAt: '2026-07-04T00:00:00.000Z', prompt: 'fix it', ...over })
 
-/** A provider command: answers the contract's command line from a JSON file of runs, logging every call. */
-const PROVIDER = `
-const { readFileSync, writeFileSync, appendFileSync } = require('node:fs')
-const { join } = require('node:path')
-const dir = __dirname
-const args = process.argv.slice(2)
-appendFileSync(join(dir, 'calls.log'), args.join(' ') + '\\n')
-const runs = JSON.parse(readFileSync(join(dir, 'runs.json'), 'utf8'))
-const save = () => writeFileSync(join(dir, 'runs.json'), JSON.stringify(runs))
-if (args[0] === 'show') {
-  const run = runs.find(r => r.id === args[1])
-  if (!run) { process.stdout.write(JSON.stringify({ ok: false, reason: 'no-run' })); process.exit(1) }
-  process.stdout.write(JSON.stringify({ ...run, diary: [{ kind: 'said', text: 'hi' }] }))
-} else if (args[0] === 'delete') {
-  const i = runs.findIndex(r => r.id === args[1]); if (i < 0) process.exit(1)
-  runs.splice(i, 1); save(); process.stdout.write('{"ok":true}')
-} else if (args[0] === 'patch') {
-  const run = runs.find(r => r.id === args[1]); if (!run) process.exit(1)
-  const at = args.indexOf('--branch'); if (at > 0) run.branch = args[at + 1]
-  save(); process.stdout.write('{"ok":true}')
-} else {
-  process.stdout.write(JSON.stringify(runs))
-}
-`
-
-/**
- * A throwaway project, and a distribution of `deps` handed down to this process: each installed
- * under the project's node_modules with its own package.json, every project's.
- */
-async function project(deps: Record<string, Record<string, unknown>>): Promise<string> {
-  const root = await realpath(await mkdtemp(join(tmpdir(), 'openagent-runs-')))
-  await writeFile(join(root, 'distribution.mjs'), `export default ${JSON.stringify(Object.keys(deps).map(name => ({ package: name })))}\n`)
-  process.env[DISTRIBUTION_ENV] = join(root, 'distribution.mjs')
-  for (const [name, manifest] of Object.entries(deps)) {
-    const dir = join(root, 'node_modules', name)
-    await mkdir(dir, { recursive: true })
-    await writeFile(join(dir, 'package.json'), JSON.stringify({ name, ...manifest }))
-    await writeFile(join(dir, 'provider.cjs'), PROVIDER)
-    await writeFile(join(dir, 'runs.json'), JSON.stringify([{ id: 'r2', startedAt: '2026-07-05T00:00:00.000Z', status: 'done', caller: { pid: 7 } }, { id: 'r1', startedAt: '2026-07-04T00:00:00.000Z', status: 'failed' }]))
-  }
-  return root
+/** A host that lists `runs`. */
+function listing(id: string, runs: RunSummary[]): RunHost {
+  return { ...fakeHost({ id }), list: async (_project, wanted = {}) => runs.filter(run => !wanted.ids || wanted.ids.includes(run.id)) }
 }
 
-const calls = async (root: string, pkg: string): Promise<string[]> =>
-  (await readFile(join(root, 'node_modules', pkg, 'calls.log'), 'utf8').catch(() => '')).split('\n').filter(Boolean)
+const hostsOf = (...hosts: RunHost[]): RunHosts => ({ local: LOCAL_HOST, of: async () => hosts })
 
-test('the runs provider is the package of the distribution that declares it, naming one of its own commands; with none, the project has no runs', async () => {
-  const root = await project({
-    plain: { bin: { plain: 'provider.cjs' } },
-    'wrong-bin': { bin: { a: 'provider.cjs' }, openagent: { runs: 'b' } },
-    logs: { bin: { records: 'provider.cjs' }, openagent: { runs: 'records' } },
+test('a run as its host says it, in the page shape: where its work is and its options where the pages read them, its agent session\'s command, the host beside this computer\'s it is on', () => {
+  const run = summary('r1', {
+    status: 'working',
+    endedAt: undefined as never,
+    computer: 'laptop',
+    person: 'me@x.org',
+    agent: { id: 'claude-code', model: 'opus', effort: 'high' },
+    options: { publish: 'pr', 'git-branches': { base: 'origin/develop', repos: [{ name: 'app', from: '/me/app' }] }, github: { prBase: 'main', account: 'me' } },
+    branch: 'agent-x',
+    base: 'origin/develop',
+    pr: { number: 7, url: 'u7' },
+    earlierPrs: [{ number: 6, url: 'u6' }],
+    facts: { 'git-branches': { baseCommit: 'c0ffee', landed: 'beef' } },
+    session: { id: 's-1', resume: 'claude --resume s-1' },
+    saving: true,
+    cost: 0.5,
+    contextTokens: 1000,
+    title: 'Fix the login',
+    naming: true,
   })
-  try {
-    const found = await providedCommand(root, 'runs')
-    assert.equal(found?.package, 'logs', 'a declaration naming no command of the package is skipped')
-    assert.equal(found?.name, 'records')
-    assert.equal(await providedCommand(root, 'tickets'), undefined, 'another kind: nobody declares it')
-    const none = await project({ plain: { bin: { plain: 'provider.cjs' } } })
-    try {
-      assert.equal(await providedRuns()(none), undefined, 'no package of the distribution reads its runs')
-    } finally {
-      await rm(none, { recursive: true, force: true })
-    }
-  } finally {
-    await rm(root, { recursive: true, force: true })
-  }
-})
-
-test('a provider is read through its command: whole cards with caller, one run with its diary; reads within the window share one call', async () => {
-  const root = await project({ logs: { bin: { logs: 'provider.cjs' }, openagent: { runs: 'logs' } } })
-  try {
-    let clock = 1_000_000
-    const runs = await providedRuns(() => clock)(root)
-    assert.ok(runs)
-    const [a, b] = await Promise.all([runs.list(), runs.list()])
-    assert.deepEqual(a.map(card => card.id), ['r2', 'r1'])
-    assert.deepEqual(a[0]!.caller, { pid: 7 })
-    assert.equal(a, b, 'two reads at once are one call')
-    await runs.list()
-    assert.deepEqual(await calls(root, 'logs'), ['--local --full --limit 10000'], 'a read within the window is not a call')
-    await runs.list({ fresh: true })
-    assert.equal((await calls(root, 'logs')).length, 2, 'fresh skips the window')
-    clock += 5_000
-    await runs.list()
-    assert.equal((await calls(root, 'logs')).length, 3, 'past the window: read again')
-
-    const shown = await runs.show('r1')
-    assert.equal(shown?.card.status, 'failed')
-    assert.deepEqual(shown?.diary, [{ kind: 'said', text: 'hi' }])
-    assert.equal(await runs.show('nope'), undefined, 'a refusal is no run')
-    assert.equal(await runs.show('../escape'), undefined, 'an unsafe id never reaches the command')
-    assert.equal((await calls(root, 'logs')).filter(line => line.startsWith('show')).length, 2)
-  } finally {
-    await rm(root, { recursive: true, force: true })
-  }
-})
-
-/** The provider's command line as the function its command calls, exported by the package: each answer logged as `in <args>` with where it ran. */
-const PROVIDER_CLI = `
-import { appendFileSync, readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
-const dir = dirname(fileURLToPath(import.meta.url))
-export async function runCli(args, io) {
-  appendFileSync(join(dir, 'calls.log'), 'in ' + args.join(' ') + ' @' + io.cwd + '\\n')
-  const runs = JSON.parse(readFileSync(join(dir, 'runs.json'), 'utf8'))
-  if (args[0] !== 'show') return io.stdout(JSON.stringify(runs)), 0
-  const run = runs.find(r => r.id === args[1])
-  if (!run) return io.stdout(JSON.stringify({ ok: false, reason: 'no-run' })), io.stderr('no run ' + args[1]), 1
-  return io.stdout(JSON.stringify({ ...run, diary: [{ kind: 'said', text: 'hi' }] })), 0
-}
-`
-
-test('a provider whose package exports its command\'s function is answered in this process: no command is run', async () => {
-  const root = await project({ inlogs: { type: 'module', exports: { '.': './cli.mjs' }, bin: { logs: 'provider.cjs' }, openagent: { runs: 'logs' } } })
-  try {
-    await writeFile(join(root, 'node_modules', 'inlogs', 'cli.mjs'), PROVIDER_CLI)
-    const runs = (await providedRuns(() => 0)(root))!
-    assert.deepEqual((await runs.list()).map(card => card.id), ['r2', 'r1'])
-    assert.deepEqual((await runs.show('r1'))?.diary, [{ kind: 'said', text: 'hi' }])
-    assert.equal(await runs.show('nope'), undefined, 'a refusal is no run')
-    assert.deepEqual(await calls(root, 'inlogs'), [`in --local --full --limit 10000 @${root}`, `in show r1 --local --full @${root}`, `in show nope --local --full @${root}`], 'every answer came from the function, in the project; the command never ran')
-  } finally {
-    await rm(root, { recursive: true, force: true })
-  }
-})
-
-test('a patch and a delete go through the command and drop what was read, so the next read sees them', async () => {
-  const root = await project({ logs: { bin: { logs: 'provider.cjs' }, openagent: { runs: 'logs' } } })
-  try {
-    const runs = (await providedRuns(() => 0)(root))!
-    assert.equal((await runs.list())[1]!.branch, undefined)
-    assert.deepEqual(await runs.patch('r1', { branch: 'agent-fix' }), { ok: true })
-    assert.equal((await runs.list())[1]!.branch, 'agent-fix', 'the clock never moved: only the drop explains a fresh read')
-    assert.deepEqual(await runs.remove('r2'), { ok: true })
-    assert.deepEqual((await runs.list()).map(card => card.id), ['r1'])
-    const refused = await runs.remove('r2')
-    assert.equal(refused.ok, false, 'the command refused: said, not thrown')
-    assert.ok((await calls(root, 'logs')).includes('patch r1 --branch agent-fix'))
-  } finally {
-    await rm(root, { recursive: true, force: true })
-  }
-})
-
-test('parseRunCard keeps the shape\'s fields with the right types, and refuses what is not a card', () => {
-  assert.deepEqual(parseRunCard({ id: 'r1', startedAt: 'x', status: 'done', cost: '1', pr: { number: 3, url: 'u' }, caller: { pid: 1 }, extra: 1 }), {
+  const { endedAt: _, ...working } = run
+  assert.deepEqual(metaOf(working, LOCAL_HOST), {
     id: 'r1',
-    startedAt: 'x',
-    status: 'done',
-    pr: { number: 3, url: 'u' },
-    caller: { pid: 1 },
+    status: 'running',
+    startedAt: '2026-07-04T00:00:00.000Z',
+    updatedAt: '2026-07-04T00:00:00.000Z',
+    cost: 0.5,
+    host: 'laptop',
+    person: 'me@x.org',
+    intent: 'fix it',
+    title: 'Fix the login',
+    naming: true,
+    base: 'develop',
+    publish: 'pr',
+    options: run.options,
+    driver: 'claude-code',
+    model: 'opus',
+    effort: 'high',
+    contextTokens: 1000,
+    branch: 'agent-x',
+    pr: { number: 7, url: 'u7' },
+    earlierPrs: [{ number: 6, url: 'u6' }],
+    resumeCommand: 'claude --resume s-1',
+    saving: true,
   })
-  assert.equal(parseRunCard('{"id":"r1","startedAt":"x","status":"done"}')?.id, 'r1')
-  // The person a provider's list says the run is kept under; a person that is no word is none.
-  assert.equal(parseRunCard({ id: 'r1', startedAt: 'x', status: 'done', person: 'me@x.dev' })?.person, 'me@x.dev')
-  assert.equal(parseRunCard({ id: 'r1', startedAt: 'x', status: 'done', person: 3 })?.person, undefined)
-  assert.equal(parseRunCard({ id: 'r1', startedAt: 'x', status: 'sleeping' }), undefined)
-  // `unknown` is how a run reads while its computer does not answer, never what a card says.
-  assert.equal(parseRunCard({ id: 'r1', startedAt: 'x', status: 'unknown' }), undefined)
-  assert.equal(parseRunCard({ id: '../r1', startedAt: 'x', status: 'done' }), undefined)
-  assert.equal(parseRunCard('not json'), undefined)
+  // On a host beside this computer's: it says which. Ended: it changed when it ended.
+  assert.deepEqual(metaOf(summary('r2', { host: 'web', endedAt: '2026-07-04T01:00:00.000Z' }), LOCAL_HOST), { id: 'r2', status: 'done', startedAt: '2026-07-04T00:00:00.000Z', updatedAt: '2026-07-04T01:00:00.000Z', endedAt: '2026-07-04T01:00:00.000Z', intent: 'fix it', target: 'web' })
+})
+
+test("a project's runs are every host's, newest first, one row per run: the first host that has it keeps it; a host that cannot answer has none", async () => {
+  const here = listing(LOCAL_HOST, [summary('2026-07-04T00-00-02-000Z'), summary('2026-07-04T00-00-01-000Z', { prompt: 'here' })])
+  const web = listing('web', [summary('2026-07-04T00-00-03-000Z', { host: 'web' }), summary('2026-07-04T00-00-01-000Z', { host: 'web', prompt: 'there' })])
+  const down: RunHost = { ...fakeHost({ id: 'actions' }), list: async () => Promise.reject(new Error('offline')) }
+  const runs = await readRuns(hostsOf(here, web, down), undefined)
+  assert.deepEqual(runs.map(run => [run.id, run.intent, run.target]), [
+    ['2026-07-04T00-00-03-000Z', 'fix it', 'web'],
+    ['2026-07-04T00-00-02-000Z', 'fix it', undefined],
+    ['2026-07-04T00-00-01-000Z', 'here', undefined],
+  ])
+  assert.equal((await readRun(hostsOf(here, web), undefined, '2026-07-04T00-00-03-000Z'))?.target, 'web')
+  assert.equal(await readRun(hostsOf(here, web), undefined, 'gone'), undefined)
+})
+
+test("a run's events as they are now: what its host streams up to the end-of-replay marker, without the message being written; none from a host that streams none", async () => {
+  const host = fakeHost()
+  const { id } = await host.start({ prompt: 'p', options: {} })
+  host.emit(id, { kind: 'log', message: 'one' })
+  host.emit(id, { kind: 'partial', text: 'wri' })
+  host.emit(id, { kind: 'stream-sync' })
+  host.emit(id, { kind: 'log', message: 'after' })
+  assert.deepEqual(await readRunEvents(host, { id }), [{ kind: 'log', message: 'one' }])
+  const { events: _, ...silent } = fakeHost()
+  assert.equal(await readRunEvents(silent as RunHost, { id }), undefined)
+})
+
+test('what a working run is doing, by its events: the last tool it used with what, or the last thing it said, on one line; the last tool, and how many calls it made', () => {
+  const doing = (lines: AnyDiaryLine[]) => doingOf(eventsOf(lines) as RunEvent[])
+  assert.deepEqual(doing([{ kind: 'start', prompt: 'do it' }, { kind: 'action', label: 'Read', detail: 'a.ts' }, { kind: 'action', label: 'Edit', detail: 'src/\n  login.ts' }, { kind: 'cost', usd: 1 }]), { doing: 'Edit src/ login.ts', tool: 'Edit', calls: 2 })
+  assert.deepEqual(doing([{ kind: 'action', label: 'Bash' }, { kind: 'said', text: 'x'.repeat(200) }]), { doing: 'x'.repeat(139) + '…', tool: 'Bash', calls: 1 }, 'the last thing said, cut to a line')
+  assert.equal(doing([{ kind: 'start', prompt: 'do it' }]), undefined, 'nothing done yet')
+})
+
+test('startedAtFromAgentId inverts agentIdFromStartedAt, and refuses foreign ids (#1251)', () => {
+  const startedAt = '2026-07-26T21:17:39.507Z'
+  assert.equal(startedAtFromAgentId(agentIdFromStartedAt(startedAt)), startedAt)
+  assert.equal(startedAtFromAgentId('not-a-run-id'), undefined)
+  assert.equal(startedAtFromAgentId(''), undefined)
 })

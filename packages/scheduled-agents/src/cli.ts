@@ -1,8 +1,8 @@
-import { Refused, UsageError, inRepo, nodeGitRunner, parseCommandArgs, runCommandLine, helpRows, helpText, type Command, type GitRunner } from '@openagt/agent-data'
-import { projectRoot } from '@openagt/git-branches'
+import { Refused, UsageError, inRepo, parseCommandArgs, runCommandLine, helpRows, helpText, type Command } from '@openagt/hooks/command'
+import { nodeGitRunner, projectRoot } from '@openagt/git-branches'
+import type { GitRunner } from '@openagt/hooks'
 import { codingAgent, driverFor } from '@openagt/agent-driver'
 import { runNow, schedulerStatus, startScheduler, stopScheduler, tickProject } from './scheduler.js'
-import { cleanup } from './cleanup.js'
 import { PUBLISH_PICKS, agentInForce, readState, updateState, withAgent, withoutCommand, withoutListed, withPacePicked, withPick, withSwitchedOn, type PublishPick, type State } from './state.js'
 import { parseInterval, parseTimeOfDay, takesTimeOfDay } from './pace.js'
 import { AGENTS, AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, MAX_AGENTS, WRITE_LINE_TIMEOUT_MS, isAgent, isAgents } from './names.js'
@@ -40,7 +40,6 @@ ${helpRows([
   ['now <command>', `start one run of a scheduled command now, whatever its switch, its pace and the quota left: a person asked for it. A command with a check starts only when the check finds work (it has 10 seconds); how many at once, where a run's checkout starts and whether the coding agent can start hold as on a tick. It needs no scheduler running. Not ready within 20 seconds, it starts nothing`],
   ['try --when <shell line>', 'run a check once, as a tick would, asking what is new since a day ago: what it printed and whether an agent would start; nothing is saved or started; it has 20 seconds, less than a tick gives a check'],
   ['write-line --words <plain words> [--agent <claude-code|codex>]', `a shell line for --when, written from what it waits for said in plain words, by one session of the coding agent (Claude Code unless named) with no tools: a fraction of a cent. The line is only printed, as {line}, or {none} with why no line can do it; nothing is run or saved. It has ${WRITE_LINE_TIMEOUT_MS / 1000} seconds`],
-  ['cleanup', `remove what this tool left in the project: this machine's switches and paces of its commands, the state file and the scheduler's log, then .scheduler/ and the rule hiding it from git once it is empty (the automations kept on this machine are your own writing and stay); refused while the state names a scheduler that is alive; the command a dashboard asks for when a project is removed with its files`],
 ])}
 
 ${helpText('JSON on stdout. Exit code 1 for a refusal or a failure (the reason on stderr), 2 for a usage error.')}`
@@ -246,12 +245,6 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     return { ok: true, ...written }
   },
 
-  async cleanup(args, io, git) {
-    parseCommandArgs(args, {}, 0)
-    const outcome = await cleanup(await project(io.cwd, git), { git })
-    if (outcome.ok) return outcome
-    throw new Refused(outcome, `the scheduler is running here (pid ${outcome.pid}): stop it first with npx @openagt/scheduled-agents@0.1 stop`)
-  },
 }
 
 /** Write a change of the state, and answer the state as written: what a command that sets something answers. */

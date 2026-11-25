@@ -1,236 +1,196 @@
-import { callPackageCommand, type ProvidedCommand } from '@openagt/agent-data'
-import { providedCommand } from '../distribution-packages.js'
+import type { ProjectRef, RunEvent, RunHost, RunOptions, RunRef, RunSummary, RunsWanted } from '@openagt/hooks'
 
 /**
- * Finished runs, as OpenAgent reads them (#1774). OpenAgent keeps no run and imports no
- * records package: a project's finished runs come from whichever of its packages declares that it
- * provides them — `"openagent": { "runs": "<command>" }` in the package's own package.json — and
- * OpenAgent reads them by running that command. Swap the package for another that answers
- * the same command line and prints the same shapes, and nothing here changes. No package declares
- * it: the project has no finished runs, only the ones still running in a checkout.
- *
- * The command line a provider answers, each printing one JSON document and exiting 0:
- *   `<command> --local --full --limit N`   the runs, newest first, whole cards, each with the `person` it is kept under
- *   `<command> show <id> --local --full`   one run: the whole card plus `diary`, every line
- *   `<command> delete <id>`                remove a run
- *   `<command> patch <id> [--branch <b>] [--pr <n> --pr-url <url>] [--landed <commit> --from <commit>]`   the late facts
- * `--local` reads the copy on this machine, no network: OpenAgent polls. A provider whose package
- * exports the function its command calls, `runCli(argv, io)`, is answered inside OpenAgent's own
- * process: a read every few seconds is no Node started each time, which a small server cannot carry.
- *
- * The shapes, owned here: {@link RunCard} and {@link AnyDiaryLine}. A running agent's own card in
- * its checkout is the same shape, written by the tool that runs it.
+ * The runs, as the shell reads them (#2394, decision 14): every `run.host` says its own, this
+ * computer's and the ones beside it (a CI runner, a cloud session), and the shell reads
+ * no run's files itself. A run here is the shell's page shape, {@link AgentMeta}, made from what its
+ * host says ({@link metaOf}); what a module adds to a run's row (how its pull request stands, the
+ * work it left on this machine) is that module's read, marked on it beside.
  */
 
-/** How a run stands: still going, or how it ended. */
-export type RunStatus = 'running' | 'done' | 'stopped' | 'failed' | 'waiting'
+/** How a run stands, as the pages say it. */
+export type AgentStatus = 'running' | 'done' | 'stopped' | 'failed' | 'waiting'
 
-/**
- * A run's card: what was asked, where the work went, how it ended, what it cost. `caller` is the
- * bookkeeping of the program that ran the agent (its pid, host, session id, …), one key.
- */
-export interface RunCard {
+/** A run, as the dashboard's lists and pages show it. */
+export interface AgentMeta {
+  status: AgentStatus
+  /** Stable, path-safe id for this run (derived from {@link startedAt}). */
   id: string
+  /** ISO timestamp the run started. */
   startedAt: string
+  /** ISO timestamp it last changed: its end, else its start. */
+  updatedAt: string
+  /** ISO timestamp the run ended, absent while it is going. */
   endedAt?: string
-  status: RunStatus
-  intent?: string
-  /** The run's short name, two to five words, as a list of runs shows it; absent when nothing named it. */
-  title?: string
-  driver?: string
-  model?: string
-  /** How hard that model was told to think, by the agent's own names (`medium`, `high`, …). */
-  effort?: string
-  branch?: string
-  pr?: { number: number; url: string }
-  ticket?: string
+  /** What the run cost so far in US dollars; absent until its agent says. */
   cost?: number
-  /** How much of the model's context the conversation filled at the run's last turn. */
-  contextTokens?: number
-  caller?: Record<string, unknown>
-  /** Whom the run is kept under, by their email: said by a provider's list, never written on a card. */
-  person?: string
-}
-
-/** The two late facts a finished run's card may still learn: the branch its work landed on, its pull request. */
-export type RunPatch = Partial<Pick<RunCard, 'branch' | 'pr'>> & {
-  /** The run's work was merged and its branch deleted: its last commit, and the commit its work began at. */
-  landed?: { commit: string; from: string }
-}
-
-/** One line of a run's diary: a JSON object with a `kind`. */
-export type AnyDiaryLine = { kind: string } & Record<string, unknown>
-
-/** A finished run: its card and its whole diary. */
-export interface FinishedRun {
-  card: RunCard
-  diary: AnyDiaryLine[]
-}
-
-/** A project's finished runs: what a provider answers, read by OpenAgent. */
-export interface RunsSource {
+  /** The computer it runs or ran on, by its name. */
+  host?: string
   /**
-   * Every finished run's card, newest first; `[]` when none can be read. `fresh` skips a list read
-   * a moment ago: the caller knows the runs changed since.
+   * Whose run it is, by the email its record is kept under: the git user of the computer that
+   * ran it. A run of this computer's that has no record yet is its project's git user's.
    */
-  list(opts?: { fresh?: boolean }): Promise<RunCard[]>
-  /** One run with its diary; `undefined` for no such run, or none readable. */
-  show(id: string): Promise<FinishedRun | undefined>
-  /** Remove a run, or why it could not be. */
-  remove(id: string): Promise<RunsWrite>
-  /** Set a run's late facts, or why they could not be. */
-  patch(id: string, patch: RunPatch): Promise<RunsWrite>
+  person?: string
+  /** What this session was asked for. */
+  intent?: string
+  /** The session's short name, as a list shows it: two to five words a small model gave it. */
+  title?: string
+  /** Set while that name is being asked for: a list holds the run's place for it then. */
+  naming?: true
+  /** The branch the run was told to start from, by its name: a person's local branch picked in the launcher. Absent on a run that started from origin's default branch. */
+  base?: string
+  /** How far the run takes its work when its agent finishes: `commit`, `branch`, `pr` or `merge`; absent on a run with none. The session's "Auto" pick shows it. */
+  publish?: string
+  /** The run's options, one slice per module, as its record keeps them: what its box's controls say. */
+  options?: RunOptions
+  /** The folder the run's agent works or worked in. */
+  workspace?: string
+  /** The coding agent it is on, by its id (`RunAgent.id`). */
+  driver?: string
+  /** The branch the agent's work is on: for a run with a checkout, the one it has out now. */
+  branch?: string
+  /** The pull request this session's work is on. */
+  pr?: { number: number; url: string }
+  /** The command that picks the run's agent session back up in a terminal, as its coding agent says it. */
+  resumeCommand?: string
+  /** The run was started by another computer (#1648): its {@link host} is not this one. Marked on the way to the dashboard. */
+  otherHost?: boolean
+  /** It ended clean and the process that ran it is still saving its record and cleaning up its checkout: the window every surface says "saving…" for. */
+  saving?: boolean
+  /** How the run's pull request stands ({@link pr}), as the git host last said: marked on the way to the dashboard. */
+  prState?: 'open' | 'draft' | 'merged' | 'closed'
+  /** The title of the run's pull request, as the git host last said: the jump finds the run by it. Marked like {@link prState}. */
+  prTitle?: string
+  /** The pull requests the run opened before {@link pr}, oldest first, each marked with how it stands like {@link prState}. */
+  earlierPrs?: { number: number; url: string; state?: 'open' | 'draft' | 'merged' | 'closed' }[]
+  /** Where this run executes: a host's id for a run on a host beside this computer's (`run.host`: a CI runner's, a cloud session's `web`), absent for one on this computer. */
+  target?: string
+  /** The model the run's agent was started with; absent when it was left on the agent's own default. */
+  model?: string
+  /** How hard that model was told to think, by the coding agent's own names; absent, it thinks as it does by default. */
+  effort?: string
+  /** How much of the model's context the conversation filled at the last turn; absent when the agent reports no reading. */
+  contextTokens?: number
 }
 
-/** What a change to the runs did: done, or the provider's reason it was not. */
-export type RunsWrite = { ok: true } | { ok: false; error: string }
+/** The origin's name a published branch it started from is kept under, which a page names the branch without. */
+const ON_ORIGIN = 'origin/'
 
-/** The finished runs of the project at `root`, or `undefined` when none of its packages provides them. */
-export type RunsFor = (root: string) => Promise<RunsSource | undefined>
-
-/** A {@link RunsFor} that also forgets what it read of one project, for when a module just wrote there. */
-export type RunsReader = RunsFor & { changed(root: string, pkg?: string): void }
-
-const STATUSES: readonly RunStatus[] = ['running', 'done', 'stopped', 'failed', 'waiting']
-
-/** Whether a string can name a run: letters, digits, `-` and `_`, nothing a path can climb out with. */
-export function isRunId(id: string): boolean {
-  return /^[A-Za-z0-9_-]+$/.test(id)
-}
-
-/**
- * A card read back: the fields of the shape, each kept only when it has the right type, plus
- * `caller` as it is. `undefined` for anything that is not a card — not an object, or missing an
- * id, a start or a status. Takes a card's JSON text or an already-parsed value.
- */
-export function parseRunCard(input: unknown): RunCard | undefined {
-  let raw = input
-  if (typeof input === 'string') {
-    try {
-      raw = JSON.parse(input)
-    } catch {
-      return undefined
-    }
-  }
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
-  const r = raw as Record<string, unknown>
-  const status = r['status']
-  if (typeof r['id'] !== 'string' || !isRunId(r['id']) || typeof r['startedAt'] !== 'string' || !(STATUSES as readonly unknown[]).includes(status)) return undefined
-  const card: RunCard = { id: r['id'], startedAt: r['startedAt'], status: status as RunStatus }
-  for (const key of ['endedAt', 'intent', 'title', 'driver', 'model', 'effort', 'branch', 'ticket', 'person'] as const) {
-    if (typeof r[key] === 'string') card[key] = r[key]
-  }
-  if (typeof r['cost'] === 'number') card.cost = r['cost']
-  if (typeof r['contextTokens'] === 'number') card.contextTokens = r['contextTokens']
-  const pr = r['pr'] as Record<string, unknown> | undefined
-  if (pr && typeof pr === 'object' && typeof pr['number'] === 'number' && typeof pr['url'] === 'string') card.pr = { number: pr['number'], url: pr['url'] }
-  const caller = r['caller']
-  if (caller && typeof caller === 'object' && !Array.isArray(caller)) card.caller = caller as Record<string, unknown>
-  return card
-}
-
-/** Diary lines read back from a provider's output: the JSON objects with a string `kind`, in order. */
-function diaryLines(value: unknown): AnyDiaryLine[] {
-  if (!Array.isArray(value)) return []
-  return value.filter((line): line is AnyDiaryLine => !!line && typeof line === 'object' && !Array.isArray(line) && typeof (line as Record<string, unknown>)['kind'] === 'string')
-}
-
-/**
- * How many runs a list asks for: every run the project has, in practice. The command line takes a
- * cap, and OpenAgent's lists (the sidebar's history, a ticket's holder, the activity feed) have
- * always read the whole record.
- */
-const LIST_LIMIT = 10_000
-
-/** How long a read is reused: the dashboard polls many reads of the same list every few seconds. */
-const CACHE_MS = 5_000
-
-/** The runs source over one provider command: each call one answer of the command, reads cached per {@link CACHE_MS}. */
-function commandRuns(root: string, command: ProvidedCommand, now: () => number): RunsSource & { drop(): void } {
-  let listed: { at: number; cards: Promise<RunCard[]> } | undefined
-  const shown = new Map<string, { at: number; run: Promise<FinishedRun | undefined> }>()
-  const drop = (): void => {
-    listed = undefined
-    shown.clear()
-  }
+/** A run as its host says it, in the shell's page shape: `local` is the host that is this computer's. */
+export function metaOf(run: RunSummary, local: string): AgentMeta {
+  const base = run.base
   return {
-    drop,
-    list(opts = {}) {
-      // Concurrent reads share one answer; a read that failed is not kept.
-      if (listed && !opts.fresh && now() - listed.at < CACHE_MS) return listed.cards
-      const read: { at: number; cards: Promise<RunCard[]> } = { at: now(), cards: Promise.resolve([]) }
-      read.cards = callPackageCommand(root, command, ['--local', '--full', '--limit', String(LIST_LIMIT)]).then(result => {
-        if (!result.ok || !Array.isArray(result.output)) {
-          if (listed === read) listed = undefined
-          return []
-        }
-        return result.output.map(parseRunCard).filter((card): card is RunCard => card !== undefined)
-      })
-      listed = read
-      return read.cards
-    },
-    show(id) {
-      if (!isRunId(id)) return Promise.resolve(undefined)
-      const known = shown.get(id)
-      if (known && now() - known.at < CACHE_MS) return known.run
-      const read: { at: number; run: Promise<FinishedRun | undefined> } = { at: now(), run: Promise.resolve(undefined) }
-      read.run = callPackageCommand(root, command, ['show', id, '--local', '--full']).then(result => {
-        const output = result.ok ? result.output : undefined
-        const card = parseRunCard(output)
-        if (!card) {
-          if (shown.get(id) === read) shown.delete(id)
-          return undefined
-        }
-        return { card, diary: diaryLines((output as Record<string, unknown>)['diary']) }
-      })
-      shown.set(id, read)
-      return read.run
-    },
-    async remove(id) {
-      if (!isRunId(id)) return { ok: false, error: `not a run id: ${id}` }
-      const result = await callPackageCommand(root, command, ['delete', id])
-      drop()
-      return result.ok ? { ok: true } : { ok: false, error: result.error }
-    },
-    async patch(id, patch) {
-      if (!isRunId(id)) return { ok: false, error: `not a run id: ${id}` }
-      const args = ['patch', id, ...(patch.branch !== undefined ? ['--branch', patch.branch] : []), ...(patch.pr ? ['--pr', String(patch.pr.number), '--pr-url', patch.pr.url] : []), ...(patch.landed ? ['--landed', patch.landed.commit, '--from', patch.landed.from] : [])]
-      const result = await callPackageCommand(root, command, args)
-      drop()
-      return result.ok ? { ok: true } : { ok: false, error: result.error }
-    },
+    id: run.id,
+    status: run.status === 'working' ? 'running' : run.status,
+    startedAt: run.startedAt,
+    updatedAt: run.endedAt ?? run.startedAt,
+    ...(run.endedAt !== undefined ? { endedAt: run.endedAt } : {}),
+    ...(run.cost !== undefined ? { cost: run.cost } : {}),
+    ...(run.computer !== undefined ? { host: run.computer } : {}),
+    ...(run.person !== undefined ? { person: run.person } : {}),
+    ...(run.prompt ? { intent: run.prompt } : {}),
+    ...(run.title !== undefined ? { title: run.title } : {}),
+    ...(run.naming ? { naming: true as const } : {}),
+    ...(base !== undefined ? { base: base.startsWith(ON_ORIGIN) ? base.slice(ON_ORIGIN.length) : base } : {}),
+    ...(run.options?.publish !== undefined ? { publish: run.options.publish } : {}),
+    ...(run.options !== undefined ? { options: run.options } : {}),
+    ...(run.workspace !== undefined ? { workspace: run.workspace } : {}),
+    ...(run.agent !== undefined ? { driver: run.agent.id } : {}),
+    ...(run.agent?.model !== undefined ? { model: run.agent.model } : {}),
+    ...(run.agent?.effort !== undefined ? { effort: run.agent.effort } : {}),
+    ...(run.contextTokens !== undefined ? { contextTokens: run.contextTokens } : {}),
+    ...(run.branch !== undefined ? { branch: run.branch } : {}),
+    ...(run.pr ? { pr: run.pr } : {}),
+    ...(run.earlierPrs ? { earlierPrs: run.earlierPrs } : {}),
+    ...(run.session?.resume !== undefined ? { resumeCommand: run.session.resume } : {}),
+    ...(run.saving ? { saving: true } : {}),
+    ...(run.host !== local ? { target: run.host } : {}),
   }
 }
+
+/** Where the shell asks about runs: every host of a project, this computer's first. */
+export interface RunHosts {
+  /** This computer's host, by its id (`LOCAL_HOST`). */
+  local: string
+  /** The hosts a project's runs are on, this computer's first; a session with no project's too. */
+  of(project?: ProjectRef): Promise<RunHost[]>
+}
+
+/** Newest run first: an id sorts chronologically, so the id order is the time order. */
+const byIdDesc = (a: { id: string }, b: { id: string }): number => (a.id < b.id ? 1 : a.id > b.id ? -1 : 0)
 
 /**
- * The production {@link RunsFor}: the project's provider, looked up among the packages the project has (`distribution-packages.ts`), one
- * source per project kept while the same command provides — so the cache holds across the many
- * reads of one poll, and a project whose provider changes is read the new way within {@link CACHE_MS}. `changed(root)` forgets that project's reads, so the next read runs the
- * command again: a module's command just ran there, and may have written. `changed(root, pkg)`
- * forgets them only when that package is the one providing: another package's command did not write them.
+ * A project's runs, or the sessions with no project, newest first, as every host of it says them:
+ * one row per run, the first host that has it keeping it. A host that cannot answer has none.
  */
-export function providedRuns(now: () => number = Date.now): RunsReader {
-  const sources = new Map<string, { at: number; command?: ProvidedCommand; source?: ReturnType<typeof commandRuns> }>()
-  const reader: RunsFor = async root => {
-    let known = sources.get(root)
-    if (!known || now() - known.at >= CACHE_MS) {
-      const command = await providedCommand(root, 'runs').catch(() => undefined)
-      const same = known?.command && command && known.command.bin === command.bin
-      known = { at: now(), ...(command ? { command, source: same ? known!.source! : commandRuns(root, command, now) } : {}) }
-      sources.set(root, known)
-    }
-    return known.source
-  }
-  return Object.assign(reader, {
-    changed: (root: string, pkg?: string) => {
-      const known = sources.get(root)
-      if (pkg === undefined || known?.command?.package === pkg) known?.source?.drop()
-    },
-  })
+export async function readRuns(hosts: RunHosts, project: ProjectRef | undefined, wanted: RunsWanted = {}): Promise<AgentMeta[]> {
+  const answers = await Promise.all((await hosts.of(project)).map(host => host.list(project, wanted).catch((): RunSummary[] => [])))
+  const seen = new Set<string>()
+  return answers
+    .flat()
+    .filter(run => !seen.has(run.id) && seen.add(run.id))
+    .map(run => metaOf(run, hosts.local))
+    .sort(byIdDesc)
 }
 
-/** OpenAgent's one reader of finished runs, shared by every caller so they share its cache. */
-export const projectRuns: RunsReader = providedRuns()
+/** One run, as its host says it; none when no host has it. */
+export async function readRun(hosts: RunHosts, project: ProjectRef | undefined, id: string): Promise<AgentMeta | undefined> {
+  return (await readRuns(hosts, project, { ids: [id] }))[0]
+}
 
-/** A {@link RunsFor} for a project with no provider: no finished runs. */
-export const noRuns: RunsFor = async () => undefined
+/** How long a read of a run's events waits for its host to have them all: a run just started has its diary a moment later. */
+const EVENTS_WAIT_MS = 5_000
+
+/**
+ * A run's events as they are now, for a reader that replays them: what its host streams up to the
+ * end-of-replay marker. None for a host that streams no events.
+ */
+export async function readRunEvents(host: RunHost, run: RunRef): Promise<RunEvent[] | undefined> {
+  if (!host.events) return undefined
+  const stop = new AbortController()
+  const timer = setTimeout(() => stop.abort(), EVENTS_WAIT_MS)
+  const events: RunEvent[] = []
+  try {
+    for await (const event of host.events(run, stop.signal)) {
+      if (event.kind === 'stream-sync') break
+      if (event.kind !== 'partial') events.push(event)
+    }
+  } finally {
+    clearTimeout(timer)
+    stop.abort()
+  }
+  return events
+}
+
+/** How long a line saying what a run is doing may be. */
+const DOING_MAX = 140
+
+/**
+ * What a working run is doing, as its row of a list of subagents says it: the last thing it did (a
+ * tool it used, with what) or said, on one line; the last tool it used; and how many calls it made so far.
+ */
+export interface AgentDoing {
+  doing?: string
+  tool?: string
+  calls: number
+}
+
+/** What a run's events say it is doing; none when they say no step and no word. */
+export function doingOf(events: readonly RunEvent[]): AgentDoing | undefined {
+  let doing: string | undefined
+  let tool: string | undefined
+  let calls = 0
+  for (const event of events) {
+    if (event.kind !== 'driver') continue
+    const driven = event.event
+    const text = driven.type === 'action' ? (driven.detail !== undefined ? `${driven.label} ${driven.detail}` : driven.label) : driven.type === 'text' ? driven.text : undefined
+    if (driven.type === 'action') {
+      calls++
+      tool = driven.label
+    }
+    const flat = text?.replace(/\s+/g, ' ').trim()
+    if (flat) doing = flat.length > DOING_MAX ? flat.slice(0, DOING_MAX - 1) + '…' : flat
+  }
+  if (doing === undefined && calls === 0) return undefined
+  return { ...(doing !== undefined ? { doing } : {}), ...(tool !== undefined ? { tool } : {}), calls }
+}

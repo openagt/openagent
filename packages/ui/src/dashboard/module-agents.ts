@@ -1,4 +1,4 @@
-import type { AgentMeta, AgentStatus } from '../store/agent-store.js'
+import type { AgentMeta, AgentStatus } from '../store/index.js'
 
 /** One run of a project, as a module sees it: what a page or a card shows of a run, and no more. */
 export interface ModuleAgent {
@@ -20,14 +20,11 @@ export interface ModuleAgent {
   person?: string
   /** What it cost so far, in US dollars. */
   cost?: number
-  /** The coding agent that runs it (`claude-code`, `codex`, …) and its model. */
+  /** The coding agent that runs it, by its `run.agent` id, and its model. */
   driver?: string
   model?: string
   /** Its pull request, with how it stands as the git host last said (`merged`: the sidebar's merged run), once read. */
   pr?: { number: number; url: string; state?: AgentMeta['prState'] }
-  /** Its work that never left this machine: files its checkout left uncommitted, and commits never pushed. */
-  uncommitted?: number
-  unpublished?: number
 }
 
 /**
@@ -56,8 +53,6 @@ export function moduleAgentOf(agent: AgentMeta): ModuleAgent {
     ...(agent.driver ? { driver: agent.driver } : {}),
     ...(agent.model ? { model: agent.model } : {}),
     ...(agent.pr ? { pr: { ...agent.pr, ...(agent.prState ? { state: agent.prState } : {}) } } : {}),
-    ...(agent.uncommitted ? { uncommitted: agent.uncommitted } : {}),
-    ...(agent.unpublished ? { unpublished: agent.unpublished } : {}),
   }
 }
 

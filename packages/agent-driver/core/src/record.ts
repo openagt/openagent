@@ -4,7 +4,7 @@
 
 /**
  * Where the runs live: `agents/<who>/<id>.json` and `<id>.jsonl` in the project's data directory
- * (`@openagt/agent-data` knows where that is: in the person's own folder, or the project's
+ * (`@openagt/store-filesystem` knows where that is: in the person's own folder, or the project's
  * `agent-data` branch when shared).
  */
 export const RUNS_DIR = 'agents'

@@ -53,10 +53,10 @@ test('a project added has its scheduler started where the plugin is on, once; a 
   await lifecycle.projectAdded!(project('/a'), context)
   await lifecycle.projectAdded!(project('/a'), context)
   assert.deepEqual(calls, ['start /a'])
-  await lifecycle.projectRemoved!(project('/a'), context)
+  await lifecycle.projectRemoved!(project('/a'), context, { files: false })
   assert.deepEqual(calls, ['start /a', 'stop /a unless kept alive'])
   // Told for every module, on or not: nothing was started there, so nothing is written in its folder.
-  await lifecycle.projectRemoved!(project('/b'), context)
+  await lifecycle.projectRemoved!(project('/b'), context, { files: false })
   assert.deepEqual(calls, ['start /a', 'stop /a unless kept alive'])
   app.stop.abort()
   await lifecycle.stopping!()

@@ -3,11 +3,14 @@ import { test } from 'node:test'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { mkdir, mkdtemp, readFile, readlink, realpath, rm, stat, writeFile } from 'node:fs/promises'
-import { nodeGitRunner } from '@openagt/agent-data'
+import { nodeGitRunner } from './git.js'
+import type { AppContext, ProjectRef } from '@openagt/hooks'
+import { gitBranchesModule } from './module.js'
 import { runCli, worktreePath } from './index.js'
 
-// `cleanup` through the command line, on a real repository with a real remote: the tool's own
-// checkouts, directory and rules go; work, branches, the remote and other tools' files stay.
+// A project removed with its files (`app.lifecycle`'s `projectRemoved`), on a real repository with a
+// real remote: the tool's own checkouts, directory and rules go; work, branches, the remote and
+// other tools' files stay.
 
 const git = nodeGitRunner()
 
@@ -33,6 +36,14 @@ async function run(cwd: string, ...argv: string[]): Promise<{ code: number; out:
   const lines: string[] = []
   const code = await runCli(argv, { cwd, stdout: line => lines.push(line), stderr: () => {} })
   return { code, out: lines.length ? JSON.parse(lines.join('\n')) : undefined }
+}
+
+const removed = gitBranchesModule().hooks['app.lifecycle']!.projectRemoved!
+const app = {} as AppContext
+
+/** The project at `repo` taken off the list with its files, as the projects module tells this one. */
+async function removedWithFiles(repo: string) {
+  return removed({ id: 'repo-1', dir: repo, name: 'repo' } satisfies ProjectRef, app, { files: true })
 }
 
 async function commitWork(path: string): Promise<void> {
@@ -63,10 +74,12 @@ test('cleanup: checkouts go under the reclaim rule; uncommitted work, branches w
     await writeFile(join(repo, '.branches', 'agent-data', 'card.json'), '{}\n')
     const work = (await branches(repo)).find(line => line.startsWith('agent-done '))
 
-    const first = await run(repo, 'cleanup')
-    assert.equal(first.code, 0)
-    assert.deepEqual(first.out, {
-      ok: true,
+    // Taken off the list without its files: nothing of this tool's goes.
+    assert.equal(await removed({ id: 'repo-1', dir: repo, name: 'repo' }, app, { files: false }), undefined)
+    assert.equal(await exists(worktreePath(repo, 'done')), true)
+
+    const first = await removedWithFiles(repo)
+    assert.deepEqual(first, {
       removed: ['.branches/agent-done'],
       kept: [
         { path: '.branches/agent-dirty', reason: 'agent-fix-title has uncommitted work; the checkout was kept' },
@@ -92,15 +105,15 @@ test('cleanup: checkouts go under the reclaim rule; uncommitted work, branches w
     const kept = (await branches(repo)).filter(line => line.startsWith('agent-'))
     assert.equal(kept.length, 2)
 
-    const second = await run(repo, 'cleanup')
-    assert.deepEqual(second.out, { ok: true, removed: ['.branches/agent-dirty', '.branches'], kept: [] })
+    const second = await removedWithFiles(repo)
+    assert.deepEqual(second, { removed: ['.branches/agent-dirty', '.branches'], kept: [] })
     assert.equal(await exists(join(repo, '.branches')), false)
     assert.equal(await excludeOf(repo), '# mine\n/notes.txt\n', 'only this tool\'s rules went')
     assert.deepEqual((await branches(repo)).filter(line => line.startsWith('agent-')), kept, 'both branches hold work and stay')
     assert.equal(await git(['worktree', 'list', '--porcelain'], repo).then(list => list.match(/^worktree /gm)?.length), 1, 'no checkout is left registered')
     assert.equal(await outside(repo), before)
 
-    assert.deepEqual((await run(repo, 'cleanup')).out, { ok: true, removed: [], kept: [] }, 'a second pass finds nothing')
+    assert.deepEqual(await removedWithFiles(repo), { removed: [], kept: [] }, 'a second pass finds nothing')
   } finally {
     await rm(base, { recursive: true, force: true })
   }
@@ -110,7 +123,7 @@ test('cleanup: a project this tool never worked in is left exactly as it is', as
   const { base, repo } = await project()
   try {
     const before = await outside(repo)
-    assert.deepEqual((await run(repo, 'cleanup')).out, { ok: true, removed: [], kept: [] })
+    assert.deepEqual(await removedWithFiles(repo), { removed: [], kept: [] })
     assert.equal(await excludeOf(repo), '# mine\n/notes.txt\n')
     assert.equal(await outside(repo), before)
   } finally {
@@ -124,7 +137,7 @@ test('cleanup: the rules are the repository\'s: they stay while another checkout
     // The same rules written by hand, in a project the tool never worked in.
     const byHand = '/.branches\n/node_modules/@openagt/git-branches\n/node_modules/.bin/branches\n/.claude/skills/branches\n/.agents/skills/branches\n'
     await writeFile(join(repo, '.git', 'info', 'exclude'), byHand)
-    assert.deepEqual((await run(repo, 'cleanup')).out, { ok: true, removed: [], kept: [] })
+    assert.deepEqual(await removedWithFiles(repo), { removed: [], kept: [] })
     assert.equal(await excludeOf(repo), byHand)
 
     // A second checkout of the same repository, a project of its own, with an agent at work in each.
@@ -134,7 +147,7 @@ test('cleanup: the rules are the repository\'s: they stay while another checkout
     await run(other, 'create', 'there')
     await writeFile(join(worktreePath(other, 'there'), 'index.html'), '<h1>Edited</h1>\n')
 
-    assert.deepEqual((await run(repo, 'cleanup')).out, { ok: true, removed: ['.branches/agent-here', '.branches'], kept: [] })
+    assert.deepEqual(await removedWithFiles(repo), { removed: ['.branches/agent-here', '.branches'], kept: [] })
     assert.equal(await excludeOf(repo), byHand, 'the other project\'s checkout and its links are still hidden')
     assert.equal((await git(['status', '--porcelain'], other)).trim(), '')
     assert.equal((await git(['status', '--porcelain'], worktreePath(other, 'there'))).trim(), 'M index.html', 'only the agent\'s own edit shows there')

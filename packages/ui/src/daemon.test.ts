@@ -1,9 +1,10 @@
 import { strict as assert } from 'node:assert'
+import { execFileSync } from 'node:child_process'
 import { test } from 'node:test'
 import { mkdtemp, writeFile, rm, mkdir, readdir, realpath } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { createHooks, LOCAL_HOST, type AppContext } from '@openagt/hooks'
+import { createHooks, LOCAL_HOST, type AppContext, OPENAGENT_DIR } from '@openagt/hooks'
 import { fakeHost } from '@openagt/hooks/testing'
 import { runDaemon, type DaemonState, type RunDaemonOptions } from './daemon.js'
 import { handDownTestDistribution } from './test-distribution.js'
@@ -35,9 +36,11 @@ async function startDaemon(cwd: string, opts: RunDaemonOptions): Promise<{ done:
   )
   return { done, state: await listening }
 }
-import { OPENAGENT_DIR } from './openagent-dir.js'
-import { listProjects } from './registry.js'
-import { gitignorePath, openagentGitignore, projectId } from '@openagt/agent-data'
+import { listProjects } from './distribution-hooks.js'
+import projectsModule from '@openagt/projects/module'
+import storeFilesystem from '@openagt/store-filesystem/module'
+import { gitignorePath, openagentGitignore } from '@openagt/projects'
+import { projectId } from './project-id.js'
 
 // The dashboard steers + starts over the daemon's in-process RPC mount (#405/#426), not the
 // retired per-read HTTP routes. Post to `/_rpc/<name>` (same-origin) and return the unwrapped `ret`.
@@ -50,11 +53,11 @@ async function callRpc(url: string, name: string, args: unknown[]): Promise<unkn
   const text = await res.text()
   return text ? (JSON.parse(text) as { ret?: unknown }).ret : undefined
 }
-type StartResult = { ok: true; agentId: string; driver?: string } | { ok: false; error: string }
+type StartResult = { ok: true; agentId: string } | { ok: false; error: string }
 // The home project's id: what the browser sends for the daemon's own workspace, which the
 // daemon resolves back to `cwd` (see `resolveProject`).
 const homeId = (cwd: string): string => projectId(resolve(cwd))
-const sendStart = (url: string, cwd: string, prompt: string, options: Record<string, string> = {}): Promise<StartResult> =>
+const sendStart = (url: string, cwd: string, prompt: string, options: Record<string, unknown> = {}): Promise<StartResult> =>
   callRpc(url, 'sendStart', [homeId(cwd), prompt, options]) as Promise<StartResult>
 
 const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms))
@@ -71,12 +74,15 @@ async function tmpWorkspace(): Promise<string> {
   return cwd
 }
 
-// Point the registry at a throwaway config dir under the workspace so tests never touch the real
-// $HOME and clean up with the workspace. Returns the env the daemon reads it from.
+// Point the registry and this computer's settings (the list of projects among them) at a throwaway
+// config dir under the workspace, so tests never touch the real $HOME and clean up with the
+// workspace. The settings' store reads the process's own environment. Returns the env the daemon
+// reads the rest from.
 async function configEnv(cwd: string): Promise<NodeJS.ProcessEnv> {
   const dir = join(cwd, 'cfg')
   await mkdir(dir, { recursive: true })
-  return { XDG_CONFIG_HOME: dir }
+  process.env.XDG_CONFIG_HOME = dir
+  return { ...process.env }
 }
 
 test('runDaemon serves the dashboard, and shuts down when the signal aborts', async () => {
@@ -158,7 +164,7 @@ test("a Start goes to this computer's host, of the modules the daemon runs, with
   const ac = new AbortController()
   try {
     const { done, state } = await startDaemon(cwd, { port: 0, signal: ac.signal, env, hooks })
-    assert.deepEqual(await sendStart(state.url, cwd, '/work-queue now', { driver: 'codex' }), { ok: true, agentId: 'run-1', driver: 'codex' })
+    assert.deepEqual(await sendStart(state.url, cwd, '/work-queue now', { options: { 'agent-driver': { driver: 'codex' } } }), { ok: true, agentId: 'run-1' })
     assert.deepEqual(host.requests.map(request => [request.project?.dir, request.prompt, request.options['agent-driver']]), [[cwd, '/work-queue now', { driver: 'codex' }]])
     assert.deepEqual(await sendStart(state.url, cwd, '   '), { ok: false, error: 'a non-empty prompt is required' })
     assert.deepEqual(await callRpc(state.url, 'sendStart', ['no-such-project', 'x']), { ok: false, error: 'unknown project: no-such-project' })
@@ -217,7 +223,7 @@ test('the dashboard adds no folder by itself, not even its own start folder, so 
   const ac = new AbortController()
   try {
     const { done } = await startDaemon(cwd, { port: 0, signal: ac.signal, env })
-    assert.deepEqual(await listProjects(env), [])
+    assert.deepEqual(await listProjects(), [])
     ac.abort()
     await done
   } finally {
@@ -226,21 +232,25 @@ test('the dashboard adds no folder by itself, not even its own start folder, so 
   }
 })
 
-test('the folder the caller names is added once the dashboard listens, as Add project adds it; started again inside it, it is the project already there', async () => {
+test('the repository the caller starts in is added once the dashboard listens, by the projects module, as Add project adds it; started again inside it, it is the project already there; outside a repository there is none', async () => {
   const folder = await realpath(await mkdtemp(join(tmpdir(), 'openagent-daemon-add-')))
   const cfg = await realpath(await mkdtemp(join(tmpdir(), 'openagent-daemon-add-cfg-')))
   // The add's git reads the process's own environment, and a new folder's first commit needs an author.
-  const env = { XDG_CONFIG_HOME: cfg, GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.com', GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@example.com' }
-  const before = Object.fromEntries(Object.keys(env).map(key => [key, process.env[key]]))
-  Object.assign(process.env, env)
+  const own = { XDG_CONFIG_HOME: cfg, GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.com', GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@example.com' }
+  const before = Object.fromEntries(Object.keys(own).map(key => [key, process.env[key]]))
+  Object.assign(process.env, own)
+  // The daemon reads the list through the distribution handed down: its environment has it.
+  const env = { ...process.env }
   await mkdir(join(folder, 'src'))
-  const told: { id: string; path: string; added: boolean; address: string }[] = []
+  execFileSync('git', ['init', '-q'], { cwd: folder })
+  const outside = await realpath(await mkdtemp(join(tmpdir(), 'openagent-daemon-outside-')))
+  const told: ({ id: string; path: string; added: boolean; address: string } | undefined)[] = []
   // The modules are told of the project added (`app.lifecycle`): a scheduler starts with it.
   const added: string[] = []
-  const hooks = createHooks([{ module: { name: 'fake-runs', hooks: { 'run.host': [fakeHost({ id: LOCAL_HOST })], 'app.lifecycle': { projectAdded: project => void added.push(project.dir) } } } }])
+  const hooks = createHooks([{ module: storeFilesystem }, { module: projectsModule }, { module: { name: 'fake-runs', hooks: { 'run.host': [fakeHost({ id: LOCAL_HOST })], 'app.lifecycle': { projectAdded: project => void added.push(project.dir) } } } }])
   try {
     // Aborted as soon as it listens: the add comes before the daemon waits, so it has run once it is done.
-    for (const project of [folder, join(folder, 'src')]) {
+    for (const project of [folder, join(folder, 'src'), outside]) {
       const ac = new AbortController()
       const { done } = await startDaemon(cfg, { port: 0, signal: ac.signal, env, hooks, project, onProject: started => told.push(started) })
       ac.abort()
@@ -248,8 +258,8 @@ test('the folder the caller names is added once the dashboard listens, as Add pr
     }
     const id = projectId(folder)
     const address = id.slice(0, id.lastIndexOf('-')) // the folder's name, as the id writes it
-    assert.deepEqual(told, [{ id, path: folder, added: true, address }, { id, path: folder, added: false, address }])
-    assert.deepEqual((await listProjects(env)).map(project => project.id), [id])
+    assert.deepEqual(told, [{ id, path: folder, added: true, address }, { id, path: folder, added: false, address }, undefined])
+    assert.deepEqual((await listProjects()).map(project => project.id), [id])
     assert.deepEqual(added, [folder], 'told once: the second start finds it on the list')
   } finally {
     for (const [key, value] of Object.entries(before)) {
@@ -257,6 +267,7 @@ test('the folder the caller names is added once the dashboard listens, as Add pr
       else process.env[key] = value
     }
     await rm(folder, { recursive: true, force: true })
+    await rm(outside, { recursive: true, force: true })
     await rm(cfg, { recursive: true, force: true })
   }
 })

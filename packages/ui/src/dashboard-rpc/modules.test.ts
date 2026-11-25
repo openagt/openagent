@@ -3,10 +3,10 @@ import { test } from 'node:test'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { projectId, sessionsHome } from '@openagt/agent-data'
+import { projectId } from '../project-id.js'
+import { sessionsHome } from '@openagt/hooks'
 import { SESSIONS_ID } from '../project-address.js'
-import { addProject } from '../registry.js'
-import { projectQueue } from '../store/queue.js'
+import { listTestProject } from '../test-projects.js'
 import { onModules, runComputerCommand, runModuleCommand } from './modules.js'
 import { callModule } from './module-calls.js'
 
@@ -54,20 +54,6 @@ const plugin = (bin: string) => ({
   files: { ...module(bin).files, 'module.mjs': `export default { name: ${JSON.stringify(bin)}, plugin: { scope: 'project' }, hooks: {} }` },
 })
 
-/** A queue provider that is also a module: `--local` prints its file; `add` appends to it. */
-const queueModule = {
-  manifest: { exports: { './dashboard': './w.js' }, bin: { queue: 'bin/queue' }, openagent: { queue: 'queue' } },
-  files: {
-    'w.js': 'export default {}',
-    'bin/queue': `
-const fs = require('node:fs'); const path = require('node:path'); const file = path.join(__dirname, '..', 'queue.json')
-const read = () => JSON.parse(fs.readFileSync(file, 'utf8'))
-if (process.argv[2] === 'add') { fs.writeFileSync(file, JSON.stringify([...read(), process.argv[3]])); console.log('{"ok":true}') }
-else console.log(JSON.stringify(read()))`,
-    'queue.json': '[]',
-  },
-}
-
 /** The modules listed, each URL without its file's version, once every one is seen to carry one. */
 async function listed(): Promise<Awaited<ReturnType<typeof onModules>>> {
   const modules = await onModules()
@@ -86,15 +72,18 @@ test('the dashboard\'s modules are every registered project\'s, one per package,
     const b = join(dir, 'b')
     await project(a)
     await project(b)
-    await addProject(a, '2026-09-19T00:00:00.000Z')
-    await addProject(b, '2026-09-19T00:00:01.000Z')
+    await listTestProject(a, '2026-09-19T00:00:00.000Z')
+    await listTestProject(b, '2026-09-19T00:00:01.000Z')
 
     await withDistribution(dir, [...COMPUTER, '@openagt/store-filesystem', '@openagt/ui-pane-changes', '@openagt/ui-pane-files', 'logs', 'plain', 'queue'], async () => {
       await switchOn(b, 'queue')
-      // The computer's modules (the notifications, the accounts, the Human Queue, how markdown looks, Profile) come first, and are no project's. Then the ones every project has, from the first, which the sessions with no project have too; then queue, which only the project it is on in has.
+      // The computer's modules (the notifications, the accounts, the agent profiles, the Human Queue, how markdown looks, Profile) come first, and are no project's. Then the ones every project has, from the first, which the sessions with no project have too; then queue, which only the project it is on in has.
       assert.deepEqual(await listed(), [
         { package: '@openagt/agent-driver', url: '/_computer-modules/%40openagt%2Fagent-driver/dashboard.js', projects: [], computer: true },
         { package: '@openagt/notifications-browser', url: '/_computer-modules/%40openagt%2Fnotifications-browser/dashboard.js', projects: [], computer: true },
+        { package: '@openagt/profiles', url: '/_computer-modules/%40openagt%2Fprofiles/dashboard.js', projects: [], computer: true },
+        { package: '@openagt/projects', url: '/_computer-modules/%40openagt%2Fprojects/dashboard.js', projects: [], computer: true },
+        { package: '@openagt/store-git-repository', url: '/_computer-modules/%40openagt%2Fstore-git-repository/dashboard.js', projects: [], computer: true },
         { package: '@openagt/ui-card-waiting', url: '/_computer-modules/%40openagt%2Fui-card-waiting/dashboard.js', projects: [], computer: true },
         { package: '@openagt/ui-renderer-markdown', url: '/_computer-modules/%40openagt%2Fui-renderer-markdown/dashboard.js', projects: [], computer: true },
         { package: '@openagt/user-info', url: '/_computer-modules/%40openagt%2Fuser-info/dashboard.js', projects: [], computer: true },
@@ -128,6 +117,9 @@ test("with no project added, the computer's modules are there and run their own 
       assert.deepEqual(await listed(), [
         { package: '@openagt/agent-driver', url: '/_computer-modules/%40openagt%2Fagent-driver/dashboard.js', projects: [], computer: true },
         { package: '@openagt/notifications-browser', url: '/_computer-modules/%40openagt%2Fnotifications-browser/dashboard.js', projects: [], computer: true },
+        { package: '@openagt/profiles', url: '/_computer-modules/%40openagt%2Fprofiles/dashboard.js', projects: [], computer: true },
+        { package: '@openagt/projects', url: '/_computer-modules/%40openagt%2Fprojects/dashboard.js', projects: [], computer: true },
+        { package: '@openagt/store-git-repository', url: '/_computer-modules/%40openagt%2Fstore-git-repository/dashboard.js', projects: [], computer: true },
         { package: '@openagt/ui-card-waiting', url: '/_computer-modules/%40openagt%2Fui-card-waiting/dashboard.js', projects: [], computer: true },
         { package: '@openagt/ui-renderer-markdown', url: '/_computer-modules/%40openagt%2Fui-renderer-markdown/dashboard.js', projects: [], computer: true },
         { package: '@openagt/user-info', url: '/_computer-modules/%40openagt%2Fuser-info/dashboard.js', projects: [], computer: true },
@@ -146,36 +138,9 @@ test("with no project added, the computer's modules are there and run their own 
 
       const a = join(dir, 'a')
       await project(a)
-      await addProject(a, '2026-09-19T00:00:00.000Z')
+      await listTestProject(a, '2026-09-19T00:00:00.000Z')
       assert.deepEqual(await runComputerCommand('queue', []), { ok: false, error: "queue is not this computer's" })
       assert.deepEqual(await runModuleCommand(projectId(a), '@openagt/agent-driver', ['adding']), { ok: false, error: '@openagt/agent-driver brings no module to this project' })
-    })
-  } finally {
-    if (previous === undefined) delete process.env.XDG_CONFIG_HOME
-    else process.env.XDG_CONFIG_HOME = previous
-    await rm(dir, { recursive: true, force: true })
-  }
-})
-
-test('a module\'s action may write what OpenAgent reads through a provider: the next read sees it, not a cached copy (#1774); a read forgets nothing', async () => {
-  const dir = await realpath(await mkdtemp(join(tmpdir(), 'openagent-modules-rpc-')))
-  const previous = process.env.XDG_CONFIG_HOME
-  process.env.XDG_CONFIG_HOME = join(dir, 'cfg')
-  try {
-    await mkdir(process.env.XDG_CONFIG_HOME, { recursive: true })
-    await install(dir, { queue: queueModule })
-    const a = join(dir, 'a')
-    await project(a)
-    await addProject(a, '2026-09-19T00:00:00.000Z')
-    await withDistribution(dir, ['queue'], async () => {
-      const queue = (await projectQueue(a))!
-      assert.deepEqual(await queue.list(), [], 'read once: cached for the window')
-      assert.deepEqual(await runModuleCommand(projectId(a), 'queue', ['add', 'ship it'], undefined, true), { ok: true, output: { ok: true } })
-      assert.deepEqual(await queue.list(), ['ship it'], 'the module wrote through its action, and OpenAgent forgot its read')
-      // Another writer adds an entry; the page then reads the queue through the package's command.
-      await writeFile(join(dir, 'node_modules', 'queue', 'queue.json'), JSON.stringify(['ship it', 'and this']))
-      assert.deepEqual(await runModuleCommand(projectId(a), 'queue', ['--local']), { ok: true, output: ['ship it', 'and this'] })
-      assert.deepEqual(await queue.list(), ['ship it'], 'a read wrote nothing: what OpenAgent read stays, until its window ends')
     })
   } finally {
     if (previous === undefined) delete process.env.XDG_CONFIG_HOME
@@ -199,9 +164,9 @@ test("a module calls its own server part's functions, in its own project, which 
     })
     const a = join(dir, 'a')
     await project(a)
-    await addProject(a, '2026-09-19T00:00:00.000Z')
+    await listTestProject(a, '2026-09-19T00:00:00.000Z')
 
-    await withDistribution(dir, ['reader', 'logs', '@openagt/ui-pane-files'], async () => {
+    await withDistribution(dir, ['@openagt/store-filesystem', 'reader', 'logs', '@openagt/ui-pane-files'], async () => {
       assert.deepEqual(await callModule(projectId(a), 'reader', 'where', { path: 'x' }), { ok: true, output: { root: a, project: { id: projectId(a), name: 'a', dir: a }, input: { path: 'x' } } })
       assert.deepEqual(await callModule(SESSIONS_ID, 'reader', 'where', {}), { ok: true, output: { root: sessionsHome(), project: undefined, input: {} } })
       assert.deepEqual(await callModule(projectId(a), 'logs', 'where', {}), { ok: false, error: 'logs has no server part' })

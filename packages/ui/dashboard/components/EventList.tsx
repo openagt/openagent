@@ -1,7 +1,7 @@
-import type { ChoiceRequest, OpenAgentEvent } from '../../src/index.js'
+import type { ChoiceRequest, RunEvent } from '@openagt/hooks'
 import type { BackgroundTask } from '@openagt/hooks'
-import { foldScreenRows, formatOpenAgentEvent } from '../../src/client.js'
-import { answeredQuestion } from '@openagt/agent-driver/question'
+import { foldScreenRows, formatRunEvent } from '../../src/client.js'
+import { answeredQuestion } from '@openagt/hooks'
 import { Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { Check, ChevronRight, Copy, PencilLine } from 'lucide-react'
 import { pendingChoices } from '../lib/live-state.js'
@@ -22,7 +22,7 @@ import { useSteadyText, useStillWriting } from '../lib/use-steady-text.js'
 import { BackgroundLine, Caret, LiveLine, ToolCalls, type CallOutput, type ToolStep } from './ToolCalls.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { ImageTiles } from './ImageTiles.js'
-import { imageAddress } from '../../src/images.js'
+import { useImageStore } from '../lib/box-images.js'
 import {
   MessageScroller,
   MessageScrollerButton,
@@ -65,7 +65,7 @@ import {
 
 // The conversation text — the user's prompt and the agent's reply. Both are rendered as Markdown:
 // the agent writes in Markdown, and a prompt may too.
-function messageText(e: OpenAgentEvent): string | null {
+function messageText(e: RunEvent): string | null {
   if (e.kind !== 'driver') return null
   if (e.event.type === 'start') return e.event.prompt
   if (e.event.type === 'text') return e.event.text
@@ -73,13 +73,13 @@ function messageText(e: OpenAgentEvent): string | null {
 }
 
 /** Grouping key for a run of same-kind rows: the user's prompt stands apart from the agent's work. */
-function rowGroup(e: OpenAgentEvent): string {
+function rowGroup(e: RunEvent): string {
   if (e.kind === 'driver') return e.event.type === 'start' || e.event.type === 'steered' ? 'you' : 'agent'
   return e.kind
 }
 
 /** A message the person sent while the agent worked, as it landed between two of its steps: theirs, in the turn. */
-function steeredText(e: OpenAgentEvent): string | undefined {
+function steeredText(e: RunEvent): string | undefined {
   return e.kind === 'driver' && e.event.type === 'steered' ? e.event.text : undefined
 }
 
@@ -90,7 +90,7 @@ function later(a: string | undefined, b: string | undefined): string | undefined
 }
 
 /** A driver `start` opens a fresh prompt turn. */
-function isTurnBoundary(e: OpenAgentEvent): boolean {
+function isTurnBoundary(e: RunEvent): boolean {
   return e.kind === 'driver' && e.event.type === 'start'
 }
 
@@ -100,7 +100,7 @@ function isTurnBoundary(e: OpenAgentEvent): boolean {
  * the user asked for that, and neither is a run *waiting* on the question it ended on (#1774): both
  * stay neutral rather than being coloured like a fault.
  */
-function isFailure(e: OpenAgentEvent): boolean {
+function isFailure(e: RunEvent): boolean {
   if (e.kind === 'driver') return e.event.type === 'error'
   // An error the agent reported itself (#1500) is a failure like any other: the log already has
   // one red lane, and a second vocabulary for the same thing would only make both quieter.
@@ -109,7 +109,7 @@ function isFailure(e: OpenAgentEvent): boolean {
 }
 
 /** The row's colour: a failure is red (#1199), and everything else keeps the muted log tone. */
-function rowTone(e: OpenAgentEvent): string {
+function rowTone(e: RunEvent): string {
   return isFailure(e) ? 'text-danger' : ''
 }
 
@@ -120,7 +120,7 @@ function rowTone(e: OpenAgentEvent): string {
  * chat's column. Every other row carries the same -mx/px pair, so its hover band and its words keep
  * the column.
  */
-function rowBox(e: OpenAgentEvent): string {
+function rowBox(e: RunEvent): string {
   return isFailure(e) ? 'rounded-lg bg-danger/10 px-4 py-2 md:-mx-4' : '-mx-1.5 rounded-sm px-1.5'
 }
 
@@ -130,7 +130,7 @@ function rowBox(e: OpenAgentEvent): string {
  * followed". A later turn stays where it happened. A message being sent is its turn's prompt
  * already, where its own line will stand: first in a run with no prompt yet, else last.
  */
-function inTurns(events: OpenAgentEvent[], sent: OpenAgentEvent | undefined): OpenAgentEvent[] {
+function inTurns(events: RunEvent[], sent: RunEvent | undefined): RunEvent[] {
   const at = events.findIndex(isTurnBoundary)
   if (at < 0) return sent === undefined ? events : [sent, ...events]
   const turns = at === 0 ? events : [events[at]!, ...events.slice(0, at), ...events.slice(at + 1)]
@@ -183,14 +183,14 @@ type ChoiceRow = { choice: ChoiceRequest; pick?: string | readonly string[]; pas
  * a control nobody reads must not look answerable. Earlier firings' "✓ chose" lines stay put:
  * they are the only record of a superseded decision.
  */
-function foldChoiceRows(events: OpenAgentEvent[]): {
-  rows: Map<OpenAgentEvent, ChoiceRow>
-  hidden: Set<OpenAgentEvent>
+function foldChoiceRows(events: RunEvent[]): {
+  rows: Map<RunEvent, ChoiceRow>
+  hidden: Set<RunEvent>
 } {
-  const rows = new Map<OpenAgentEvent, ChoiceRow>()
-  const hidden = new Set<OpenAgentEvent>()
-  const lastFiring = new Map<string, { e: OpenAgentEvent; at: number }>()
-  const lastResolved = new Map<string, { e: Extract<OpenAgentEvent, { kind: 'choice-resolved' }>; at: number }>()
+  const rows = new Map<RunEvent, ChoiceRow>()
+  const hidden = new Set<RunEvent>()
+  const lastFiring = new Map<string, { e: RunEvent; at: number }>()
+  const lastResolved = new Map<string, { e: Extract<RunEvent, { kind: 'choice-resolved' }>; at: number }>()
   events.forEach((e, at) => {
     if (e.kind === 'choice') lastFiring.set(chatGate(e), { e, at })
     else if (e.kind === 'choice-resolved') lastResolved.set(e.id, { e, at })
@@ -225,13 +225,13 @@ function foldChoiceRows(events: OpenAgentEvent[]): {
  * once the agent's process is done, about a second later; till then its block is left out as it is
  * once the question came. A turn that ended without one shows its block as written: nothing came of it.
  */
-export function replyBeforeEnd(events: readonly OpenAgentEvent[]): OpenAgentEvent | undefined {
+export function replyBeforeEnd(events: readonly RunEvent[]): RunEvent | undefined {
   for (let at = events.length - 1; at >= 0; at--) {
     const e = events[at]!
     if (e.kind === 'choice' || e.kind === 'end' || isTurnBoundary(e)) return undefined
     if (e.kind !== 'driver' || ('subagent' in e.event && e.event.subagent !== undefined)) continue
     if (e.event.type === 'action') return undefined
-    // A message with no words (Codex ends some turns with one) is not the turn's last word.
+    // A message with no words (a coding agent may end a turn with one) is not the turn's last word.
     if (e.event.type !== 'text' || e.event.text.trim() === '') continue
     return e
   }
@@ -246,7 +246,7 @@ export function replyBeforeEnd(events: readonly OpenAgentEvent[]): OpenAgentEven
  * coding agent never began, and nothing else in the chat says it ended. A failed end is a row where
  * it happened: it says why the agent is not going on, and why the next prompt was needed.
  */
-export function quietEnds(events: readonly OpenAgentEvent[]): Set<OpenAgentEvent> {
+export function quietEnds(events: readonly RunEvent[]): Set<RunEvent> {
   const at = events.findIndex(e => !isTurnBoundary(e))
   const first = at > 0 ? events[at] : undefined
   return new Set(events.filter(e => e.kind === 'end' && (e.ok || e.waiting || (e.stopped && e !== first))))
@@ -256,9 +256,9 @@ export function quietEnds(events: readonly OpenAgentEvent[]): Set<OpenAgentEvent
  * The replies a question follows: the agent's last message before each question it stopped on.
  * It is what the question is about (a plan to approve), so it is shown whole, not folded.
  */
-export function askedReplies(events: readonly OpenAgentEvent[]): Set<OpenAgentEvent> {
-  const asked = new Set<OpenAgentEvent>()
-  let reply: OpenAgentEvent | undefined
+export function askedReplies(events: readonly RunEvent[]): Set<RunEvent> {
+  const asked = new Set<RunEvent>()
+  let reply: RunEvent | undefined
   for (const e of events) {
     if (isTurnBoundary(e)) reply = undefined
     else if (e.kind === 'driver' && e.event.type === 'text') reply = e
@@ -395,16 +395,19 @@ function TurnFiles({ files, onOpen, footer }: { files: readonly ChangedFile[]; o
 // on hover the copy and Cancel and edit, which takes it back into the box.
 // `attached`: what the run handed the agent with this message, folded under the box.
 // `images`: the images it went with, by their names, as tiles in a row over the box, at its right;
-// one this computer no longer keeps (a record from another computer) says so on its tile.
+// shown from the module that keeps them; one this computer no longer keeps (a record from another
+// computer) says so on its tile.
 // `fresh`: a message just sent, which slides in where it lands, as Claude Code on the web's does.
 function Prompt({ text, at, waiting, attached, images, fresh = false }: { text: string; at?: string | undefined; waiting?: Waiting | undefined; attached?: string | undefined; images?: string[] | undefined; fresh?: boolean }) {
   const [open, setOpen] = useState(false)
   const tall = isTall(text)
   // OpenAgent is not answering: a waiting message can be neither sent now nor taken back.
   const down = useContext(DaemonDown)
+  // Where the images are shown from: the module that keeps them.
+  const store = useImageStore()
   return (
     <div className={`group/prompt flex min-w-0 flex-1 flex-col items-end font-sans text-foreground ${fresh ? 'bubble-in' : ''}`}>
-      {images !== undefined && images.length > 0 && <ImageTiles tiles={images.map((name, at) => ({ key: `${at}:${name}`, src: imageAddress(name) }))} className="mb-2 max-w-[80%] justify-end" />}
+      {store && images !== undefined && images.length > 0 && <ImageTiles tiles={images.map((name, at) => ({ key: `${at}:${name}`, src: store.option.src(name) }))} className="mb-2 max-w-[80%] justify-end" />}
       <div role="group" aria-label={waiting ? 'Your message, waiting' : 'Your message'} className="max-w-[80%] min-w-0 rounded-lg rounded-br-sm bg-card px-4 py-2 shadow-sm ring-1 ring-hairline">
         <div className={tall && !open ? PROMPT_CUT : ''}>
           <Markdown text={text} />
@@ -500,7 +503,7 @@ function Attached({ text }: { text: string }) {
  * What the agent waits on in the background in the turn going on: the set its driver said as the
  * agent went idle, until it said none, the agent awake again. Nothing once a new prompt begins.
  */
-function backgroundWait(told: readonly OpenAgentEvent[]): BackgroundTask[] | undefined {
+function backgroundWait(told: readonly RunEvent[]): BackgroundTask[] | undefined {
   for (let at = told.length - 1; at >= 0; at--) {
     const e = told[at]!
     if (isTurnBoundary(e)) return undefined
@@ -514,7 +517,7 @@ function backgroundWait(told: readonly OpenAgentEvent[]): BackgroundTask[] | und
  * through, said once it has answered something, as Claude Code on the web says them; before that,
  * the line is the dots and the seconds.
  */
-function turnTokens(told: readonly OpenAgentEvent[]): number | undefined {
+function turnTokens(told: readonly RunEvent[]): number | undefined {
   let start = told.length
   while (start > 0 && !isTurnBoundary(told[start - 1]!)) start--
   const turn = told.slice(start)
@@ -523,12 +526,12 @@ function turnTokens(told: readonly OpenAgentEvent[]): number | undefined {
 }
 
 /** A tool call or a thought of the coding agent: a step between two of its messages. */
-function stepOf(e: OpenAgentEvent): ToolStep | undefined {
+function stepOf(e: RunEvent): ToolStep | undefined {
   return e.kind === 'driver' && (e.event.type === 'action' || e.event.type === 'thought') ? { ...e.event } : undefined
 }
 
 /** What a tool call gave back: no row and no step of its own, a part of its call. */
-function outputOf(e: OpenAgentEvent): (CallOutput & { id: string }) | undefined {
+function outputOf(e: RunEvent): (CallOutput & { id: string }) | undefined {
   return e.kind === 'driver' && e.event.type === 'output' ? e.event : undefined
 }
 
@@ -541,15 +544,15 @@ function outputOf(e: OpenAgentEvent): (CallOutput & { id: string }) | undefined 
  * line says it.
  */
 function foldSteps(
-  events: readonly OpenAgentEvent[],
+  events: readonly RunEvent[],
   live = false,
-): { rows: OpenAgentEvent[]; steps: Map<OpenAgentEvent, ToolStep[]>; current?: Extract<ToolStep, { type: 'action' }> } {
+): { rows: RunEvent[]; steps: Map<RunEvent, ToolStep[]>; current?: Extract<ToolStep, { type: 'action' }> } {
   const last = events[events.length - 1]
   const going = live && last !== undefined ? stepOf(last) : undefined
   if (going?.type === 'action') return { ...foldSteps(events.slice(0, -1)), current: going }
-  const rows: OpenAgentEvent[] = []
-  const steps = new Map<OpenAgentEvent, ToolStep[]>()
-  let run: { head: OpenAgentEvent; steps: ToolStep[] } | undefined
+  const rows: RunEvent[] = []
+  const steps = new Map<RunEvent, ToolStep[]>()
+  let run: { head: RunEvent; steps: ToolStep[] } | undefined
   const calls = new Map<string, Extract<ToolStep, { type: 'action' }>>()
   const close = (): void => {
     if (run?.steps.some(step => step.type === 'action')) {
@@ -639,7 +642,7 @@ const NONE_QUEUED: readonly WaitingMessage[] = []
  * "allowed" included. The name the session was given is not a row: it is the name, written where
  * a name goes — the top bar and the rail — and a line announcing it read as a step the agent took.
  */
-function shownAsRow(e: OpenAgentEvent): boolean {
+function shownAsRow(e: RunEvent): boolean {
   if (e.kind === 'session-update' || e.kind === 'usage' || e.kind === 'title') return false
   if (e.kind === 'driver' && (e.event.type === 'result' || e.event.type === 'tokens' || e.event.type === 'thinking' || e.event.type === 'background')) return false
   if (e.kind === 'driver' && e.event.type === 'rate-limit') return e.event.limit.status !== 'allowed'
@@ -738,7 +741,7 @@ export function EventList({
   onOpenChange,
   onOpenScreen,
 }: {
-  events: OpenAgentEvent[]
+  events: RunEvent[]
   /** The message the agent is writing, as far as it has got: the agent's row after the last, drawn
    *  as a finished reply is. Never an event: its whole message's row replaces it. */
   writing?: string
@@ -821,14 +824,14 @@ export function EventList({
   // is sent, not seconds later when the run writes its first line.
   const sentAt = useMemo(() => (sending !== undefined ? (sendingAt ?? new Date().toISOString()) : undefined), [sending, sendingAt])
   // Its row holds no time, as one being sent shows none.
-  const sent: OpenAgentEvent | undefined = sending !== undefined ? { kind: 'driver', event: { type: 'start', prompt: sending, ...(sendingImages !== undefined && sendingImages.length > 0 ? { images: sendingImages } : {}) } } : undefined
+  const sent: RunEvent | undefined = sending !== undefined ? { kind: 'driver', event: { type: 'start', prompt: sending, ...(sendingImages !== undefined && sendingImages.length > 0 ? { images: sendingImages } : {}) } } : undefined
   // Every row and every passed end, in their turns; `shown` is the rows alone.
   const kept = inTurns(events, answeredInPlace ? undefined : sent).filter(e => shownAsRow(e) && !choiceRows?.hidden.has(e) && !screenRows.hidden.has(e) && !theirs.has(e))
   // Every event and the message just sent: what the turn going on is read off.
   const told = sent === undefined ? events : [...events, sent]
   // The text of a row's message: the reply a question follows, or may yet, without the question's block.
   const unended = useMemo(() => replyBeforeEnd(events), [events])
-  const textOf = (e: OpenAgentEvent): string | null => {
+  const textOf = (e: RunEvent): string | null => {
     const text = messageText(e)
     return text !== null && (asked.has(e) || e === unended) ? withoutBlocks(text, elsewhere) : text
   }
@@ -872,7 +875,7 @@ export function EventList({
   // A row is known by its event's place in the whole log, not among the rows shown: a row that
   // stops being shown (an end the run went on after) then changes no other row's identity, and
   // the scroller keeps its place. A message just sent is the next turn's.
-  const idOf = (e: OpenAgentEvent): string => rowIds.get(e) ?? `turn:${turns + 1}`
+  const idOf = (e: RunEvent): string => rowIds.get(e) ?? `turn:${turns + 1}`
   const rows = subagentRows(events, working)
   // A prompt or the agent's own words part them: what it started after saying something comes after those words.
   const reports = new Map(calls.flatMap(call => {
@@ -951,9 +954,9 @@ export function EventList({
   // finished saying it. A turn that changed files ends on their card: the pair goes under it, as
   // Claude Code puts it under its card of the turn's files. Keyed by the prompt the turn ended at;
   // the last turn's by `null`.
-  const footers = new Map<OpenAgentEvent, string>()
-  const filesFooters = new Map<OpenAgentEvent | null, { text: string; at: string | undefined }>()
-  let last: { row: OpenAgentEvent; text: string } | undefined
+  const footers = new Map<RunEvent, string>()
+  const filesFooters = new Map<RunEvent | null, { text: string; at: string | undefined }>()
+  let last: { row: RunEvent; text: string } | undefined
   let said: string[] = []
   for (const e of shown) {
     const message = textOf(e)
@@ -978,7 +981,7 @@ export function EventList({
   // The open question the keys answer: the newest.
   const asking = [...shown].reverse().find(e => choiceRows?.rows.has(e) && choiceRows.rows.get(e)?.pick === undefined && !choiceRows.rows.get(e)?.passed)
   // The question the chat opened on, which takes the focus from the message box; one asked later does not.
-  const openedOn = useRef<OpenAgentEvent | undefined | null>(null)
+  const openedOn = useRef<RunEvent | undefined | null>(null)
   if (openedOn.current === null && shown.length > 0) openedOn.current = asking
   // The reply that question is about: a chat opened on a plan for a yes shows the plan's top first.
   const openedAt = openedOn.current ? shown.slice(0, shown.indexOf(openedOn.current)).reverse().find(e => asked.has(e)) : undefined
@@ -1081,7 +1084,7 @@ export function EventList({
                     <ScreenRow label={e.label} onOpen={onOpenScreen && screenRows.live.has(e) ? onOpenScreen : undefined} />
                   ) : (
                     <span className={`min-w-0 flex-1 whitespace-pre-wrap break-words ${rowTone(e) || 'text-foreground'}`}>
-                      {(formatOpenAgentEvent(e) ?? '').trim()}
+                      {(formatRunEvent(e) ?? '').trim()}
                     </span>
                   )}
                   {/* A line of steps, a message or a subagent's message has no time at its end, as Claude

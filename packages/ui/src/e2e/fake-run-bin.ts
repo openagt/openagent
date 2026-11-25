@@ -23,12 +23,11 @@
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
-import { continuationPrompt, FakeDriver, findRun, logDiaryFile, parseRunCard, readDiary, startEvent, writeRun, type AnyDiaryLine, type RunCard, NAME_FILE_ENV, givenName, isPublish, type Publish } from '@openagt/agent-driver'
-import type { DriverEvent, LogEndStatus, SessionLog } from '@openagt/hooks'
+import { FakeDriver, findRun, logDiaryFile, parseRunCard, readDiary, startEvent, writeRun, type AnyDiaryLine, type RunCard, NAME_FILE_ENV, givenName, isPublish, type Publish } from '@openagt/agent-driver'
+import { type DriverEvent, type LogEndStatus, type SessionLog, continuationPrompt, OPENAGENT_DIR } from '@openagt/hooks'
 import { parseQuestion, QUESTION_TAG } from '@openagt/ask/question'
-import { nodeGitRunner } from '@openagt/agent-data'
+import { nodeGitRunner } from '../git.js'
 import { agentBranchName, attachCheckout, createCheckout, reclaimWorktree, worktreeBranch, worktreePath } from '@openagt/git-branches'
-import { OPENAGENT_DIR } from '../openagent-dir.js'
 
 const QUESTION = { title: 'Which way?', options: [{ label: 'Left', detail: 'the short way' }, { label: 'Right' }], recommended: 'Left' }
 

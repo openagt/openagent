@@ -1,31 +1,12 @@
 // How a tool call of the coding agent reads in the chat: a verb, then what it was done to
 // ("Read AGENTS.md", "Ran pnpm test"), and how a run of calls sums up ("Ran 2 commands, edited
-// README.md, used a tool"). Both drivers say a call as a label and a detail: Claude Code's label is the tool's name
-// (Bash, Read, Edit), Codex's is the kind of the item (commandExecution, fileChange), so each has
-// its own lines in the one map.
+// README.md, used a tool"). A call's words are its coding agent's own (`RunAgent.calls`): each
+// agent says how its calls read, and the chat reads those of the run's agent.
 
+import { saidCall, type AgentCalls, type CallKind, type SaidCall } from '@openagt/hooks'
 import { sumEdits, type ChangedFile, type FileEdit } from './turn-changes.js'
 
-/**
- * What a call did, for counting a run of calls: a search of the code (`search`), of the file names
- * (`find`) or of the web (`web`) is each its own.
- */
-type CallKind = 'command' | 'read' | 'edit' | 'search' | 'find' | 'web' | 'skill' | 'other'
-
-export interface ToolCall {
-  /** The grey word: what was done. */
-  verb: string
-  /** The same word while the call is still going on: "Running", "Reading". */
-  doing: string
-  /** The dark words: what it was done to. A file reads as its name alone. */
-  target?: string
-  /** What was looked for is said in the grey of the verb, as Claude Code on the web says a search. */
-  plain?: true
-  /** The detail as the driver gave it: the whole path, the command. */
-  detail?: string
-  /** The one file a file's tool was given (Read, Edit, Write), as the driver gave it: what its name opens. */
-  path?: string
-  kind: CallKind
+export interface ToolCall extends SaidCall {
   /** The files the call changed, when its coding agent said them: each once, its lines summed. */
   files?: ChangedFile[]
   /** The lines the call added and removed over all its files. */
@@ -44,74 +25,14 @@ function sizeOf(files: readonly ChangedFile[]): LineCount {
   return { added: files.reduce((n, file) => n + file.added, 0), removed: files.reduce((n, file) => n + file.removed, 0) }
 }
 
-const CALLS: Record<string, { verb: string; doing: string; kind: CallKind; file?: true; plain?: true; slash?: true }> = {
-  // Claude Code: the tool's name.
-  Bash: { verb: 'Ran', doing: 'Running', kind: 'command' },
-  Read: { verb: 'Read', doing: 'Reading', kind: 'read', file: true },
-  Edit: { verb: 'Edited', doing: 'Editing', kind: 'edit', file: true },
-  MultiEdit: { verb: 'Edited', doing: 'Editing', kind: 'edit', file: true },
-  NotebookEdit: { verb: 'Edited', doing: 'Editing', kind: 'edit', file: true },
-  Write: { verb: 'Wrote', doing: 'Writing', kind: 'edit', file: true },
-  Grep: { verb: 'Searched', doing: 'Searching', kind: 'search', plain: true },
-  Glob: { verb: 'Searched', doing: 'Searching', kind: 'find', plain: true },
-  WebSearch: { verb: 'Searched the web', doing: 'Searching the web', kind: 'web', plain: true },
-  WebFetch: { verb: 'Fetched', doing: 'Fetching', kind: 'other' },
-  // "Ran skill /github", as Claude Code on the web says it.
-  Skill: { verb: 'Ran skill', doing: 'Running skill', kind: 'skill', slash: true },
-  Task: { verb: 'Started agent', doing: 'Starting agent', kind: 'other' },
-  Agent: { verb: 'Started agent', doing: 'Starting agent', kind: 'other' },
-  TodoWrite: { verb: 'Updated todos', doing: 'Updating todos', kind: 'other' },
-  ToolSearch: { verb: 'Loaded tools', doing: 'Loading tools', kind: 'other' },
-  // Codex: the kind of the item.
-  commandExecution: { verb: 'Ran', doing: 'Running', kind: 'command' },
-  fileChange: { verb: 'Edited', doing: 'Editing', kind: 'edit', file: true },
-  mcpToolCall: { verb: 'Called', doing: 'Calling', kind: 'other' },
-  webSearch: { verb: 'Searched the web', doing: 'Searching the web', kind: 'web', plain: true },
-}
-
-/** `imageView` reads "Image view"; a name that is already words is left as it is. */
-function asWords(label: string): string {
-  if (!/^[a-z]+([A-Z][a-z]*)+$/.test(label)) return label
-  const words = label.replace(/[A-Z]/g, c => ` ${c.toLowerCase()}`)
-  return words.charAt(0).toUpperCase() + words.slice(1)
-}
-
-/** A path's last part; several paths (Codex names every file of one change) each cut the same way. */
-function fileNames(detail: string): string {
-  return detail
-    .split(', ')
-    .map(path => path.replace(/\/+$/, '').split('/').pop() || path)
-    .join(', ')
-}
-
 /**
- * A tool of an MCP server, as Claude Code names it (`mcp__github__get_me`): "Used github: Get me",
- * as Claude Code on the web says a call to its connectors.
+ * One call as the chat says it, by the words of its coding agent (`calls`). A call whose coding
+ * agent said the files it changed (`changed`) names them and their size: "Created" when it made
+ * every one of them, "Updated" otherwise, as Claude Code on the web says them, whatever the tool
+ * was called.
  */
-function mcpCall(label: string): { verb: string; doing: string; tool: string } | undefined {
-  const match = /^mcp__(.+?)__(.+)$/.exec(label)
-  if (!match) return undefined
-  const tool = match[2]!.replace(/_/g, ' ')
-  return { verb: `Used ${match[1]}:`, doing: `Using ${match[1]}:`, tool: tool.charAt(0).toUpperCase() + tool.slice(1) }
-}
-
-/**
- * One call as the chat says it. A label the map does not know is its own verb; an MCP server's
- * tool is "Used <server>:" and the tool. A call whose coding agent said the files it changed
- * (`changed`) names them and their size: "Created" when it made every one of them, "Updated"
- * otherwise, as Claude Code on the web says them, whatever the tool was called.
- */
-export function toolCall(label: string, detail?: string, changed?: readonly FileEdit[]): ToolCall {
-  const known = CALLS[label]
-  const mcp = mcpCall(label)
-  const call: ToolCall = { verb: known?.verb ?? mcp?.verb ?? asWords(label), doing: known?.doing ?? mcp?.doing ?? asWords(label), kind: known?.kind ?? 'other' }
-  if (mcp) call.target = mcp.tool
-  if (known?.plain) call.plain = true
-  if (detail !== undefined) {
-    call.detail = detail
-    call.target = known?.file ? fileNames(detail) : known?.slash ? `/${detail.replace(/^\//, '')}` : detail
-    if (known?.file && !detail.includes(', ')) call.path = detail
-  }
+export function toolCall(calls: AgentCalls | undefined, label: string, detail?: string, changed?: readonly FileEdit[]): ToolCall {
+  const call: ToolCall = saidCall(calls, label, detail)
   if (changed !== undefined && changed.length > 0) {
     const files = sumEdits(changed)
     call.kind = 'edit'

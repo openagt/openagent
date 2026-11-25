@@ -5,17 +5,11 @@ import { useAction } from './use-action.js'
 type StartArgs = Parameters<typeof sendStart>
 
 /**
- * The person's picks a start carries to the run; an unset one is left to the run's own default.
- * The publish pick is carried as saved, and not at all when none was made: the daemon that starts
- * the run decides the pick in force.
+ * The person's picks a start carries to the run: the publish pick as saved, and not at all when
+ * none was made, so the daemon that starts the run decides the pick in force.
  */
-export function startPicks(preferences: Preferences): { driver?: string; model?: string; effort?: string; publish?: PublishPick } {
-  return {
-    ...(preferences.driver ? { driver: preferences.driver } : {}),
-    ...(preferences.model ? { model: preferences.model } : {}),
-    ...(preferences.effort ? { effort: preferences.effort } : {}),
-    ...(preferences.publish ? { publish: preferences.publish } : {}),
-  }
+export function startPicks(preferences: Preferences): { publish?: PublishPick } {
+  return preferences.publish ? { publish: preferences.publish } : {}
 }
 
 // Starting a run, for every surface that does (the launcher, the onboarding checklist): the

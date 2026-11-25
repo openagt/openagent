@@ -1,6 +1,5 @@
-import { withPersonalFolder, type PersonalFolderDeps } from '@openagt/agent-data'
+import { withPersonalFolder, type PersonalFolderDeps, foldersOf, madeAtEachCall, type Folders } from '@openagt/store-filesystem'
 import { StoreOrder, type Scope, type Store, type StoreBackend } from '@openagt/hooks'
-import { foldersOf, madeAtEachCall, type Folders } from '@openagt/store-filesystem'
 
 /**
  * The person's own folder as a git repository: every save to a scope kept there (the person's,

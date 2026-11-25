@@ -1,18 +1,14 @@
 import type { ReactNode } from 'react'
-import type { AgentWorktree } from '../../src/index.js'
 import { Folder, FolderGit2, GitBranch } from 'lucide-react'
-import { useLoaded } from '../lib/use-async.js'
-import { handoffSays, useAgentHandoff } from '../lib/use-agent-handoff.js'
-import { onAgentCopies } from '../rpc/reads.js'
-import { Committing, HandoffActions, HandoffSummary } from './AgentHandoff.js'
 import { MiddleCut } from './MiddleCut.js'
 import { Panel, PanelRow } from './ui/panel.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 
 // The session's work, above the message box: one panel, a row per repo that has work (his pick,
-// over a bar per repo and over the project's bar with a label per copy). The project's row is
-// first; each copy of a repo the session has (Context) has the same row after it, so a copied
-// repo's work is read and taken further exactly as the project's is. A row is the repo's name,
+// over a bar per repo and over the project's bar with a label per copy), each drawn by the module
+// whose work it is (`chat.work`). The project's row is first; each copy of a repo
+// the session has (Context) has the same row after it, so a copied repo's work is read and taken
+// further exactly as the project's is. A row is the repo's name,
 // under it its branch, what the branch holds (+N −N) and its pull request, and at its end the next
 // step as a press (Commit, Open PR, Merge). A repo with nothing to say has no row, and a session
 // with no row has no panel. On a phone the press stays at the row's end, as wide as its word.
@@ -50,7 +46,7 @@ export function WorkRow({
   path?: string | undefined
   /** What the branch holds, in a phrase. */
   summary?: ReactNode
-  pr?: { number: number; url: string; state: string; title: string } | undefined
+  pr?: { number: number; url: string; state?: string | undefined; title?: string | undefined } | undefined
   /** The next step (Commit, Open PR, Merge), or the words that stand where it would be. */
   actions?: ReactNode
   /** Why the next step just failed. */
@@ -76,9 +72,9 @@ export function WorkRow({
           <Tooltip key="pr">
             <TooltipTrigger render={<a href={pr.url} target="_blank" rel="noreferrer" className="relative flex shrink-0 items-center gap-1.5 text-primary hover:underline" />}>
               <span>PR #{pr.number}</span>
-              <span className="rounded-full border border-border px-1.5 uppercase text-muted-foreground">{pr.state.toLowerCase()}</span>
+              {pr.state !== undefined && <span className="rounded-full border border-border px-1.5 uppercase text-muted-foreground">{pr.state.toLowerCase()}</span>}
             </TooltipTrigger>
-            <TooltipContent>{pr.title}</TooltipContent>
+            <TooltipContent>{pr.title || `PR #${pr.number}`}</TooltipContent>
           </Tooltip>
         ),
       ]}
@@ -91,64 +87,6 @@ export function WorkRow({
       }
       actions={actions ? <span className="flex shrink-0 items-center gap-2 empty:hidden">{actions}</span> : undefined}
       actionsAtRest
-    />
-  )
-}
-
-/**
- * The project's row: the run's checkout as the page read it, its branch and its pull request. It is
- * there while there is something to say (`show`): the agent has changes, a pull request or a next
- * step. An agent that changed nothing has no row.
- */
-export function ProjectWorkRow({ name, checkout, summary, actions, error, show }: {
-  /** The project's name; "This project" until the projects are read. */
-  name?: string | null | undefined
-  checkout: AgentWorktree | null
-  summary?: ReactNode
-  actions?: ReactNode
-  error?: string | null | undefined
-  show: boolean
-}) {
-  const branch = checkout?.branch
-  if (branch === undefined || !show) return null
-  return <WorkRow project name={name || 'This project'} branch={branch} path={checkout?.checkout?.path} summary={summary} pr={checkout?.pr} actions={actions} error={error} />
-}
-
-/** The names of the session's copies of repos, read again when the run stops or goes on: a copy is made as it starts. */
-export function useAgentCopies(projectId: string, agentId: string, live: boolean | null): string[] {
-  // A daemon that does not know the question answers nothing: no copies.
-  const names = useLoaded<string[] | null>(() => onAgentCopies(projectId, agentId), [], [projectId, agentId, live], { remember: `copies:${projectId}:${agentId}` })
-  return names ?? []
-}
-
-/**
- * A copy's row: its own read of its branch, taken as the project's is, once the run has stopped
- * (a branch still being written to has nothing to hand off). Nothing while the copy holds no work.
- */
-export function CopyWorkRow({ projectId, agentId, repo, ended, saving, working, committing, onAsked }: {
-  projectId: string
-  agentId: string
-  /** The copy's name in the session's folder. */
-  repo: string
-  /** The run has ended: its work is read, and its next step offered. */
-  ended: boolean
-  saving: boolean
-  working: boolean
-  /** The agent is doing what a Commit press asked. */
-  committing: boolean
-  onAsked?: ((text: string | null) => void) | undefined
-}) {
-  const state = useAgentHandoff(projectId, agentId, ended, saving, working, repo)
-  const handoff = state.handoff
-  if (!ended || !handoff || handoff.prPending || !(handoff.pr !== undefined || handoffSays(handoff))) return null
-  return (
-    <WorkRow
-      name={repo}
-      branch={handoff.branch}
-      summary={<HandoffSummary handoff={handoff} />}
-      pr={handoff.pr}
-      actions={committing ? <Committing /> : <HandoffActions key={`${projectId}/${agentId}/${repo}`} projectId={projectId} agentId={agentId} repo={repo} state={state} onAsked={onAsked} />}
-      error={state.error}
     />
   )
 }

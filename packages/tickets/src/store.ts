@@ -1,5 +1,7 @@
 import { join, relative } from 'node:path'
-import { excludeFromGit, nodeBranchFileFs, nodeGitRunner, projectDataDir, projectDataDirs, pullProjectData, withProjectData, type BranchFileFs, type CommitMessage, type FileBranchSync, type FileBranchWrite, type GitRunner } from '@openagt/agent-data'
+import { excludeFromGit, nodeGitRunner } from '@openagt/git-branches'
+import { nodeBranchFileFs, projectDataDir, projectDataDirs, pullProjectData, withProjectData, type BranchFileFs, type CommitMessage, type FileBranchSync, type FileBranchWrite } from '@openagt/store-filesystem'
+import type { GitRunner } from '@openagt/hooks'
 import { TICKETS_DIR } from './names.js'
 
 // Where the tickets live: `tickets/` in the project's data directory (its directory in the

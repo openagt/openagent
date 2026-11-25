@@ -7,13 +7,14 @@ This directory used to be a package of its own. It is a directory
 now: the boundary bought a public export surface, a bundle-copying build step and a task graph to
 sequence it, for a dependency that only ever pointed one way.
 
-It is a **projection of the files each agent's own tool writes** — no daemon process, no
-IPC:
+It is a **projection of what each run's host says** (`run.host`): the shell reads no run's files
+itself:
 
 - **Reads** — `POST /_rpc/<name>` (`rpc/reads.ts`, `rpc/projects.ts`, …) for agent history, an agent's
   replay, and the surfaced PLAN/TODO docs.
-- **Live event stream** — Server-Sent Events at `GET /_rpc/events` (`rpc/events.ts`) tailing
-  the selected agent's diary, `<id>.jsonl` in its checkout; each new line becomes one SSE frame.
+- **Live event stream** — Server-Sent Events at `GET /_rpc/events` (`rpc/events.ts`) relaying
+  the selected run's events as its host streams them (`RunHost.events`); each event becomes one SSE
+  frame.
 
 The `rpc/` modules are typed stubs: each is declared against the implementation's own signature in
 `../src/dashboard-rpc/`, so a renamed or re-shaped RPC is a type error here rather than a 404 in
@@ -44,8 +45,8 @@ pnpm --filter @openagt/ui dev:dashboard
 
 Populate a project to watch: run `dev:daemon` instead of `dev:dashboard`, which brings a real
 daemon up in the dev server's own process, and start an agent from the UI: Start goes to this
-computer's run host (`agent-driver`'s), and the dashboard shows the agent from the files the
-run writes. The CLI keeps three options and no verbs; it starts no agent.
+computer's run host (`run.host`, agent-driver's in OpenAgent's distribution), and the dashboard
+shows the agent as that host says it. The CLI keeps three options and no verbs; it starts no agent.
 
 ## Tests
 

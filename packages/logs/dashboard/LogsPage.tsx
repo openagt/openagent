@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { Button, Empty, Facts, FilterChips, MiddleCut, Page, PanelGroup, PanelGroups, PanelRow, PanelShape, PersonMark, RunMark, Skeleton, Slot, WordsShape, formatDateTime, formatDay, formatDuration, needsWord, personSaid, rpcClient, runName, runLineTone, runState, useCodingAgents, useGitHostPeople, useIsMobile, runsAgain, runWord, useModuleHost, usePolled, useWaiting, type CodingAgent, type ModuleAgent, type ModuleHostPerson, type UiPageProps, type UiProject, type ReadState, type WaitingItem } from '@openagt/ui/module'
+import { Button, Empty, Facts, FilterChips, MiddleCut, Page, PanelGroup, PanelGroups, PanelRow, PanelShape, PersonMark, RunMark, Skeleton, Slot, WordsShape, formatDateTime, formatDay, formatDuration, personSaid, rpcClient, runName, runLineTone, runState, useCodingAgents, usePeople, useIsMobile, runsAgain, runWord, useModuleHost, usePolled, useWaiting, type CodingAgent, type ModuleAgent, type ModuleHostPerson, type UiPageProps, type UiProject, type ReadState, type WaitingItem } from '@openagt/ui/module'
 import type { RunCard } from '@openagt/agent-driver'
 
 /** How many runs each project lists: the command's own default page is 20; the page shows more. */
@@ -13,9 +13,6 @@ export interface RunRow {
     person?: string
     /** Its pull request merged, as the git host last said, read where the sidebar reads it: the run reads as merged there and here. */
     merged?: boolean
-    /** Its work that never left this machine, as the dashboard lists it: files left uncommitted, commits never pushed. */
-    uncommitted?: number
-    unpublished?: number
   }
 }
 
@@ -60,8 +57,6 @@ function cardOf(run: ModuleAgent): Omit<RunRow['card'], 'id' | 'startedAt'> {
     ...(run.driver ? { driver: run.driver } : {}),
     ...(run.model ? { model: run.model } : {}),
     ...(run.pr ? { pr: { number: run.pr.number, url: run.pr.url }, ...(run.pr.state === 'merged' ? { merged: true } : {}) } : {}),
-    ...(run.uncommitted ? { uncommitted: run.uncommitted } : {}),
-    ...(run.unpublished ? { unpublished: run.unpublished } : {}),
   }
 }
 
@@ -83,17 +78,11 @@ function chipWord(state: string): string {
 }
 
 /**
- * What a run's work still needs before it leaves this machine, in the sidebar's words, as two facts
- * of its line: "Needs commit", "2 files". Where the run's line already opens with what it needs (its
- * item of "Waiting on you"), only the count.
+ * How much of a run's work still waits before it leaves this machine, as a fact of its line after
+ * what it needs, which its item of "Waiting on you" says ("Needs commit"): "2 files", "1 commit".
  */
-export function leftParts(card: Pick<RunRow['card'], 'uncommitted' | 'unpublished'>, gitHost: boolean, needSaid = false): string[] {
-  const parts = card.uncommitted
-    ? [needsWord('uncommitted'), `${card.uncommitted} file${card.uncommitted === 1 ? '' : 's'}`]
-    : card.unpublished
-      ? [needsWord('unpushed', gitHost), `${card.unpublished} commit${card.unpublished === 1 ? '' : 's'}`]
-      : []
-  return needSaid ? parts.slice(1) : parts
+export function leftParts(need: WaitingItem | undefined): string[] {
+  return (need?.mark === 'changes' || need?.mark === 'branch') && need.detail !== undefined ? [need.detail] : []
 }
 
 /** How a row stands: by the sidebar's rule ({@link runState}), given what waits on the person for its run, the sidebar's "Waiting on you". */
@@ -207,7 +196,7 @@ export function LogsPage({ projects }: UiPageProps) {
   const needs = new Map([...useWaiting().all.items].reverse().flatMap(item => (item.scope === 'run' && item.run !== undefined ? [[`${item.projectId}/${item.run}`, item] as const] : [])))
   const needOf = (row: RunRow): WaitingItem | undefined => needs.get(`${row.project.id}/${row.card.id}`)
   const standingOf = (row: RunRow): Standing => runState(row.card, needOf(row))
-  const accountOf = useGitHostPeople(read.rows.map(({ project, card }) => ({ projectId: project.id, person: card.person })), host.gitHostPeople, 'logs:people')
+  const accountOf = usePeople(read.rows.map(({ project, card }) => ({ projectId: project.id, person: card.person })), host.people, 'logs:people')
 
   // Which status the list shows: every one, until a chip picks one, kept in the query (`?status=waiting`) as a list's view
   // is, not in the path, which names a page below this one: a reload or Back from a run shows the list the person left.
@@ -286,7 +275,7 @@ export function LogsPage({ projects }: UiPageProps) {
                           // On a phone the time stands in the line, so the name has the row's width and the row keeps its two lines.
                           phone && <span title={formatDateTime(card.startedAt)}>{clock(card.startedAt)}</span>,
                           // What its work still needs before it leaves this machine, in the sidebar's words.
-                          ...leftParts(card, project.gitHost, need !== undefined),
+                          ...leftParts(need),
                           many && project.name,
                           card.cost !== undefined && dollars(card.cost),
                           // Last, as the part that gives way, and cut in its middle: runs started the same minute differ only at

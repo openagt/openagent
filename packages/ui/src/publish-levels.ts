@@ -1,60 +1,38 @@
+import type { Publish } from '@openagt/hooks'
+
 /**
  * How far a run takes its work when its agent finishes, node-free so every surface shares
- * one copy: the registry's preference sanitizer, the daemon's Start and the dashboard bundle.
- * The levels are the words a run is handed, the ones `agent-runner run --publish` takes. The
- * launcher's menu offers them after "Off", the pick that hands the run no level: nothing is added to the person's message then, and whether the
- * agent commits is its own, by the branches skill in its checkout.
- * Until a person picks, a run commits its work and pushes nothing: what leaves the machine is the
- * person's to ask for.
+ * one copy: the registry's preference sanitizer, the daemon's Start and the dashboard bundle. How far a
+ * project lets a run go is its run host's to say.
+ * The levels are the run options' (`RunOptions.publish`); the Auto menu draws the ones the modules
+ * offer (`composer.auto`) after "Off", the pick that hands the run no level: nothing is added to
+ * the person's message then, and whether the agent commits is its own, by the skills in its
+ * checkout. Until a person picks, a run commits its work and pushes nothing: what leaves the
+ * machine is the person's to ask for.
  */
 
-/** The levels a run can be started at, each going further than the one before. */
-export const PUBLISH_LEVELS = ['commit', 'branch', 'pr', 'merge'] as const
-
 /** A level: commit the work, and from there push the branch, open its pull request, or open it set to merge once its checks pass. */
-export type PublishLevel = (typeof PUBLISH_LEVELS)[number]
+export type PublishLevel = Publish
 
-/** What the launcher's menu lists, in its order: nothing, then each level. */
-export const PUBLISH_PICKS = ['nothing', ...PUBLISH_LEVELS] as const
+/** What the Auto menu can pick, in its order: nothing, then each level, each going further than the one before. Spelled here, not imported: the dashboard's bundle takes no value from the hooks' Node entry. */
+export const PUBLISH_PICKS = ['nothing', 'commit', 'branch', 'pr', 'merge'] as const satisfies readonly ('nothing' | Publish)[]
 
-/** A pick of the launcher's menu. */
+/** A pick of the Auto menu. */
 export type PublishPick = (typeof PUBLISH_PICKS)[number]
-
-export const PUBLISH_LABELS: Readonly<Record<PublishPick, string>> = {
-  nothing: 'Off',
-  commit: 'Commit',
-  branch: 'Publish branch',
-  pr: 'Open PR',
-  merge: 'Merge on green',
-}
 
 export function isPublishPick(value: unknown): value is PublishPick {
   return (PUBLISH_PICKS as readonly unknown[]).includes(value)
 }
 
 /**
- * The picks a project is offered: every one where it has a git host; without a git host no pull
- * request can be opened, so the picks stop at the branch; without a remote nothing can be
- * published at all, so they stop at the commit.
+ * The pick in force among the picks `offered`. Until a person saves one it is Commit, which pushes
+ * nothing. A saved pick that is not offered falls back to the furthest offered short of it.
  */
-export function offeredPublishPicks(gitHost: boolean, remote = true): readonly PublishPick[] {
-  if (!remote) return ['nothing', 'commit']
-  return gitHost ? PUBLISH_PICKS : ['nothing', 'commit', 'branch']
-}
-
-/** The furthest a project's run goes with no pull request: its branch pushed, or its work committed where there is no remote. */
-function furthestWithoutRequest(remote: boolean): PublishPick {
-  return remote ? 'branch' : 'commit'
-}
-
-/**
- * The pick in force in this project. Until a person saves one it is Commit, which pushes nothing.
- * A saved pick the project is not offered falls back to the furthest it goes with no pull request.
- */
-export function publishPickIn(saved: PublishPick | undefined, gitHost: boolean, remote = true): PublishPick {
-  if (saved === undefined) return 'commit'
-  if (offeredPublishPicks(gitHost, remote).includes(saved)) return saved
-  return furthestWithoutRequest(remote)
+export function pickIn(saved: PublishPick | undefined, offered: readonly PublishPick[]): PublishPick {
+  const wanted = saved ?? 'commit'
+  if (offered.includes(wanted)) return wanted
+  const reach = PUBLISH_PICKS.indexOf(wanted)
+  return [...offered].reverse().find(pick => PUBLISH_PICKS.indexOf(pick) <= reach) ?? 'nothing'
 }
 
 /** The level a pick hands the run; none for Off. */

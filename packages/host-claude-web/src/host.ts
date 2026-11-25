@@ -1,5 +1,5 @@
-import type { ProjectRef, RunFound, RunHost, RunReadiness, RunSummary } from '@openagt/hooks'
-import type { RecordDeps } from '@openagt/agent-driver'
+import type { ProjectRef, RunFound, RunHost, RunReadiness } from '@openagt/hooks'
+import { runEvents, summaryOf, type RecordDeps } from '@openagt/agent-driver'
 import { bridgeQuestions } from './bridge-store.js'
 import { hostname } from 'node:os'
 import { NO_EXTENSION, endUnmade, giveUp, startWebRun, type HandOffDeps } from './hand-off.js'
@@ -70,9 +70,18 @@ export function webHost(deps: WebHostDeps = {}): RunHost {
       await endUnmade(run.project.dir, run.id, 'stopped', logs, deps.now)
     },
 
-    async list(project) {
+    async list(project, wanted = {}) {
       if (!project) return []
-      return (await projectWebRuns(project, {}, logs)).map(run => summaryOf(run, project))
+      const ids = wanted.ids ? new Set(wanted.ids) : undefined
+      const since = wanted.since !== undefined ? Date.parse(wanted.since) : undefined
+      return (await projectWebRuns(project, since !== undefined ? { since } : {}, logs))
+        .filter(run => !ids || ids.has(run.card.id))
+        .map(run => summaryOf(run.card, { project: project.id, agents: [], deps: { host: WEB_HOST, here, isAlive: () => false } }))
+    },
+
+    // The session's events are the ones its hand-off records, in the project's records.
+    async *events(run, signal) {
+      if (run.project && (await runOf(run))) yield* runEvents(run.project.dir, run.id, signal)
     },
 
     async find(run): Promise<RunFound | undefined> {
@@ -85,7 +94,7 @@ export function webHost(deps: WebHostDeps = {}): RunHost {
           status: card.status,
           ...(typeof host === 'string' ? { host } : {}),
           ...(card.branch !== undefined ? { branch: card.branch } : {}),
-          ...(card.pr ? { pr: { number: card.pr.number } } : {}),
+          ...(card.pr ? { pr: { number: card.pr.number, url: card.pr.url } } : {}),
         },
         // The run's work is on the branch its session pushed, on origin: never a checkout of this computer's.
         changedNothing: false,
@@ -94,15 +103,3 @@ export function webHost(deps: WebHostDeps = {}): RunHost {
   }
 }
 
-/** A run's record, as the host lists it. */
-function summaryOf({ card }: WebRun, project: ProjectRef): RunSummary {
-  return {
-    id: card.id,
-    project: project.id,
-    status: card.status === 'running' ? 'working' : card.status,
-    startedAt: card.startedAt,
-    ...(card.endedAt !== undefined ? { endedAt: card.endedAt } : {}),
-    ...(card.title !== undefined ? { title: card.title } : {}),
-    prompt: card.intent ?? '',
-  }
-}

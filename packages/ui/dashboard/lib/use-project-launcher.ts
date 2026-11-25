@@ -1,28 +1,16 @@
 import { useRef } from 'react'
 import { onCommands, type ProjectLauncher } from '../rpc/projects.js'
 import { usePolled } from './use-async.js'
-import { usePreferences } from './preferences.js'
 
 /**
- * What the launcher offers for a project: its commands, the branches an agent can start from, and
- * how far a run can publish. `null` until it is read, and for no project. Read again every few
- * seconds: a skill written into the project's folder, here or in a terminal, is a
- * command from then on, and one that reached the branch agents start from stops waiting.
- *
- * A command is waiting for the branch the person starts agents from, so the read names their pick.
- * A new pick is read at once; the project's last answer stands until it lands, since what the
- * launcher shows of it does not hang on the pick.
+ * What the launcher offers for a project: the branches an agent can start from, and how far a run
+ * can publish. `null` until it is read, and for no project. Read again every few seconds; the
+ * project's last answer stands while it is read again, and another project's is never shown for it.
  */
 export function useProjectLauncher(projectId: string | null): ProjectLauncher | null {
-  const pick = usePreferences().startFrom?.[projectId ?? '']
-  const read = usePolled<ProjectLauncher | null>(projectId ? () => (pick ? onCommands(projectId, pick) : onCommands(projectId)) : null, null, 15_000, [projectId, pick?.kind, pick?.kind === 'published' ? pick.branch : undefined])
+  const read = usePolled<ProjectLauncher | null>(projectId ? () => onCommands(projectId) : null, null, 15_000, [projectId])
   const last = useRef<{ projectId: string | null; launcher: ProjectLauncher | null }>({ projectId, launcher: null })
   const known = read.state !== 'unknown'
   if (known) last.current = { projectId, launcher: read.value }
   return known || last.current.projectId !== projectId ? read.value : last.current.launcher
-}
-
-/** The commands an agent started now has: the ones not waiting to reach the branch it starts from. */
-export function readyCommands<T extends { waiting?: string | undefined }>(commands: readonly T[]): T[] {
-  return commands.filter(command => command.waiting === undefined)
 }

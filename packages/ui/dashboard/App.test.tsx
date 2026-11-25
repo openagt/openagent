@@ -51,11 +51,15 @@ vi.mock('./components/SettingsDialog.js', async () => {
     },
   }
 })
-vi.mock('./components/ProjectHome.js', async importOriginal => ({
-  ProjectHomeShape: (await importOriginal<typeof import('./components/ProjectHome.js')>()).ProjectHomeShape,
-  ProjectHome: ({ projectName, onProjectRemoved }: { projectName?: string; onProjectRemoved?: () => void }) =>
-    createElement('p', null, `the launcher of ${projectName}`, createElement('button', { onClick: onProjectRemoved }, 'remove the project')),
-}))
+// A project's launcher, stood in for: its press removes the project as the projects module's Remove project does.
+vi.mock('./components/ProjectHome.js', async importOriginal => {
+  const { projectsChanged } = await import('./lib/shell-projects.js')
+  return {
+    ProjectHomeShape: (await importOriginal<typeof import('./components/ProjectHome.js')>()).ProjectHomeShape,
+    ProjectHome: ({ projectId, projectName }: { projectId: string; projectName?: string }) =>
+      createElement('p', null, `the launcher of ${projectName}`, createElement('button', { onClick: () => projectsChanged({ removed: projectId }) }, 'remove the project')),
+  }
+})
 // The Overview's box, stood in for: it says the project it starts in, and has a press that picks the project `app`, one that picks none, and one that starts.
 vi.mock('./components/StartAgentForm.js', () => ({
   StartAgentForm: ({ projectId, projectName, onPickProject, onAgentStarted }: { projectId: string; projectName?: string | null; onPickProject: (id: string) => void; onAgentStarted?: (intent: string, agentId: string) => void }) =>
@@ -68,10 +72,13 @@ vi.mock('./components/StartAgentForm.js', () => ({
       createElement('button', { onClick: () => onAgentStarted?.('from the box', '9-box') }, 'start from the box'),
     ),
 }))
-vi.mock('./components/ProjectActions.js', async importOriginal => ({
-  ...(await importOriginal<typeof import('./components/ProjectActions.js')>()),
-  ProjectMenu: ({ onProjectRemoved }: { onProjectRemoved?: () => void }) => (onProjectRemoved ? createElement('button', { onClick: onProjectRemoved }, 'remove the project from its menu') : null),
-}))
+vi.mock('./components/ProjectActions.js', async importOriginal => {
+  const { projectsChanged } = await import('./lib/shell-projects.js')
+  return {
+    ...(await importOriginal<typeof import('./components/ProjectActions.js')>()),
+    ProjectMenu: ({ projectId }: { projectId: string }) => createElement('button', { onClick: () => projectsChanged({ removed: projectId }) }, 'remove the project from its menu'),
+  }
+})
 
 // A session's page, as itself unless a test stands in for it: the stand-in gets what the shell hands the page.
 const agentView = vi.hoisted(() => ({ standIn: null as null | ((props: Record<string, unknown>) => unknown) }))
@@ -83,7 +90,7 @@ vi.mock('./components/AgentView.js', async importOriginal => {
 const { App } = await import('./App.js')
 const { Dialog } = await import('./components/ui/dialog.js')
 
-const PROJECT = { id: 'app-abc', path: '/work/app', name: 'app', activated: true }
+const PROJECT = { id: 'app-abc', path: '/work/app', name: 'app' }
 
 /** A module's browser part the loader imports like a real one: a data URL whose default export is a definition that fills `views`. */
 function moduleModule(key: string, ...views: UiView[]): string {
@@ -105,9 +112,9 @@ function answerShell(modules: unknown[]): void {
   answers.set('onRecentAgents', () => [])
   answers.set('onAgents', () => [])
   answers.set('onOverview', () => ({ active: [] }))
-  answers.set('onProfilesList', () => ({ profiles: [], claude: [], codex: [], plugins: [] }))
-  answers.set('onSkillChoices', () => ({ core: [], plugins: [] }))
-  answers.set('onAgentUpdates', () => [])
+  // The coding agents as each says itself, and whether a run is named as it starts.
+  answers.set('onCodingAgents', () => [])
+  answers.set('onNamesRuns', () => true)
   // A project's Overview reads its files, for its box's `#`.
   answers.set('onProjectFiles', () => [])
   // The Overview draws its cards once the person's layout is read.
@@ -327,11 +334,37 @@ describe('module pages in the shell (#1774)', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'No such page' })).toBeTruthy()
   })
 
+  test("the modules' pages stand in the rail by their order, the ones of the same order as the modules are loaded, and the dashboard's own Permissions after them", async () => {
+    answerShell([
+      { package: '@acme/agents', url: moduleModule('__orderedAgents', { place: 'app.page', id: 'agents', label: 'Agents', order: 90, View: () => null }), projects: [], computer: true },
+      { package: '@acme/logs', url: moduleModule('__orderedLogs', { place: 'app.page', id: 'logs', label: 'Logs', View: () => null }), projects: [PROJECT.id] },
+      { package: '@acme/queue', url: moduleModule('__orderedQueue', { place: 'app.page', id: 'queue', label: 'Queue', View: () => null }), projects: [PROJECT.id] },
+    ])
+    render(<App />)
+    const rail = await screen.findByRole('link', { name: 'Agents' }).then(link => link.closest('nav') ?? document.body)
+    const labels = () => within(rail as HTMLElement).getAllByRole('link').map(link => link.textContent)
+    await waitFor(() => expect(labels().filter(label => ['Logs', 'Queue', 'Agents', 'Permissions'].includes(label ?? ''))).toEqual(['Logs', 'Queue', 'Agents', 'Permissions']))
+  })
+
+  test("with a project picked, the rail lists the pages of its packages and of this computer's, and the computer's page opens in it", async () => {
+    answerShell([
+      { package: '@acme/agents', url: moduleModule('__scopedAgents', { place: 'app.page', id: 'agents', label: 'Agents', View: () => createElement('p', null, 'the agents page') }), projects: [], computer: true },
+      { package: '@acme/logs', url: moduleModule('__scopedLogs', { place: 'app.page', id: 'logs', label: 'Logs', View: () => null }), projects: [PROJECT.id] },
+      { package: '@acme/queue', url: moduleModule('__scopedQueue', { place: 'app.page', id: 'queue', label: 'Queue', View: () => null }), projects: ['elsewhere-1'] },
+    ])
+    window.history.replaceState(null, '', '/app/agents')
+    render(<App />)
+    expect(await screen.findByText('the agents page')).toBeTruthy()
+    const rail = (await screen.findByRole('link', { name: 'Agents' })).closest('nav') ?? document.body
+    await waitFor(() => expect(within(rail as HTMLElement).getAllByRole('link').map(link => link.textContent).filter(label => ['Logs', 'Queue', 'Agents'].includes(label ?? ''))).toEqual(['Agents', 'Logs']))
+    expect(window.location.pathname).toBe('/app/agents')
+  })
+
   test("on a phone the bar names the dashboard's own pages, as it names a module's", async () => {
     answerShell([{ package: '@acme/logs', url: moduleModule('__phoneLogs', { place: 'app.page', id: 'logs', label: 'Logs', View: () => null }), projects: [PROJECT.id] }])
     const wide = phoneScreen()
     try {
-      for (const [path, name] of [['/logs', 'Logs'], ['/profiles', 'Profiles'], ['/permissions', 'Permissions']]) {
+      for (const [path, name] of [['/logs', 'Logs'], ['/permissions', 'Permissions']]) {
         window.history.replaceState(null, '', path)
         render(<App />)
         // The name alone: the page's count stands beside it in the bar once the page has read it. Read in the wait: the first
@@ -433,7 +466,6 @@ describe('a first visit, the projects not read yet', () => {
     const answer = holdProjects()
     const id = '2026-11-14T23-05-03-506Z'
     answers.set('onAgents', () => [{ id, status: 'done', startedAt: '2026-11-14T23:05:03.506Z', updatedAt: '2026-11-14T23:06:00.000Z', intent: 'tidy up' }])
-    answers.set('onRetainedWorktrees', () => [])
     window.history.replaceState(null, '', `/${PROJECT.name}/${id}`)
     render(<App />)
     const foot = await screen.findByTestId('chat-bottom')
@@ -468,10 +500,10 @@ describe('a first visit, the projects not read yet', () => {
     holdProjects()
     const wide = phoneScreen()
     try {
-      window.history.replaceState(null, '', '/profiles')
+      window.history.replaceState(null, '', '/permissions')
       render(<App />)
       // The bar holds the page's name alone.
-      expect(document.querySelector('[data-phone-bar]')!.textContent).toBe('Profiles')
+      expect(document.querySelector('[data-phone-bar]')!.textContent).toBe('Permissions')
     } finally {
       wide()
     }
@@ -494,7 +526,6 @@ describe('module cards on the Overview (#1818)', () => {
   /** The Overview's own reads, answered empty: the shell's stub answers null otherwise, and a null list is not an empty one. */
   function answerOverview(modules: unknown[]): void {
     answerShell(modules)
-    answers.set('onQuota', () => null)
     answers.set('onDashboard', () => null)
     // Landing on a started run renders its page, whose changes card reads a list.
     answers.set('onAgentChanges', () => [])
@@ -693,7 +724,7 @@ describe('module cards on the Overview (#1818)', () => {
     await waitFor(() => expect(window.location.pathname).toBe('/app/9-r'))
   })
 
-  test('a run just started shows its name, in the header too, as soon as the daemon has it: before its row is in the list', async () => {
+  test('a run just started shows its name, in the header too, once its host lists it named', async () => {
     const { useModuleHost } = await import('./module/index.js')
     function Starter({ projects }: UiCardProps) {
       const host = useModuleHost()
@@ -701,14 +732,17 @@ describe('module cards on the Overview (#1818)', () => {
     }
     answerOverview([{ package: '@acme/queue', url: moduleModule('__namedStarterCard', { place: 'overview.card', id: 'starter', label: 'starter', View: Starter }), projects: [PROJECT.id] }])
     answers.set('sendStart', () => ({ ok: true, agentId: '9-n' }))
-    answers.set('onStartedName', () => 'Fix flaky login test')
+    let listed: unknown[] = []
+    answers.set('onAgents', () => listed)
     window.history.replaceState(null, '', '/')
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'start' }))
     await waitFor(() => expect(window.location.pathname).toBe('/app/9-n'))
-    expect(calls.find(call => call.name === 'onStartedName')?.args).toEqual(['9-n'])
-    // The header's title, revealed letter by letter, while the list still has no row for the run.
-    await waitFor(() => expect(document.querySelector('[title="Fix flaky login test"]')).toBeTruthy())
+    // Before its host lists it, the header holds the name's place.
+    await waitFor(() => expect(screen.queryByTestId('title-placeholder')).toBeTruthy())
+    listed = [{ id: '9-n', status: 'running', startedAt: new Date().toISOString(), intent: 'fix the flaky login test', title: 'Fix flaky login test' }]
+    // The header's title, revealed letter by letter, from the row the host named.
+    await waitFor(() => expect(document.querySelector('[title="Fix flaky login test"]')).toBeTruthy(), { timeout: 5000 })
     expect(screen.queryByTestId('title-placeholder')).toBeNull()
   })
   test('a run just started is starting until a list has had it; then a list without it says no such session, as after a delete and Back', async () => {
@@ -722,7 +756,6 @@ describe('module cards on the Overview (#1818)', () => {
     const run = { id: '9-d', status: 'done', startedAt: '2026-07-19T16:05:44.756Z', updatedAt: '2026-07-19T16:06:21.000Z', intent: 'tidy up' }
     let listed: unknown[] = []
     answers.set('onAgents', () => listed)
-    answers.set('onRetainedWorktrees', () => [])
     window.history.replaceState(null, '', '/')
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'start' }))
@@ -737,7 +770,7 @@ describe('module cards on the Overview (#1818)', () => {
 })
 
 describe('the project select (#1513)', () => {
-  const OTHER = { id: 'site-def', path: '/work/site', name: 'site', activated: true }
+  const OTHER = { id: 'site-def', path: '/work/site', name: 'site' }
   const url = () => window.location.pathname + window.location.search
 
   function answerTwo(): void {
@@ -755,7 +788,6 @@ describe('the project select (#1513)', () => {
       },
     ])
     answers.set('onProjects', () => [PROJECT, OTHER])
-    answers.set('onQuota', () => null)
     answers.set('onDocs', () => [])
     answers.set('onProjectFiles', () => [])
     answers.set('onAgentChanges', () => [])
@@ -766,15 +798,13 @@ describe('the project select (#1513)', () => {
       ],
       whole: [],
     }))
-    answers.set('onRetainedWorktrees', () => [])
-    answers.set('onDashboard', () => ({ totals: { projects: 2, openTodos: 0 }, projects: [], queue: [], active: [] }))
+    answers.set('onDashboard', () => ({ totals: { projects: 2 }, active: [] }))
     // The agents at work, as the shell reads them for the mark and the Overview alike.
     answers.set('onOverview', () => ({
       active: [
         { projectId: PROJECT.id, projectName: 'app', agentId: 'a2', status: 'running', intent: 'app works' },
         { projectId: OTHER.id, projectName: 'site', agentId: 's2', status: 'running', intent: 'site works' },
       ],
-      queueOpen: 0,
       recent: [],
     }))
     answers.set('onRecentAgents', () => [
@@ -1060,19 +1090,16 @@ describe('the project select (#1513)', () => {
     expect(screen.getByText('card for app')).toBeTruthy()
   })
 
-  test('adding a project reads the modules again at once', async () => {
+  test('a project a module added reads the projects and the modules again at once', async () => {
     answerTwo()
-    // A repo on this computer that is no project yet, picked at the top of the sidebar, is made one.
-    answers.set('onRepos', () => ({ repos: [{ path: '/work/new', name: 'new' }], canAddFolder: false }))
-    answers.set('sendAddProject', () => ({ ok: true, alreadyActivated: false }))
     render(<App />)
     await screen.findByRole('link', { name: 'Logs' })
-    const reads = () => calls.filter(call => call.name === 'onModules').length
-    const before = reads()
-    await openMenu(screen.getByRole('combobox', { name: 'Project: All projects' }))
-    fireEvent.click(await screen.findByRole('option', { name: /new/ }))
-    fireEvent.click(await screen.findByRole('button', { name: 'I trust it, add it' }))
-    await waitFor(() => expect(reads()).toBe(before + 1))
+    const reads = (name: string) => calls.filter(call => call.name === name).length
+    const [modules, projects] = [reads('onModules'), reads('onProjects')]
+    const { projectsChanged } = await import('./lib/shell-projects.js')
+    act(() => projectsChanged({ added: true }))
+    await waitFor(() => expect(reads('onModules')).toBe(modules + 1))
+    expect(reads('onProjects')).toBeGreaterThan(projects)
   })
 
   test('removing a project reads the modules again at once, and goes to the Overview', async () => {
@@ -1158,7 +1185,7 @@ describe('the project select (#1513)', () => {
 
   test("a page's word is the page's: a project with that name is addressed by its id, and a name nobody has says so", async () => {
     answerTwo()
-    const LOGS = { id: 'logs-9zz', path: '/work/logs', name: 'logs', activated: true }
+    const LOGS = { id: 'logs-9zz', path: '/work/logs', name: 'logs' }
     answers.set('onProjects', () => [PROJECT, OTHER, LOGS])
     window.history.replaceState(null, '', '/logs')
     render(<App />)
@@ -1195,7 +1222,6 @@ describe('the Context of a session continued from its box', () => {
     answers.set('onDocs', () => [])
     answers.set('onProjectFiles', () => [])
     answers.set('onAgentChanges', () => [])
-    answers.set('onRetainedWorktrees', () => [])
     answers.set('onAgents', () => [{ id: '7-e', status: 'done', startedAt: '2026-07-19T16:05:44.756Z', updatedAt: '2026-07-19T16:06:21.000Z', intent: 'app ran' }])
     window.history.replaceState(null, '', '/app/7-e')
     render(<App />)
@@ -1296,12 +1322,10 @@ describe('the shell on a phone', () => {
     const id = '2026-11-14T23-05-03-506Z'
     try {
       answerShell([{ package: '@acme/waiting', url: moduleModule('__phoneWaiting', { place: 'overview.card', id: 'waiting', label: 'Waiting', needsYou: true, View: WaitingCard }), projects: [PROJECT.id] }])
-      answers.set('onQuota', () => null)
       answers.set('onDashboard', () => null)
       answers.set('onAgentChanges', () => [])
       answers.set('onDocs', () => [])
       answers.set('onProjectFiles', () => [])
-      answers.set('onRetainedWorktrees', () => [])
       answers.set('onAgents', () => [{ id, status: 'done', startedAt: '2026-11-14T23:05:03.506Z', updatedAt: '2026-11-14T23:06:00.000Z', intent: 'pick a name' }])
       answers.set('onWaiting', () => ({ items: [{ kind: 'waiting', projectId: PROJECT.id, projectName: 'app', module: 'ask', scope: 'run', run: id, words: 'Needs answer', title: 'Pick a name' }], whole: [PROJECT.id] }))
 

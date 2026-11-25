@@ -1,10 +1,10 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { pendingChoices } from './open-choices.js'
-import type { OpenAgentEvent } from './events.js'
+import type { RunEvent } from '@openagt/hooks'
 
-const ASK: OpenAgentEvent = { kind: 'choice', id: 'question', title: 'Which way?', options: [{ id: 'a', label: 'Left' }, { id: 'b', label: 'Right' }], recommended: 'a' }
-const SAID: OpenAgentEvent = { kind: 'driver', event: { type: 'text', text: 'going on' } }
+const ASK: RunEvent = { kind: 'choice', id: 'question', title: 'Which way?', options: [{ id: 'a', label: 'Left' }, { id: 'b', label: 'Right' }], recommended: 'a' }
+const SAID: RunEvent = { kind: 'driver', event: { type: 'text', text: 'going on' } }
 
 test('a question stays open through the end of a run that ended waiting on it, whole', () => {
   const open = pendingChoices([SAID, ASK, { kind: 'usage', costUsd: 0.1 }, { kind: 'end', ok: false, waiting: true }])
@@ -13,7 +13,7 @@ test('a question stays open through the end of a run that ended waiting on it, w
 
 test('a question closes when the agent goes on, and a later one opens again', () => {
   assert.deepEqual(pendingChoices([ASK, { kind: 'end', ok: false, waiting: true }, SAID]), [])
-  assert.equal(pendingChoices([ASK, SAID, { ...ASK, title: 'And now?' } as OpenAgentEvent]).at(-1)?.title, 'And now?')
+  assert.equal(pendingChoices([ASK, SAID, { ...ASK, title: 'And now?' } as RunEvent]).at(-1)?.title, 'And now?')
 })
 
 test('a run that ends for good takes its question with it: nobody would read the pick (#1359)', () => {

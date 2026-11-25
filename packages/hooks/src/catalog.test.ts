@@ -1,15 +1,15 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { COMPUTER, PERSON, SETTINGS_FILE, chainStore, settingsIn } from './index.js'
-import { DEFAULT_PROFILE, PERSON_INFO, PROFILES, SCHEDULED_COMMANDS, isPersonName, isProfileName, profileIdOf, profileOf, profilesIn } from './catalog.js'
+import { DEFAULT_PROFILE, PERSON_INFO, PROFILES, SCHEDULED_COMMANDS, START_FROM, isPersonName, isProfileName, profileIdOf, profileOf, profilesIn } from './catalog.js'
 import { memoryStore } from './testing.js'
 
 test("the person's name and picture: saved with the person, each part read strictly, and none set is the computer's", async () => {
   const store = chainStore([memoryStore()])
   const settings = settingsIn(store)
   assert.deepEqual(await settings.get(PERSON_INFO), {})
-  await settings.set(PERSON_INFO, { name: 'Ada Lovelace', picture: 'https://avatars.example/ada.png', github: 'ada' })
-  assert.deepEqual(await settings.get(PERSON_INFO), { name: 'Ada Lovelace', picture: 'https://avatars.example/ada.png', github: 'ada' })
+  await settings.set(PERSON_INFO, { name: 'Ada Lovelace', picture: 'https://avatars.example/ada.png', login: 'ada' })
+  assert.deepEqual(await settings.get(PERSON_INFO), { name: 'Ada Lovelace', picture: 'https://avatars.example/ada.png', login: 'ada' })
   assert.match((await store.read(PERSON, SETTINGS_FILE)) ?? '', /"user-info\.person"/)
 
   // Only a picture on the web, and a name that is one line: what is not valid goes, the rest stays.
@@ -23,11 +23,11 @@ test("the person's name and picture: saved with the person, each part read stric
   assert.equal(isPersonName('x'.repeat(61)), false)
 })
 
-test('the profiles: saved with the person, Default first and built in until changed, each read strictly; a profile not there is Default', async () => {
+test('the profiles: saved with the person, Default first and built in until changed, each module slice kept, the ones the engine takes read strictly; a profile not there is Default', async () => {
   const store = chainStore([memoryStore()])
   const settings = settingsIn(store)
   assert.deepEqual(profilesIn(await settings.get(PROFILES)), [{ id: DEFAULT_PROFILE, name: 'Default', options: {} }])
-  const reviewer = { id: 'reviewer', name: 'Reviewer', options: { github: { account: 'ada-agent' }, 'agent-driver': { claude: ['Work'] }, skills: { project: 'none' as const }, plugins: { without: ['logs', 'tickets'] } } }
+  const reviewer = { id: 'reviewer', name: 'Reviewer', options: { github: { account: 'ada-agent', prBase: 'develop' }, 'agent-driver': { claude: ['Work'], model: 'claude-opus-5-5', effort: 'high' }, skills: { project: 'none' as const }, plugins: { without: ['logs', 'tickets'] } } }
   const writer = { id: 'writer', name: 'Writer', options: {} }
   await settings.set(PROFILES, [writer, reviewer, { id: DEFAULT_PROFILE, name: 'Default', options: { 'agent-driver': { codex: ['Home'] } } }])
   const all = profilesIn(await settings.get(PROFILES))
@@ -58,4 +58,17 @@ test("the scheduled commands a computer runs: kept on the computer, by project t
   assert.deepEqual(await settings.get(SCHEDULED_COMMANDS), { shop: { triage: { on: '2026-10-03T08:00:00.000Z' } } })
   await saved([])
   assert.deepEqual(await settings.get(SCHEDULED_COMMANDS), {})
+})
+
+test('where every next run of a project starts, by its id: the local branch or a branch of origin’s, the main branch being no entry; a pick that is not one is dropped', () => {
+  const local = { kind: 'local' }
+  const published = { kind: 'published', branch: 'local' }
+  assert.deepEqual(START_FROM.parse({ 'app-1a2b': local, 'web-3c4d': 'main', '': local, 'api-5e6f': true }), { 'app-1a2b': local })
+  assert.deepEqual(START_FROM.parse({ 'app-1a2b': published, 'web-3c4d': local }), { 'app-1a2b': published, 'web-3c4d': local }, 'a branch literally named local is no local pick')
+  assert.deepEqual(START_FROM.parse({ 'app-1a2b': 'local' }), {}, 'a bare word is no pick')
+  assert.deepEqual(START_FROM.parse({ a: { kind: 'published' }, b: { kind: 'published', branch: '--upload-pack=x' }, c: { kind: 'published', branch: 'a b' }, d: { kind: 'main' } }), {}, 'a pick names a branch')
+  assert.equal(START_FROM.parse(['app-1a2b']), undefined)
+  assert.equal(START_FROM.parse('local'), undefined)
+  const many = Object.fromEntries(Array.from({ length: 250 }, (_, i) => [`p-${i}`, local]))
+  assert.equal(Object.keys(START_FROM.parse(many) ?? {}).length, 200, 'bounded')
 })

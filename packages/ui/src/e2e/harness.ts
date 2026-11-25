@@ -7,30 +7,29 @@ import { readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { DISTRIBUTION_ENV } from '@openagt/hooks'
+import { DISTRIBUTION_ENV, type RunEvent } from '@openagt/hooks'
 import { setDashboardContext } from '../dashboard-rpc/context.js'
 import { createProjectRuntime, type ProjectRuntime } from '../daemon-runtime.js'
-import { projectId } from '@openagt/agent-data'
+import { projectId } from '../project-id.js'
 import { registryPreferencesStore } from '../registry.js'
-import { fromDiaryLine, projectBranches, projectRuns, resolveAgentDiary, type AgentMeta, type AgentStatus, type AnyDiaryLine } from '../store/index.js'
+import type { AgentMeta, AgentStatus } from '../store/index.js'
+import { findRun } from '@openagt/agent-driver'
 import { worktreePath } from '@openagt/git-branches'
 import { FIXTURE_PLUGINS, makeFixtureRepo } from './fixture.js'
 import { fakeRunHost, STARTS_FILE_ENV, type HostCall } from './fake-runs.js'
-import { tailAgentEvents } from '../dashboard-rpc/events-tail.js'
-import { sendAddProject, sendShareRecords } from '../dashboard-rpc/projects.js'
+import { streamAgentEvents } from '../dashboard-rpc/events.js'
+import { callModule } from '../dashboard-rpc/module-calls.js'
 import { sendSwitchPlugin } from '../dashboard-rpc/plugins.js'
 import { sendStart, sendStop } from '../dashboard-rpc/control.js'
-import { onAgents } from '../dashboard-rpc/reads.js'
-import type { OpenAgentEvent } from '../events.js'
+import { onAgents, onRunCheckout } from '../dashboard-rpc/reads.js'
 import type { StartAgentOptions } from '../dashboard/types.js'
-import type { QuotaView } from '../dashboard/quota.js'
 
 export { git } from './fixture.js'
 
 // Re-home the process-global config home FIRST: the registry, preferences, and daemon state all
 // resolve through $XDG_CONFIG_HOME at call time, and scripts/test-node.mjs gives the whole suite ONE
 // shared throwaway home — so without this, story files running as sibling processes would see
-// each other's registered projects in every cross-project rollup (onProjects, onQueue, onOverview).
+// each other's registered projects in every cross-project rollup (onProjects, onOverview).
 process.env.XDG_CONFIG_HOME = mkdtempSync(join(tmpdir(), 'openagent-e2e-config-'))
 
 /** One registered project inside a {@link StoryWorld}: a real git repo the stories act on. */
@@ -44,7 +43,7 @@ export interface StoryProject {
 /** A live tail of one agent's event log — the same source `onEvents` streams to the browser. */
 export interface AgentTail {
   /** Every event seen so far, in arrival order. Poll with {@link waitFor}. */
-  events: OpenAgentEvent[]
+  events: RunEvent[]
   stop(): void
 }
 
@@ -57,8 +56,6 @@ export interface StoryWorld {
   /** The daemon's home workspace (a plain temp dir, not a registered project). */
   home: string
   runtime: ProjectRuntime
-  /** The usage panel's reading (mutable): what `onQuota` serves. */
-  quota: { view: QuotaView }
   /**
    * Bind one dashboard RPC to this world's context. The real mount wires the context once, at
    * start-up; a story stands several worlds up in one process, so re-providing before every call
@@ -68,8 +65,8 @@ export interface StoryWorld {
   /** What every start and resume of this world was handed, oldest first. */
   hostCalls(): Promise<HostCall[]>
   /**
-   * Create a real git repo (initial commit included) and register it through the same
-   * `sendAddProject` RPC the dashboard's Add-project dialog calls.
+   * Create a real git repo (initial commit included) and add it through the same function of the
+   * projects module (`addProject`) the dashboard's Add-project dialog calls.
    */
   addProject(files?: Record<string, string>): Promise<StoryProject>
   /** Start an agent through the same `sendStart` RPC the launcher calls; returns the agent id. */
@@ -117,8 +114,7 @@ export async function release(project: StoryProject, agentId: string): Promise<v
 
 /**
  * Stand up one story world. The dashboard context mirrors `runDaemon`'s `startDashboard` wiring
- * piece for piece — same closures, same registry-backed stores — except where the daemon holds a
- * live poller (quota), which a story controls through a mutable stub instead.
+ * piece for piece — same closures, same registry-backed stores.
  */
 export async function makeWorld(): Promise<StoryWorld> {
   const home = mkdtempSync(join(tmpdir(), 'openagent-e2e-home-'))
@@ -130,24 +126,15 @@ export async function makeWorld(): Promise<StoryWorld> {
   const host = fakeRunHost()
   const runtime = createProjectRuntime({ cwd: home, env: process.env, host })
 
-  const quota = { view: { windows: [] } as QuotaView }
   const context = {
     host,
     // The demo's runs are all this computer's: no host beside it.
     otherHosts: async () => [],
     startAgent: runtime.onStart,
-    addProject: runtime.onAddProject,
     startedIn: runtime.onStartedIn,
-    removeProject: runtime.onRemoveProject,
-    prepareStart: runtime.onPrepareStart,
     preferences: registryPreferencesStore(),
-    // The story sets one view; both questions are answered off it, since a story that cares about
-    // the model's own week states that window in the view it sets (#1619).
-    quota: { read: async () => quota.view, stop: () => {} },
-    // No story reads the menu, and none may start a coding agent's CLI to ask.
-    models: { read: async () => ({ 'claude-code': { models: [] as [] }, codex: { models: [] as [] } }), forget: () => {} },
-    agentUpdates: { read: async () => [], update: async () => ({ ok: false as const, error: 'not wired in this test' }), openAgent: async () => undefined },
-    projectState: async () => ({ errors: [] }),
+    openAgentUpdate: { read: async () => undefined },
+    projectState: async () => ({ errors: [], notes: [] }),
   }
 
   const repos: string[] = []
@@ -165,7 +152,6 @@ export async function makeWorld(): Promise<StoryWorld> {
   const world: StoryWorld = {
     home,
     runtime,
-    quota,
     rpc,
 
     async hostCalls() {
@@ -180,11 +166,13 @@ export async function makeWorld(): Promise<StoryWorld> {
       const cwd = mkdtempSync(join(tmpdir(), 'openagent-e2e-repo-'))
       repos.push(cwd)
       await makeFixtureRepo(cwd, files)
-      const added = await rpc(sendAddProject)(cwd)
-      if (!added.ok) throw new Error(`could not register the fixture repo: ${added.error}`)
+      const adding = await rpc(callModule)(null, '@openagt/projects', 'addProject', { path: cwd })
+      const added = adding.ok ? (adding.output as { ok: boolean; error?: string }) : adding
+      if (!added.ok) throw new Error(`could not add the fixture repo: ${added.error}`)
       const id = projectId(resolve(cwd))
       // Its records go to its remote, as a team's do.
-      const shared = await rpc(sendShareRecords)(id, true)
+      const sharing = await rpc(callModule)(id, '@openagt/store-git-branch', 'share', { on: true })
+      const shared = sharing.ok ? (sharing.output as { ok: boolean; error?: string }) : sharing
       if (!shared.ok) throw new Error(`could not share the fixture repo's records: ${shared.error}`)
       for (const plugin of FIXTURE_PLUGINS) {
         const switched = await rpc(sendSwitchPlugin)(plugin, true, id)
@@ -215,11 +203,10 @@ export async function makeWorld(): Promise<StoryWorld> {
     },
 
     async waitRetired(project, agentId, timeoutMs = 30_000) {
-      // Through the product's own read of the checkouts, the branches provider's list shared for a
-      // few seconds (#1774): what a story asserts or acts on next reads the same list, so "retired"
-      // means gone from there, not merely gone from disk.
+      // Through the product's own read of the run's checkout, as its host finds it: what a story
+      // asserts or acts on next reads the same, so "retired" means gone from there.
       await waitFor(
-        async () => ((await (await projectBranches(project.cwd))?.list().catch(() => []))?.some(checkout => checkout.id === agentId) ? undefined : true),
+        async () => ((await onRunCheckout(project.id, agentId)) === null ? true : undefined),
         `run ${agentId}'s worktree to be retired`,
         timeoutMs,
       )
@@ -227,25 +214,21 @@ export async function makeWorld(): Promise<StoryWorld> {
 
     async waitRecorded(project, agentId, timeoutMs = 30_000) {
       await waitFor(
-        async () => ((await (await projectRuns(project.cwd))?.show(agentId)) ? true : undefined),
+        async () => ((await findRun(project.cwd, agentId).catch(() => undefined)) ? true : undefined),
         `run ${agentId} to be recorded on the data branch`,
         timeoutMs,
       )
     },
 
     async tailAgent(project, agentId) {
-      const events: OpenAgentEvent[] = []
-      // The relocating tail — the same seam the dashboard's onEvents rides: when the run's tool
-      // records the run and reclaims the checkout, the tail asks again and sends the finished run's
-      // lines it had not sent, so the feed keeps the final lines even when their fs.watch signal was lost.
-      const stop = tailAgentEvents<AnyDiaryLine>(
-        () => resolveAgentDiary(project.cwd, agentId),
-        line => {
-          const event = fromDiaryLine(line)
-          if (event) events.push(event)
-        },
-      )
-      const tail = { events, stop }
+      const events: RunEvent[] = []
+      // The stream the dashboard's `GET /_rpc/events` relays, as the run's host says it: across the
+      // run's records and the reclaim of its checkout, so the feed keeps the final lines even when
+      // their fs.watch signal was lost.
+      const stopping = streamAgentEvents(project.id, agentId, event => {
+        if (event.kind !== 'stream-sync' && event.kind !== 'partial') events.push(event)
+      })
+      const tail = { events, stop: () => void stopping.then(stop => stop?.()) }
       tails.push(tail)
       return tail
     },
@@ -264,7 +247,6 @@ export async function makeWorld(): Promise<StoryWorld> {
           10_000,
         ).catch(() => {})
       }
-      await runtime.dispose().catch(() => {})
       delete process.env[STARTS_FILE_ENV]
       await rm(home, { recursive: true, force: true }).catch(() => {})
       for (const repo of repos) await rm(repo, { recursive: true, force: true }).catch(() => {})

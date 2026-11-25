@@ -1,17 +1,18 @@
-import type { OpenAgentEvent } from '../../src/index.js'
+import type { RunEvent } from '@openagt/hooks'
 
-// A run's subagents are the ones its coding agent started inside its session (Claude Code's
-// `Agent` tool, Codex's collab calls), known only from the run's log, by its `subagent` events. The
-// chat's rows and the pane read them.
+// A run's subagents are the ones its coding agent started inside its session, with a tool of its
+// own, known only from the run's log, by its `subagent` events. The chat's rows and the pane read them.
 
 /**
- * A subagent the coding agent started inside its own session (its `Agent` tool, Codex's collab
- * calls), folded out of the run's events: one per `subagent` event id, as the newest of them says,
+ * A subagent the coding agent started inside its own session, with a tool of its own, folded out
+ * of the run's events: one per `subagent` event id, as the newest of them says,
  * with how many calls it made and the last of them. It works in the run's own checkout and has no
  * branch of its own.
  */
 export interface CallSubagent {
   id: string
+  /** The id of the call that started it, when it is not `id`. */
+  call?: string
   /** How many tokens and tool calls it went through, as far as its coding agent says. */
   tokens?: number
   toolUses?: number
@@ -30,14 +31,14 @@ export interface CallSubagent {
 }
 
 /** An event of the agent's own doing: no subagent's, no count, no turn's end. */
-export function isAgentsOwn(e: OpenAgentEvent): boolean {
+export function isAgentsOwn(e: RunEvent): boolean {
   if (e.kind !== 'driver') return false
   const event = e.event as { type: string; subagent?: string }
   return ['action', 'output', 'text', 'thought', 'thinking', 'partial'].includes(event.type) && event.subagent === undefined
 }
 
 /** The subagent of the coding agent's own whose step this is (a call, its answer, its words, a thought); none for any other event. */
-function stepOfSubagent(e: OpenAgentEvent): string | undefined {
+function stepOfSubagent(e: RunEvent): string | undefined {
   if (e.kind !== 'driver') return undefined
   const event = e.event
   return event.type === 'action' || event.type === 'output' || event.type === 'text' || event.type === 'thought' ? event.subagent : undefined
@@ -49,7 +50,7 @@ function stepOfSubagent(e: OpenAgentEvent): string | undefined {
  * call's answer and nowhere else, so without that a message that continues the run would make it
  * read as working again. A new prompt alone ends none: a subagent in the background goes on across them.
  */
-export function callSubagents(events: readonly OpenAgentEvent[]): CallSubagent[] {
+export function callSubagents(events: readonly RunEvent[]): CallSubagent[] {
   const byId = new Map<string, CallSubagent>()
   for (const e of events) {
     if (e.kind === 'end') {
@@ -77,15 +78,13 @@ export function callSubagents(events: readonly OpenAgentEvent[]): CallSubagent[]
 
 /**
  * The events the chat shows nothing for, because a subagent's row says them: each subagent's own
- * events, the call that started it and that call's answer (the `action` and `output` of the same
- * call — on Codex the call is the part of the subagent's id before the colon), and what the
- * subagent itself said and did, which is its transcript and no step of the run's own.
+ * events, the call that started it and that call's answer (the `action` and `output` of the call
+ * its event names), and what the subagent itself said and did, which is its transcript and no
+ * step of the run's own.
  */
-export function subagentEvents(events: readonly OpenAgentEvent[]): Set<OpenAgentEvent> {
-  const ids = new Set<string>()
-  for (const e of events) if (e.kind === 'driver' && e.event.type === 'subagent') ids.add(e.event.id)
-  const calls = new Set([...ids].flatMap(id => [id, id.split(':')[0]!]))
-  const hidden = new Set<OpenAgentEvent>()
+export function subagentEvents(events: readonly RunEvent[]): Set<RunEvent> {
+  const calls = startingCalls(events)
+  const hidden = new Set<RunEvent>()
   for (const e of events) {
     if (e.kind !== 'driver') continue
     const event = e.event
@@ -95,8 +94,13 @@ export function subagentEvents(events: readonly OpenAgentEvent[]): Set<OpenAgent
   return hidden
 }
 
+/** The ids of the calls that started the log's subagents: each one's `call`, else its own id. */
+function startingCalls(events: readonly RunEvent[]): Set<string> {
+  return new Set(events.flatMap(e => (e.kind === 'driver' && e.event.type === 'subagent' ? [e.event.call ?? e.event.id] : [])))
+}
+
 /** What one subagent of the coding agent's own said and did: its transcript, as the run's events. */
-export function subagentTranscript(events: readonly OpenAgentEvent[], id: string): OpenAgentEvent[] {
+export function subagentTranscript(events: readonly RunEvent[], id: string): RunEvent[] {
   return events.filter(e => stepOfSubagent(e) === id)
 }
 
@@ -176,7 +180,7 @@ export function callRow(call: CallSubagent, runWorking: boolean, fallbackAt: str
 }
 
 /** A run's subagents as their rows, in the order they were started. `working` is whether the run's own process works. */
-export function subagentRows(events: readonly OpenAgentEvent[], working: boolean): SubagentRow[] {
+export function subagentRows(events: readonly RunEvent[], working: boolean): SubagentRow[] {
   const fallbackAt = events[0]?.at ?? new Date(0).toISOString()
   return callSubagents(events).map(call => callRow(call, working, fallbackAt))
 }
@@ -191,7 +195,7 @@ export type SubagentStep = { kind: 'agent'; row: SubagentRow } | { kind: 'messag
  * of its own, after those words. `parts` says which events part what is before them from what is
  * after. `reports` holds what each subagent sent when it ended, by its row's key.
  */
-export function subagentSteps(events: readonly OpenAgentEvent[], rows: readonly SubagentRow[], reports: ReadonlyMap<string, string>, parts: (e: OpenAgentEvent) => boolean): Map<number, SubagentStep[]> {
+export function subagentSteps(events: readonly RunEvent[], rows: readonly SubagentRow[], reports: ReadonlyMap<string, string>, parts: (e: RunEvent) => boolean): Map<number, SubagentStep[]> {
   const stretchAt: number[] = []
   for (const e of events) stretchAt.push((stretchAt.at(-1) ?? 0) + (parts(e) ? 1 : 0))
   const place = (step: SubagentStep, time: string) => {
@@ -231,7 +235,7 @@ export function stepWords(steps: readonly SubagentStep[]): string {
 }
 
 /** What a subagent of the coding agent's own sent when it ended: the last thing it said. */
-export function subagentReport(events: readonly OpenAgentEvent[], id: string): string | undefined {
+export function subagentReport(events: readonly RunEvent[], id: string): string | undefined {
   const said = subagentTranscript(events, id).flatMap(e => (e.kind === 'driver' && e.event.type === 'text' ? [e.event.text] : []))
   return said.at(-1)
 }
@@ -248,11 +252,10 @@ export function subagentReport(events: readonly OpenAgentEvent[], id: string): s
  * does, when one ended meanwhile. A main agent that goes on beside its subagents never waited, and
  * its count goes on.
  */
-export function subagentWait(events: readonly OpenAgentEvent[]): { waiting: boolean; wokeAt?: string } {
+export function subagentWait(events: readonly RunEvent[]): { waiting: boolean; wokeAt?: string } {
   const open = new Set<string>()
-  // A subagent's id is the id of the call that started it (on Codex, the part before the colon):
-  // that call, and what it hands back, are known by it.
-  const subagents = new Set(events.flatMap(e => (e.kind === 'driver' && e.event.type === 'subagent' ? [e.event.id, e.event.id.split(':')[0]!] : [])))
+  // The calls that started a subagent, and what they hand back, are known by their ids.
+  const subagents = startingCalls(events)
   let waiting = false
   let endedMeanwhile = false
   let wokeAt: string | undefined

@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { nodeGitRunner } from '@openagt/agent-data'
+import { nodeGitRunner } from '../git.js'
 import { PERSON_INFO } from '@openagt/hooks'
 import { distributionSettings } from '../distribution-hooks.js'
 import { handDownTestDistribution } from '../test-distribution.js'
@@ -38,8 +38,8 @@ const said = async () => {
 test("the person is what was saved with them, through the distribution's store: committed in their own folder, which their other computers sync", () =>
   withComputer(async folder => {
     assert.equal((await onPerson()).own, undefined, "none set yet: the computer's name")
-    await (await distributionSettings()).set(PERSON_INFO, { name: 'Ada Lovelace', picture: 'https://avatars.githubusercontent.com/u/1', github: 'ada' })
-    assert.deepEqual(await said(), { name: 'Ada Lovelace', avatar: 'https://avatars.githubusercontent.com/u/1', github: 'ada', own: true })
+    await (await distributionSettings()).set(PERSON_INFO, { name: 'Ada Lovelace', picture: 'https://avatars.githubusercontent.com/u/1', login: 'ada' })
+    assert.deepEqual(await said(), { name: 'Ada Lovelace', avatar: 'https://avatars.githubusercontent.com/u/1', login: 'ada', own: true })
     assert.match(readFileSync(join(folder, 'person', 'settings.json'), 'utf8'), /Ada Lovelace/)
     assert.match(await nodeGitRunner()(['log', '-1', '--format=%s'], folder), /setting user-info\.person/)
   }))

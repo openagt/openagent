@@ -1,7 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import type { GitRunner } from '@openagt/agent-data'
-import type { ProjectRef } from '@openagt/hooks'
+import type { GitRunner, ProjectRef } from '@openagt/hooks'
 import { readDiary, type AnyDiaryLine } from '@openagt/agent-driver'
 import { bridgeStarts, resetBridgeStarts, type BridgeStartRequest } from './bridge-starts.js'
 import { NOT_ON_GITHUB } from './github.js'

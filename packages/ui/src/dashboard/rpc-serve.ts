@@ -8,7 +8,6 @@ import { followRunsChanged } from '../dashboard-rpc/runs-changed.js'
 import { callModule } from '../dashboard-rpc/module-calls.js'
 import { errorMessage } from '../error-message.js'
 import { sendBody } from './compress.js'
-import { IMAGE_MAX_BYTES, imageMediaType, isImageName, readImage } from '@openagt/agent-driver'
 
 /**
  * CSRF guard for the state-changing RPCs. A browser attaches an `Origin`
@@ -98,39 +97,23 @@ export function moduleCallOf(path: string): { pkg: string; name: string } | unde
   }
 }
 
-/** Read a request body, bounded so a bad caller cannot make the daemon buffer without limit. */
-async function readBody(req: IncomingMessage, limit = 4 * 1024 * 1024): Promise<string> {
+/**
+ * The most a call's body may be, so a bad caller cannot make the daemon buffer without limit: room
+ * for an image a module keeps, sent whole as base64 (`composer.images`), a third more than its bytes.
+ */
+const BODY_LIMIT = 6 * 1024 * 1024
+
+/** Read a request body, bounded at {@link BODY_LIMIT}. */
+async function readBody(req: IncomingMessage): Promise<string> {
   let size = 0
   const chunks: Buffer[] = []
   for await (const chunk of req) {
     const buf = chunk as Buffer
     size += buf.length
-    if (size > limit) throw new Error('request body too large')
+    if (size > BODY_LIMIT) throw new Error('request body too large')
     chunks.push(buf)
   }
   return Buffer.concat(chunks).toString('utf8')
-}
-
-/** Where a kept image is served, past {@link RPC_PREFIX}: `images/<name>`. */
-const IMAGES_PATH = 'images/'
-
-/** The body of a call that sends an image: its base64, and the call's own few bytes around it. */
-const IMAGE_BODY_LIMIT = Math.ceil((IMAGE_MAX_BYTES * 4) / 3) + 64 * 1024
-
-/**
- * An image kept on this computer, for a message box's tile and the chat's: by its name only, which
- * is its content's hash, so it never changes and is cached for good. Behind the same guards as
- * every call: another site's page cannot read it, nor a rebound name reach it.
- */
-async function serveImage(res: ServerResponse, name: string): Promise<void> {
-  const bytes = isImageName(name) ? await readImage(name).catch(() => undefined) : undefined
-  if (bytes === undefined) {
-    res.writeHead(404, { 'content-type': 'text/plain', 'cache-control': 'no-store' })
-    res.end('no such image on this computer')
-    return
-  }
-  res.writeHead(200, { 'content-type': imageMediaType(name), 'content-length': bytes.length, 'cache-control': 'private, max-age=31536000, immutable', 'x-content-type-options': 'nosniff' })
-  res.end(bytes)
 }
 
 function sendJson(req: IncomingMessage, res: ServerResponse, status: number, body: unknown): Promise<void> {
@@ -254,10 +237,6 @@ export function makeRpcMount(context: DashboardContext): (req: IncomingMessage, 
         serveChangesStream(req, res)
         return true
       }
-      if (req.method === 'GET' && name.startsWith(IMAGES_PATH)) {
-        await serveImage(res, decodeURIComponent(name.slice(IMAGES_PATH.length)))
-        return true
-      }
       const moduleCall = moduleCallOf(name)
       const handler = moduleCall ? undefined : RPC_HANDLERS[name]
       if (req.method !== 'POST' || (!moduleCall && !handler)) {
@@ -268,8 +247,7 @@ export function makeRpcMount(context: DashboardContext): (req: IncomingMessage, 
         await sendJson(req, res, 415, { error: 'a call is sent as application/json' })
         return true
       }
-      // An image is sent whole, as base64: a third more than its bytes, which are at most what the agents take.
-      const raw = await readBody(req, name === 'sendImage' ? IMAGE_BODY_LIMIT : undefined)
+      const raw = await readBody(req)
       const args: unknown[] = raw ? (JSON.parse(raw) as unknown[]) : []
       if (!Array.isArray(args)) {
         await sendJson(req, res, 400, { error: 'the request body must be a JSON array of arguments' })
@@ -280,9 +258,13 @@ export function makeRpcMount(context: DashboardContext): (req: IncomingMessage, 
       await sendJson(req, res, 200, { ret })
     } catch (err) {
       // An RPC that throws is a failed call, not a dead daemon: answer it and stay up. Without
-      // this a rejected promise inside the mount became an unhandled rejection.
-      if (!res.headersSent) await sendJson(req, res, 500, { error: errorMessage(err) })
-      else res.end()
+      // this a rejected promise inside the mount became an unhandled rejection. A body left
+      // unread (one past the bound) ends the connection with the answer: what is left of it is
+      // no next request, and a connection kept for one would stay open waiting for it.
+      if (!res.headersSent) {
+        if (!req.complete) res.setHeader('connection', 'close')
+        await sendJson(req, res, 500, { error: errorMessage(err) })
+      } else res.end()
     }
     return true
   }

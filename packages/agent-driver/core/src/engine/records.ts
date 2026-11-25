@@ -1,10 +1,10 @@
-import { isSkillName, type FileBranchWrite } from '@openagt/agent-data'
-import { isProfileId, MODULE_NAME } from '@openagt/hooks'
+import { isSkillName } from './names.js'
+import type { FileBranchWrite } from '@openagt/store-filesystem'
+import { isProfileId, MODULE_NAME, type AgentDriverOptions, type RunOptions } from '@openagt/hooks'
 import type { ProjectSkillsPick } from './profile.js'
-import { publishedBranch } from '@openagt/agent-data/names'
+import { publishedBranch, type SessionRepo } from '@openagt/git-branches'
 import { deleteRun, writeRun, type RecordDeps } from '../record-store.js'
 import { type AnyDiaryLine, type RunCard } from '../record.js'
-import type { SessionRepo } from '@openagt/git-branches'
 
 /**
  * A run in flight is a run record (#1774): the `logs` skill's card on the project's `agent-data`
@@ -137,7 +137,7 @@ export function markerCard(run: { id: string; startedAt: string; prompt: string;
     driver: run.driver,
     ...(run.model !== undefined ? { model: run.model } : {}),
     // `host` as the run's live card has it too: a reader tells this machine's runs from another's by it.
-    caller: { runner: run.mark, host: run.mark.host, ...forReaders(run.mark) },
+    caller: { runner: run.mark, host: run.mark.host, ...forReaders(run.mark, agentAsked(run.driver, run.model)) },
   }
 }
 
@@ -148,8 +148,11 @@ export function markerCard(run: { id: string; startedAt: string; prompt: string;
  * change, and what it was started for, which a git host's check reads to find the run a thread has,
  * and the repos a session with no project has, which its page shows.
  */
-export function forReaders(mark: Lasting): Lasting {
+export function forReaders(mark: Lasting, agent: AgentDriverOptions = {}): Lasting & { options?: RunOptions } {
+  // The run's options, one slice per module, as the run was asked them: what its box's controls say.
+  const options = { ...(Object.keys(agent).length > 0 ? { 'agent-driver': agent } : {}), ...markOptions(mark) }
   return {
+    ...(Object.keys(options).length > 0 ? { options } : {}),
     ...(mark.base !== undefined ? { base: publishedBranch(mark.base) ?? mark.base } : {}),
     ...(mark.prBase !== undefined ? { prBase: mark.prBase } : {}),
     ...(mark.gitAccount !== undefined ? { gitAccount: mark.gitAccount } : {}),
@@ -160,6 +163,29 @@ export function forReaders(mark: Lasting): Lasting {
     ...(mark.profile !== undefined ? { profile: mark.profile } : {}),
     ...(mark.pluginsWithout !== undefined ? { pluginsWithout: mark.pluginsWithout } : {}),
     ...(mark.projectSkills !== undefined ? { projectSkills: mark.projectSkills } : {}),
+  }
+}
+
+/** agent-driver's slice of a run's options, as its card keeps it: the coding agent the run is on, its model and how hard it thinks. */
+export function agentAsked(driver: string, model?: string, effort?: string): AgentDriverOptions {
+  return { driver, ...(model !== undefined ? { model } : {}), ...(effort !== undefined ? { effort } : {}) }
+}
+
+/**
+ * The run's options, one slice per module, as its mark keeps what it was asked: where it starts and
+ * where its pull request goes, the account it works as, the repos it has, its profile and the
+ * session's picks over it; the profile's own picks are not in them.
+ */
+export function markOptions(mark: Lasting): RunOptions {
+  const branches = { ...(mark.base !== undefined ? { base: mark.base } : {}), ...(mark.repos !== undefined ? { repos: mark.repos } : {}) }
+  const github = { ...(mark.prBase !== undefined ? { prBase: mark.prBase } : {}), ...(mark.gitAccount !== undefined ? { account: mark.gitAccount } : {}) }
+  return {
+    ...(mark.publish !== undefined ? { publish: mark.publish } : {}),
+    ...(Object.keys(branches).length > 0 ? { 'git-branches': branches } : {}),
+    ...(Object.keys(github).length > 0 ? { github } : {}),
+    ...(mark.projectSkills !== undefined ? { skills: { project: mark.projectSkills } } : {}),
+    ...(mark.pluginsWithout !== undefined ? { plugins: { without: mark.pluginsWithout } } : {}),
+    ...(mark.profile !== undefined ? { profiles: { profile: mark.profile } } : {}),
   }
 }
 

@@ -1,22 +1,17 @@
-import { ReadyNaming } from '@openagt/agent-driver'
 import { withLocalBin } from './local-bin.js'
 import { refreshLoginShellPath } from './shell-path.js'
 import { startDashboard, type Dashboard } from './dashboard/server.js'
 import { createProjectRuntime } from './daemon-runtime.js'
-import { defaultQuotaSource } from './dashboard/quota.js'
-import { defaultModelsSource } from './dashboard/models.js'
-import { agentUpdates } from './dashboard/agent-updates.js'
+import { openAgentUpdates } from './dashboard/openagent-update.js'
 import { projectStateReader } from './project-state.js'
 import { resolveDashboardBundle } from './dashboard/bundle.js'
 import { resolveWebsite } from './dashboard/website.js'
 import { registryPreferencesStore } from './registry.js'
-import { readySessionsHome, startSessionsSweep } from './sessions-home.js'
+import { readySessionsHome } from './sessions-home.js'
 import { distributionHooks, localHostOf } from './distribution-hooks.js'
-import type { Hooks, ProjectRef, RunHost } from '@openagt/hooks'
-import { sessionsHome } from '@openagt/agent-data'
+import { type Hooks, type ProjectRef, type RunHost, sessionsHome } from '@openagt/hooks'
 import { readSecureAddress, SECURE_PORT, type SecureAddress } from './secure-address.js'
 import type { StartedProject } from './dashboard/types.js'
-import { runningFixes } from './dashboard-rpc/logins.js'
 
 /**
  * The dashboard process (#302). It is a pure projection of files: a run's tool keeps the run's
@@ -58,13 +53,14 @@ export interface RunDaemonOptions {
   /** Called once the server has bound, before it blocks. The only way a caller learns the port. */
   onListening?: (state: DaemonState) => void
   /**
-   * A folder to add to the projects once the dashboard listens, as Add project does with the
-   * records kept on this computer. One already on the list, or inside one that is, is left as it is.
-   * The dashboard adds no folder by itself: this is the caller's.
+   * The folder `openagent` was typed in, made a project once the dashboard listens (`folderGiven`,
+   * the projects module's): the repository it is in, added as Add project adds one. One already
+   * on the list, or inside one that is, is left as it is. The dashboard adds no folder by itself:
+   * this is the caller's.
    */
   project?: string
-  /** Called once {@link project} is on the list: its id, which always opens its page, the address the page shows, and whether it was added now. */
-  onProject?: (project: StartedProject) => void
+  /** Called once {@link project} was asked about: its id, which always opens its page, the address the page shows, and whether it was added now; none for a folder that is no project, outside any repository. */
+  onProject?: (project: StartedProject | undefined) => void
   /** How long the teardown after Ctrl+C may take; default {@link SHUTDOWN_DEADLINE_MS}. For tests. */
   shutdownDeadlineMs?: number
   /** The modules the dashboard runs, loaded; its distribution's when unsaid (`distribution-hooks.ts`). For tests. */
@@ -90,24 +86,18 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   await refreshLoginShellPath()
   // Everything the dashboard drives per project (a run's start, project install) lives in the
   // runtime, so this body stays about the daemon's own lifecycle.
-  // A run's name is asked of a naming session kept waiting for it (agent-driver's `ReadyNaming`), so
-  // the page has it about a second after Start. A run starts on this computer's host, the
-  // distribution's (#2394).
+  // A run starts on this computer's host, the distribution's (#2394), which names it as it starts.
   const hooks = opts.hooks ?? (await distributionHooks(env))
   const host = await localHostOf(hooks)
-  // The hosts beside it, of the modules on in a project (a GitHub Actions runner): a run may be picked to run on one.
+  // The hosts beside it, of the modules on in a project (a CI runner): a run may be picked to run on one.
   const otherHosts = async (project?: ProjectRef): Promise<RunHost[]> => (await hooks.hosts(project)).filter(other => other.id !== host.id)
-  // A project added or removed is told to the modules (`app.lifecycle`): a scheduler starts or stops with it.
-  const runtime = createProjectRuntime({ cwd, env, naming: new ReadyNaming(), host, otherHosts, lifecycle: hooks })
+  // The folder `openagent` was typed in is made a project by the modules (`app.lifecycle`): the projects module's.
+  const runtime = createProjectRuntime({ cwd, env, host, otherHosts, folderGiven: folder => hooks.folderGiven(folder) })
   // The daemon serves the built dashboard bundle (#405/#426): the SPA reads each run's files over
   // `GET /_rpc/events`, so there is no in-process event stream to feed here. The runtime's RPCs reach the browser through the
   // dashboard context the mount is wired with. A missing bundle (a broken install) surfaces as a
   // 503 from the server.
   const clientBundleDir = await resolveDashboardBundle()
-  // The long-lived meter the usage panel draws (#685), owned here so it stops with the daemon.
-  const quota = defaultQuotaSource()
-  // Which models each coding agent offers: asked on the menu's first read, then kept.
-  const models = defaultModelsSource()
   const websiteDir = await resolveWebsite()
   // A secure address that cannot be read is said, and the dashboard comes up on its plain one.
   const secure = await readSecureAddress(env).catch((err: unknown): SecureAddress | undefined => {
@@ -118,30 +108,22 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
     port,
     context: {
       startAgent: runtime.onStart,
-      addProject: runtime.onAddProject,
       startedIn: runtime.onStartedIn,
-      prepareStart: runtime.onPrepareStart,
-      removeProject: runtime.onRemoveProject,
       host,
       otherHosts,
       preferences: registryPreferencesStore(env),
-      quota,
-      models,
-      agentUpdates: agentUpdates({ models }),
+      openAgentUpdate: openAgentUpdates(),
       // What a project's page and row say of it beside its runs: the modules on in it say what needs setting up.
       projectState: projectStateReader({ hooks: async () => hooks }),
     },
     screen: runtime.screenOf,
-    // What the modules on answer on the dashboard's address (`app.route`): host-claude-web's bridge.
+    // What the modules on answer on the dashboard's address (`app.route`): a host's bridge, say.
     routes: () => hooks.routes(),
     ...(clientBundleDir ? { clientBundleDir } : {}),
     ...(secure ? { secure: { ...secure, port: SECURE_PORT } } : {}),
     ...(websiteDir ? { websiteDir } : {}),
   }).catch(async (err: unknown) => {
-    // The port is taken (another dashboard runs there, say): what was set up for it stops, or
-    // its timers keep the process alive.
-    quota.stop()
-    await runtime.dispose()
+    // The port is taken (another dashboard runs there, say).
     throw err
   })
 
@@ -159,13 +141,14 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   // work: adding it tells the modules on in it (`projectAdded`).
   if (opts.project !== undefined) {
     const started = await runtime.onStartedIn(opts.project)
-    if (started.ok) opts.onProject?.({ id: started.id, path: started.path, added: started.added, address: started.address })
-    else console.log(`[openagent] could not add ${opts.project}: ${started.error}`)
+    if (started === undefined || started.ok) opts.onProject?.(started && { id: started.id, path: started.path, added: started.added, address: started.address })
+    else {
+      console.log(`[openagent] could not add ${opts.project}: ${started.error}`)
+      opts.onProject?.(undefined)
+    }
   }
-  // The sessions with no project: their home made, and a session whose process died swept, as a
-  // project's scheduler sweeps its runs.
-  const sessions = await readySessionsHome(sessionsHome(env))
-  const stopSessionsSweep = startSessionsSweep(sessions)
+  // The sessions with no project: their home made, before the modules start their work there.
+  await readySessionsHome(sessionsHome(env))
 
   // The modules' own work (`app.lifecycle`), once the dashboard listens, so it never delays the
   // URL: the projects' schedulers. Each module on starts it, told where OpenAgent answers, and a
@@ -174,7 +157,6 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   await hooks.started({ signal: lifecycle.signal, url: dashboard.url })
 
   await waitForShutdown(opts.signal)
-  stopSessionsSweep()
 
   await stopWithin(opts.shutdownDeadlineMs ?? SHUTDOWN_DEADLINE_MS, async step => {
     step("the modules' own work")
@@ -184,12 +166,6 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
     // dashboard is gone, while what is left stops behind it.
     step('the dashboard')
     await dashboard.close()
-    runningFixes.end()
-    // Stopped here as well as by the dashboard: a broken install serves 503s without ever taking
-    // ownership of the source we handed in, and that poller would go on reading by itself.
-    quota.stop()
-    step('the naming sessions')
-    await runtime.dispose()
   })
 }
 

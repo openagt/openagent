@@ -3,10 +3,9 @@ import { runDaemon, DEFAULT_DAEMON_PORT } from '../daemon.js'
 import { joinRunningDashboard } from '../join-dashboard.js'
 import type { StartedProject } from '../dashboard/types.js'
 import { handDownDistribution } from './distribution.js'
-import { repositoryOf } from './project.js'
 import { openInBrowser } from './browser.js'
 import { openagentPackage, openagentVersion } from '../version.js'
-import { helpRows, helpText, unknownWord, usageError } from '@openagt/agent-data'
+import { helpRows, helpText, unknownWord, usageError } from '@openagt/hooks/command'
 
 export type { DashboardDistribution, DashboardPackage } from '../distribution-packages.js'
 
@@ -22,7 +21,7 @@ const defaultIO: CliIO = {
 }
 
 /** The command's help; with `--uninstall` where the distribution takes OpenAgent off the computer. */
-const helpOf = (uninstall: boolean): string => `OpenAgent — autonomous AI programming, with a coding agent (Claude Code or Codex).
+const helpOf = (uninstall: boolean): string => `OpenAgent — autonomous AI programming, with a coding agent.
 
 ${helpRows([
   'Usage:',
@@ -36,7 +35,7 @@ ${helpRows([
 
 ${helpText('The dashboard listens on this computer only.')}
 
-${helpText("Everything else is the dashboard: it shows a project's runs from their files, and starts one on this computer's run host, the module OpenAgent is distributed with that runs it.")}`
+${helpText("Everything else is the dashboard: it shows a project's runs as their hosts say them, and starts one on this computer's run host, the module OpenAgent is distributed with that runs it.")}`
 
 /** What the CLI itself accepts: three options, no verbs (D4). */
 export interface CliArgs {
@@ -140,9 +139,9 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
 async function runForegroundDaemonCmd(args: CliArgs, io: CliIO): Promise<number> {
   const cwd = process.cwd()
   const port = args.port ?? DEFAULT_DAEMON_PORT
-  let project: string | undefined
+  // The folder this was typed in, handed over: the modules make it a project when it is in a repository.
+  const project = cwd
   try {
-    project = await repositoryOf(cwd)
     let url = ''
     await runDaemon(cwd, {
       port,
@@ -154,10 +153,10 @@ async function runForegroundDaemonCmd(args: CliArgs, io: CliIO): Promise<number>
         // runDaemon then blocks until signalled, so this is fire-and-forget by necessity: the
         // update line lands a moment later, above the server logs.
         void printStartupFooter(io)
-        // Outside a repository there is no project to open: the Overview, where one is added.
-        if (project === undefined) openInBrowser(state.url)
       },
-      ...(project !== undefined ? { project, onProject: (started: StartedProject) => openProject(url, started, io) } : {}),
+      project,
+      // Outside a repository there is no project to open: the Overview, where one is added.
+      onProject: (started: StartedProject | undefined) => (started ? openProject(url, started, io) : openInBrowser(url)),
     })
   } catch (err) {
     // Another dashboard has the port (#2141): this one hands it the folder rather than failing.
@@ -185,7 +184,7 @@ function openProject(url: string, started: StartedProject, io: CliIO): void {
  * A dashboard runs on the port already: hand it the repository this was typed in, open the page,
  * and end, since this process serves nothing. What holds the port may be no dashboard at all.
  */
-async function joinRunning(port: number, project: string | undefined, io: CliIO): Promise<number> {
+async function joinRunning(port: number, project: string, io: CliIO): Promise<number> {
   const running = await joinRunningDashboard(port, project)
   if (!running.joined) {
     io.err(`could not start the dashboard: port ${port} is taken by another program. Pass --port <n> to use another one.`)

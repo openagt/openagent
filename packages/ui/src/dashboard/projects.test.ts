@@ -1,16 +1,14 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { summarizeProject, defaultProjectsProvider, type SummarizeDeps } from './projects.js'
-import type { ProjectRecord } from '../registry.js'
+import type { ProjectRecord } from '@openagt/hooks'
 import { type AgentMeta } from '../store/index.js'
 
 const RECORD: ProjectRecord = { id: 'app-a-1', path: '/repos/app-a', addedAt: '2026-07-11T00:00:00.000Z' }
 
 function deps(over: SummarizeDeps): SummarizeDeps {
   return {
-    isActivated: async () => true,
     readAgents: async () => [],
-    gitHost: async () => undefined,
     ...over,
   }
 }
@@ -31,16 +29,10 @@ test("summarizeProject names the project as its repository is named, and one wit
   assert.equal(summary.path, '/repos/app-a')
 })
 
-test('gitHost says whether a package provides the project a git host; a lookup that fails reads as none', async () => {
-  assert.equal((await summarizeProject(RECORD, deps({}))).gitHost, false)
-  const source = {} as NonNullable<Awaited<ReturnType<NonNullable<SummarizeDeps['gitHost']>>>>
-  assert.equal((await summarizeProject(RECORD, deps({ gitHost: async () => source }))).gitHost, true)
-  const failing = deps({
-    gitHost: async () => {
-      throw new Error('package.json unreadable')
-    },
-  })
-  assert.equal((await summarizeProject(RECORD, failing)).gitHost, false)
+test("the summary says its repository's address, origin's; a project with no remote, or one whose address cannot be read, has none", async () => {
+  assert.equal((await summarizeProject(RECORD, deps({ remote: async () => 'github.com/o/r' }))).remote, 'github.com/o/r')
+  assert.equal('remote' in (await summarizeProject(RECORD, deps({ remote: async () => undefined }))), false)
+  assert.equal('remote' in (await summarizeProject(RECORD, deps({ remote: async () => Promise.reject(new Error('no git')) }))), false)
 })
 
 test('lastActivityAt is the newest run (#645)', async () => {
@@ -58,24 +50,15 @@ test('no runs means no lastActivityAt key at all', async () => {
   assert.equal('lastActivityAt' in summary, false)
 })
 
-test('activation reflects the injected check', async () => {
-  const summary = await summarizeProject(RECORD, deps({ isActivated: async () => false }))
-  assert.equal(summary.activated, false)
-})
-
-test('a throwing reader is forgiving: inactive, no activity, never throws', async () => {
+test('a throwing reader is forgiving: no activity, never throws', async () => {
   const summary = await summarizeProject(
     RECORD,
     deps({
-      isActivated: async () => {
-        throw new Error('stat failed')
-      },
       readAgents: async () => {
         throw new Error('read failed')
       },
     }),
   )
-  assert.equal(summary.activated, false)
   assert.equal('lastActivityAt' in summary, false)
 })
 
@@ -86,7 +69,7 @@ function provider(present: string[]) {
   return defaultProjectsProvider({
     listRecords: async () => [RECORD, RECORD_B],
     isDirectory: async path => present.includes(path),
-    summarize: async record => ({ id: record.id, path: record.path, name: record.path.split('/').pop()!, activated: true, gitHost: false }),
+    summarize: async record => ({ id: record.id, path: record.path, name: record.path.split('/').pop()!, gitHost: false }),
   })
 }
 
@@ -117,7 +100,7 @@ test('a failing directory check reads as gone, never throws (#1140)', async () =
     isDirectory: async () => {
       throw new Error('EACCES')
     },
-    summarize: async record => ({ id: record.id, path: record.path, name: 'x', activated: true, gitHost: false }),
+    summarize: async record => ({ id: record.id, path: record.path, name: 'x', gitHost: false }),
   }).list()
   assert.deepEqual(listed, [])
 })

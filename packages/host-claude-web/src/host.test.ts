@@ -7,7 +7,7 @@ import { NOT_ON_GITHUB } from './github.js'
 import { NO_EXTENSION, UNMADE } from './hand-off.js'
 import { webHost, type WebHostDeps } from './host.js'
 import { git, recorded, removeRepo, testRepo, until } from './test-support.js'
-import { findWebRun } from './web-runs.js'
+import { WEB_HOST, findWebRun } from './web-runs.js'
 
 // Claude Code on the web as a host for a project's runs: what stops a run there before its Start,
 // its start, what a person says to it, a Stop, and the runs it knows of the project's records.
@@ -101,12 +101,17 @@ test("the host lists the project's runs on the web, and finds one by its record:
     await recorded(repo, '2026-11-19T11-00-00-000Z', { status: 'done', endedAt: '2026-11-19T11:30:00.000Z', branch: 'claude/add-flag', pr: { number: 9, url: 'https://github.com/o/r/pull/9' } })
     await recorded(repo, '2026-11-19T11-30-00-000Z', {}, { target: 'actions' })
     const web = host()
-    assert.deepEqual(await web.list!(project), [
-      { id: '2026-11-19T11-00-00-000Z', project: 'shop', status: 'done', startedAt: '2026-11-19T11:00:00.000Z', endedAt: '2026-11-19T11:30:00.000Z', prompt: 'run 2026-11-19T11-00-00-000Z' },
-      { id: '2026-11-19T10-00-00-000Z', project: 'shop', status: 'working', startedAt: '2026-11-19T10:00:00.000Z', title: 'Add a flag', prompt: 'run 2026-11-19T10-00-00-000Z' },
-    ])
+    const listed = await web.list!(project)
+    assert.deepEqual(
+      listed.map(run => [run.id, run.host, run.project, run.status, run.endedAt, run.title, run.prompt, run.pr?.number, run.branch, run.session?.id, run.computer]),
+      [
+        ['2026-11-19T11-00-00-000Z', WEB_HOST, 'shop', 'done', '2026-11-19T11:30:00.000Z', undefined, 'run 2026-11-19T11-00-00-000Z', 9, 'claude/add-flag', undefined, HERE],
+        ['2026-11-19T10-00-00-000Z', WEB_HOST, 'shop', 'working', undefined, 'Add a flag', 'run 2026-11-19T10-00-00-000Z', undefined, undefined, 'session_01S', HERE],
+      ],
+    )
+    assert.deepEqual((await web.list!(project, { ids: ['2026-11-19T10-00-00-000Z'] })).map(run => run.id), ['2026-11-19T10-00-00-000Z'])
     assert.deepEqual(await web.list!(), [])
-    assert.deepEqual(await web.find!({ id: '2026-11-19T11-00-00-000Z', project }), { record: { status: 'done', host: HERE, branch: 'claude/add-flag', pr: { number: 9 } }, changedNothing: false })
+    assert.deepEqual(await web.find!({ id: '2026-11-19T11-00-00-000Z', project }), { record: { status: 'done', host: HERE, branch: 'claude/add-flag', pr: { number: 9, url: 'https://github.com/o/r/pull/9' } }, changedNothing: false })
     assert.equal(await web.find!({ id: '2026-11-19T11-30-00-000Z', project }), undefined)
     assert.equal(await web.find!({ id: '2026-11-19T11-00-00-000Z' }), undefined, 'a run of no project is none of this host')
   } finally {

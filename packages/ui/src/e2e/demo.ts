@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
-import { projectId } from '@openagt/agent-data'
+import { projectId } from '../project-id.js'
 import type { AgentMeta, AgentStatus } from '../store/index.js'
 import { FIXTURE_PLUGINS, makeFixtureRepo } from './fixture.js'
 
@@ -191,10 +191,13 @@ export async function startDemo(options: DemoOptions = {}): Promise<Demo> {
   }
 
   try {
-    const added = await call<{ ok: boolean; error?: string }>('sendAddProject', shop)
+    // As the Add-project dialog adds one: the projects module's own function.
+    const adding = await call<{ ok: true; output: { ok: boolean; error?: string } } | { ok: false; error: string }>(`${encodeURIComponent('@openagt/projects')}/addProject`, null, { path: shop })
+    const added = adding.ok ? adding.output : adding
     if (!added.ok) throw new Error(`could not add the demo project: ${added.error}`)
     // Its records go to its remote, as a team's do.
-    const shared = await call<{ ok: boolean; error?: string }>('sendShareRecords', id, true)
+    const sharing = await call<{ ok: true; output: { ok: boolean; error?: string } } | { ok: false; error: string }>(`${encodeURIComponent('@openagt/store-git-branch')}/share`, id, { on: true })
+    const shared = sharing.ok ? sharing.output : sharing
     if (!shared.ok) throw new Error(`could not share the demo project's records: ${shared.error}`)
 
     // It has on every plugin with a page of its own, so each page can be walked.

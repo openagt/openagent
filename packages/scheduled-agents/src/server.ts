@@ -1,4 +1,4 @@
-import { nodeGitRunner } from '@openagt/agent-data'
+import { nodeGitRunner } from '@openagt/git-branches'
 import { read } from '@openagt/hooks/rpc'
 import { shownAutomation, whyRefused, type ShownAutomation } from './automation.js'
 import { schedulerStatus, type Status } from './scheduler.js'

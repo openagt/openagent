@@ -3,7 +3,7 @@
  * the agent queue (the `queue` skill's file, which this package never reads or writes) and to the
  * issue it tracks. No node imports, so browser-side code can name them too.
  *
- * Where the tickets are is not named here: `@openagt/agent-data` knows the project's data directory (in
+ * Where the tickets are is not named here: `@openagt/store-filesystem` knows the project's data directory (in
  * the person's own folder, or the project's `agent-data` branch when shared).
  */
 

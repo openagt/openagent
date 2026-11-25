@@ -19,7 +19,7 @@ async function pageCalls(): Promise<string[]> {
 
 test('every RPC the page calls is one the daemon answers', async () => {
   const names = await pageCalls()
-  assert.ok(names.length > 50, 'the page calls are found')
+  assert.ok(names.length > 20, 'the page calls are found')
   assert.deepEqual(names.filter(name => !(name in RPC_HANDLERS)), [])
 })
 

@@ -3,13 +3,16 @@ import { mock, test } from 'node:test'
 import { mkdir, mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { projectId, sessionsHome } from '@openagt/agent-data'
+import { projectId } from '../project-id.js'
+import { sessionsHome, type PullRequestState } from '@openagt/hooks'
 import { followRunsChanged, type RunsChanged } from './runs-changed.js'
 import { ownRunsWatch } from '../dashboard/runs-watch.js'
-import { prStates, prsForBranch } from '../dashboard/pull-requests.js'
-import type { GitHostFor, GitHostRequest } from '../store/git-host.js'
-import { addProject } from '../registry.js'
+import { pullRequestsRead } from '../dashboard/pr-states.js'
+import { listTestProject } from '../test-projects.js'
 import { SESSIONS_ID } from '../project-address.js'
+import { handDownTestDistribution } from '../test-distribution.js'
+
+handDownTestDistribution()
 
 test("the page is told when the runs of a project, or of the sessions with no project, change: once for changes that come together, and no more once it stops listening", async () => {
   const dir = await realpath(await mkdtemp(join(tmpdir(), 'openagent-runs-changed-')))
@@ -26,7 +29,7 @@ test("the page is told when the runs of a project, or of the sessions with no pr
     await mkdir(process.env.XDG_CONFIG_HOME, { recursive: true })
     const app = join(dir, 'app')
     await mkdir(app)
-    await addProject(app, new Date().toISOString())
+    await listTestProject(app, new Date().toISOString())
     const told: RunsChanged[] = []
     const stop = followRunsChanged(change => told.push(change))
     for (let i = 0; i < 50 && changed.size < 2; i++) await new Promise(resolve => setTimeout(resolve, 10))
@@ -52,34 +55,29 @@ test("the page is told when the runs of a project, or of the sessions with no pr
   }
 })
 
-test('the page is told when a read finds a pull request moved, once for the reads that find it together', async () => {
+test('the page is told when a module reads a pull request for the first time, or standing otherwise than before, once for the reads that come together', async () => {
   const dir = await realpath(await mkdtemp(join(tmpdir(), 'openagent-prs-changed-')))
   const previous = process.env.XDG_CONFIG_HOME
   process.env.XDG_CONFIG_HOME = join(dir, 'cfg')
   const follow = mock.method(ownRunsWatch, 'follow', () => () => {})
-  const request: GitHostRequest = { number: 5, url: 'https://github.com/o/r/pull/5', state: 'open', title: 'A fix', draft: false, branch: 'agent-five', head: '', createdAt: '' }
-  const saying = (state: GitHostRequest['state']): GitHostFor => async () => ({
-    requests: async () => ({ ok: true, requests: [{ ...request, state }] }),
-    open: async () => ({ ok: false, error: 'not here' }),
-    merge: async () => ({ ok: false, error: 'not here' }),
-    bring: async () => ({ ok: false, error: 'not here' }),
-    home: async () => undefined,
-    people: async () => [],
-  })
+  const read = (state: PullRequestState) => pullRequestsRead([{ url: 'https://github.com/o/r/pull/5', state, title: 'A fix', branch: 'agent-five' }])
   try {
     const told: RunsChanged[] = []
     const stop = followRunsChanged(change => told.push(change))
-    await prsForBranch('/repo', 'agent-five', saying('open'))
+    read('open')
     await new Promise(resolve => setTimeout(resolve, 300))
-    assert.deepEqual(told, [], 'read for the first time: nothing moved')
-    await prsForBranch('/repo', 'agent-five', saying('merged'))
-    await prStates('/repo', saying('merged'))
+    assert.deepEqual(told, [{ kind: 'prs' }], 'read for the first time: the rows have its state now')
+    read('open')
     await new Promise(resolve => setTimeout(resolve, 300))
-    assert.deepEqual(told, [{ kind: 'prs' }])
+    assert.equal(told.length, 1, 'read as it was: nothing moved')
+    read('merged')
+    read('merged')
+    await new Promise(resolve => setTimeout(resolve, 300))
+    assert.deepEqual(told, [{ kind: 'prs' }, { kind: 'prs' }])
     stop()
-    await prsForBranch('/repo', 'agent-five', saying('closed'))
+    read('closed')
     await new Promise(resolve => setTimeout(resolve, 300))
-    assert.equal(told.length, 1, 'no more once it stops listening')
+    assert.equal(told.length, 2, 'no more once it stops listening')
   } finally {
     follow.mock.restore()
     if (previous === undefined) delete process.env.XDG_CONFIG_HOME

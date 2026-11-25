@@ -1,8 +1,6 @@
 import { stat } from 'node:fs/promises'
-import { projectNameOf, repositoryAddress } from '@openagt/agent-data'
-import { createHooks, DISTRIBUTION_ENV, loadHandedDown, LOCAL_HOST, type Hooks, type ProjectRef, type RunHost, type RunRef, type Settings } from '@openagt/hooks'
+import { projectNameOf, repositoryAddress, createHooks, DISTRIBUTION_ENV, loadHandedDown, LOCAL_HOST, PROJECTS, type Hooks, type ProjectRecord, type ProjectRef, type RunHost, type RunRef, type Settings } from '@openagt/hooks'
 import { SESSIONS_ID } from './project-address.js'
-import { listProjects } from './registry.js'
 
 /**
  * The modules the dashboard runs (#2394): those of the distribution handed down to its process
@@ -13,6 +11,11 @@ export async function loadHooks(env: NodeJS.ProcessEnv = process.env): Promise<H
   const modules = await loadHandedDown(env)
   if (!modules) throw new Error(`the dashboard runs the modules of a distribution, and none was handed to it (${DISTRIBUTION_ENV}): start it with a distribution's openagent command, such as @openagt/dashboard's`)
   return createHooks(modules, { projects: () => listedProjects(env) })
+}
+
+/** The projects on this computer's list, as the projects module keeps it (`PROJECTS`): read through the distribution's settings. */
+export async function listProjects(env: NodeJS.ProcessEnv = process.env): Promise<ProjectRecord[]> {
+  return (await distributionSettings(env)).get(PROJECTS)
 }
 
 /** The projects on this computer's list whose folder is there, as a module's life is told them: one whose folder is gone has nothing to run in. */
@@ -46,10 +49,10 @@ export async function distributionSettings(env: NodeJS.ProcessEnv = process.env)
   return (await distributionHooks(env)).settings
 }
 
-/** This computer's host, agent-driver's: where a run started from here runs. A distribution without it starts no run. */
+/** This computer's host, the `run.host` of {@link LOCAL_HOST}'s id a module gives: where a run started from here runs. A distribution without it starts no run. */
 export async function localHostOf(hooks: Hooks): Promise<RunHost> {
   const host = (await hooks.hosts()).find(one => one.id === LOCAL_HOST)
-  if (!host) throw new Error("the dashboard's distribution has no host for this computer, which agent-driver gives")
+  if (!host) throw new Error(`the dashboard's distribution has no host for this computer: none of its modules gives a run.host of the id '${LOCAL_HOST}'`)
   return host
 }
 

@@ -1,4 +1,4 @@
-import { withLockFile } from '@openagt/agent-data'
+import { withLockFile } from '@openagt/git-branches'
 import { changesOf, StoreOrder, type Store, type StoreBackend } from '@openagt/hooks'
 import { filesIn, listIn, readIn, watchIn, writeIn } from './files.js'
 import { foldersOf, lockFile, scopeFolder, type Folders } from './folders.js'

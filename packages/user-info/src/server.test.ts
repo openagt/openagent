@@ -2,14 +2,14 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { PERSON_INFO } from '@openagt/hooks'
 import { act, rpcKind, type RpcComputerHost } from '@openagt/hooks/rpc'
-import { memorySettings } from '@openagt/hooks/testing'
+import { computerRpcHost } from '@openagt/hooks/testing'
 import type { ProfileOutcome } from '@openagt/github'
 import { copyFromGitHub, copyingFrom, removePicture, saveName } from './server.js'
 
 // Settings › Profile's functions, against a store kept in memory, GitHub's profile as a test says it.
 
 function computer(): RpcComputerHost {
-  return { settings: memorySettings() }
+  return computerRpcHost()
 }
 
 const github = (profiles: Record<string, Omit<Extract<ProfileOutcome, { ok: true }>, 'ok'>>) => {
@@ -43,7 +43,7 @@ test("a GitHub profile's name and picture are copied once, with the login they c
   const host = computer()
   const { asked, copy } = github({ ada: { login: 'ada', name: 'Ada Lovelace', avatar: 'https://avatars.githubusercontent.com/u/1' } })
   assert.deepEqual(await copy(host, { login: '@ada' }), { changed: true, login: 'ada' })
-  assert.deepEqual(await host.settings.get(PERSON_INFO), { name: 'Ada Lovelace', picture: 'https://avatars.githubusercontent.com/u/1', github: 'ada' })
+  assert.deepEqual(await host.settings.get(PERSON_INFO), { name: 'Ada Lovelace', picture: 'https://avatars.githubusercontent.com/u/1', login: 'ada' })
   assert.deepEqual(await copy(host, { login: 'ada' }), { changed: false, login: 'ada' })
   assert.deepEqual(asked, ['ada', 'ada'])
   await assert.rejects(copy(host, { login: 'nobody' }), /GitHub has no user nobody/)
@@ -55,5 +55,5 @@ test('a profile with no name keeps the name the person set, and one with no pict
   await host.settings.set(PERSON_INFO, { name: 'Ada', picture: 'https://avatars.example/ada.png' })
   const { copy } = github({ ada: { login: 'Ada' } })
   assert.deepEqual(await copy(host, { login: 'ada' }), { changed: true, login: 'Ada' })
-  assert.deepEqual(await host.settings.get(PERSON_INFO), { name: 'Ada', picture: 'https://avatars.example/ada.png', github: 'Ada' })
+  assert.deepEqual(await host.settings.get(PERSON_INFO), { name: 'Ada', picture: 'https://avatars.example/ada.png', login: 'Ada' })
 })

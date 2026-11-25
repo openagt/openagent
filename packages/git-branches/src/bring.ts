@@ -1,4 +1,5 @@
-import { gitReason, nodeGitRunner, type GitRunner } from '@openagt/agent-data'
+import { gitReason, nodeGitRunner } from './git.js'
+import type { GitRunner } from '@openagt/hooks'
 import { mergeBranch, type MergeOutcome } from './merge.js'
 import { copiedFrom } from './session-folder.js'
 import { currentBranch } from './worktree.js'

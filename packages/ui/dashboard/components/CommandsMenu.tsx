@@ -1,4 +1,4 @@
-import type { ProjectLauncher } from '../rpc/projects.js'
+import type { UiCommand } from '../module/index.js'
 import type { OfferedPrompt } from '../lib/use-prompts.js'
 import { Plus, X } from 'lucide-react'
 import { cn } from '../lib/utils.js'
@@ -17,8 +17,8 @@ import {
   DropdownMenuSeparator,
 } from './ui/dropdown-menu.js'
 
-/** One of the project's commands, as `onCommands` reads it off the project's skills. */
-export type CommandEntry = ProjectLauncher['commands'][number]
+/** One of the commands the modules offer the box (`composer.commands`). */
+export type CommandEntry = UiCommand
 
 // The visible face of what a project can be asked to do (#948, #1774): its commands, and the
 // prompts a person saved, which the modules at `composer.prompts` offer (#2394). Loading used to

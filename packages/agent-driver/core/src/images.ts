@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { chmod, mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { configFile } from './private-files.js'
+import { IMAGE_MAX_BYTES, IMAGES_PER_MESSAGE } from './image-bounds.js'
 
 // The images a person's messages go with, kept on this computer only: one folder of the user's,
 // `$XDG_CONFIG_HOME/openagent-images` or `~/.openagent-images`, beside OpenAgent's other files and
@@ -22,9 +23,6 @@ type Kind = keyof typeof KINDS
 
 /** The media types the store takes. */
 export type ImageMediaType = (typeof KINDS)[Kind]['type']
-
-/** The most bytes an image is kept at: what the agents' models take whole (5 MB as base64). */
-export const IMAGE_MAX_BYTES = 3.75 * 1024 * 1024
 
 const NAME = /^[0-9a-f]{64}\.(png|jpg|gif|webp)$/
 
@@ -82,6 +80,18 @@ export async function keepImage(type: string, bytes: Buffer, env: NodeJS.Process
     await rename(next, file)
   }
   return { ok: true, name }
+}
+
+/**
+ * Why the images a message or a Start names cannot go with it, in words for the person: more than
+ * one message goes with, a name that is no image's, or one no longer kept on this computer. None
+ * when they can.
+ */
+export async function refusedImages(images: unknown, env: NodeJS.ProcessEnv = process.env): Promise<string | undefined> {
+  if (images === undefined) return undefined
+  if (!Array.isArray(images) || images.length > IMAGES_PER_MESSAGE || !images.every(isImageName)) return 'Images are named by the names the dashboard kept them under.'
+  if (!(await Promise.all(images.map(name => hasImage(name, env)))).every(Boolean)) return 'An image is no longer on this computer. Take it out and add it again.'
+  return undefined
 }
 
 /** The kind the name `name` says. Throws for anything that is not an image's name. */

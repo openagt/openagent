@@ -1,12 +1,12 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type Ref, type RefObject } from 'react'
 import { ChevronRight, X } from 'lucide-react'
 import { useIsMobile } from '../lib/use-mobile.js'
-import type { OpenAgentEvent } from '../../src/index.js'
+import type { RunEvent } from '@openagt/hooks'
 import { panesPage } from '../lib/panes.js'
 import { revealSubagent, useRevealedSubagent } from '../lib/reveal-change.js'
 import { arrange, subagentRows, subagentTranscript, type SubagentRow } from '../lib/subagents.js'
 import { formatElapsed } from '../lib/format-date.js'
-import { anyModelName, useModels } from '../lib/models.js'
+import { anyModelName, useAgents } from '../lib/agents.js'
 import { runTone, runWord } from '../lib/run-words.js'
 import { useCut } from '../lib/use-cut.js'
 import { FocusHome } from '../lib/focus-home.js'
@@ -45,7 +45,7 @@ export function SubagentsPanel({
   /** The main agent. */
   agentId: string
   /** The main agent's log. */
-  events: readonly OpenAgentEvent[]
+  events: readonly RunEvent[]
   /** Whether the main agent's process is working. */
   live: boolean
 }) {
@@ -194,7 +194,7 @@ const capital = (words: string): string => words.charAt(0).toUpperCase() + words
  * pane's lists (ui/look/spacing.md 3). One that failed is one line too: nothing says why.
  */
 function SubagentItem({ row, open, onPick }: { row: SubagentRow; open: boolean; onPick: (key: string) => void }) {
-  const models = useModels()
+  const models = useAgents()
   const timed = row.working || row.endedAt !== undefined
   const time = useId()
   const model = row.model !== undefined ? `Model ${anyModelName(models, row.model)}` : undefined
@@ -254,7 +254,7 @@ function SubagentItem({ row, open, onPick }: { row: SubagentRow; open: boolean; 
 }
 
 /** The subagent a row opened, under the list: its name over its prompt and what it said and did. */
-function Shown({ row, events, onClose }: { row: SubagentRow; events: readonly OpenAgentEvent[]; onClose: () => void }) {
+function Shown({ row, events, onClose }: { row: SubagentRow; events: readonly RunEvent[]; onClose: () => void }) {
   const phone = useIsMobile()
   // Its transcript is the main agent's events that are its own, shown as plain steps here.
   const callId = row.call.id
@@ -311,7 +311,7 @@ function Shown({ row, events, onClose }: { row: SubagentRow; events: readonly Op
  * How long it has worked is the log's own moving line at its end, as the chat says it.
  */
 function PaneHead({ row }: { row: SubagentRow }) {
-  const models = useModels()
+  const models = useAgents()
   const ended = !row.working && row.status !== 'done'
   return (
     <div className="flex flex-col gap-4 pb-3 font-sans text-sm">
@@ -344,8 +344,8 @@ function PaneFoot({ row, calls }: { row: SubagentRow; calls: number }) {
 }
 
 /** One of a call's own events without the mark that makes the main agent's chat pass it over. */
-function untagged(e: OpenAgentEvent): OpenAgentEvent {
+function untagged(e: RunEvent): RunEvent {
   if (e.kind !== 'driver' || !('subagent' in e.event)) return e
   const { subagent: _subagent, ...event } = e.event
-  return { ...e, event } as OpenAgentEvent
+  return { ...e, event } as RunEvent
 }

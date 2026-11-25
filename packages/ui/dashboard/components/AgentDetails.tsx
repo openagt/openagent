@@ -1,6 +1,6 @@
-import type { AgentMeta, OpenAgentEvent } from '../../src/index.js'
-import { DRIVER_LABELS, driverFromImpl } from '../../src/client.js'
-import { modelName, useModels } from '../lib/models.js'
+import type { AgentMeta } from '../../src/index.js'
+import type { RunEvent } from '@openagt/hooks'
+import { agentOf, modelName, useAgents } from '../lib/agents.js'
 import { formatDateTimeShort } from '../lib/format-date.js'
 
 // The session-details strip behind "Show details" in the session's menu (always available now, so the
@@ -13,7 +13,7 @@ import { formatDateTimeShort } from '../lib/format-date.js'
 // request is, because the bar goes once the work is landed and the request would go with it.
 
 /** What the record says the agent spent: the priced turns added up, and the turns it answered. */
-function spend(events: OpenAgentEvent[]): { costUsd?: number; turns: number } {
+function spend(events: RunEvent[]): { costUsd?: number; turns: number } {
   let costUsd: number | undefined
   let turns = 0
   for (const event of events) {
@@ -35,11 +35,10 @@ function Fact({ label, value }: { label: string; value: string }) {
   )
 }
 
-export function AgentDetails({ events, card, pr }: { events: OpenAgentEvent[]; card?: AgentDetailsCard | undefined; pr?: { number: number; url: string; state: string } | undefined }) {
-  const picked = driverFromImpl(card?.driver)
-  const agent = picked ? DRIVER_LABELS[picked] : card?.driver
-  const models = useModels()
-  const model = card?.model && modelName(picked ? models?.[picked] : undefined, card.model)
+export function AgentDetails({ events, card, pr }: { events: RunEvent[]; card?: AgentDetailsCard | undefined; pr?: { number: number; url: string; state?: string | undefined } | undefined }) {
+  const ran = agentOf(useAgents(), card?.driver)
+  const agent = ran?.label ?? card?.driver
+  const model = card?.model && modelName(ran, card.model)
   const { costUsd, turns } = spend(events)
 
   return (
@@ -55,7 +54,7 @@ export function AgentDetails({ events, card, pr }: { events: OpenAgentEvent[]; c
           <a href={pr.url} target="_blank" rel="noreferrer" className="text-primary hover:underline">
             #{pr.number}
           </a>
-          <span className="text-muted-foreground/70">{pr.state.toLowerCase()}</span>
+          {pr.state !== undefined && <span className="text-muted-foreground/70">{pr.state.toLowerCase()}</span>}
         </span>
       )}
       {costUsd === undefined && turns === 0 && <span className="text-muted-foreground/70">No spend reported yet</span>}

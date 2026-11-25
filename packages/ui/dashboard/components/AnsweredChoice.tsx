@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Check } from 'lucide-react'
-import type { ChoiceRequest } from '../../src/index.js'
+import type { ChoiceRequest } from '@openagt/hooks'
 import { pickedIds } from '../../src/client.js'
 import { cn } from '../lib/utils.js'
 

@@ -1,24 +1,14 @@
-import { useContext, useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
-import { ArrowLeft, Blocks, Bot, ChevronRight, ChevronsUpDown, Database, FolderGit2, Keyboard, Layers, Palette, X, FolderSearch } from 'lucide-react'
-import { DRIVERS, DRIVER_LABELS, isDriverName } from '../../src/client.js'
-import { driverOptions, useModels } from '../lib/models.js'
-import type { DriverOption } from './DriverModelMenu.js'
+import { ArrowLeft, Blocks, ChevronRight, ChevronsUpDown, Keyboard, Layers, Palette, X } from 'lucide-react'
 import type { ProjectSummary } from '../../src/index.js'
 import { DEFAULT_ORDER, useMountedModules, type MountedView } from '../lib/use-modules.js'
 
-import { PERMISSIONS_PAGE } from '../lib/use-route.js'
-import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
-import { inPlace } from '../lib/in-place.js'
 import { useIsMobile } from '../lib/use-mobile.js'
-import { usePreferences, updatePreferences } from '../lib/preferences.js'
 import { AppearanceSettings } from './AppearanceSettings.js'
-import { AGENT_DATA_ENTRY, AgentDataSettings } from './AgentDataSettings.js'
 import { SHORTCUTS_ENTRY, ShortcutList } from './ShortcutList.js'
-import { REPO_SOURCES_ENTRY, RepoSourcesSettings } from './RepoSourcesSettings.js'
 import { PickProject } from './PickProject.js'
-import { ProjectDot } from './ProjectPicker.js'
-import { PROJECT_AGENT_DATA_ENTRY, ProjectAgentDataSettings } from './ProjectAgentDataSettings.js'
+import { ProjectDot } from './SidebarProjectPicker.js'
 import { COMPUTER_PLUGINS_ENTRY, ComputerPluginsSettings, PLUGINS_ENTRY, ProjectPluginsSettings } from './PluginsSettings.js'
 import { ModuleSlot, projectsHaving } from './ModulePageView.js'
 import { buttonVariants } from './ui/button.js'
@@ -30,14 +20,14 @@ import { MENU_TRIGGER_OPEN_CLASS } from './ui/dropdown-menu.js'
 import { navRowClass } from './ui/nav-row.js'
 import { cn } from '../lib/utils.js'
 import { useProjectLabel } from '../lib/project-labels.js'
-import { SettingsFootContext, SettingsSection, SettingsSelectRow as SelectRow, ToggleRow, type SettingsOption as SelectOption } from './SettingsRows.js'
+import { SettingsFootContext } from './SettingsRows.js'
 
 // Settings (#958): a dialog over the page you are on, a list of entries on the left and the
 // picked entry's settings on the right. It opens from the person's menu and closes back to the
 // page under it; the address carries it (`?settings=<entry>`), so a reload or a link opens it again.
 //
 // The list has two groups, by whose the settings are. First, with no title: the dashboard's own
-// (how it looks, what it tells you, which agent runs) and the entries of the packages that are
+// (how it looks, what it tells you) and the entries of the packages that are
 // the computer's (Profile, Notifications), in one order by number: the dashboard's own stand at 20 to
 // 80, so a package's entry goes before them, between two, or after them; the plugins kept per person
 // or per computer, switched on and off, among them. Then "Project": the entries of the packages a
@@ -113,11 +103,14 @@ export function SettingsDialog({
       ...(section.order !== undefined ? { order: section.order } : {}),
       title: section.title,
       icon: section.icon,
-      body: (
-        <ModuleSlot package={section.package} label={`${section.title} settings`}>
-          <Body projects={projectsHaving(section.projects, of)} {...(openItem !== undefined && section.id === entry ? { item: openItem } : {})} />
-        </ModuleSlot>
-      ),
+      body:
+        section.pickProject !== undefined && !project ? (
+          <PickProject words={section.pickProject} projects={of.filter(p => section.projects.includes(p.id))} onPick={setPicked} />
+        ) : (
+          <ModuleSlot package={section.package} label={`${section.title} settings`}>
+            <Body projects={projectsHaving(section.projects, of)} {...(openItem !== undefined && section.id === entry ? { item: openItem } : {})} />
+          </ModuleSlot>
+        ),
     }
   }
   // Sorted once more with the dashboard's own: a package's entries are in their order already, and at the same number the dashboard's stands first.
@@ -136,7 +129,6 @@ export function SettingsDialog({
     projects.length > 0
       ? [
           oneProject(PLUGINS_ENTRY, 15, 'Plugins', Blocks, ProjectPluginsSettings, 'Each project switches its plugins on and off. Pick a project.'),
-          oneProject(PROJECT_AGENT_DATA_ENTRY, 50, 'Project agent data', Database, ProjectAgentDataSettings, 'Each project keeps its agent data in one place, your folder or its own repository. Pick a project.'),
         ]
       : []
   const projectEntries = [...ownForProject, ...forProject.map(section => moduleEntry(section, project ? [project] : projects))].sort(byOrder)
@@ -149,7 +141,7 @@ export function SettingsDialog({
   const inProject = projectEntries.includes(current)
   // With every project picked, an entry that changes something says which projects a change goes to.
   const shownSection = inProject && !project ? forProject.find(s => s.id === current.id) : undefined
-  const savedTo = shownSection && shownSection.readOnly !== true ? projectsHaving(shownSection.projects, projects) : []
+  const savedTo = shownSection && shownSection.readOnly !== true && shownSection.pickProject === undefined ? projectsHaving(shownSection.projects, projects) : []
 
   const item = (e: Entry) => {
     const Icon = e.icon
@@ -300,18 +292,8 @@ function ProjectSelect({ projects, value, onChange }: { projects: ProjectSummary
   )
 }
 
-/** The dashboard's own entries: how it looks, which agent runs, the plugins, your agent data, where repos come from, the keys. */
+/** The dashboard's own entries: how it looks, the plugins, your agent data, where repos come from, the keys. */
 function useOwnEntries(): Entry[] {
-  const preferences = usePreferences()
-  const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
-  // The start menu's own list (#1874), so Settings offers exactly the picks the menu does.
-  const models = useModels()
-  const drivers = driverOptions(models)
-  const driver = preferences.driver ?? DRIVERS[0]
-  const driverAnswer = isDriverName(driver) ? models?.[driver] : undefined
-  const missingDriver = isDriverName(driver) && driverAnswer !== undefined && 'missing' in driverAnswer && driverAnswer.missing ? DRIVER_LABELS[driver] : undefined
-  const model = preferences.model ?? ''
-
   return [
     {
       id: 'appearance',
@@ -321,76 +303,11 @@ function useOwnEntries(): Entry[] {
       body: <AppearanceSettings />,
     },
     {
-      id: 'agent',
-      order: 40,
-      title: 'Coding agent',
-      icon: Bot,
-      body: (
-        <SettingsSection>
-          <SelectRow
-            label="Coding agent"
-            description={
-              <>
-                Which coding agent runs the work.
-                {missingDriver !== undefined && (
-                  <>
-                    {' '}
-                    <span className="text-warning">{missingDriver} is not installed on this computer.</span>{' '}
-                    <a href={services.pageHref(PERMISSIONS_PAGE)} onClick={inPlace(() => services.openPage(PERMISSIONS_PAGE))} className="text-primary hover:underline">
-                      Install it on Permissions
-                    </a>
-                    .
-                  </>
-                )}
-              </>
-            }
-            value={driver}
-            options={drivers}
-            // A model is always one agent's own (the start menu's rule), so a new agent starts unpinned.
-            onChange={value => updatePreferences({ driver: value, model: '' })}
-          />
-          <SelectRow
-            label="Model"
-            description="The models the coding agent lists. Its own default when none is picked."
-            value={model}
-            options={modelOptions(drivers.find(d => d.value === driver), model)}
-            onChange={value => updatePreferences({ model: value })}
-          />
-          <ToggleRow
-            label="Name each run"
-            description="A small model names each run in a few words, for about a thirtieth of a cent. Off, a run is listed by what you asked for."
-            checked={preferences.nameRuns ?? true}
-            onChange={next => updatePreferences({ nameRuns: next })}
-          />
-          <ToggleRow
-            label="Show what the coding agent thought"
-            description="Inside a run of steps, a row for each thought between them. Off, the panel is the steps the coding agent took and nothing else."
-            checked={preferences.showThinking ?? false}
-            onChange={next => updatePreferences({ showThinking: next })}
-          />
-        </SettingsSection>
-      ),
-    },
-    {
       id: COMPUTER_PLUGINS_ENTRY,
       order: 45,
       title: 'Plugins',
       icon: Blocks,
       body: <ComputerPluginsSettings />,
-    },
-    {
-      id: AGENT_DATA_ENTRY,
-      order: 50,
-      title: 'Your agent data',
-      icon: FolderGit2,
-      body: <AgentDataSettings />,
-    },
-    {
-      id: REPO_SOURCES_ENTRY,
-      order: 60,
-      title: 'Repos',
-      icon: FolderSearch,
-      body: <RepoSourcesSettings />,
     },
     {
       id: SHORTCUTS_ENTRY,
@@ -402,18 +319,3 @@ function useOwnEntries(): Entry[] {
   ]
 }
 
-/**
- * The Model row's choices: the agent's own default first (the one pick the start menu has no entry
- * for, since a menu entry is always a real model), then the models the agent listed. A saved model
- * the list does not hold is kept, by its id, since that id is still what a start is given; a list
- * not answered yet, or that could not be had, says why in a line that cannot be picked.
- */
-function modelOptions(driver: DriverOption | undefined, model: string): SelectOption[] {
-  const listed = driver?.models ?? []
-  return [
-    { value: '', label: 'Default' },
-    ...listed,
-    ...(model && !listed.some(m => m.value === model) ? [{ value: model, label: model }] : []),
-    ...(listed.length === 0 && driver?.modelsNote ? [{ value: driver.modelsNote, label: driver.modelsNote, disabled: true }] : []),
-  ]
-}

@@ -1,14 +1,13 @@
 import { Skeleton } from './ui/skeleton.js'
 import { SentenceShape, Slot } from './ui/slot.js'
 import { useMountedModules } from '../lib/use-modules.js'
-import { GitHostsCard } from './GitHosts.js'
 import { ModuleSlot } from './ModulePageView.js'
 import { Page } from './Page.js'
 
 // The Permissions page: every account OpenAgent's agents work with, in one place. An agent can
-// reach what its accounts can, and nothing else is a permission. The modules' parts of the page
-// (`permissions.section`) come first, the coding agents' accounts among them, where an agent with
-// no account has a row that adds one; the git hosts' are the dashboard's (`GitHosts.tsx`).
+// reach what its accounts can, and nothing else is a permission. Every part of the page is a
+// module's (`permissions.section`): the coding agents' accounts, where an agent with no account has
+// a row that adds one, and the git hosts'.
 
 /** The Permissions page. */
 export function PermissionsPage() {
@@ -24,7 +23,6 @@ export function AccountsList() {
   return (
     <div className="space-y-8">
       <ModuleSections />
-      <GitHostsCard />
     </div>
   )
 }

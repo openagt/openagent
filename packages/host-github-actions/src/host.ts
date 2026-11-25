@@ -3,8 +3,8 @@ import { closeSync, mkdirSync, openSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { findRun, isRunId, listRuns, promptLines, type RunCard, nameHandOver, runIdFrom, runnerMark, runStderrPath } from '@openagt/agent-driver'
-import type { ProjectRef, RunFound, RunHost, RunInput, RunOptions, RunReadiness, RunRef, RunSummary, InboxLine, PromptLine } from '@openagt/hooks'
+import { findRun, isRunId, listRuns, promptLines, type RunCard, nameHandOver, runEvents, runIdFrom, runnerMark, runStderrPath, summaryOf } from '@openagt/agent-driver'
+import type { ProjectRef, RunFound, RunHost, RunInput, RunOptions, RunReadiness, RunRef, InboxLine, PromptLine } from '@openagt/hooks'
 import { GitHubError, githubRequest, type FetchLike } from './actions.js'
 import { ACTIONS_HOST, WORKFLOW, githubAccess, type GitHubAccess, type TurnRequest } from './turn.js'
 
@@ -123,13 +123,20 @@ export function actionsHost(deps: ActionsHostDeps = {}): RunHost {
       }
     },
 
-    async list(project) {
+    async list(project, wanted = {}) {
       if (!project) return []
-      const cards = await listRuns(project.dir).catch(() => [])
+      const ids = wanted.ids ? new Set(wanted.ids) : undefined
+      const since = wanted.since !== undefined ? Date.parse(wanted.since) : undefined
+      const cards = await listRuns(project.dir, since !== undefined ? { since } : {}).catch(() => [])
       return cards
-        .filter(card => card.caller?.['target'] === ACTIONS_HOST)
-        .map(card => summaryOf(card, project))
+        .filter(card => card.caller?.['target'] === ACTIONS_HOST && (!ids || ids.has(card.id)))
+        .map(card => summaryOf(card, { project: project.id, agents: [], deps: { host: ACTIONS_HOST, here, isAlive } }))
         .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
+    },
+
+    // The run's events are the ones its turns record, in the project's records.
+    async *events(run, signal) {
+      if (run.project && (await recordOf(run))) yield* runEvents(run.project.dir, run.id, signal)
     },
 
     async find(run): Promise<RunFound | undefined> {
@@ -141,7 +148,7 @@ export function actionsHost(deps: ActionsHostDeps = {}): RunHost {
           status: card.status,
           ...(typeof host === 'string' ? { host } : {}),
           ...(card.branch !== undefined ? { branch: card.branch } : {}),
-          ...(card.pr ? { pr: { number: card.pr.number } } : {}),
+          ...(card.pr ? { pr: { number: card.pr.number, url: card.pr.url } } : {}),
         },
         // The run's work is on the branch its turns pushed, on origin: never a checkout of this computer's to reclaim.
         changedNothing: false,
@@ -155,18 +162,6 @@ function inputOf(line: PromptLine): RunInput {
   return line.kind === 'answer' ? { answer: line.answer } : { text: line.text }
 }
 
-/** A run's record, as the host lists it. */
-function summaryOf(card: RunCard, project: ProjectRef): RunSummary {
-  return {
-    id: card.id,
-    project: project.id,
-    status: card.status === 'running' ? 'working' : card.status,
-    startedAt: card.startedAt,
-    ...(card.endedAt !== undefined ? { endedAt: card.endedAt } : {}),
-    ...(card.title !== undefined ? { title: card.title } : {}),
-    prompt: card.intent ?? '',
-  }
-}
 
 function alive(pid: number): boolean {
   try {

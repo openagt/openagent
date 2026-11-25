@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { DATA_BRANCH } from '@openagt/agent-data'
+import { DATA_BRANCH } from '@openagt/git-branches'
 import { findRun, listRuns, readDiary } from '../record-store.js'
 import { lasting, markerCard, recordRun, runnerMark, withdrawMarker, writeMarker } from './records.js'
 import { git, removeRepo, testRepo } from './test-repo.js'

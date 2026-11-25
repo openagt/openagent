@@ -1,16 +1,15 @@
-import { PROFILES_PAGE, PERMISSIONS_PAGE } from '../lib/use-route.js'
+import { PERMISSIONS_PAGE } from '../lib/use-route.js'
 import { RevealedTitle } from './RevealedTitle.js'
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
-import { Plus, Bot, SlidersHorizontal, Check, Folder, Laptop, LayoutDashboard, Blocks, FilePen, GitBranch, KeyRound } from 'lucide-react'
+import { Plus, SlidersHorizontal, Check, Folder, Laptop, LayoutDashboard, Blocks, FilePen, GitBranch, KeyRound } from 'lucide-react'
 import { HOST_ICON } from './RunOnMenu.js'
 import { hostOf, useRunHosts } from '../lib/run-hosts.js'
 import { PersonMark, personName } from './PersonMark.js'
 import { effortLabel } from '../lib/effort.js'
 import type { ComponentType } from 'react'
 import type { AgentMeta, AgentStatus, RecentAgent, ProjectSummary, Waiting } from '../../src/index.js'
-import { needsWord, waitingKey } from '../../src/client.js'
+import { waitingKey } from '../../src/client.js'
 import type { ModuleHostPerson } from '../module/index.js'
-import { DRIVER_LABELS, driverFromImpl } from '../../src/client.js'
 import { buttonVariants } from './ui/button.js'
 import { inPlace } from '../lib/in-place.js'
 import { formatRoute, type Route } from '../lib/route.js'
@@ -24,14 +23,14 @@ import { useRailScroll } from '../lib/rail-scroll.js'
 import { useProjectLabel } from '../lib/project-labels.js'
 import { runState } from '../lib/run-words.js'
 import { RunMark } from './RunMark.js'
-import { DriverLogo } from './driver-logos.js'
-import { modelName, useModels } from '../lib/models.js'
+import { agentOf, modelName, useAgents, useNamesRuns } from '../lib/agents.js'
+import { PackageLogo } from './Logins.js'
 import { PR_MARKS, type PrState } from '../lib/pr-marks.js'
 import { agentLabel, awaitingName } from '../lib/agent-label.js'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuCheckboxItem, DropdownMenuSeparator } from './ui/dropdown-menu.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
-import { ProjectPicker } from './ProjectPicker.js'
+import { SidebarProjectPicker } from './SidebarProjectPicker.js'
 import { navRowClass } from './ui/nav-row.js'
 import {
   Sidebar,
@@ -57,8 +56,8 @@ import { SidebarResizer } from './SidebarResizer.js'
 import { HideSidebarButton } from './SidebarToggle.js'
 import { JumpButton } from './JumpPalette.js'
 import { readAgentLogAhead } from '../lib/agent-log.js'
-import { onGitHostPeople } from '../rpc/people.js'
-import { personSaid, useGitHostPeople } from '../lib/use-git-host-people.js'
+import { onPeople } from '../rpc/people.js'
+import { personSaid, usePeople } from '../lib/use-people.js'
 import { usePerson } from '../lib/use-person.js'
 
 // One rendered row of the rail, from either source (a project's own run, or a pooled cross-project
@@ -97,10 +96,8 @@ export function AgentHistory({
   onSelectRecent,
   projects = [],
   onNewAgentInProject,
-  onProjectAdded,
   startTick = 0,
   startIntent = '',
-  startTitle,
   startId = null,
   startProjectName,
   working = false,
@@ -160,12 +157,8 @@ export function AgentHistory({
   projects?: ProjectSummary[]
   /** Start a new session in a project (its launcher). */
   onNewAgentInProject?: (projectId: string) => void
-  /** A project was just added, so the shell can refresh its list. */
-  onProjectAdded?: () => void
   startTick?: number
   startIntent?: string
-  /** The name the daemon had for that run before the run's own row is in: the stand-in shows it. */
-  startTitle?: string | undefined
   /** The id the start reported for its run: the row the stand-in waits for. */
   startId?: string | null
   /** The project that run was started in, by its label: the stand-in row names it as the run's own row will. */
@@ -188,7 +181,6 @@ export function AgentHistory({
       setOpenMobile(false)
       go(...args)
     }
-  // The coding agent picked for the next start: the stand-in row's logo.
   const preferences = usePreferences()
   const label = useProjectLabel()
   // The optimistic row, and the id of the run it stands in for.
@@ -278,6 +270,8 @@ export function AgentHistory({
 
   // A run listed in "Waiting on you" is not listed again in the Log.
   const waitingListed = new Set(waiting.slice(0, WAITING_SHOWN).flatMap(item => (item.run !== undefined ? [`${item.projectId}:${item.run}`] : [])))
+  // What waits on each run, by its project and its id: a row marks the work it left on this machine.
+  const waitingByRun = new Map(waiting.flatMap(item => (item.run !== undefined ? [[`${item.projectId}:${item.run}`, item] as const] : [])))
   const logged = rows.filter(row => !waitingListed.has(`${row.projectId}:${row.agent.id}`))
   // What a row shows beside its name and its age, and what the list is cut by: the person's picks
   // from the button beside "Log", all off until asked for. One project's list has no projects to cut it by.
@@ -288,7 +282,7 @@ export function AgentHistory({
   const hasRecents = rows.length > 0 || showOptimistic
 
   // Each row's person, in its own project.
-  const accountIn = useGitHostPeople(rows.map(row => ({ projectId: row.projectId, person: row.agent.person })), onGitHostPeople, 'sidebar:people')
+  const accountIn = usePeople(rows.map(row => ({ projectId: row.projectId, person: row.agent.person })), onPeople, 'sidebar:people')
   // A session with no project has no git host to ask who its person is: they are who a project's
   // host said they are, on another row of the list, so one person has one picture down the list.
   // Between two projects nothing is carried over: a project's host may know another person by the address.
@@ -304,7 +298,8 @@ export function AgentHistory({
   const yours = (person: string | undefined): boolean => person !== undefined && me?.email !== undefined && person.toLowerCase() === me.email
   const ownMark = (person: string | undefined): { name?: string; picture?: string } => (yours(person) && me ? { name: me.name, ...(me.avatar !== undefined ? { picture: me.avatar } : {}) } : {})
 
-  const models = useModels()
+  const codingAgents = useAgents()
+  const namesRuns = useNamesRuns()
   const pageHref = (segment: string) => hrefOf({ projectId: null, agentId: null, page: segment, ...(scope ? { scope } : {}) })
   const renderRow = (row: Row) => (
     <AgentHistoryRow
@@ -315,10 +310,10 @@ export function AgentHistory({
       intent={agentLabel(row.agent)}
       // A name is seconds away: the row holds the place rather than printing the whole prompt and
       // swapping it for the name a moment later.
-      naming={awaitingName(row.agent, preferences.nameRuns !== false)}
+      naming={awaitingName(row.agent, namesRuns)}
       driver={row.agent.driver}
       {...(row.agent.person ? { person: row.agent.person, account: accountOf(row.projectId, row.agent.person), ...ownMark(row.agent.person) } : {})}
-      {...(row.agent.model ? { model: modelName(models?.[driverFromImpl(row.agent.driver) ?? 'claude-code'], row.agent.model) } : {})}
+      {...(row.agent.model ? { model: modelName(agentOf(codingAgents, row.agent.driver), row.agent.model) } : {})}
       {...(row.agent.effort ? { effort: row.agent.effort } : {})}
       {...(row.agent.base ? { base: row.agent.base } : {})}
       // On the Overview the project is what tells the rows apart, so the row still names it; a
@@ -330,9 +325,7 @@ export function AgentHistory({
       {...(hostOf(row.agent.target) !== undefined ? { host: { id: hostOf(row.agent.target)!, projectId: row.projectId } } : {})}
       {...(row.agent.otherHost && row.agent.host ? { startedOn: row.agent.host } : {})}
       prs={runPrs(row.agent)}
-      {...(row.agent.unpublished ? { unpublished: row.agent.unpublished } : {})}
-      {...(row.agent.uncommitted ? { uncommitted: row.agent.uncommitted } : {})}
-      gitHost={projects.find(p => p.id === row.projectId)?.gitHost !== false}
+      {...workOf(waitingByRun.get(`${row.projectId}:${row.agent.id}`))}
       href={row.href}
       onClick={leave(row.onClick)}
       onNear={row.onNear}
@@ -370,7 +363,7 @@ export function AgentHistory({
             </span>
           </div>
           {/* The "Landing page | Dashboard" switch (`ViewToggle`) stood here: hidden for now, its code kept. */}
-          <ProjectPicker look="sidebar" none={{ label: 'All projects' }} picked={scope ?? null} pending={scopePending} projects={projects} onPick={onScope} onProjectAdded={onProjectAdded ?? (() => {})} />
+          <SidebarProjectPicker picked={scope ?? null} pending={scopePending} projects={projects} onPick={onScope} />
         </SidebarHeader>
         {/* Everything under the project select is one scroll (his pick, 2026-11-24): the pages, what
             waits and the Log. The pages used to stand still over the lists, which left the Log only
@@ -415,8 +408,7 @@ export function AgentHistory({
                       {known.map(page => (
                         <NavRow key={page.segment} icon={page.icon ?? Blocks} label={page.label} active={activePage === page.segment} href={pageHref(page.segment)} onClick={leave(() => onPage(page.segment))} />
                       ))}
-                      {/* The agents (Rom): each a name, skills and accounts, on a page of the dashboard's own; then the accounts they work with. */}
-                      <NavRow icon={Bot} label="Profiles" active={activePage === PROFILES_PAGE} href={pageHref(PROFILES_PAGE)} onClick={leave(() => onPage(PROFILES_PAGE))} />
+                      {/* Then the accounts OpenAgent's work goes as, on a page of the dashboard's own. */}
                       <NavRow icon={KeyRound} label="Permissions" active={activePage === PERMISSIONS_PAGE} href={pageHref(PERMISSIONS_PAGE)} onClick={leave(() => onPage(PERMISSIONS_PAGE))} />
                     </>
                   )}
@@ -467,12 +459,11 @@ export function AgentHistory({
                                   printing the prompt and having it swapped a second later. */}
                               <AgentHistoryRow
                                 status="running"
-                                {...(preferences.nameRuns === false ? { intent: optimistic?.intent ?? undefined } : startTitle !== undefined ? { intent: startTitle } : { intent: undefined, naming: true })}
+                                {...(!namesRuns ? { intent: optimistic?.intent ?? undefined } : { intent: undefined, naming: true })}
                                 {...(crossProject && startProjectName ? { project: startProjectName } : {})}
                                 subtitle="just now"
                                 age="now"
                                 show={show}
-                                driver={preferences.driver}
                                 active={starting}
                                 standIn
                                 onClick={leave(() => onSelect(null))}
@@ -553,7 +544,7 @@ function NavRow({
 
 // The "New" launcher: one click to the "New agent session" page, of the project picked at the top of
 // the rail, or with all of them showing, of no project. Where the session works is picked on that
-// page, in the row above the box (ProjectPicker), not here.
+// page, in the row above the box (the projects module's picker), not here.
 function NewButton({
   scope,
   href,
@@ -825,6 +816,18 @@ function PrMarks({ prs }: { prs: readonly RunPr[] }) {
 /** A state's word as a line of its own starts: "Open", "Needs answer". */
 const capitalised = (word: string): string => word.charAt(0).toUpperCase() + word.slice(1)
 
+/** The work a run left on this machine, as a row marks it: the mark of the item that says it, and its words. */
+export interface RunWork {
+  mark: 'changes' | 'branch'
+  said: string
+}
+
+/** A row's work mark, from what waits on its run: files never committed, or a branch never published. Nothing for any other item. */
+function workOf(item: Waiting | undefined): { work?: RunWork } {
+  if (item?.mark !== 'changes' && item?.mark !== 'branch') return {}
+  return { work: { mark: item.mark, said: [item.words, item.detail].filter(Boolean).join(' · ') } }
+}
+
 // One agent row, one line: the state's mark, the session's name and how long ago it started, as
 // Claude Code on the web lists its sessions. The name comes first (his pick, 2026-11-24): the row
 // used to carry the project, the person and the coding agent's logo too, wherever the rows of a
@@ -854,9 +857,7 @@ function AgentHistoryRow({
   host,
   startedOn,
   prs = [],
-  unpublished,
-  uncommitted,
-  gitHost = true,
+  work,
   person,
   account,
   name,
@@ -900,12 +901,8 @@ function AgentHistoryRow({
   startedOn?: string | undefined
   /** The run's pull requests, each with how it stands when the git host said: glyphs before the age. */
   prs?: readonly RunPr[]
-  /** How many commits of its own wait on its branch, never pushed: the Human Queue's "Needs PR", marked where a pull request would be. */
-  unpublished?: number | undefined
-  /** How many files its checkout left uncommitted: the Human Queue's "Needs commit", in the same place. */
-  uncommitted?: number | undefined
-  /** Whether its project can open a pull request: commits never pushed need one, else a push. */
-  gitHost?: boolean
+  /** The work it left on this machine, as what waits on the person says it: files never committed, or a branch never published. */
+  work?: RunWork | undefined
   /** Whose run it is, by the email its record is kept under. */
   person?: string | undefined
   /** Their account at the project's git host, when it said: their picture. */
@@ -915,7 +912,7 @@ function AgentHistoryRow({
   /** Their picture when the git host has none to give: the person's own, for their own runs. */
   picture?: string | undefined
 }) {
-  const picked = driverFromImpl(driver)
+  const ran = agentOf(useAgents(), driver)
   // The host it runs on, by the name its project's module gives it.
   const hostLabel = useRunHosts(host ? host.projectId : null).find(one => one.id === host?.id)?.label
   const onHost = host ? `Runs on ${hostLabel ?? 'another host'}` : undefined
@@ -929,15 +926,10 @@ function AgentHistoryRow({
   const { state: marked, word } = runState({ status, saving })
   const prWords = prs.map(pr => `#${pr.number}${pr.state ? ` ${PR_MARKS[pr.state].word}` : ''}`)
   const prSaid = prs.length > 0 ? `${prs.length === 1 ? 'PR' : 'PRs'} ${prWords.join(', ')}` : undefined
-  // Work that never left the machine, in the Human Queue's words and icon, gray (his pick): files left
-  // uncommitted first, since committing them is the run's next step.
-  const left = uncommitted
-    ? { Icon: FilePen, said: `${needsWord('uncommitted')} · ${uncommitted} file${uncommitted === 1 ? '' : 's'}` }
-    : unpublished
-      ? { Icon: GitBranch, said: `${needsWord('unpushed', gitHost)} · ${unpublished} commit${unpublished === 1 ? '' : 's'}` }
-      : undefined
+  // Work that never left the machine, in the Human Queue's words and icon, gray (his pick).
+  const left = work ? { Icon: work.mark === 'changes' ? FilePen : GitBranch, said: work.said } : undefined
   const personWords = person ? personSaid(person, account) : undefined
-  const agentSaid = picked ? [DRIVER_LABELS[picked], ...(model ? [model] : [])].join(' · ') : undefined
+  const agentSaid = ran ? [ran.label, ...(model ? [model] : [])].join(' · ') : undefined
   // Everything about the run in one sentence, the row's name for a reader that cannot see its
   // marks or point at it: the word, where the run is and when it started, whose it is, which
   // coding agent ran it, and the computer or host it ran on.
@@ -946,7 +938,7 @@ function AgentHistoryRow({
     ...(project ? [project] : []),
     subtitle,
     ...(personWords ? [personWords] : []),
-    ...(picked ? [DRIVER_LABELS[picked]] : []),
+    ...(ran ? [ran.label] : []),
     ...(startedOn ? [`started on ${startedOn}`] : []),
     ...(host ? [`runs on ${hostLabel ?? 'another host'}`] : []),
     ...(prSaid ? [prSaid] : []),
@@ -967,7 +959,7 @@ function AgentHistoryRow({
     ...(host ? [{ fact: 'Runs on', said: hostLabel ?? 'another host', node: <HOST_ICON className="size-3 shrink-0" aria-hidden /> }] : []),
   ]
   // A run whose model its record does not say is its coding agent's logo alone.
-  const ranOn = picked ? [...(model ? [model] : []), ...(model && effort ? [effortLabel(effort)] : [])] : undefined
+  const ranOn = ran ? [...(model ? [model] : []), ...(model && effort ? [effortLabel(effort)] : [])] : undefined
   const marks = (
     <>
       {/* The mark stands where a status word would, and carries that word for a reader who
@@ -1024,18 +1016,18 @@ function AgentHistoryRow({
           ) : (
             <PersonMark className={PERSON_MARK} />
           )}
-          {show.agent && picked && agentSaid && (
+          {show.agent && ran && agentSaid && (
             <span className="absolute -right-1.5 -bottom-1 flex size-3 items-center justify-center rounded-full bg-sidebar">
               <RowMark said={agentSaid}>
-                <DriverLogo driver={picked} className="size-2.5 text-muted-foreground" />
+                <PackageLogo svg={ran.logo} className="size-2.5 text-muted-foreground" />
               </RowMark>
             </span>
           )}
         </span>
       )}
-      {show.agent && !(show.person && (personWords || standIn)) && picked && agentSaid && (
+      {show.agent && !(show.person && (personWords || standIn)) && ran && agentSaid && (
         <RowMark said={agentSaid}>
-          <DriverLogo driver={picked} className="size-3.5 text-muted-foreground" />
+          <PackageLogo svg={ran.logo} className="size-3.5 text-muted-foreground" />
         </RowMark>
       )}
     </>
@@ -1087,9 +1079,9 @@ function AgentHistoryRow({
                 </span>
               </>
             )}
-            {picked && ranOn && (
-              <span role="img" aria-label={[DRIVER_LABELS[picked], ...ranOn].join(' · ')} className={cn('flex shrink-0 items-center gap-1.5 text-xs whitespace-nowrap', !person && 'flex-1')}>
-                <DriverLogo driver={picked} className="size-3.5 shrink-0" />
+            {ran && ranOn && (
+              <span role="img" aria-label={[ran.label, ...ranOn].join(' · ')} className={cn('flex shrink-0 items-center gap-1.5 text-xs whitespace-nowrap', !person && 'flex-1')}>
+                <PackageLogo svg={ran.logo} className="size-3.5 shrink-0" />
                 {ranOn[0] && <span>{ranOn[0]}</span>}
                 {ranOn[1] && <span className="text-muted-foreground">· {ranOn[1]}</span>}
               </span>

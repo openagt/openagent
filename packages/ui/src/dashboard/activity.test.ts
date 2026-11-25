@@ -4,7 +4,7 @@ import { buildActivity } from './activity.js'
 import type { ProjectSummary } from './projects.js'
 import type { AgentMeta } from '../store/index.js'
 
-const project = (id: string, path: string): ProjectSummary => ({ id, path, name: id, activated: true, gitHost: false })
+const project = (id: string, path: string): ProjectSummary => ({ id, path, name: id })
 
 const agent = (over: Partial<AgentMeta> = {}): AgentMeta => ({
   status: 'running',

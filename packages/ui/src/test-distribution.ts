@@ -12,8 +12,9 @@ import type { DashboardDistribution, DashboardPackage } from './distribution-pac
  */
 export const DASHBOARD_PACKAGES: DashboardDistribution = [
   { package: '@openagt/store-filesystem' },
-  { package: '@openagt/store-git-repository' },
+  { package: '@openagt/store-git-repository', for: 'computer' },
   { package: '@openagt/store-git-branch' },
+  { package: '@openagt/projects', for: 'computer' },
   { package: '@openagt/git-branches' },
   { package: '@openagt/github' },
   { package: '@openagt/skills' },
@@ -25,6 +26,7 @@ export const DASHBOARD_PACKAGES: DashboardDistribution = [
   { package: '@openagt/ui-renderer-markdown', for: 'computer' },
   { package: '@openagt/ui-card-waiting', for: 'computer' },
   { package: '@openagt/user-info', for: 'computer' },
+  { package: '@openagt/profiles', for: 'computer' },
 
   { package: '@openagt/notifications-command', for: 'computer' },
   { package: '@openagt/notifications-browser', for: 'computer', on: true },

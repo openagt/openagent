@@ -105,7 +105,7 @@ export function useLinkActions(
       // One project at a time, in the order given, only those that have the action's package;
       // the first failure ends the batch with its reason.
       for (const { projectId, links } of groups) {
-        if (!action.projects.includes(projectId) || links.length === 0) continue
+        if (!action.run || !action.projects.includes(projectId) || links.length === 0) continue
         result = await action.run(host, { projectId, links })
         if (!result.ok) break
       }

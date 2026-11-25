@@ -1,13 +1,12 @@
-import { resolveProjectPath, runHostOf } from './context.js'
+import { contextProjects, resolveProjectPath, runHostOf } from './context.js'
 import { findComputerModule, findProjectModule } from '../project-modules.js'
-import { providedDataChanged } from '../store/provided.js'
-import { callModuleFunction, computerHost, functionKind, serverHost, type ModuleCallResult } from '../dashboard/module-host.js'
-import { distributionSettings, projectRefAt, runRefAt } from '../distribution-hooks.js'
+import { callModuleFunction, computerHost, functionKind, serverHost, type ComputerHostDeps, type ModuleCallResult } from '../dashboard/module-host.js'
+import { distributionHooks, projectRefAt, runRefAt } from '../distribution-hooks.js'
 import { SESSIONS_ID } from '../project-address.js'
 
-import { pullProjectData } from '@openagt/agent-data'
-import type { ProjectRef, RunFound, RunQuestion, RunRef } from '@openagt/hooks'
-import { loadAgentEvents } from '../store/index.js'
+import type { ProjectRef, RunFacts, RunFound, RunQuestion, RunRef } from '@openagt/hooks'
+import type { ModuleOn } from '@openagt/hooks/rpc'
+import { readRunEvents } from '../store/index.js'
 import { pendingChoices } from '../open-choices.js'
 import { sayForModule } from '../dashboard/run-inbox.js'
 
@@ -20,8 +19,8 @@ export type { ModuleCallResult } from '../dashboard/module-host.js'
  * Call function `name` of a module's server part in one project (`@openagt/hooks/rpc`): how a
  * module's browser part reads, or changes, what a command cannot answer fast enough. Refused for
  * an unknown project, a package that is not a module of that project, and a module with no server
- * part. An act is followed as a command's is (`modules.ts`' runModuleCommand): the project's data is
- * converged with origin, and what was read of the package's data is forgotten. With `null` for
+ * part. An act is followed as a command's is (`modules.ts`' runModuleCommand): the modules on in
+ * the project are told it wrote the project's data (`projectWritten`). With `null` for
  * the project, it is a call of a package that is this computer's ({@link callComputerModule}).
  */
 export async function callModule(projectId: string | null, pkg: string, name: string, input: unknown): Promise<ModuleCallResult> {
@@ -32,24 +31,54 @@ export async function callModule(projectId: string | null, pkg: string, name: st
   if (!root) return { ok: false, error: 'unknown project' }
   if (!module) return { ok: false, error: `${pkg} is no module of this project` }
   if (!module.server) return { ok: false, error: `${pkg} has no server part` }
-  const host = serverHost(root, await distributionSettings(), {
-    project: projectOnce(projectId, root),
+  const project = projectOnce(projectId, root)
+  const host = serverHost(root, await distributionHooks(), {
+    ...COMPUTER,
+    project,
     find: runsFound(projectId, root),
-    questions: agentId => runQuestions(root, agentId),
+    questions: agentId => runQuestions(projectId, root, agentId),
     say: (agentId, line) => sayForModule(projectId, root, agentId, line),
+    record: (agentId, facts) => recordFor(projectId, root, agentId, facts),
+    modulesOn: async opts => modulesOn(await project(), opts?.every === true),
   })
   const result = await callModuleFunction(module.server, name, host, input)
-  if (kind === 'act') {
-    await pullProjectData(root, { log: () => {} }).catch(() => {})
-    providedDataChanged(root, pkg)
-  }
+  const written = kind === 'act' ? await project() : undefined
+  if (written) await (await distributionHooks()).projectWritten(written).catch(() => {})
   return result
+}
+
+/** What every function is handed of this computer: its projects, and OpenAgent's accounts at the git hosts, as the modules' `account.access` answers for them. */
+const COMPUTER: ComputerHostDeps = {
+  projects: async () => Promise.all((await contextProjects().list()).map(project => projectRefAt(project.id, project.path))),
+  accounts: {
+    hosts: async () => (await distributionHooks()).gitAccounts.hosts(),
+    sendAs: async (host, login) => (await distributionHooks()).gitAccounts.sendAs(host, login),
+    mergeCommit: async (dir, branch, number) => (await distributionHooks()).gitAccounts.mergeCommit(dir, branch, number),
+    runAs: async (dir, login) => (await distributionHooks()).gitAccounts.runAs(dir, login),
+    people: async (dir, emails) => (await distributionHooks()).gitAccounts.people(dir, emails),
+  },
 }
 
 /** The project `projectId` at `root`, as a hook is given it, read once for the call and only when asked: a session with no project is none. */
 function projectOnce(projectId: string, root: string): () => Promise<ProjectRef | undefined> {
   let project: Promise<ProjectRef | undefined> | undefined
   return () => (project ??= projectId === SESSIONS_ID ? Promise.resolve(undefined) : projectRefAt(projectId, root))
+}
+
+/**
+ * The modules on in `project` (none: a session with no project), each with the skills it gives its
+ * runs and whether it has a step of them; with `every`, every module of the distribution's.
+ */
+async function modulesOn(project: ProjectRef | undefined, every: boolean): Promise<ModuleOn[]> {
+  const hooks = await distributionHooks()
+  const where = project ? { project } : {}
+  const [on, given, steps] = await Promise.all([every ? hooks.modules : hooks.on(project), hooks.skills(where, { every }), every ? [] : hooks.steps({ ...where, options: {} })])
+  return on.map(module => ({
+    name: module.name,
+    plugin: module.plugin !== undefined,
+    skills: given.filter(skill => skill.module === module.name).map(skill => skill.name),
+    steps: every ? module.hooks['run.step'] !== undefined : steps.some(step => step.module === module.name),
+  }))
 }
 
 /**
@@ -66,9 +95,23 @@ function runsFound(projectId: string, root: string): (agentId: string) => Promis
   }
 }
 
-/** The questions run `agentId` of the project at `root` still waits on, read off its events by the rule every surface reads them by. */
-async function runQuestions(root: string, agentId: string): Promise<RunQuestion[]> {
-  return pendingChoices((await loadAgentEvents(root, agentId).catch(() => undefined)) ?? []).map(question => ({ ...question, options: [...question.options] }))
+/**
+ * Write `facts` down on run `agentId`'s record, in the project at `root`, through the run's host
+ * (`RunHost.record`): what a module's press did, such as the pull request it opened. The record is
+ * what its page reads once the branch is gone.
+ */
+async function recordFor(projectId: string, root: string, agentId: string, facts: RunFacts): Promise<void> {
+  const run = await runRefAt(projectId, root, agentId)
+  const host = await runHostOf(run)
+  if (!host.record) throw new Error(`A session on ${host.label} keeps no record here.`)
+  await host.record(run, facts)
+}
+
+/** The questions run `agentId` of the project at `root` still waits on, read off its events (as its host says them) by the rule every surface reads them by. */
+async function runQuestions(projectId: string, root: string, agentId: string): Promise<RunQuestion[]> {
+  const run = await runRefAt(projectId, root, agentId)
+  const events = await readRunEvents(await runHostOf(run), run).catch(() => undefined)
+  return pendingChoices(events ?? []).map(question => ({ ...question, options: [...question.options] }))
 }
 
 /**
@@ -80,5 +123,5 @@ async function callComputerModule(pkg: string, name: string, input: unknown): Pr
   const module = await findComputerModule(pkg).catch(() => undefined)
   if (!module) return { ok: false, error: `${pkg} is not this computer's` }
   if (!module.server) return { ok: false, error: `${pkg} has no server part` }
-  return callModuleFunction(module.server, name, computerHost(await distributionSettings()), input)
+  return callModuleFunction(module.server, name, computerHost(await distributionHooks(), COMPUTER), input)
 }

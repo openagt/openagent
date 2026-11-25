@@ -1,6 +1,5 @@
 import { ArrowLeft } from 'lucide-react'
-import type { AgentWorktree, OpenAgentEvent } from '../../src/index.js'
-import { formatBytes } from '../../src/client.js'
+import type { RunEvent } from '@openagt/hooks'
 import { AgentActionsMenu } from './AgentActionsMenu.js'
 import { AgentErrorCount } from './AgentErrorCount.js'
 import { PaneToggles, TopBar } from './Panes.js'
@@ -25,37 +24,33 @@ export function AgentActionBar({
   events,
   live = false,
   retainedWorktree = false,
-  onWorktreeRemoved,
   onDeleted,
-  onProjectRemoved,
   label,
   naming,
   expanded = false,
   onToggle,
   ready = true,
-  checkout,
   status,
   onBack,
+  resumeCommand,
 }: {
   projectId: string
   /** Which run Stop addresses (#749). */
   agentId?: string | null | undefined
-  events: OpenAgentEvent[]
+  events: RunEvent[]
   /** The run works, as its page knows it: its menu offers Stop. */
   live?: boolean
   /** The session's name: it leads the bar, and is the button of the session's menu. */
   label?: string | undefined
+  /** The command that picks the session's agent session back up in a terminal, as its coding agent says it: the session's menu copies it. */
+  resumeCommand?: string | undefined
   /** The name is still being made: see AgentActionsMenu. */
   naming?: boolean | undefined
-  /** True when this finished agent still has a worktree on disk, so it can be removed (#737). */
+  /** True when this finished agent still has a worktree on disk (#737): its menu opens that folder. */
   retainedWorktree?: boolean
-  /** Told after that worktree is removed, so the menu item goes. */
-  onWorktreeRemoved?: () => void
   /** Told after this session is deleted, so the caller can leave it (#1032). Given only for a
    * finished run: absent, no delete is offered. */
   onDeleted?: (() => void) | undefined
-  /** Told once the project is off the list; given, the project's menu offers "Remove project". */
-  onProjectRemoved?: (() => void) | undefined
   /** Whether the details strip the caller renders under this bar is shown. */
   expanded?: boolean
   /** Given, the session's menu shows and hides that strip. */
@@ -66,15 +61,11 @@ export function AgentActionBar({
    * and a fact still on screen from the run before read as this one's.
    */
   ready?: boolean
-  /** The agent's checkout as the page read it (`null`: not answered yet), read once for this bar and the one above the message box. */
-  checkout: AgentWorktree | null
   /** The run's state as the run table names it (`shownStatus`), once it is known. */
   status?: string | undefined
   /** Given, a phone's bar starts with a back arrow that calls it: a phone's session page has no bar of pages. */
   onBack?: (() => void) | undefined
 }) {
-  // Only once nothing is writing to the worktree is there a size to say (#798).
-  const size = ready ? formatBytes(checkout?.checkout?.sizeBytes, '') : ''
   return (
     // The row is as tall as the "New agent session" page's (ProjectActions) and as an
     // open pane's header, so the three stand level; unlike a pane's, it has no line under it.
@@ -97,10 +88,9 @@ export function AgentActionBar({
           label={label}
           {...(naming ? { naming } : {})}
           retainedWorktree={retainedWorktree}
-          onWorktreeRemoved={onWorktreeRemoved}
           onDeleted={onDeleted}
           {...(onToggle ? { details: { open: expanded, onToggle } } : {})}
-          size={size}
+          resumeCommand={resumeCommand}
         />
         {/* The run's state after its name on a desktop; a phone's bar keeps its width for the name, and
             the first screenful shows the state (the failed end, the commits and their press, the question): a screen reader still hears it here. */}
@@ -112,7 +102,7 @@ export function AgentActionBar({
             count is only useful if it is whole. */}
         {ready && <AgentErrorCount events={events} />}
         {/* A session with no project has no project's menu. */}
-        <PaneToggles before={projectId !== SESSIONS_ID && <ProjectMenu projectId={projectId} onProjectRemoved={onProjectRemoved} />} />
+        <PaneToggles before={projectId !== SESSIONS_ID && <ProjectMenu projectId={projectId} />} />
       </div>
     </TopBar>
   )

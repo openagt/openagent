@@ -31,6 +31,10 @@ are on as their repositories stand: your folder's sync with a repository of your
 agent data**. A run gets the skills of the core modules (github's on a GitHub project) and of the
 plugins on in its project, linked into its checkout; nothing is written into the project.
 
+The projects are [`@openagt/projects`](../projects/README.md)'s: the list, the project picker
+above the launcher's box, **Remove project…** in a project's menu, after which every module cleans
+up what it left there, and **Settings › Repos**, the folders searched for repos.
+
 ## The command is four options and no verbs
 
 ```
@@ -62,30 +66,30 @@ project's main branch, fetched first; **My local branch**, the branch the projec
 on, with its commits that are not pushed (edits that are not committed are not carried); or
 another of the branches origin has now, fetched first. The pick is saved per project. The local
 pick names the branch, and another of origin's its full name (`refs/remotes/origin/<branch>`),
-so the run can tell them apart; `agent-driver` fetches it. The menu is shown for a project with
-a remote whose folder is on a branch.
+so the run can tell them apart; `@openagt/git-branches`, whose menu it is, fetches it before it
+makes the run's branch. The menu is shown for a project with a remote whose folder is on a branch.
 
 A run started from another branch origin has opens its pull request into that branch, unless the
-Auto menu says main. Otherwise the pull request goes to main.
+gear's **Pull request into** line (`@openagt/github`) says main. Otherwise the pull request goes to
+main.
 
-A session with no project may have repos as context, ticked in **Context** under the box:
-`agent-driver` copies each into the session's folder.
+A session with no project may have repos as context, ticked in **Repos** under the box
+(`@openagt/git-branches`), which copies each into the session's folder; **Context** beside it holds
+the files the next message goes with.
 
-The session's profile and its GitHub account (the **Profile** and **GitHub account** lines of the
-gear's menu under the box) go with the Start: `agent-driver` hands them to the run's process in its environment,
-`OPENAGENT_PROFILE` and `OPENAGENT_GIT_ACCOUNT`. A profile is a name and a saved set of run options
-(its accounts, the plugins its runs go without, and the project skills they get), kept with the
-person and edited on the Profiles page; the run reads it as it starts, and again when it
-resumes.
-
-The **Skills** line of the gear's menu picks, for this session alone, which skills the run gets: the
-plugins on in the project, each ticked, tickable off, and which of the project's own skills stay
-in its checkout, both as the profile has them until the session picks. The picks go the same way,
-in `OPENAGENT_PLUGINS_WITHOUT` (names, comma-separated; set to nothing, none of them) and
-`OPENAGENT_PROJECT_SKILLS` (`all`, `none` or names), the profile's where one is unset: the run
-gets none of the skills or steps of a plugin it goes without, and the project skills not picked
-are left out of its checkout with git's sparse checkout, nothing committed. The record keeps the
-picks, and a resume goes on with them.
+The gear's menu under the box starts with the modules' lines. **Profile** (`@openagt/profiles`)
+picks the profile of every next run on this computer: a name and a saved set of run options, kept with
+the person and edited on the Profiles page, whose editor draws every module's control of the box.
+`agent-driver` puts the run on it where the run's options name none, and the record keeps it.
+**Skills** (`@openagt/skills`) picks, for this run alone, which skills it gets: the plugins on in the
+project, each ticked, tickable off, and which of the project's own skills stay in its checkout, both
+as the profile has them until a pick there. The picks are the run's options (`plugins.without`,
+`skills.project`): the run gets none of the skills or steps of a plugin it goes without, and the
+project skills not picked are left out of its checkout with git's sparse checkout, nothing
+committed. The record keeps them, and a resume goes on with them. **GitHub account**
+(`@openagt/github`) picks the account every next run on this computer works as on GitHub, else the
+one runs use (Permissions › Use for runs); a profile can name its own. The run works as it, and its
+record keeps it.
 
 Before a Start, the launcher asks the host's check, for the picked coding agent: its
 `problems` (a coding agent not installed or logged out) are said in red and its `warnings` in
@@ -106,7 +110,9 @@ them through the package's server part, as `scheduler status` says them, and sav
 The dashboard is a **projection of the agent's own files**. The agent's tool keeps the
 agent's card (`<id>.json`) and diary (`<id>.jsonl`) under `.openagent/` in the agent's
 checkout, and copies both onto the project's `agent-data` branch when the agent ends.
-Everything the dashboard shows — live, and months later — it reads from those two files.
+Everything the dashboard shows — live, and months later — comes from those two files, read
+through this computer's run host (`agent-driver`'s), which merges a working run's card over its
+record and streams its diary.
 
 Steering goes back the same way, never over a channel:
 

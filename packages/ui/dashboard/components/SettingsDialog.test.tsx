@@ -5,8 +5,8 @@ import { refreshPreferences } from '../lib/preferences.js'
 import { forgetRemembered } from '../lib/use-async.js'
 
 import { ModulesContext, byMountOrder, mountedOf, type MountedModules, type MountedView } from '../lib/use-modules.js'
-import { CalendarClock, Globe, Puzzle, Ticket, UserRound } from 'lucide-react'
-import { checked, choices, closeList, offered, openList, pick, showing } from '../test-controls.js'
+import { CalendarClock, Database, FolderGit2, Globe, Puzzle, Ticket, UserRound } from 'lucide-react'
+import { checked, choices, pick, showing } from '../test-controls.js'
 
 // The reads Settings makes, answered as an empty computer: no editors detected, no stored
 // preferences.
@@ -20,18 +20,8 @@ vi.mock('../rpc/preferences.js', async importOriginal => ({
   patchPreferences: prefsSaved,
 }))
 
-// The coding agents' own lists, as the daemon asked them: Claude Code answered, Codex could not.
-const onModels = vi.hoisted(() =>
-  vi.fn(async () => ({
-    'claude-code': { models: [{ id: 'opus', name: 'Opus 5.5' }, { id: 'claude-fable-5-1', name: 'Fable 5.1' }] },
-    codex: { models: [], error: 'not logged in' },
-  })),
-)
-vi.mock('../rpc/models.js', () => ({ onModels }))
 // Its own suite reads the accounts; here the entry is its name.
 vi.mock('./RepoSourcesSettings.js', () => ({ REPO_SOURCES_ENTRY: 'repos', RepoSourcesSettings: () => <p>Where repos are found</p> }))
-vi.mock('./AgentDataSettings.js', () => ({ AGENT_DATA_ENTRY: 'agent-data', AgentDataSettings: () => <p>Where the agent data is</p> }))
-vi.mock('./ProjectAgentDataSettings.js', () => ({ PROJECT_AGENT_DATA_ENTRY: 'project-agent-data', ProjectAgentDataSettings: () => <p>Where this project's agent data is</p> }))
 vi.mock('../rpc/reads.js', async importOriginal => ({
   ...(await importOriginal<typeof import('../rpc/reads.js')>()),
   onPreferences: vi.fn(async () => ({})),
@@ -87,8 +77,6 @@ describe('Settings dropdowns (#1172)', () => {
       }
     }
     await usable(['Project', 'Font', 'Code font', 'File preview font', 'Editor'])
-    fireEvent.click(screen.getByRole('button', { name: 'Coding agent' }))
-    await usable(['Project', 'Coding agent', 'Model'])
   })
 
   test('an editor list the daemon could not fill still leaves a usable Editor row', async () => {
@@ -129,111 +117,33 @@ describe('Settings › Appearance, its pictures and swatches', () => {
   })
 })
 
-describe('Settings › Coding agent', () => {
-  test('a coding agent that is not installed says so in its row, with the way to Permissions, where it is installed', async () => {
-    const answered = onModels.getMockImplementation()!
-    onModels.mockResolvedValue({ 'claude-code': { models: [], error: 'not found', missing: true }, codex: { models: [], error: 'not logged in' } } as never)
-    prefsRead.mockResolvedValueOnce({})
-    refreshPreferences()
-    try {
-      open('agent')
-      expect(await screen.findByText('Claude Code is not installed on this computer.')).toBeTruthy()
-      expect(screen.getByRole('link', { name: 'Install it on Permissions' }).getAttribute('href')).toBe('/permissions')
-    } finally {
-      onModels.mockImplementation(answered)
-    }
-  })
-
-  test("the Model row offers the agent's own list, the start menu's, after the agent's own default", async () => {
-    prefsRead.mockResolvedValueOnce({})
-    refreshPreferences()
-    open('agent')
-    await waitFor(async () =>
-      expect(await offered(select('Model'))).toEqual([
-        ['Default', false],
-        ['Opus 5.5', false],
-        ['Fable 5.1', false],
-      ]),
-    )
-    expect(showing(select('Model'))).toBe('Default')
-    // Each is saved by the id the agent gave it, and the agent's own default as no model at all.
-    await pick(select('Model'), 'Opus 5.5')
-    await pick(select('Model'), 'Fable 5.1')
-    await pick(select('Model'), 'Default')
-    expect(saves()).toEqual([{ model: 'opus' }, { model: 'claude-fable-5-1' }, { model: '' }])
-    expect(showing(select('Model'))).toBe('Default')
-  })
-
-  test('a saved model the agent does not list is kept, by its id, since a start is still given it', async () => {
-    prefsRead.mockResolvedValueOnce({ model: 'fable' })
-    refreshPreferences()
-    open('agent')
-    await waitFor(() => expect(showing(select('Model'))).toBe('fable'))
-    await waitFor(async () => expect((await choices(select('Model'))).slice(0, -1)).toEqual(['Default', 'Opus 5.5', 'Fable 5.1']))
-    expect((await offered(select('Model'))).at(-1)).toEqual(['fable', false])
-    // The line is the saved id itself, not only its words: it is the one the list marks as the pick.
-    const lines = within(await openList(select('Model'))).getAllByRole('option')
-    expect(lines.map(line => line.getAttribute('aria-selected'))).toEqual(['false', 'false', 'false', 'true'])
-    await closeList(select('Model'))
-  })
-
-  test('an agent that could not list its models says why, in a line that cannot be picked', async () => {
-    prefsRead.mockResolvedValueOnce({ driver: 'codex' })
-    refreshPreferences()
-    open('agent')
-    await waitFor(() => expect(showing(select('Coding agent'))).toBe('Codex'))
-    await waitFor(async () =>
-      expect(await offered(select('Model'))).toEqual([
-        ['Default', false],
-        ['not logged in', true],
-      ]),
-    )
-  })
-
-  test("picking another agent leaves the model unpinned: a model is one agent's own", async () => {
-    prefsRead.mockResolvedValueOnce({ model: 'opus' })
-    refreshPreferences()
-    open('agent')
-    await waitFor(() => expect(showing(select('Model'))).toBe('Opus 5.5'))
-    expect(await choices(select('Coding agent'))).toEqual(['Claude Code', 'Codex'])
-    await pick(select('Coding agent'), 'Codex')
-    expect(saves()).toEqual([{ driver: 'codex', model: '' }])
-    expect(showing(select('Coding agent'))).toBe('Codex')
-    expect(showing(select('Model'))).toBe('Default')
-  })
-})
-
 describe('Settings on and off rows', () => {
   const row = (label: string) => screen.getByRole('switch', { name: label })
 
   test('each is a switch that shows what is saved, and switching it saves that one setting at once', async () => {
     prefsRead.mockResolvedValueOnce({ showThinking: true })
     refreshPreferences()
-    open('agent')
+    open('appearance')
     await waitFor(() => expect(checked(row('Show what the coding agent thought'))).toBe(true))
     // No box to tick anywhere among Settings' own rows: on and off is a switch.
     const switches = () => screen.getAllByRole('switch').map(each => [each.getAttribute('aria-label'), checked(each)])
     expect(switches()).toEqual([
-      // Naming a run costs money for something only a person looks at, so it is a switch — on
-      // until it is turned off, since a list of first lines is what it was put there to fix.
-      ['Name each run', true],
       ['Show what the coding agent thought', true],
+      ['Discover OpenAgent on the Overview', true],
     ])
-    fireEvent.click(row('Name each run'))
-    expect(checked(row('Name each run'))).toBe(false)
     fireEvent.click(row('Show what the coding agent thought'))
     expect(checked(row('Show what the coding agent thought'))).toBe(false)
-    expect(saves()).toEqual([{ nameRuns: false }, { showThinking: false }])
+    expect(saves()).toEqual([{ showThinking: false }])
   })
 
   test("a click on a switch's name switches it, as a click on the switch does", async () => {
-    prefsRead.mockResolvedValueOnce({ nameRuns: false })
+    prefsRead.mockResolvedValueOnce({ showThinking: false })
     refreshPreferences()
-    open('agent')
-    await waitFor(() => expect(checked(row('Name each run'))).toBe(false))
-    fireEvent.click(screen.getByText('Name each run'))
-    expect(checked(row('Name each run'))).toBe(true)
-    expect(saves()).toEqual([{ nameRuns: true }])
+    open('appearance')
+    await waitFor(() => expect(checked(row('Show what the coding agent thought'))).toBe(false))
+    fireEvent.click(screen.getByText('Show what the coding agent thought'))
+    expect(checked(row('Show what the coding agent thought'))).toBe(true)
+    expect(saves()).toEqual([{ showThinking: true }])
   })
 })
 
@@ -253,9 +163,9 @@ describe('Settings › Appearance', () => {
 describe('the Settings list', () => {
   const mounted = (sections: MountedView<'settings.section'>[]): MountedModules => mountedOf({ views: { 'settings.section': sections } })
   const PROJECTS = [
-    { id: 'p1', name: 'gemstack', gitHost: true },
-    { id: 'p2', name: 'other', gitHost: true },
-    { id: 'p3', name: 'plain', gitHost: true },
+    { id: 'p1', name: 'gemstack' },
+    { id: 'p2', name: 'other' },
+    { id: 'p3', name: 'plain' },
   ]
   /** A package's settings that says which projects it was given. */
   const Given = ({ projects }: { projects: { name: string }[] }) => <p>{`for: ${projects.map(p => p.name).join(', ') || 'no project'}`}</p>
@@ -277,6 +187,18 @@ describe('the Settings list', () => {
   const MODULES = mounted([
     PROFILE,
     { place: 'settings.section', id: 'claude-web', title: 'Claude web', icon: Globe, order: 90, View: Given, package: '@openagt/host-claude-web', projects: [], computer: true },
+    { place: 'settings.section', id: 'agent-data', title: 'Your agent data', icon: FolderGit2, order: 50, View: () => <p>Where the agent data is</p>, package: '@openagt/store-git-repository', projects: [], computer: true },
+    {
+      place: 'settings.section',
+      id: 'project-agent-data',
+      title: 'Project agent data',
+      icon: Database,
+      order: 50,
+      pickProject: 'Each project keeps its agent data in one place, your folder or its own repository. Pick a project.',
+      View: ({ projects }) => <p>{`Where ${projects.map(p => p.name).join(', ')}’s agent data is`}</p>,
+      package: '@openagt/store-git-branch',
+      projects: ['p1', 'p2', 'p3'],
+    },
     { place: 'settings.section', id: 'tickets', title: 'Tickets', icon: Ticket, View: Given, package: '@openagt/tickets', projects: ['p1', 'p2', 'gone'] },
     { place: 'settings.section', id: 'scheduler', title: 'Scheduler', icon: CalendarClock, View: Broken, package: '@openagt/scheduled-agents', projects: ['p2'] },
     { place: 'settings.section', id: 'skills', title: 'Skills', icon: Puzzle, order: 10, View: Ticks, package: '@openagt/skills', projects: ['p1', 'p2', 'p3'] },
@@ -293,7 +215,7 @@ describe('the Settings list', () => {
 
   test("two groups: yours and this computer's, the computer's packages among them; then the picked project's packages", () => {
     show('', 'p1')
-    expect(entries('You and this computer')).toEqual(['Profile', 'Appearance', 'Coding agent', 'Plugins', 'Your agent data', 'Repos', 'Keyboard shortcuts', 'Claude web'])
+    expect(entries('You and this computer')).toEqual(['Profile', 'Appearance', 'Plugins', 'Your agent data', 'Keyboard shortcuts', 'Claude web'])
     // gemstack has tickets and no scheduler; every project has its skills, whose entry says it goes first, and its plugins.
     expect(entries('Project')).toEqual(['Skills', 'Plugins', 'Project agent data', 'Tickets', 'List'])
     expect(showing(select('Project'))).toBe('gemstack')
@@ -361,11 +283,11 @@ describe('the Settings list', () => {
     show('project-agent-data')
     expect(title()).toBe('SettingsAll projectsProject agent data')
     expect(screen.getByText(/your folder or its own repository\. Pick a project\./)).toBeTruthy()
-    expect(screen.queryByText("Where this project's agent data is")).toBeNull()
+    expect(screen.queryByText(/’s agent data is/)).toBeNull()
     // No line says it saves to several.
     expect(screen.queryByText(/^Saved to/)).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'other' }))
-    expect(await screen.findByText("Where this project's agent data is")).toBeTruthy()
+    expect(await screen.findByText('Where other’s agent data is')).toBeTruthy()
     expect(showing(select('Project'))).toBe('other')
     expect(title()).toBe('SettingsotherProject agent data')
   })
@@ -383,7 +305,7 @@ describe('the Settings list', () => {
         <SettingsDialog entry="profile" onEntry={() => {}} onClose={onClose} scope={null} projects={[]} />
       </ModulesContext.Provider>,
     )
-    expect(entries('You and this computer')).toEqual(['Profile', 'Appearance', 'Coding agent', 'Plugins', 'Your agent data', 'Plain', 'Lights', 'Repos', 'Keyboard shortcuts'])
+    expect(entries('You and this computer')).toEqual(['Profile', 'Appearance', 'Plugins', 'Plain', 'Lights', 'Keyboard shortcuts'])
   })
 
   test('opened with no entry, a computer shows the first and its address says so; a phone shows the list, whose address is none', () => {

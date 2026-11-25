@@ -15,7 +15,7 @@ import { openMenu, phoneScreen } from '../../ui/dashboard/test-utils.js'
 // own `done` and `add`. What other packages tell it (what a path into the project's files is called)
 // comes through the dashboard's mounted modules, faked here by what such a package would declare.
 
-const alpha = { id: 'p1', name: 'alpha', gitHost: true }
+const alpha = { id: 'p1', name: 'alpha', remote: 'github.com/me/project' }
 const PLAN = 'Create tickets/2026-08-01_login-page.plan.md'
 const FULL: PlacedEntry[] = [{ entry: 'Hand-written on top' }, { entry: 'Hot fix', priority: 8 }, { entry: 'Also urgent', priority: 8 }, { entry: 'Later', priority: 3 }]
 

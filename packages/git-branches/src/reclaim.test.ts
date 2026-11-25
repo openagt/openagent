@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { chmod, mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
-import { nodeGitRunner } from '@openagt/agent-data'
+import { nodeGitRunner } from './git.js'
 import { addWorktree, agentBranchName, reclaimWorktree, type ReclaimOptions } from './index.js'
 
 // #982: one rule decides every removal — the checkout goes only once its branch holds everything

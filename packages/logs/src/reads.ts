@@ -1,4 +1,7 @@
-import { inRepo, nodeBranchFileFs, openProjectReader, runsRootOf, type GitRunner } from '@openagt/agent-data'
+import { inRepo } from '@openagt/hooks/command'
+import { nodeBranchFileFs, openProjectReader } from '@openagt/store-filesystem'
+import { runsRootOf } from '@openagt/git-branches'
+import type { GitRunner } from '@openagt/hooks'
 import { RUNS_DIR, readCard, runEntries, runsPath, type ListedRun, type RecordsReader } from '@openagt/agent-driver'
 import { peopleOf, readCommitLines, type PersonActivity } from './people.js'
 

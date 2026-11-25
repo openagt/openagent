@@ -1,16 +1,18 @@
 import { lstat, readdir, readlink, rmdir } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
-import { BRANCHES_DIR, nodeGitRunner, repositoryCheckouts, unexcludeFromGit, type GitRunner } from '@openagt/agent-data'
+import { BRANCHES_DIR, isAgentBranch } from './branch-names.js'
+import { nodeGitRunner } from './git.js'
+import type { GitRunner, ProjectCleanup } from '@openagt/hooks'
+import { repositoryCheckouts, unexcludeFromGit } from './git-exclude.js'
+import { reclaimAgent, refusalLine } from './agent-checkout.js'
 import { reconcileBranchLinks } from './branch-links.js'
-import { isAgentBranch } from './branch-names.js'
 import { OWN_SKILL, skillLinkPaths, type SkillLink } from './skill-links.js'
 import { worktreeDirEntries } from './worktree.js'
 
 /**
- * `cleanup`: what this tool left in a project, removed, for a person who takes the project out of
- * a dashboard and asks for the tool's files to go too. The tool removes its own and nothing else:
- * a dashboard asks for it by the `cleanup` kind the package declares under `openagent` in its
- * package.json, and holds no list of this tool's files.
+ * What this tool left in a project, removed, for a person who takes the project off the list and
+ * asks for the tool's files to go too (`app.lifecycle`'s `projectRemoved`, `module.ts`). The tool
+ * removes its own and nothing else: the projects module holds no list of this tool's files.
  *
  * Every agent checkout goes under the reclaim rule, as `prune` does it: one holding uncommitted
  * work stays, named with the reason, and a branch with work on it is never deleted. The checkouts
@@ -23,28 +25,14 @@ import { worktreeDirEntries } from './worktree.js'
  * rule for the directory once no checkout has one.
  */
 
-/** One thing left where it was, by its path from the project's root, and why. */
-export interface Kept {
-  path: string
-  reason: string
-}
-
-export interface CleanupOutcome {
-  ok: true
-  removed: string[]
-  kept: Kept[]
-}
-
-/**
- * `reclaimOne` removes one agent's checkout under the reclaim rule and answers nothing, or the
- * line saying why it stayed.
- */
-export async function cleanup(repo: string, reclaimOne: (agentId: string) => Promise<string | undefined>, git: GitRunner = nodeGitRunner()): Promise<CleanupOutcome> {
+/** What a clean-up of the project at `repo` removed, and what it kept, each by its path from the project's root, with why. */
+export async function cleanup(repo: string, git: GitRunner = nodeGitRunner()): Promise<ProjectCleanup> {
   const dir = join(repo, BRANCHES_DIR)
   const removed: string[] = []
-  const kept: Kept[] = []
+  const kept: ProjectCleanup['kept'] = []
   for (const { agentId, path } of await worktreeDirEntries(repo)) {
-    const stayed = await reclaimOne(agentId)
+    const outcome = await reclaimAgent(repo, agentId, git)
+    const stayed = outcome.ok ? undefined : refusalLine(agentId, outcome)
     if (stayed === undefined) removed.push(`${BRANCHES_DIR}/${basename(path)}`)
     else kept.push({ path: `${BRANCHES_DIR}/${basename(path)}`, reason: stayed })
   }
@@ -74,7 +62,7 @@ export async function cleanup(repo: string, reclaimOne: (agentId: string) => Pro
       if (gone && !(await anyHolds(checkouts, BRANCHES_DIR))) await unexcludeFromGit(repo, `/${BRANCHES_DIR}`, undefined, git).catch(() => {})
     }
   }
-  return { ok: true, removed, kept }
+  return { removed, kept }
 }
 
 /**

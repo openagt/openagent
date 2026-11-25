@@ -1,10 +1,9 @@
 import { hostname } from 'node:os'
-import { errorMessage } from '@openagt/agent-data'
-import { runHostOf } from '../dashboard-rpc/context.js'
+import { errorMessage } from '../error-message.js'
+import { contextRun, runHostOf } from '../dashboard-rpc/context.js'
 
 import { runRefAt } from '../distribution-hooks.js'
 import { withAgentLock } from '../agent-locks.js'
-import { findAgent } from '../store/index.js'
 import { LOCAL_HOST, type InboxLine } from '@openagt/hooks'
 
 /**
@@ -21,8 +20,8 @@ export type SteerResult = { ok: true } | { ok: false; error: string }
  * The key every action on one run locks under (`agent-locks.ts`): a Remove, a Delete and an Open
  * PR on the same run each run their own git; serialized, whichever runs second finds the state
  * the first one left and acts on that. The project and the run's id, not the checkout's path:
- * the path is the branches provider's to know, and an Open PR on a run whose checkout is gone
- * still locks the run.
+ * the path is the run's host's to know, and an Open PR on a run whose checkout is gone still
+ * locks the run.
  */
 export function agentLockKey(cwd: string, agentId: string): string {
   return `${cwd}\0${agentId}`
@@ -33,8 +32,8 @@ export function agentLockKey(cwd: string, agentId: string): string {
  * the project's shared records, is only read. Continued here it would move to this computer under
  * its id, with this computer's logins and none of its conversation.
  */
-export async function startedElsewhere(cwd: string, agentId: string): Promise<SteerResult | undefined> {
-  const host = (await findAgent(cwd, agentId).catch(() => undefined))?.host
+export async function startedElsewhere(projectId: string, agentId: string): Promise<SteerResult | undefined> {
+  const host = (await contextRun(projectId, agentId).catch(() => undefined))?.host
   return host !== undefined && host !== hostname() ? { ok: false, error: `This run is on ${host}. Continue it there.` } : undefined
 }
 
@@ -58,6 +57,6 @@ export async function sayToRun(projectId: string, cwd: string, agentId: string, 
  * Throws why it was not said.
  */
 export async function sayForModule(projectId: string, cwd: string, agentId: string, line: InboxLine): Promise<void> {
-  const said = await withAgentLock(agentLockKey(cwd, agentId), async () => (await startedElsewhere(cwd, agentId)) ?? sayToRun(projectId, cwd, agentId, line))
+  const said = await withAgentLock(agentLockKey(cwd, agentId), async () => (await startedElsewhere(projectId, agentId)) ?? sayToRun(projectId, cwd, agentId, line))
   if (!said.ok) throw new Error(said.error)
 }

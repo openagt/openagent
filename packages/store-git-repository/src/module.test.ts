@@ -3,7 +3,9 @@ import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { nodeGitRunner, stopSyncingPersonalFolder, syncPersonalFolder, withPersonalFolder } from '@openagt/agent-data'
+import { nodeGitRunner } from '@openagt/git-branches'
+import { stopSyncingPersonalFolder, syncPersonalFolder } from './folder-sync.js'
+import { withPersonalFolder } from '@openagt/store-filesystem'
 import gitRepository, { SYNC_ENTRY } from './module.js'
 
 // store-git-repository's row: whether the person's folder syncs with a repository of theirs, its

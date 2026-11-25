@@ -1,4 +1,4 @@
-export { toolQuestion, continuationPrompt, skipPrompt, answeredQuestion } from './question.js'
+export { toolQuestion } from './question.js'
 export { appendInbox, takeInbox, promptOf, promptLines, steeredWords, finishTurn } from './inbox.js'
 export { attachLog, logCardFile, logDiaryFile, logLiveFile, agentEnv, DIARY_ENV } from './session-log.js'
 export { checkCliReady, probeCli, type CliProbe, type CliSpec, type DriverReadyOptions } from './ready.js'
@@ -34,11 +34,11 @@ export {
   type AnyDiaryLine,
 } from './record.js'
 export { runIdsOf, runEntries, findEntry, readCard, readRunDiary, type RecordsReader, type RunEntry } from './records.js'
-export { listRuns, findRun, runFiles, readDiary, writeRun, patchRun, deleteRun, runsPath, recordFunnel, resolveRecordDeps, type RecordDeps, type RecordFiles, type RecordFunnel } from './record-store.js'
+export { listRuns, keptRuns, findRun, runFiles, readDiary, writeRun, patchRun, deleteRun, runsPath, recordFunnel, resolveRecordDeps, type RecordDeps, type RecordFiles, type RecordFunnel } from './record-store.js'
 export { accountTurn } from './accounts/turn.js'
 export { configFile, writePrivate } from './private-files.js'
 // The images a person's messages go with, kept on this computer only.
-export { imagesDir, isImageName, imageFile, imageMediaType, readImage, hasImage, keepImage, IMAGE_MAX_BYTES, type ImageMediaType } from './images.js'
+export { imagesDir, isImageName, imageFile, imageMediaType, readImage, hasImage, keepImage, type ImageMediaType } from './images.js'
 // The coding agents of the distribution (`run.agent`, #2394): the one a run is on, and the accounts each has.
 export { codingAgent, codingAgents, agentNames, UnknownAgent } from './agents.js'
 export {
@@ -63,6 +63,11 @@ export { gitHostEnv } from './engine/git-host.js'
 export { INBOX_FILE } from './engine/live-card.js'
 export { localHost, type LocalHostDeps } from './engine/host.js'
 export { ReadyNaming, type ReadyNamingDeps } from './engine/ready-naming.js'
+export { forgetStartedNames, nameStarted, withStartedNames } from './engine/started-names.js'
+// The environment a run is started with: a module's tool in the run names the run, its profile and its picks by it.
+export { AGENT_ID_ENV, PLUGINS_WITHOUT_ENV, PROFILE_ENV, PROJECT_SKILLS_ENV, isSkillName } from './engine/names.js'
+// The models a coding agent offers, as its adapter asks it once per account.
+export { modelsAskedOnce, firstAccountOf, modelsOf, type AgentModels, type ModelsAsked } from './models.js'
 export { NAME_FILE_ENV, givenName, nameHandOver } from './engine/title.js'
 // The coding agents' accounts and their rotation (#2394): the lists, the order runs take them in,
 // the limits, and the next free one taking over a turn at a usage limit.
@@ -86,3 +91,5 @@ export {
 export { accountRotation, goOn, UsageLimitError, type AccountsOption } from './accounts/rotation.js'
 export { removeAdded } from './accounts/login.js'
 export { loginWiring, type LoginWiring } from './accounts/wiring.js'
+export { summaryOf, standing, runEvents, inFolder, type SummaryAt } from './reads/run-reads.js'
+export { fromDiaryLine, eventsOf } from './reads/run-events.js'

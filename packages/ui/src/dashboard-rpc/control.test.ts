@@ -3,10 +3,10 @@ import { test } from 'node:test'
 import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { projectId } from '@openagt/agent-data'
+import { projectId } from '../project-id.js'
 import type { RunHost, RunRef } from '@openagt/hooks'
 import { fakeHost } from '@openagt/hooks/testing'
-import { addProject } from '../registry.js'
+import { listTestProject } from '../test-projects.js'
 import { provideTestContext } from './test-context.js'
 import { sendMessage, sendStart, sendStop } from './control.js'
 import type { StartAgentOptions } from '../dashboard/types.js'
@@ -19,17 +19,20 @@ test('sendStart hands the trimmed prompt, the picks and the project to the daemo
       return { ok: true, agentId: 'run-1' }
     },
   })
-  assert.deepEqual(await sendStart('p1', '  /work-queue now \n', { driver: 'codex', model: 'gpt-5' }), { ok: true, agentId: 'run-1' })
+  assert.deepEqual(await sendStart('p1', '  /work-queue now \n', { options: { 'agent-driver': { driver: 'codex', model: 'gpt-5' } } }), { ok: true, agentId: 'run-1' })
   assert.deepEqual(await sendStart('p1', 'Read the docs'), { ok: true, agentId: 'run-1' })
-  assert.deepEqual(calls, [['/work-queue now', { driver: 'codex', model: 'gpt-5' }, 'p1'], ['Read the docs', {}, 'p1']])
+  assert.deepEqual(calls, [['/work-queue now', { options: { 'agent-driver': { driver: 'codex', model: 'gpt-5' } } }, 'p1'], ['Read the docs', {}, 'p1']])
   assert.deepEqual(await sendStart('p1', '   '), { ok: false, error: 'a non-empty prompt is required' })
   assert.equal(calls.length, 2)
 })
 
 test("a Stop and what a person says to a run go to the host the run is on: the first of its project's other hosts that has it, else this computer's (#2394)", async () => {
   const dir = await realpath(await mkdtemp(join(tmpdir(), 'openagent-control-')))
+  // A list of projects of its own: the other tests' processes change the one they share.
+  const previous = process.env.XDG_CONFIG_HOME
+  process.env.XDG_CONFIG_HOME = join(dir, 'cfg')
   try {
-    await addProject(dir, '2026-11-19T00:00:00.000Z')
+    await listTestProject(dir, '2026-11-19T00:00:00.000Z')
     const id = projectId(dir)
     const ON_ACTIONS = '2026-11-19T10-00-00-000Z'
     const HERE = '2026-11-19T11-00-00-000Z'
@@ -54,6 +57,8 @@ test("a Stop and what a person says to a run go to the host the run is on: the f
     assert.deepEqual(told, [`actions stop ${ON_ACTIONS} in ${id}`, `actions and document it ${ON_ACTIONS}`, `here stop ${HERE} in ${id}`, `here faster ${HERE}`])
     assert.ok(asked.every(project => project === id), "the hosts asked are the run's project's")
   } finally {
+    if (previous === undefined) delete process.env.XDG_CONFIG_HOME
+    else process.env.XDG_CONFIG_HOME = previous
     await rm(dir, { recursive: true, force: true })
   }
 })

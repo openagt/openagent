@@ -13,10 +13,15 @@ import type { DashboardDistribution } from '@openagt/ui/cli'
  */
 const DISTRIBUTION: DashboardDistribution = [
   // The store: every module's data in its folder on this computer, the person's own folder synced
-  // with a repository of theirs, and a shared project's on its repository's agent-data branch.
+  // with a repository of theirs (this computer's: the folder is its person's, Settings › Your agent
+  // data), and a shared project's on its repository's agent-data branch.
   { package: '@openagt/store-filesystem' },
-  { package: '@openagt/store-git-repository' },
+  { package: '@openagt/store-git-repository', for: 'computer' },
   { package: '@openagt/store-git-branch' },
+  // projects: the list of projects on this computer, a project added and removed, the project
+  // picker and Settings › Repos; in a run, the repository there and where its repos are. This
+  // computer's: the list is.
+  { package: '@openagt/projects', for: 'computer' },
   // git-branches: the run's checkout, its branch read back, the checkout reclaimed.
   { package: '@openagt/git-branches' },
   // github: the run's account and pull request; its skill is in every run of a project on GitHub.
@@ -42,6 +47,8 @@ const DISTRIBUTION: DashboardDistribution = [
   { package: '@openagt/ui-card-waiting', for: 'computer' },
   // The person's name and picture, Settings › Profile.
   { package: '@openagt/user-info', for: 'computer' },
+  // The agent profiles: their page, the profile every next run is on, and Default.
+  { package: '@openagt/profiles', for: 'computer' },
   // notifications-command, a plugin that starts off: the person's command, run when a run on this
   // computer needs them.
   { package: '@openagt/notifications-command', for: 'computer' },

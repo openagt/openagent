@@ -36,3 +36,12 @@ test('ready: only its CLI is asked; logged out stops a run, unless an account wa
   assert.match(out.problems[0]!, /claude auth login/)
   assert.deepEqual(await claudeCodeAgent({ probe: answers(false), isRoot: notRoot }).ready({ personal, addedAccount: true }), { problems: [], warnings: [], ownLoggedOut: true })
 })
+
+test("a session is picked back up in a terminal in the folder it ran in, made again first, since a run's checkout is usually gone by then (#1195)", () => {
+  const agent = claudeCodeAgent()
+  // The mkdir is the load-bearing part: the CLI matches a session by the folder it ran in.
+  assert.equal(agent.resumeCommand?.({ id: 'sess-1', cwd: '/repo/.branches/agent-run-1' }), "mkdir -p '/repo/.branches/agent-run-1' && cd '/repo/.branches/agent-run-1' && claude --resume sess-1")
+  // The repo lives wherever the person keeps it: `/Users/John Doe/…` survives the shell.
+  assert.equal(agent.resumeCommand?.({ id: 's', cwd: "/Users/John Doe/it's" }), `mkdir -p '/Users/John Doe/it'\\''s' && cd '/Users/John Doe/it'\\''s' && claude --resume s`)
+  assert.equal(agent.resumeCommand?.({ id: 'sess-1' }), 'claude --resume sess-1', 'no folder recorded')
+})

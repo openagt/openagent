@@ -1,13 +1,13 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { rpcKind, type RpcComputerHost } from '@openagt/hooks/rpc'
-import { memorySettings } from '@openagt/hooks/testing'
+import { computerRpcHost } from '@openagt/hooks/testing'
 import { kinds, saveKind } from './server.js'
 
 // Settings › Notifications' functions, against settings kept in memory.
 
 function computer(): RpcComputerHost {
-  return { settings: memorySettings() }
+  return computerRpcHost()
 }
 
 test('reading the kinds only reads; switching one changes it', () => {

@@ -1,10 +1,9 @@
 import { SESSIONS_ID } from '../../src/project-address.js'
-import type { GitHostHome } from '../../src/index.js'
 import { useContext, useEffect, useRef, useState, type MutableRefObject, type ReactNode } from 'react'
 import { Loader2 } from 'lucide-react'
 import { cn } from '../lib/utils.js'
 import { IN_BOX } from '../lib/in-box.js'
-import { Composer, type ComposerHandle, type SessionModel } from './Composer.js'
+import { Composer, type ComposerHandle } from './Composer.js'
 import { sendMessage } from '../rpc/control.js'
 import { useAction } from '../lib/use-action.js'
 import { useStop } from '../lib/use-stop.js'
@@ -12,19 +11,15 @@ import { keepDraft, keepDraftImages, keptDraft, keptDraftImages } from '../lib/d
 import { DaemonDown } from '../lib/use-daemon-health.js'
 import { Button } from './ui/button.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
-import { SessionContextMenu } from './ContextMenu.js'
-import { SessionReposSaid } from './SessionRepos.js'
-import { AutoMenu, autoCovers, autoSaid } from './AutoMenu.js'
-import { ProfileOff } from './ProfileMenu.js'
-import { useProfileName } from './ProfilesPage.js'
-import { GitHostOff } from './GitHosts.js'
-import { SkillsOff, useRecordedSkillCount } from './SkillsMenu.js'
-import { DEFAULT_PROFILE } from '../../src/client.js'
-import { isPublishPick, offeredPublishPicks, type PublishPick } from '../../src/client.js'
+import { ContextMenu } from './ContextMenu.js'
+import { AutoMenu, autoCovers, autoSaid, useAutoLevels } from './AutoMenu.js'
+import { isPublishPick, type PublishPick } from '../../src/client.js'
 import { useProjectLauncher } from '../lib/use-project-launcher.js'
 import { promptWithContext, type ContextSet } from '../lib/use-context-set.js'
 import { overlayOpen, pressed, shortcut } from '../lib/shortcut.js'
 import { useIsMobile } from '../lib/use-mobile.js'
+import type { RunOptions } from '@openagt/hooks'
+import type { ControlBox } from './Places.js'
 
 /** How long after an Esc that closed something a second Esc is still that press, said twice: a double press. */
 const DOUBLE_PRESS_MS = 500
@@ -65,18 +60,11 @@ export function AgentComposer({
   editInBox,
   giveBack,
   focusBox,
-  model,
   context,
   contextSet,
   publish,
-  prBase,
   row,
-  repos,
-  profile,
-  gitHost,
-  gitAccount,
-  pluginsWithout,
-  projectSkills,
+  options,
 }: {
   projectId: string
   /** Which run this addresses (#749). */
@@ -99,29 +87,16 @@ export function AgentComposer({
   giveBack?: MutableRefObject<((text: string, images?: string[]) => void) | null> | undefined
   /** Set here to what gives the box the focus: a question answered from its card. */
   focusBox?: MutableRefObject<(() => void) | null> | undefined
-  /** The model the session runs on: said under the box, at the right. */
-  model?: SessionModel | undefined
-  /** How full the session's context is, as a circle beside the model. */
+  /** How full the session's context is, as a circle at the right of the row under the box, after its controls. */
   context?: ReactNode
   /** The shell's Context (#492), as the launcher's box has it (his pick): what is picked goes with the next message, said at its end, and is cleared once it went. */
   contextSet?: ContextSet | undefined
   /** How far the run takes its work, as its record says (`commit`, `branch`, `pr`, `merge`); absent, none. The "Auto" menu shows it and changes it from the next message on. */
   publish?: string | undefined
-  /** The branch the run's pull request goes into, as its record says; absent, the repository's default branch. */
-  prBase?: string | undefined
   /** The row above the box: where the session started. */
   row?: ReactNode
-  /** The repos the session has as copies, as its record says. */
-  repos?: readonly { name: string; from: string }[] | undefined
-  /** The profile the session is on, by its id, as its record says; Default when absent. */
-  profile?: string | undefined
-  /** The project's page on its git host, when it has one. */
-  gitHost?: GitHostHome | null | undefined
-  /** The account the run worked as there, as its record says. */
-  gitAccount?: string | undefined
-  /** The session's picks, as its record says: the plugins it went without, which of the project's own skills stayed. */
-  pluginsWithout?: string[] | undefined
-  projectSkills?: 'all' | 'none' | string[] | undefined
+  /** The session's run options, as its record keeps them: what its box's controls say (`composer.control`). */
+  options?: RunOptions | undefined
 }) {
   const composerRef = useRef<ComposerHandle>(null)
   useEffect(() => {
@@ -171,9 +146,14 @@ export function AgentComposer({
   // level keeps the old one, which must not read as changed.
   // Picked back to what the record says, there is nothing to send.
   const launcher = useProjectLauncher(projectId)
+  // The levels offered, as the launcher's: every one with no project, the session's copies of repos being wherever each is.
+  const autoProject = projectId !== SESSIONS_ID && launcher ? { id: projectId, name: projectId, ...(launcher.remote ? { remote: launcher.address ?? 'origin' } : {}) } : undefined
+  const levels = useAutoLevels(projectId, autoProject)
   const recorded: PublishPick = isPublishPick(publish) ? publish : 'nothing'
   const [picked, setPicked] = useState<PublishPick | null>(null)
   useEffect(() => setPicked(null), [agentId])
+  // The session's controls, as its record keeps their options: said, not offered.
+  const controlBox: ControlBox = { in: 'session', projectId, agentId, options: options ?? {}, onChange: () => {}, busy }
   useEffect(() => {
     if (picked === recorded) setPicked(null)
   }, [picked, recorded])
@@ -295,19 +275,7 @@ export function AgentComposer({
 
   // What the gear's hover says of the session's setup with its menu shut.
   const noProject = projectId === SESSIONS_ID
-  // What a level acts on: the project, or with none the session's copies of repos.
-  const publishes = !noProject || (repos?.length ?? 0) > 0
-  const profileName = useProfileName(profile ?? DEFAULT_PROFILE)
-  const skillCount = useRecordedSkillCount(noProject ? undefined : projectId, profile, pluginsWithout, projectSkills)
-  const autoTarget = prBase !== undefined ? { into: prBase } : undefined
-  const setupSaid = [
-    profileName !== undefined && `Profile ${profileName}`,
-    skillCount !== undefined && `${skillCount} skill${skillCount === 1 ? '' : 's'}`,
-    gitAccount !== undefined && `@${gitAccount}`,
-    publishes && autoSaid(picked ?? recorded, autoTarget),
-  ]
-    .filter(Boolean)
-    .join(' · ')
+  const setupSaid = autoSaid(picked ?? recorded, levels)
 
   return (
     // The box stands on the chat's 16 inset at every width, as the chat's cards do, so on a desktop its
@@ -327,26 +295,21 @@ export function AgentComposer({
         submitBusyLabel={live ? 'Sending…' : 'Continuing…'}
         inAgent
         sessionRow={row}
-        sessionModel={model}
         sessionContext={context}
         {...(contextSet ? { addContext: contextSet.add, removeContext: contextSet.remove } : {})}
-        // The launcher's gear, line for line in its places: the profile, said and not offered, since a
-        // session keeps the one it started on; "Skills", the picks it started with in its hover; the
-        // account the run worked as; then, set apart and still a pick, "When it finishes". After the
-        // gear, Context: the repos the session started with, said, and in a project the files picked for the next message; for a session with no project,
-        // no git to take its work further with.
+        // The launcher's gear, line for line in its places: the modules' lines, as the session's record
+        // keeps its options; then, set apart and still a pick, "When it finishes". After the
+        // gear, in a project, Context: the files picked for the next message; then the modules' controls there.
+        controlBox={controlBox}
         setup={{
           said: setupSaid,
           lines: (
             <>
-              <ProfileOff profile={profile} />
-              <SkillsOff projectId={noProject ? undefined : projectId} profile={profile} pluginsWithout={pluginsWithout} projectSkills={projectSkills} />
-              <GitHostOff home={gitHost ?? null} account={gitAccount} />
-              {publishes && <AutoMenu publish={picked ?? recorded} picks={noProject ? offeredPublishPicks(true, true) : offeredPublishPicks(launcher?.gitHost ?? true, launcher?.remote ?? true)} onPublish={pick => setPicked(pick === recorded ? null : pick)} covers={autoCovers(noProject ? null : 'the project', repos?.length ?? 0)} target={autoTarget} />}
+              <AutoMenu publish={picked ?? recorded} levels={levels} onPublish={pick => setPicked(pick === recorded ? null : pick)} covers={autoCovers(noProject)} />
             </>
           ),
         }}
-        controls={noProject ? <SessionReposSaid repos={repos ?? []} /> : contextSet && <SessionContextMenu repos={repos ?? []} context={contextSet.context} busy={busy} onToggle={contextSet.toggle} />}
+        controls={!noProject && contextSet && <ContextMenu files={[...contextSet.context]} busy={busy} onRemove={contextSet.toggle} />}
         idleControl={idleControl}
         notes={
           <>

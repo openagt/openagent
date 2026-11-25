@@ -1,9 +1,9 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { RunOrder, type GithubFacts, type ProjectRef, type PullRequest, type RunContext, type RunFacts } from '@openagt/hooks'
+import { RunOrder, type GithubFacts, type ProjectRef, type PullRequest, type RunContext, type RunFacts, type RunSummary } from '@openagt/hooks'
 import { fakeRun } from '@openagt/hooks/testing'
 import { homedir } from 'node:os'
-import { githubModule, type GithubDeps } from './module.js'
+import { githubModule, requestsWaiting, type GithubDeps } from './module.js'
 
 // github as a module: the account a run works as, and the pull request a run's branch has, read
 // back into the run's facts.
@@ -131,4 +131,54 @@ test('a run that opens another request keeps the one before among its earlier on
   assert.deepEqual(await after({ ...branch, github: { pr: PR_12, earlierPrs: [PR_12] } }, () => PR_12), { pr: PR_12, earlierPrs: [] }, 'an emptied list is said too')
   assert.deepEqual(await after({ ...branch, github: { pr: PR_12 } }, () => undefined), { pr: PR_12 }, 'nothing read: the request the run had stays')
   assert.deepEqual(await after({ ...branch, github: { pr: PR_12 } }, () => { throw new Error('gh: not logged in') }), { pr: PR_12 }, 'GitHub could not say: the same')
+})
+
+test('git work outside a run reaches a repository on GitHub as the account runs use, and no repository elsewhere', async () => {
+  const access = { env: { GH_TOKEN: 'token' } }
+  const git = githubModule({ reach: async () => access }).hooks['account.access']?.git
+  assert.ok(git)
+  assert.deepEqual(await git('https://github.com/me/shop.git'), access)
+  assert.deepEqual(await git('git@github.com:me/shop.git'), access)
+  assert.equal(await git('https://gitlab.com/me/shop.git'), undefined)
+  assert.equal(await githubModule({ reach: async () => undefined }).hooks['account.access']?.git?.('https://github.com/me/shop.git'), undefined)
+})
+
+test("outside a run, whether a run could work as an account is asked in a project on GitHub, and in a session with no project in the person's home folder; a project elsewhere is not github's", async () => {
+  const asked: string[] = []
+  const runAs = githubModule({
+    onGithub: async dir => dir === SHOP.dir,
+    runAs: async (dir, login) => (asked.push(`${dir} ${login ?? 'runs'}`), login === 'stranger' ? { ok: false, error: 'OpenAgent has no account stranger' } : { ok: true, login: login ?? 'octo-agent', env: { GH_TOKEN: 'token' } }),
+  }).hooks['account.access']?.runAs
+  assert.ok(runAs)
+  assert.deepEqual(await runAs(SHOP.dir), { ok: true, login: 'octo-agent', env: { GH_TOKEN: 'token' } })
+  assert.deepEqual(await runAs(undefined, 'stranger'), { ok: false, error: 'OpenAgent has no account stranger' })
+  assert.equal(await runAs('/projects/elsewhere', 'octo-agent'), undefined)
+  assert.deepEqual(asked, [`${SHOP.dir} runs`, `${homedir()} stranger`])
+})
+
+test('the people behind commit emails are asked of GitHub for a project on GitHub alone', async () => {
+  const people = githubModule({ onGithub: async dir => dir === SHOP.dir, people: async (_dir, emails) => emails.map(email => ({ email, login: 'rom' })) }).hooks['account.access']?.people
+  assert.ok(people)
+  assert.deepEqual(await people(SHOP.dir, ['rom@y.dev']), [{ email: 'rom@y.dev', login: 'rom' }])
+  assert.equal(await people('/projects/elsewhere', ['rom@y.dev']), undefined)
+})
+
+test("the project's open requests wait on the person to merge them: a run's goes to the run, by the request its record names or its branch (the newest run on it); one opened by hand opens on GitHub; a draft opened by hand is not asking", () => {
+  const pr = (number: number, over: Record<string, unknown> = {}) => ({ number, title: `Request ${number}`, url: `https://github.com/o/r/pull/${number}`, isDraft: false, createdAt: '2026-08-21T10:00:00Z', ...over })
+  const run = (id: string, startedAt: string, over: Partial<RunSummary> = {}): RunSummary => ({ id, host: 'here', status: 'done', startedAt, prompt: '', ...over })
+  const runs = [
+    run('r1', '2026-08-20T09:00:00Z', { title: 'Fix the login', pr: { number: 1, url: 'https://github.com/o/r/pull/1' } }),
+    run('r0', '2026-08-19T09:00:00Z', { prompt: 'Make a dark mode', branch: 'agent/dark-mode' }),
+    run('r2', '2026-08-20T10:00:00Z', { branch: 'agent/dark-mode' }),
+  ]
+  const items = requestsWaiting([pr(1), pr(2, { isDraft: true, headRefName: 'agent/dark-mode' }), pr(3), pr(4, { isDraft: true, headRefName: 'mine' })], runs)
+  assert.deepEqual(
+    items.map(item => [item.id, item.scope, item.run, item.title]),
+    [
+      ['https://github.com/o/r/pull/1', 'run', 'r1', 'Fix the login'],
+      ['https://github.com/o/r/pull/2', 'run', 'r2', 'agent/dark-mode'],
+      ['https://github.com/o/r/pull/3', 'project', undefined, 'Request 3'],
+    ],
+  )
+  assert.deepEqual(items[2], { kind: 'waiting', scope: 'project', id: 'https://github.com/o/r/pull/3', words: 'Needs merge', title: 'Request 3', detail: '#3', mark: 'pull-request', since: '2026-08-21T10:00:00Z', fix: { label: 'Open PR #3', href: 'https://github.com/o/r/pull/3' } })
 })
