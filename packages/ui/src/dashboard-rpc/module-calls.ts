@@ -7,7 +7,6 @@ import { distributionHooks, projectRefAt, runRefAt } from '../distribution-hooks
 import { SESSIONS_ID } from '../project-address.js'
 
 import { pullProjectData } from '@openagt/agent-data'
-import { patchRun } from '@openagt/agent-driver'
 import type { ProjectRef, RunFound, RunQuestion, RunRef } from '@openagt/hooks'
 import type { ModuleOn } from '@openagt/hooks/rpc'
 import { readRunEvents } from '../store/index.js'
@@ -42,7 +41,7 @@ export async function callModule(projectId: string | null, pkg: string, name: st
     find: runsFound(projectId, root),
     questions: agentId => runQuestions(projectId, root, agentId),
     say: (agentId, line) => sayForModule(projectId, root, agentId, line),
-    landed: (agentId, landed) => landedFor(root, agentId, landed),
+    landed: (agentId, landed) => landedFor(projectId, root, agentId, landed),
     modulesOn: async opts => modulesOn(await project(), opts?.every === true),
   })
   const result = await callModuleFunction(module.server, name, host, input)
@@ -95,9 +94,15 @@ function runsFound(projectId: string, root: string): (agentId: string) => Promis
   }
 }
 
-/** Write down on run `agentId`'s record, in the project at `root`, that its work was landed: the record is what its page reads once the branch is gone. */
-async function landedFor(root: string, agentId: string, landed: { commit: string; from: string }): Promise<void> {
-  if (!(await patchRun(root, agentId, { landed }).catch(() => false))) throw new Error('the record was not updated')
+/**
+ * Write down on run `agentId`'s record, in the project at `root`, that its work was landed, through
+ * the run's host (`RunHost.record`): the record is what its page reads once the branch is gone.
+ */
+async function landedFor(projectId: string, root: string, agentId: string, landed: { commit: string; from: string }): Promise<void> {
+  const run = await runRefAt(projectId, root, agentId)
+  const host = await runHostOf(run)
+  if (!host.record) throw new Error(`A session on ${host.label} keeps no record here.`)
+  await host.record(run, { 'git-branches': { landed: landed.commit, baseCommit: landed.from } })
 }
 
 /** The questions run `agentId` of the project at `root` still waits on, read off its events (as its host says them) by the rule every surface reads them by. */

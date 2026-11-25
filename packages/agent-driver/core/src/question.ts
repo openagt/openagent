@@ -4,8 +4,7 @@
  * agent asks with a tool of its own (Claude Code's AskUserQuestion, Codex's request_user_input)
  * reads its question with {@link toolQuestion}; a question written in the agent's message is the
  * caller's to read (`DriverPromptOptions.questionIn`), as the module that teaches it writes it.
- * The answer goes back as one sentence, and a skip as another, the same for every caller, which a
- * reader of a run's prompts reads back ({@link answeredQuestion}).
+ * The answer goes back in the kernel's words (`continuationPrompt` in `@openagt/hooks`).
  */
 
 import type { Question, QuestionOption } from '@openagt/hooks'
@@ -41,26 +40,4 @@ export function toolQuestion(raw: unknown): Question | undefined {
   if (title === '' || options.length === 0) return undefined
   const header = str(asked['header'])
   return { title, ...(header !== '' ? { header } : {}), options, ...(recommended !== undefined ? { recommended } : {}), ...(asked['multiSelect'] === true ? { multi: true } : {}) }
-}
-
-/**
- * The prompt that resumes the agent after the user answered its question. One wording for
- * every caller: the agent knows what it is working on from its session, so nothing else is
- * said, and no "do not ask again" tail, since a capable agent does not re-ask a settled question.
- */
-export function continuationPrompt(question: string, answer: string): string {
-  return `You paused to ask: "${question}". The user chose: ${answer}. Continue with that decision.`
-}
-
-/** What a skip tells the agent: its question, and that it goes on without an answer. */
-export function skipPrompt(question: string): string {
-  return `You paused to ask: "${question}". The user skipped it. Continue without an answer.`
-}
-
-/** The question and the answer a prompt that answers one carries (no answer: it was skipped), or undefined for any other prompt. */
-export function answeredQuestion(prompt: string): { question: string; answer?: string } | undefined {
-  const chose = /^You paused to ask: "([\s\S]*)"\. The user chose: ([\s\S]*)\. Continue with that decision\.$/.exec(prompt)
-  if (chose) return { question: chose[1]!, answer: chose[2]! }
-  const skipped = /^You paused to ask: "([\s\S]*)"\. The user skipped it\. Continue without an answer\.$/.exec(prompt)
-  return skipped ? { question: skipped[1]! } : undefined
 }

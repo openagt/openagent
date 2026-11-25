@@ -1,11 +1,23 @@
 import { useEffect, useRef, useState } from 'react'
-import { sendImage } from '../rpc/control.js'
-import { IMAGE_MAX_BYTES, IMAGE_MAX_EDGE, IMAGE_TYPES, IMAGES_PER_MESSAGE, imageAddress, type ImageType } from '../../src/images.js'
+import type { ModuleHost, OptionPlaces } from '../module/index.js'
+import { useOptionsAt } from '../components/Places.js'
 import { keepDraftImages, keptDraftImages } from './draft-handoff.js'
 
-// The images a message goes with: read from what was dropped or pasted into the box, kept on this
-// computer by the dashboard as soon as they are in the box, and named in the message by the name
-// it kept each under. The box shows each from the file itself while it goes, so a tile is there at once.
+// The images a message goes with: read from what was dropped or pasted into the box, kept as soon
+// as they are in the box by the module that keeps them (`composer.images`), and named in the message
+// by the name it kept each under. The box shows each from the file itself while it goes, so a tile
+// is there at once. With no module that keeps images, a box takes none.
+
+/** Where a box's images are kept: the first module's `composer.images`, with its host. */
+export interface ImageStore {
+  option: OptionPlaces['composer.images']
+  host: ModuleHost
+}
+
+/** The images' keeper, wherever a box is drawn; none when no module keeps them. */
+export function useImageStore(): ImageStore | undefined {
+  return useOptionsAt('composer.images', undefined)[0]
+}
 
 /** An image in the box. */
 export interface BoxImage {
@@ -19,9 +31,9 @@ export interface BoxImage {
   error?: string | undefined
 }
 
-/** Whether `file` is an image the box takes. */
-export function isBoxImage(file: File): boolean {
-  return (IMAGE_TYPES as readonly string[]).includes(file.type)
+/** Whether `file` is an image the store keeps. */
+export function isBoxImage(file: File, store: ImageStore): boolean {
+  return store.option.types.includes(file.type)
 }
 
 /**
@@ -37,9 +49,9 @@ export function imageFiles(data: DataTransfer | null, { pasted = false }: { past
 let made = 0
 const freshKey = (): string => `image-${(made += 1)}`
 
-/** An image the box holds again, kept already: shown from the dashboard's copy. */
-export function keptImage(name: string): BoxImage {
-  return { key: freshKey(), src: imageAddress(name), name }
+/** An image the box holds again, kept already: shown from the store's copy. */
+export function keptImage(name: string, store: ImageStore): BoxImage {
+  return { key: freshKey(), src: store.option.src(name), name }
 }
 
 /** The names a box's images were kept under, in their order. */
@@ -56,11 +68,10 @@ export function imagesHold(images: readonly BoxImage[]): string | undefined {
 
 /**
  * The images of the box `draftKey` names: those it was left with, kept with its draft across a
- * reload; what drops or pastes add, each kept on this computer at once; and what takes them out.
- * `keep` is how a file is kept, the dashboard's own unless a test says otherwise.
+ * reload; what drops or pastes add, each kept by `store` at once; and what takes them out.
  */
-export function useBoxImages(draftKey: string | undefined, keep: (file: File) => Promise<{ name: string } | { error: string }> = keepBoxImage) {
-  const [images, setImages] = useState<BoxImage[]>(() => (draftKey !== undefined ? keptDraftImages(draftKey).map(keptImage) : []))
+export function useBoxImages(draftKey: string | undefined, store: ImageStore | undefined) {
+  const [images, setImages] = useState<BoxImage[]>(() => (draftKey !== undefined && store ? keptDraftImages(draftKey).map(name => keptImage(name, store)) : []))
   const latest = useRef(images)
   latest.current = images
   // The kept ones go with the draft, so a reload brings them back.
@@ -75,10 +86,11 @@ export function useBoxImages(draftKey: string | undefined, keep: (file: File) =>
     images,
     /** Add `files`, as many as one message goes with; answers how many were left out. */
     add(files: File[]): number {
-      const room = Math.max(0, IMAGES_PER_MESSAGE - latest.current.length)
+      if (!store) return files.length
+      const room = Math.max(0, store.option.perMessage - latest.current.length)
       const taken = files.slice(0, room).map(file => ({ file, image: { key: freshKey(), src: URL.createObjectURL(file) } satisfies BoxImage }))
       setImages(current => [...current, ...taken.map(one => one.image)])
-      for (const { file, image } of taken) void keep(file).then(kept => update(image.key, 'name' in kept ? { name: kept.name } : { error: kept.error }))
+      for (const { file, image } of taken) void keepBoxImage(file, store).then(kept => update(image.key, 'name' in kept ? { name: kept.name } : { error: kept.error }))
       return files.length - taken.length
     },
     remove(key: string): void {
@@ -97,7 +109,7 @@ export function useBoxImages(draftKey: string | undefined, keep: (file: File) =>
     },
     /** Put back images {@link clear} took, before those added since. */
     restore(names: readonly string[]): void {
-      setImages(current => [...names.map(keptImage), ...current])
+      if (store) setImages(current => [...names.map(name => keptImage(name, store)), ...current])
     },
   }
 }
@@ -108,20 +120,20 @@ function release(image: BoxImage): void {
 }
 
 /**
- * Keep `file` on this computer: answers the name it was kept under, or why it was not. An image the
- * coding agents cannot take as it is (too large, too many pixels) goes smaller first, as they would
- * have to have it; a kind they cannot read at all is refused.
+ * Keep `file` in `store`: answers the name it was kept under, or why it was not. An image past the
+ * store's bounds (too large, too many pixels) goes smaller first, as it would have to have it; a
+ * kind it does not keep at all is refused.
  */
-export async function keepBoxImage(file: File): Promise<{ name: string } | { error: string }> {
-  if (!isBoxImage(file)) return { error: `${file.type.replace('image/', '').toUpperCase() || 'This file'} is not an image the agent reads: PNG, JPEG, GIF or WebP` }
-  let fitted: { type: ImageType; data: string }
+async function keepBoxImage(file: File, store: ImageStore): Promise<{ name: string } | { error: string }> {
+  if (!isBoxImage(file, store)) return { error: `${file.type.replace('image/', '').toUpperCase() || 'This file'} is not an image the agent reads: ${store.option.kinds}` }
+  let fitted: { type: string; data: string }
   try {
-    fitted = await fit(file)
+    fitted = await fit(file, store.option)
   } catch {
     return { error: 'The image could not be read' }
   }
   try {
-    const kept = await sendImage(fitted.type, fitted.data)
+    const kept = await store.option.keep(store.host, fitted)
     return kept.ok ? { name: kept.name } : { error: kept.error }
   } catch {
     return { error: 'The image could not be kept: is OpenAgent running?' }
@@ -137,17 +149,17 @@ async function base64(blob: Blob): Promise<string> {
 }
 
 /**
- * The image as the coding agents can take it: as it is when it fits their bounds (its bytes, its
- * edges), else drawn smaller until it does, a PNG while that fits and a JPEG past it.
+ * The image as the store keeps it: as it is when it fits its bounds (its bytes, its edges), else
+ * drawn smaller until it does, a PNG while that fits and a JPEG past it.
  */
-async function fit(file: File): Promise<{ type: ImageType; data: string }> {
-  const type = file.type as ImageType
-  if (file.size <= IMAGE_MAX_BYTES) {
+async function fit(file: File, { maxBytes, maxEdge }: Pick<ImageStore['option'], 'maxBytes' | 'maxEdge'>): Promise<{ type: string; data: string }> {
+  const type = file.type
+  if (file.size <= maxBytes) {
     const size = await pixels(file).catch(() => undefined)
-    if (size === undefined || Math.max(size.width, size.height) <= IMAGE_MAX_EDGE) return { type, data: await base64(file) }
+    if (size === undefined || Math.max(size.width, size.height) <= maxEdge) return { type, data: await base64(file) }
   }
   const bitmap = await createImageBitmap(file)
-  let scale = Math.min(1, IMAGE_MAX_EDGE / Math.max(bitmap.width, bitmap.height))
+  let scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height))
   for (;;) {
     const canvas = document.createElement('canvas')
     canvas.width = Math.max(1, Math.round(bitmap.width * scale))
@@ -155,7 +167,7 @@ async function fit(file: File): Promise<{ type: ImageType; data: string }> {
     canvas.getContext('2d')!.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
     for (const [as, quality] of [['image/png', undefined], ['image/jpeg', 0.9]] as const) {
       const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, as, quality))
-      if (blob && blob.size <= IMAGE_MAX_BYTES) return { type: as, data: await base64(blob) }
+      if (blob && blob.size <= maxBytes) return { type: as, data: await base64(blob) }
     }
     scale *= 0.75
   }

@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { createRef } from 'react'
 import type { Preferences } from '../../src/index.js'
 import { resetRunHostsForTest } from '../lib/run-hosts.js'
-import { hoverTooltip, openMenu } from '../test-utils.js'
+import { hoverTooltip, imageStore, openMenu } from '../test-utils.js'
 import { ModulesContext, mountedOf, type MountedView } from '../lib/use-modules.js'
 import { forgetRemembered } from '../lib/use-async.js'
 import type { UiPrompt, UiPromptSaveProps } from '../module/index.js'
@@ -25,8 +25,6 @@ const onCommands = vi.hoisted(() => vi.fn())
 const onRunHosts = vi.hoisted(() => vi.fn(async () => [] as { id: string; label: string }[]))
 vi.mock('../rpc/projects.js', () => ({ onProjects: () => Promise.resolve([]), onCommands, onRunHosts }))
 // An image dropped or pasted is kept by the dashboard: here the call answers what the test says.
-const sendImage = vi.hoisted(() => vi.fn())
-vi.mock('../rpc/control.js', async original => ({ ...(await original<object>()), sendImage }))
 
 // Stub the Tiptap editor (it needs a real DOM/ProseMirror): a plain input driving onChange, a
 // "type-submit" button firing onSubmit, and a ref exposing the same handle the composer calls.
@@ -622,6 +620,18 @@ describe('images', () => {
     fireEvent.paste(screen.getByLabelText('prompt'), { clipboardData: { files, types: [...(text !== undefined ? ['text/plain'] : []), 'Files'], getData: () => text ?? '' } })
   const drop = (files: File[]) => fireEvent.drop(box(), { dataTransfer: { files, types: ['Files'] } })
   const tiles = () => screen.queryAllByRole('button', { name: /^Open image / })
+  // The module that keeps the images: its keep stands in for its server part.
+  const sendImage = vi.fn()
+  const store = imageStore((_host, image) => sendImage(image.type, image.data))
+  const renderComposer = (over: Partial<Parameters<typeof Composer>[0]> = {}) => {
+    const onSubmit = vi.fn()
+    render(
+      <ModulesContext.Provider value={mountedOf({ options: { 'composer.images': [store] } })}>
+        <Composer files={[]} onSubmit={onSubmit} busy={false} submitLabel="Send" submitBusyLabel="Sending…" {...over} />
+      </ModulesContext.Provider>,
+    )
+    return { onSubmit }
+  }
 
   beforeEach(() => {
     sendImage.mockReset()
@@ -693,7 +703,7 @@ describe('images', () => {
     await waitFor(() => expect(JSON.parse(localStorage.getItem('oa.draft-images:p1:run-1') ?? '[]')).toEqual([kept(4)]))
     cleanup()
     renderComposer({ inAgent: true, draftKey: 'p1:run-1', ref })
-    expect(screen.getByRole('list', { name: 'Images' }).querySelector('img')!.getAttribute('src')).toBe(`/_rpc/images/${kept(4)}`)
+    expect(screen.getByRole('list', { name: 'Images' }).querySelector('img')!.getAttribute('src')).toBe(`/_images/${kept(4)}`)
     let draft: ReturnType<ComposerHandle['clear']> | undefined
     act(() => void (draft = ref.current!.clear()))
     expect(draft!.images).toEqual([kept(4)])
@@ -701,6 +711,13 @@ describe('images', () => {
     expect(localStorage.getItem('oa.draft-images:p1:run-1')).toBeNull()
     act(() => ref.current!.restore(draft!))
     expect(tiles()).toHaveLength(1)
+  })
+
+  test('where no module keeps images, a box takes none: a pasted image stays out of it', () => {
+    render(<Composer files={[]} onSubmit={vi.fn()} busy={false} submitLabel="Send" submitBusyLabel="Sending…" inAgent />)
+    paste([image()])
+    expect(tiles()).toHaveLength(0)
+    expect(sendImage).not.toHaveBeenCalled()
   })
 
   test('a click on a tile shows the image large over the page; its X and Esc close it', async () => {

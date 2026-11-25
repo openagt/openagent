@@ -12,7 +12,6 @@ export type * from '../../src/dashboard-rpc/control.js'
 
 export const sendStop = rpc<typeof impl.sendStop>('sendStop')
 export const sendMessage = rpc<typeof impl.sendMessage>('sendMessage')
-export const sendImage = rpc<typeof impl.sendImage>('sendImage')
 export const withdrawMessage = rpc<typeof impl.withdrawMessage>('withdrawMessage')
 export const sendNow = rpc<typeof impl.sendNow>('sendNow')
 export const sendDeleteAgent = rpc<typeof impl.sendDeleteAgent>('sendDeleteAgent')

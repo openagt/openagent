@@ -84,6 +84,7 @@ export {
   LOCAL_HOST,
 } from './run.js'
 export type { RunEvent, RunFeedEvent, RunReplayed, RunPartial, ChoiceOption, ChoiceRequest, ChoiceBy } from './run-event.js'
+export { answeredQuestion, continuationPrompt, skipPrompt } from './run-event.js'
 export {
   PERSON,
   COMPUTER,

@@ -2,8 +2,9 @@
 // the coding agents: the control under the message box that picks the agent, its model and how hard
 // it thinks (and says them in a session); the Overview's usage card and the notice of an agent's
 // newer version; Settings › Coding agent; the accounts card, on the Overview and the Permissions
-// page; and the presses that fix what its `app.attention` items say (installing an agent, adding an
-// account). Each reads through the package's server part, which answers for this computer.
+// page; the presses that fix what its `app.attention` items say (installing an agent, adding an
+// account); and where the message box keeps the images a message goes with. Each reads through the
+// package's server part, which answers for this computer.
 import { Bot } from 'lucide-react'
 import { defineUiModule } from '@openagt/ui/module'
 import { AccountsCard, OverviewAccounts } from './AccountsCard.js'
@@ -12,6 +13,7 @@ import { AgentSettings } from './AgentSettings.js'
 import { AgentUpdates } from './AgentUpdates.js'
 import { Usage } from './Usage.js'
 import { connectFix, installFix } from './setup.js'
+import { images } from './images.js'
 
 export default defineUiModule({
   name: 'agent-driver',
@@ -25,5 +27,6 @@ export default defineUiModule({
       { place: 'permissions.section', id: 'accounts', label: 'Coding agent accounts', View: AccountsCard },
     ],
     'ui.action': [installFix, connectFix],
+    'ui.option': [images],
   },
 })

@@ -4,22 +4,32 @@ import { readdir, stat } from 'node:fs/promises'
 import { imagesDir } from '@openagt/agent-driver'
 import { makeWorld, waitFor } from './harness.js'
 import { onAgent } from '../dashboard-rpc/reads.js'
-import { sendImage, sendMessage } from '../dashboard-rpc/control.js'
+import { sendMessage } from '../dashboard-rpc/control.js'
+import { callModule } from '../dashboard-rpc/module-calls.js'
 
-// An image dropped or pasted into the box (README.md): the page sends its bytes once, the
-// dashboard keeps it on this computer under its hash, and a Start or a message names it. The run
+// An image dropped or pasted into the box (README.md): the page sends its bytes once, the module
+// that keeps images (agent-driver's `composer.images`) keeps it on this computer under its hash, and
+// a Start or a message names it. The run
 // is handed the names, its record keeps them with the prompt they went with, and the image itself
 // stays in the image store: never in the run's checkout, never in the project's records.
 
 /** The smallest PNG there is: one pixel. */
 const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
 
+type Kept = { ok: true; name: string } | { ok: false; error: string }
+
 test('a screenshot goes with the start and with a message to the ended run, and the chat names it with each after a reload', async () => {
   const world = await makeWorld()
   const rpc = world.rpc
   try {
     const project = await world.addProject()
-    const kept = await rpc(sendImage)('image/png', PNG)
+    // What the box's keep calls: agent-driver's server part, in no project.
+    const keep = async (type: string, data: string): Promise<Kept> => {
+      const called = await rpc(callModule)(null, '@openagt/agent-driver', 'keepImage', { type, data })
+      if (!called.ok) throw new Error(called.error)
+      return called.output as Kept
+    }
+    const kept = await keep('image/png', PNG)
     assert.ok(kept.ok, 'the image is kept')
     if (!kept.ok) return
     assert.match(kept.name, /^[0-9a-f]{64}\.png$/)
@@ -48,8 +58,8 @@ test('a screenshot goes with the start and with a message to the ended run, and 
     await assert.rejects(world.startAgent(project, 'Look', { images: [`${'f'.repeat(64)}.png`] }), /An image is no longer on this computer/)
     assert.equal((await world.hostCalls()).length, calls)
     // Bytes that are no image of the kind they say are not kept.
-    assert.deepEqual(await rpc(sendImage)('image/jpeg', PNG), { ok: false, error: 'This is not a JPG image' })
-    assert.deepEqual(await rpc(sendImage)('image/png', 'not base64!'), { ok: false, error: 'An image is sent as its kind and its bytes in base64.' })
+    assert.deepEqual(await keep('image/jpeg', PNG), { ok: false, error: 'This is not a JPG image' })
+    assert.deepEqual(await keep('image/png', 'not base64!'), { ok: false, error: 'An image is sent as its kind and its bytes in base64.' })
   } finally {
     await world.close()
   }

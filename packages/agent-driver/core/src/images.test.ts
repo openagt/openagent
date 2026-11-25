@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { mkdtemp, readdir, readFile, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { hasImage, imageFile, imageMediaType, imagesDir, isImageName, keepImage } from './images.js'
+import { hasImage, imageFile, imageMediaType, imagesDir, isImageName, keepImage, refusedImages } from './images.js'
 
 // The image store: the images a person's messages go with, kept on this computer, readable by that
 // user only, under names that are their content's hash and say nothing else.
@@ -55,4 +55,20 @@ test('only a name the store gives names an image: no path, no other kind', () =>
   for (const name of [`${hash}.png`, `${hash}.jpg`, `${hash}.gif`, `${hash}.webp`]) assert.ok(isImageName(name), name)
   for (const name of [`${hash}.svg`, `../${hash}.png`, `/tmp/${hash}.png`, `${hash.slice(1)}.png`, `${hash.toUpperCase()}.png`, 3, undefined]) assert.equal(isImageName(name), false, String(name))
   assert.throws(() => imageFile('../../etc/passwd'), /not an image's name/)
+})
+
+test('a message or a Start goes with the images kept here, a message\'s worth at most; any other name is refused in words', async () => {
+  const { env, dir } = await home()
+  try {
+    const kept = await keepImage('image/png', PNG, env)
+    assert.ok(kept.ok)
+    assert.equal(await refusedImages(undefined, env), undefined)
+    assert.equal(await refusedImages([kept.name], env), undefined)
+    assert.equal(await refusedImages(['/etc/passwd'], env), 'Images are named by the names the dashboard kept them under.')
+    assert.equal(await refusedImages(kept.name, env), 'Images are named by the names the dashboard kept them under.', 'a name alone is no list of them')
+    assert.equal(await refusedImages(Array.from({ length: 21 }, () => kept.name), env), 'Images are named by the names the dashboard kept them under.')
+    assert.equal(await refusedImages([`${'f'.repeat(64)}.png`], env), 'An image is no longer on this computer. Take it out and add it again.')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
 })

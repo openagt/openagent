@@ -1,4 +1,4 @@
-export { toolQuestion, continuationPrompt, skipPrompt, answeredQuestion } from './question.js'
+export { toolQuestion } from './question.js'
 export { appendInbox, takeInbox, promptOf, promptLines, steeredWords, finishTurn } from './inbox.js'
 export { attachLog, logCardFile, logDiaryFile, logLiveFile, agentEnv, DIARY_ENV } from './session-log.js'
 export { checkCliReady, probeCli, type CliProbe, type CliSpec, type DriverReadyOptions } from './ready.js'
@@ -38,7 +38,7 @@ export { listRuns, keptRuns, findRun, runFiles, readDiary, writeRun, patchRun, d
 export { accountTurn } from './accounts/turn.js'
 export { configFile, writePrivate } from './private-files.js'
 // The images a person's messages go with, kept on this computer only.
-export { imagesDir, isImageName, imageFile, imageMediaType, readImage, hasImage, keepImage, IMAGE_MAX_BYTES, type ImageMediaType } from './images.js'
+export { imagesDir, isImageName, imageFile, imageMediaType, readImage, hasImage, keepImage, type ImageMediaType } from './images.js'
 // The coding agents of the distribution (`run.agent`, #2394): the one a run is on, and the accounts each has.
 export { codingAgent, codingAgents, agentNames, UnknownAgent } from './agents.js'
 export {
@@ -63,7 +63,7 @@ export { gitHostEnv } from './engine/git-host.js'
 export { INBOX_FILE } from './engine/live-card.js'
 export { localHost, type LocalHostDeps } from './engine/host.js'
 export { ReadyNaming, type ReadyNamingDeps } from './engine/ready-naming.js'
-export { forgetStartedNames, nameStarted, startedName, withStartedNames } from './engine/started-names.js'
+export { forgetStartedNames, nameStarted, withStartedNames } from './engine/started-names.js'
 // The models a coding agent offers, as its adapter asks it once per account.
 export { modelsAskedOnce, firstAccountOf, modelsOf, type AgentModels, type ModelsAsked } from './models.js'
 export { NAME_FILE_ENV, givenName, nameHandOver } from './engine/title.js'

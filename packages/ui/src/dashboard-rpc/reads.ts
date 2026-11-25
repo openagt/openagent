@@ -20,7 +20,6 @@ import type { AgentWorktree } from '../dashboard/types.js'
 import { crawlRepoFiles } from '../project.js'
 import { contextHosts, contextProject, contextProjects, contextRun, resolveProjectPath, resolveAgentPath, runHostOf } from './context.js'
 import type { RunEvent } from '@openagt/hooks'
-import { startedName, withStartedNames } from '@openagt/agent-driver'
 import { markOtherHost, withRowMarks } from '../dashboard/run-rows.js'
 import type { ProjectRef, RunRef } from '@openagt/hooks'
 
@@ -47,18 +46,9 @@ export async function onAgents(projectId: string): Promise<AgentMeta[]> {
   return at && cwd ? runRows(at.project, cwd) : []
 }
 
-/**
- * The name asked for a run just started, answered once it is in (agent-driver's `started-names.ts`): the run's
- * row is not in the list yet when it is, and the page shows it where the row will be. Nothing
- * when no name came.
- */
-export async function onStartedName(agentId: string): Promise<string | undefined> {
-  return startedName(agentId)
-}
-
 /** A project's runs as its list shows them: its hosts' runs, marked with what the modules read of them off its folder here (`cwd`). */
 async function runRows(project: ProjectRef | undefined, cwd: string): Promise<AgentMeta[]> {
-  return withStartedNames(await withRowMarks(cwd, (await readRuns(contextHosts(), project)).map(agent => markOtherHost(agent))))
+  return withRowMarks(cwd, (await readRuns(contextHosts(), project)).map(agent => markOtherHost(agent)))
 }
 
 /** A run of the project `projectId`, as its host is asked about it; none for a project that is not on the list. */

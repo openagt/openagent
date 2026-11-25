@@ -725,7 +725,7 @@ describe('module cards on the Overview (#1818)', () => {
     await waitFor(() => expect(window.location.pathname).toBe('/app/9-r'))
   })
 
-  test('a run just started shows its name, in the header too, as soon as the daemon has it: before its row is in the list', async () => {
+  test('a run just started shows its name, in the header too, once its host lists it named', async () => {
     const { useModuleHost } = await import('./module/index.js')
     function Starter({ projects }: UiCardProps) {
       const host = useModuleHost()
@@ -733,14 +733,17 @@ describe('module cards on the Overview (#1818)', () => {
     }
     answerOverview([{ package: '@acme/queue', url: moduleModule('__namedStarterCard', { place: 'overview.card', id: 'starter', label: 'starter', View: Starter }), projects: [PROJECT.id] }])
     answers.set('sendStart', () => ({ ok: true, agentId: '9-n' }))
-    answers.set('onStartedName', () => 'Fix flaky login test')
+    let listed: unknown[] = []
+    answers.set('onAgents', () => listed)
     window.history.replaceState(null, '', '/')
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'start' }))
     await waitFor(() => expect(window.location.pathname).toBe('/app/9-n'))
-    expect(calls.find(call => call.name === 'onStartedName')?.args).toEqual(['9-n'])
-    // The header's title, revealed letter by letter, while the list still has no row for the run.
-    await waitFor(() => expect(document.querySelector('[title="Fix flaky login test"]')).toBeTruthy())
+    // Before its host lists it, the header holds the name's place.
+    await waitFor(() => expect(screen.queryByTestId('title-placeholder')).toBeTruthy())
+    listed = [{ id: '9-n', status: 'running', startedAt: new Date().toISOString(), intent: 'fix the flaky login test', title: 'Fix flaky login test' }]
+    // The header's title, revealed letter by letter, from the row the host named.
+    await waitFor(() => expect(document.querySelector('[title="Fix flaky login test"]')).toBeTruthy(), { timeout: 5000 })
     expect(screen.queryByTestId('title-placeholder')).toBeNull()
   })
   test('a run just started is starting until a list has had it; then a list without it says no such session, as after a delete and Back', async () => {

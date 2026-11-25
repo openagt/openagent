@@ -4,12 +4,10 @@ import { openInApp, type OpenTarget, type OpenResult } from '../dashboard/open-i
 import { contextPreferences, contextRun, contextStartAgent, resolveProjectPath, resolveAgentPath, runHostOf } from './context.js'
 import { runRefAt } from '../distribution-hooks.js'
 import { errorMessage } from '@openagt/agent-data'
-import { hasImage, isImageName, keepImage, patchRun } from '@openagt/agent-driver'
-import { IMAGES_PER_MESSAGE } from '../images.js'
+import { patchRun } from '@openagt/agent-driver'
 
-import { isRunId, type AgentMeta } from '../store/index.js'
+import { isRunId, projectBranches, type AgentMeta } from '../store/index.js'
 import { withAgentLock } from '../agent-locks.js'
-import { deleteProjectAgent } from '../worktrees.js'
 import { mergeAgentPr, openAgentPullRequest, pushAgentBranch, readRunHandoff, type HandoffResult } from '../dashboard/agent-handoff.js'
 import { copyTarget } from '../dashboard/session-copies.js'
 import { createRepository, type CreateRepositoryResult } from '../store/repository.js'
@@ -57,9 +55,8 @@ export async function sendStop(projectId: string, agentId?: string): Promise<Ste
 export async function sendMessage(projectId: string, text: string, agentId?: string, publish?: PublishPick | null, sent?: { id?: string; later?: boolean; images?: string[] }): Promise<SteerResult> {
   const message = text.trim()
   if (!message) return { ok: true }
+  // The run's host takes the images by their names, or refuses them.
   const images = sent?.images ?? []
-  if (!Array.isArray(images) || images.length > IMAGES_PER_MESSAGE || !images.every(isImageName)) return { ok: false, error: 'Images are named by the names the dashboard kept them under.' }
-  if (!(await Promise.all(images.map(name => hasImage(name)))).every(Boolean)) return { ok: false, error: 'An image is no longer on this computer. Take it out and add it again.' }
   // A call that names how it is sent and no level passes the level as nothing.
   const level = publish ?? undefined
   if (level !== undefined && !isPublishPick(level)) return { ok: false, error: 'unknown publish level' }
@@ -69,18 +66,6 @@ export async function sendMessage(projectId: string, text: string, agentId?: str
   if (!cwd || !agentId || !isRunId(agentId)) return { ok: false, error: 'unknown session' }
   return (await startedElsewhere(projectId, agentId)) ?? sayToRun(projectId, cwd, agentId, { kind: 'message', text: message, ...(level !== undefined ? { publish: level } : {}), ...(id !== undefined ? { id } : {}), ...(later ? { later: true as const } : {}), ...(images.length > 0 ? { images } : {}) })
 }
-
-/**
- * Keep an image dropped or pasted into a message box on this computer (`@openagt/agent-driver`'s
- * image store), its bytes sent as base64: answers the name a message names it by, or why it was
- * not kept.
- */
-export async function sendImage(type: string, data: string): Promise<{ ok: true; name: string } | { ok: false; error: string }> {
-  if (typeof type !== 'string' || typeof data !== 'string' || !BASE64.test(data)) return { ok: false, error: 'An image is sent as its kind and its bytes in base64.' }
-  return keepImage(type, Buffer.from(data, 'base64'))
-}
-
-const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/
 
 /**
  * Take back a message sent to a working run that the agent has not read yet (Cancel and edit):
@@ -119,11 +104,23 @@ async function withWorktreeRemoval<T>(projectId: string, agentId: string, remove
 /**
  * Delete a session (#1032): remove it from the dashboard, records and all — the sibling of
  * git-branches' Remove worktree, and the one destructive-of-history action, so its surface confirms
- * first. The checks, the worktree removal and what it leaves behind (the branch and its
- * commits) are all {@link deleteProjectAgent}'s; this adds only the agent lock around them.
+ * first. What goes and what stays (its checkout and its record go, its branch and their commits
+ * stay) is its host's (`RunHost.delete`); this adds only the agent lock around it.
  */
 export async function sendDeleteAgent(projectId: string, agentId: string): Promise<DeleteAgentResult> {
-  return withWorktreeRemoval(projectId, agentId, async cwd => deleteProjectAgent(cwd, agentId, await contextRun(projectId, agentId).catch(() => undefined)))
+  return withWorktreeRemoval(projectId, agentId, async cwd => {
+    try {
+      const run = await runRefAt(projectId, cwd, agentId)
+      const host = await runHostOf(run)
+      if (!host.delete) return { ok: false, error: `A session on ${host.label} is not deleted from here.` }
+      await host.delete(run)
+      // Its checkout went: the project's checkouts are read again on the next look.
+      projectBranches.changed(cwd)
+      return { ok: true }
+    } catch (err) {
+      return { ok: false, error: errorMessage(err) }
+    }
+  })
 }
 
 /**

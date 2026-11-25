@@ -17,7 +17,6 @@ import { NAME_FILE_ENV } from './title.js'
 import { git, removeRepo, testRepo } from './test-repo.js'
 import { NOW } from './run-test-support.js'
 import { memorySettings } from '@openagt/hooks/testing'
-import { startedName } from './started-names.js'
 
 // This computer's host, with the runs' processes stood in for: what each is spawned with, what a
 // person says to a run reaching it or resuming it, a Stop's signal, the runs it lists, and where a
@@ -146,7 +145,7 @@ test('a run whose options name no coding agent is on its profile\'s, else on the
   }
 })
 
-test('a run whose Start brings no name is named as it starts, where the person names runs, and the name is kept for the page until the record has it', async () => {
+test('a run whose Start brings no name is named as it starts, where the person names runs, and listed by that name until the record has it', async () => {
   const repo = await testRepo()
   try {
     const settings = memorySettings()
@@ -159,7 +158,8 @@ test('a run whose Start brings no name is named as it starts, where the person n
     const { id } = await here.start({ project, prompt: 'fix the login', options: {} })
     assert.deepEqual(asked, ['codex: fix the login'])
     assert.ok(runs[0]?.env?.[NAME_FILE_ENV], 'the run is told where its name comes')
-    assert.equal(await startedName(id), 'Login fix')
+    await liveCard(repo, id, 'running', { pid: process.pid, host: HERE })
+    assert.equal((await here.list(project)).find(run => run.id === id)?.title, 'Login fix')
     await here.check!({ project, options: {} })
     await new Promise(resolve => setTimeout(resolve, 10))
     assert.deepEqual(prepared, ['codex'], 'a check readies the naming session the next run takes')

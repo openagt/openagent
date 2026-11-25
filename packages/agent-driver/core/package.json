@@ -1,7 +1,7 @@
 {
   "name": "@openagt/agent-driver",
   "version": "0.1.0",
-  "description": "OpenAgent's runs: a coding agent run from start to end in its own checkout over the distribution's steps, steered, stopped and resumed; this computer as their host; the run's record, its card and its diary; and the coding agents' accounts, the next free one taking over at a usage limit, with the skill that tells an agent how to add and list them. The coding agents themselves come from @openagt/agent-driver-<name>.",
+  "description": "OpenAgent's runs: a coding agent run from start to end in its own checkout over the distribution's steps, steered, stopped and resumed; this computer as their host, which deletes them too and sweeps the sessions with no project; the images a person's messages go with; the run's record, its card and its diary; and the coding agents' accounts, the next free one taking over at a usage limit, with the skill that tells an agent how to add and list them. The coding agents themselves come from @openagt/agent-driver-<name>.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -26,10 +26,6 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
-    },
-    "./question": {
-      "types": "./dist/question.d.ts",
-      "default": "./dist/question.js"
     },
     "./record": {
       "types": "./dist/run-record.d.ts",

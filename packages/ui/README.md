@@ -8,8 +8,9 @@ scripted.
 
 It names no coding agent either. Each agent's name, mark and models come from its
 `run.agent`. `@openagt/agent-driver` draws the rest in the places the shell keeps for modules:
-the menu under the message box, the usage card, what a run needs before it can start, and the
-agents' updates.
+the menu under the message box, the usage card, what a run needs before it can start, the
+agents' updates, and where the images a message goes with are kept (`composer.images`). Its host
+(`run.host`) starts, stops, deletes and names this computer's runs.
 
 ```ts
 import { runCli } from '@openagt/ui/cli'

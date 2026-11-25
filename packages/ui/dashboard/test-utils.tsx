@@ -1,11 +1,32 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react'
-import { continuationPrompt } from '@openagt/agent-driver/question'
-import { mountedOf, type Mounted, type MountedModules } from './lib/use-modules.js'
+import { continuationPrompt } from '@openagt/hooks'
+import { mountedOf, type Mounted, type MountedModules, type MountedOption } from './lib/use-modules.js'
 import type { UiMarkdownProps, UiQuestionProps, UiRender } from './module/index.js'
 
 // The gear and its lines, a tooltip's hover and a menu's opening: the SDK's own test helpers, which a module's tests use too.
 import { openMenu } from './module/testing.js'
 export { hoverTooltip, openMenu, GearMenu, gear, setupLine, openSetupLine } from './module/testing.js'
+
+/**
+ * A module that keeps the images a message goes with (`composer.images`), as agent-driver's does:
+ * `keep` stands in for its server part, and a kept image is shown from `/_images/<name>`.
+ */
+export function imageStore(keep: MountedOption<'composer.images'>['keep'] = async () => ({ ok: false, error: 'not kept' })): MountedOption<'composer.images'> {
+  return {
+    place: 'composer.images',
+    id: 'images',
+    package: '@acme/images',
+    projects: [],
+    computer: true,
+    types: ['image/png', 'image/jpeg', 'image/gif', 'image/webp'],
+    kinds: 'PNG, JPEG, GIF or WebP',
+    maxBytes: 3.75 * 1024 * 1024,
+    maxEdge: 8000,
+    perMessage: 20,
+    keep,
+    src: name => `/_images/${name}`,
+  }
+}
 
 /**
  * Take a start button's "Configure first, then run" (#1507): open the chevron named
