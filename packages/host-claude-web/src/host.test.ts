@@ -106,7 +106,7 @@ test("the host lists the project's runs on the web, and finds one by its record:
       { id: '2026-11-19T10-00-00-000Z', project: 'shop', status: 'working', startedAt: '2026-11-19T10:00:00.000Z', title: 'Add a flag', prompt: 'run 2026-11-19T10-00-00-000Z' },
     ])
     assert.deepEqual(await web.list!(), [])
-    assert.deepEqual(await web.find!({ id: '2026-11-19T11-00-00-000Z', project }), { record: { status: 'done', host: HERE, branch: 'claude/add-flag', pr: { number: 9 } }, changedNothing: false })
+    assert.deepEqual(await web.find!({ id: '2026-11-19T11-00-00-000Z', project }), { record: { status: 'done', host: HERE, branch: 'claude/add-flag', pr: { number: 9, url: 'https://github.com/o/r/pull/9' } }, changedNothing: false })
     assert.equal(await web.find!({ id: '2026-11-19T11-30-00-000Z', project }), undefined)
     assert.equal(await web.find!({ id: '2026-11-19T11-00-00-000Z' }), undefined, 'a run of no project is none of this host')
   } finally {

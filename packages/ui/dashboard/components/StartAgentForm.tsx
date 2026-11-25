@@ -19,7 +19,6 @@ import { Composer, type ComposerHandle } from './Composer.js'
 import { ProjectPicker } from './ProjectPicker.js'
 import { ReposMenu, folderName, type PickedRepo } from './SessionRepos.js'
 import { Dots } from './ToolCalls.js'
-import { useGitAccountSetup, useSessionAccount } from './GitHosts.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
 import { shortcut } from '../lib/shortcut.js'
 import { useIsMobile } from '../lib/use-mobile.js'
@@ -56,13 +55,10 @@ const STARTING_SAID_AFTER_MS = 300
 // The level goes with the Start; Off sends none. Until the person
 // picks, the button shows the pick the daemon will start the run at: Commit, which pushes
 // nothing. Saved, so the pick holds for every next run.
-// Above it, the git host account this session pushes as. A pick there is for this session alone:
-// it goes with the Start, and the computer's own pick, the Permissions page's, stays. Not saved:
-// the next session starts on the computer's again.
 // The gear's first lines are the modules' (`composer.control` at `setup`): what they pick goes with
 // the Start in its run options.
 // With no project (`SESSIONS_ID`), the run starts in a folder of its own on this computer: the row
-// says "No project", and nothing about a repository is offered, no branch, no Auto level. It has its git host account all the same: it may reach the host with no project. Its Context, under the box where a project's is, is the repos the session
+// says "No project", and nothing about a repository is offered, no branch, no Auto level. Its Context, under the box where a project's is, is the repos the session
 // works with (SessionRepos.tsx): each is copied into the session's folder, and none is made a project. A repo
 // ticked in a project's Context is copied the same way, beside the run's checkout of the project.
 export function StartAgentForm({
@@ -145,44 +141,25 @@ export function StartAgentForm({
   // What would stop a run these picks start on this computer, as the modules say it (`app.attention`):
   // said above the box, each with its fix. A host beside this computer says what stops a run there itself, in its check.
   const attention = useAttention(projectId, host ? undefined : options)
-  // Whether a pull request can be opened here: unknown until the launcher is read, so every pick is
-  // offered until then; the daemon that starts the run holds a pull request pick to the branch
-  // where its project has no git host.
-  const gitHost = launcher?.gitHost ?? true
   // A project with no remote can publish nothing: its picks stop at the commit.
   const remote = launcher?.remote ?? true
   // The project as a place is given it, once the launcher is read: whether it has a remote is what a
   // module tells its levels by. With no project the level is for the session's copies of repos,
   // whatever host each is on: every level is offered.
   const autoProject = !noProject && launcher ? { id: projectId, name: projectName ?? projectId, ...(remote ? { remote: launcher.address ?? 'origin' } : {}) } : undefined
-  const levels = useAutoLevels(projectId, autoProject, noProject || gitHost)
+  const levels = useAutoLevels(projectId, autoProject)
   const publishPick = autoPickIn(preferences.publish, levels)
 
   // Asked again at each change of the picks, and once what the modules said would stop the run is
   // fixed: the host's own check says what is still in the way.
   const runItems = (attention ?? []).filter(item => item.scope === 'run').length
   const readiness = useLoaded(() => (host ? onStartCheck(projectId, options, host.id) : onStartCheck(projectId, options)), null, [projectId, JSON.stringify(options), runItems, host?.id])
-  // The project's repository, whose host is where the session pushes.
-  const address = launcher?.address
-
-  // The git host account picked for this session, when the person picked one; the computer's otherwise.
-  const [pickedAccount, setPickedAccount] = useState<string | undefined>()
-  useEffect(() => setPickedAccount(undefined), [projectId])
-  // With no project the account is the one at the host a package answers for: the session may reach it all the same.
-  const account = useSessionAccount(address, pickedAccount, noProject)
-  // The gear's lines, and what its hover says of them with the menu shut. A session with no project
-  // has its account too, and no Auto level: it has no repository of its own to publish.
-  const gitAccount = useGitAccountSetup(remote ? address : undefined, pickedAccount, setPickedAccount, noProject)
   // A project's Context holds files, said at the prompt's end, and repos, which the run copies as it does with no project.
   const ticked = noProject ? repos : [...context].filter(isRepoPath).map(path => ({ path, name: folderName(path) }))
   // What a level acts on: the project, or with none the copies of repos, once one is ticked.
   const publishes = !noProject || ticked.length > 0
-  const setupSaid = [
-    gitAccount.said,
-    publishes && autoSaid(publishPick, levels),
-  ]
-    .filter(Boolean)
-    .join(' · ')
+  // What the gear's hover says of its own line with the menu shut; the modules' lines say theirs.
+  const setupSaid = publishes ? autoSaid(publishPick, levels) : ''
 
   const submit = async (text: string, { images }: { images: string[] }) => {
     setNote(STARTING)
@@ -196,7 +173,6 @@ export function StartAgentForm({
       ...(noProject ? (publishes ? { ...unpublished, publish: publishPick } : unpublished) : startPicks(preferences)),
       ...(host ? { host: host.id } : {}),
       ...(ticked.length > 0 ? { repos: ticked.map(repo => repo.path) } : {}),
-      ...((noProject || remote) && account !== undefined ? { account } : {}),
     })
     setNote(null)
     if (result) {
@@ -210,7 +186,6 @@ export function StartAgentForm({
         keepDraftImages(`launcher:${projectId}`, [])
         onAgentStarted?.(text, result.agentId, host?.label, {
           ...(Object.keys(options).length > 0 ? { options } : {}),
-          ...((noProject || remote) && account !== undefined ? { gitAccount: account } : {}),
           ...(publishes ? { publish: publishPick } : {}),
           ...withImages,
           ...(ticked.length > 0 ? { repos: ticked.map(repo => ({ name: repo.name, from: repo.path })) } : {}),
@@ -230,7 +205,6 @@ export function StartAgentForm({
     // The width and the padding of an agent's message box (`AgentComposer.tsx`): the box is in the
     // same place on both pages. On the Overview it is the page's column, as its cards are.
     <form onSubmit={e => e.preventDefault()} className={cn('@container w-full', !onOverview && 'mx-auto max-w-3xl px-4 pt-2 pb-4')}>
-      {gitAccount.dialog}
       <Composer
         // A box of its own per project, so the prompt carried over from the picker lands in it (below).
         key={projectId}
@@ -248,14 +222,11 @@ export function StartAgentForm({
           <ProjectPicker look="row" none={{ label: 'No project', tip: 'The session works in a folder of its own' }} picked={noProject ? null : projectId} pickedName={projectName} projects={projects} busy={busy} onPick={id => pickProject(id ?? SESSIONS_ID)} onProjectAdded={onProjectAdded} />
         }
         controlBox={{ in: 'launcher', projectId, options, onChange: setOptions, busy, pickProject: id => pickProject(id ?? SESSIONS_ID) }}
-        // The gear's lines (his order), after the modules': who it pushes as, the project's git host
-        // account, picked for this session; and, set apart, what becomes of the work. The gear is in the warning's colour while the host has no account.
+        // The gear's lines (his order), after the modules': set apart, what becomes of the work.
         setup={{
           said: setupSaid,
-          warn: !noProject && gitAccount.missing,
           lines: (
             <>
-              {gitAccount.line}
               {publishes && <AutoMenu publish={publishPick} levels={levels} onPublish={pick => updatePreferences({ publish: pick })} covers={autoCovers(noProject ? null : projectName, ticked.length)} />}
             </>
           ),

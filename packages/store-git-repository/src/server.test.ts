@@ -36,7 +36,7 @@ const save = (folder: string, name: string) => withPersonalFolder(folder, 'save 
 test('a folder only on this computer, or backed up as an account of OpenAgent, is no gap; one at GitHub with none is, with what waits', async () => {
   await withComputer(async folder => {
     assert.equal((await save(folder, 'Ada')).ok, true)
-    assert.deepEqual(await backup(host, {}), { gaps: [] })
+    assert.deepEqual(await backup(host, {}), { gaps: [], hosts: [] })
 
     await git(['remote', 'add', 'origin', 'https://github.com/ada/agent.git'], folder)
     // The bug the notice is for: a change made with no account named is made, not failed.
@@ -54,7 +54,7 @@ test('a folder only on this computer, or backed up as an account of OpenAgent, i
     assert.deepEqual(await backupAttention({ project: { id: 'p', name: 'p', dir: folder } }), [])
 
     await writeRemoteAccount(folder, { login: 'ada-agent', host: 'github.com', config: [] }, git)
-    assert.deepEqual(await backup(host, {}), { gaps: [] })
+    assert.deepEqual(await backup(host, {}), { gaps: [], hosts: [] })
     assert.deepEqual(await backupAttention({}), [])
   })
 })

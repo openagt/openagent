@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { usePolled, useModuleHost } from '@openagt/ui/module'
+import type { HostAccounts } from '@openagt/hooks'
 import { server, type BackupGap } from './calls.js'
 
 // What is not backed up, read by Settings › Your agent data's notice, which fixes it: one press
@@ -8,6 +9,8 @@ import { server, type BackupGap } from './calls.js'
 
 export interface BackupView {
   gaps: BackupGap[]
+  /** OpenAgent's accounts at each host: what the data may be backed up as. */
+  hosts: HostAccounts[]
 }
 
 /** Read again this often: an account may be added on the Permissions page, or another computer may name one. */

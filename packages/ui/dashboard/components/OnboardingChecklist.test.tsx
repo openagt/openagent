@@ -18,20 +18,15 @@ vi.mock('../lib/preferences.js', () => ({
   usePreferences: () => ({}),
   updatePreferences,
 }))
-const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendGitHostInstall: vi.fn(), sendGitHostLogin: vi.fn(), sendStopGitHostLogin: vi.fn(), sendUseGitHostAccount: vi.fn() }))
-vi.mock('../rpc/logins.js', () => logins)
 /** A module's item about this computer, with the press its package fixes it with. */
 const CONNECT_AGENT = { module: '@openagt/agent-driver', kind: 'setup', scope: 'computer', id: 'connect', words: 'Connect a coding agent', detail: 'Sessions run on a coding agent, with your own account.', fix: { label: 'Connect a coding agent…', href: '/permissions' } }
 
 const { OnboardingChecklist } = await import('./OnboardingChecklist.js')
 
-const github = (accounts: { login: string; runs: boolean; ok: boolean }[]) => ({
-  hosts: [{ host: 'github.com', projects: [], provider: { name: 'GitHub', requestWord: 'pull request', logo: '<svg/>', tool: 'gh', installed: true, install: 'brew install gh', accounts } }],
-})
-const CONNECTED = github([{ login: 'octo', runs: true, ok: true }])
+/** What github says while OpenAgent has no GitHub account: a step, its fix a link here. */
+const CONNECT_GITHUB = { module: 'github', kind: 'setup', scope: 'computer', id: 'no-account', words: 'Connect GitHub', detail: 'OpenAgent pushes and opens pull requests with an account of its own, never your own login.', fix: { label: 'Add a GitHub account', href: '/permissions' } }
 
 beforeEach(() => {
-  logins.onGitHosts.mockResolvedValue(CONNECTED)
   onAttention.mockResolvedValue({ items: [], whole: true })
 })
 
@@ -71,7 +66,7 @@ const openStep = async (label: string) => fireEvent.click(await screen.findByRol
 describe('the first steps on the Overview', () => {
   test('is named "Discover OpenAgent", and a count says where the steps stand', async () => {
     onDashboard.mockResolvedValue(EMPTY)
-    logins.onGitHosts.mockResolvedValue(github([]))
+    onAttention.mockResolvedValue({ items: [CONNECT_GITHUB], whole: true })
     steps()
     // A part's heading like every other, the count beside it as every part's count stands.
     const heading = await screen.findByRole('heading', { level: 2, name: 'Discover OpenAgent 0 of 2' })
@@ -80,16 +75,15 @@ describe('the first steps on the Overview', () => {
     expect(await screen.findByRole('list', { name: '0 of 2 done' })).toBeTruthy()
   })
 
-  test.each(['dashboard', 'attention', 'hosts'])('says "Loading…" and no step until the projects, what the modules say and the git hosts are read: %s answers last', async last => {
+  test.each(['dashboard', 'attention'])('says "Loading…" and no step until the projects and what the modules say are read: %s answers last', async last => {
     // Each read is asked once or more: an answer goes to every asker.
     const askers: Record<string, ((value: unknown) => void)[]> = {}
-    const answers: Record<string, (value: unknown) => void> = { dashboard: value => askers['dashboard']!.forEach(to => to(value)), attention: value => askers['attention']!.forEach(to => to(value)), hosts: value => askers['hosts']!.forEach(to => to(value)) }
+    const answers: Record<string, (value: unknown) => void> = { dashboard: value => askers['dashboard']!.forEach(to => to(value)), attention: value => askers['attention']!.forEach(to => to(value)) }
     const held = (name: string) => () => new Promise(resolve => (askers[name] ??= []).push(resolve))
     onDashboard.mockImplementation(held('dashboard'))
     onAttention.mockImplementation(held('attention'))
-    logins.onGitHosts.mockImplementation(held('hosts'))
     // A module's step stays open, so the card stays once read.
-    const values: Record<string, unknown> = { dashboard: WITH_PROJECT, attention: { items: [QUEUE_EMPTY], whole: true }, hosts: CONNECTED }
+    const values: Record<string, unknown> = { dashboard: WITH_PROJECT, attention: { items: [QUEUE_EMPTY], whole: true } }
     steps()
     expect(await screen.findByText('Loading…')).toBeTruthy()
     expect(screen.queryAllByRole('listitem')).toEqual([])
@@ -103,7 +97,7 @@ describe('the first steps on the Overview', () => {
     expect(screen.queryByText('Loading…')).toBeNull()
   })
 
-  test('while it reads, the card draws a row per step it knows of once what the modules say and the git hosts are read, so no row is pushed by a step they add', async () => {
+  test('while it reads, the card draws a row per step it knows of once what the modules say is read, so no row is pushed by a step they add', async () => {
     onDashboard.mockImplementation(() => new Promise(() => {}))
     const asked: ((value: unknown) => void)[] = []
     const answer = (value: unknown): void => asked.forEach(to => to(value))
@@ -130,26 +124,9 @@ describe('the first steps on the Overview', () => {
     await waitFor(() => expect(document.body.textContent).toContain('makes no commit on your branch and pushes nothing'))
   })
 
-  test('the account is added in a dialog: its code is shown there, and Cancel gives the login up', async () => {
-    onDashboard.mockResolvedValue(EMPTY)
-    logins.sendStopGitHostLogin.mockResolvedValue({ ok: true })
-    logins.sendGitHostLogin.mockResolvedValue({ ok: true, code: 'ABCD-1234', url: 'https://github.com/login/device' })
-    logins.onGitHosts.mockResolvedValue(github([]))
-    steps()
-    fireEvent.click(await screen.findByRole('button', { name: 'Add a GitHub account' }))
-    logins.onGitHosts.mockResolvedValue({ hosts: [{ ...github([]).hosts[0]!, provider: { ...github([]).hosts[0]!.provider, loggingIn: { code: 'ABCD-1234', url: 'https://github.com/login/device' } } }] })
-    const dialog = await screen.findByRole('dialog', { name: 'Add a GitHub account' })
-    expect(await within(dialog).findByText('ABCD-1234')).toBeTruthy()
-    logins.onGitHosts.mockResolvedValue(github([]))
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
-    await waitFor(() => expect(logins.sendStopGitHostLogin).toHaveBeenCalledWith('github.com'))
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    expect(screen.getByRole('button', { name: 'Add a GitHub account' })).toBeTruthy()
-  })
-
   test('one step open at a time, numbered: the next to do with its words and its press; the others only their titles, each a press from open', async () => {
     onDashboard.mockResolvedValue(EMPTY)
-    logins.onGitHosts.mockResolvedValue(github([]))
+    onAttention.mockResolvedValue({ items: [CONNECT_GITHUB], whole: true })
     steps()
     await waitFor(() => expect(row('Connect GitHub').getAttribute('aria-current')).toBe('step'))
     expect(within(row('Connect GitHub')).getByText(/an account of its own, never your own login/)).toBeTruthy()
@@ -164,19 +141,17 @@ describe('the first steps on the Overview', () => {
     expect(within(row('Connect GitHub')).queryByRole('button', { name: 'Add a GitHub account' })).toBeNull()
   })
 
-  test('a step done stays, one line with a ✓ and what was done: the account, the project', async () => {
+  test('a step done stays, one line with a ✓ and what was done: the project', async () => {
     onDashboard.mockResolvedValue(WITH_PROJECT)
     onAttention.mockResolvedValue({ items: [QUEUE_EMPTY] })
     steps({ projects: [SHOP] })
-    await waitFor(() => expect(within(row('Connect GitHub')).getByLabelText('Done')).toBeTruthy())
-    expect(within(row('Connect GitHub')).getByText('@octo')).toBeTruthy()
+    await waitFor(() => expect(within(row('Add your first project')).getByLabelText('Done')).toBeTruthy())
     expect(within(row('Add your first project')).getByText('shop')).toBeTruthy()
   })
 
-  test("a module's item about this computer is a step before the git hosts': its words, what it adds, and its fix's press", async () => {
+  test("a module's item about this computer is a step, in the modules' order: its words, what it adds, and its fix's press", async () => {
     onDashboard.mockResolvedValue(EMPTY)
-    logins.onGitHosts.mockResolvedValue(github([]))
-    onAttention.mockResolvedValue({ items: [CONNECT_AGENT], whole: true })
+    onAttention.mockResolvedValue({ items: [CONNECT_AGENT, CONNECT_GITHUB], whole: true })
     const openPage = vi.fn()
     render(
       <HostServicesContext.Provider value={{ ...INERT_HOST_SERVICES, openPage }}>
@@ -210,8 +185,7 @@ describe('the first steps on the Overview', () => {
 
   test("only what this computer needs set up is a step: not what a project or a run needs, nor what waits on the person", async () => {
     onDashboard.mockResolvedValue(WITH_PROJECT)
-    onAttention.mockResolvedValue({ items: [{ ...QUEUE_EMPTY, scope: 'project', words: 'A project' }, { ...QUEUE_EMPTY, scope: 'run', words: 'A run' }, { ...QUEUE_EMPTY, kind: 'waiting', words: 'Waiting' }] })
-    logins.onGitHosts.mockResolvedValue(github([]))
+    onAttention.mockResolvedValue({ items: [CONNECT_GITHUB, { ...QUEUE_EMPTY, scope: 'project', words: 'A project' }, { ...QUEUE_EMPTY, scope: 'run', words: 'A run' }, { ...QUEUE_EMPTY, kind: 'waiting', words: 'Waiting' }] })
     steps({ projects: [SHOP] })
     await waitFor(() => expect(row('Add your first project')).toBeTruthy())
     expect(screen.getAllByRole('listitem').map(item => item.getAttribute('aria-label'))).toEqual(['Connect GitHub', 'Add your first project'])
@@ -229,6 +203,6 @@ describe('the first steps on the Overview', () => {
     onDashboard.mockResolvedValue(WITH_PROJECT)
     onAttention.mockResolvedValue({ items: [QUEUE_EMPTY] })
     steps({ projects: [SHOP] })
-    expect(await screen.findByRole('heading', { level: 2, name: 'Discover OpenAgent 2 of 3' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { level: 2, name: 'Discover OpenAgent 1 of 2' })).toBeTruthy()
   })
 })

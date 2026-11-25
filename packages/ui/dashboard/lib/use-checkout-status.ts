@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { AgentWorktree } from '../../src/index.js'
 import { onAgentWorktree } from '../rpc/reads.js'
-import { PR_PENDING_MS, SETTLING_EVERY_MS, useSettling } from './use-agent-handoff.js'
+import { SETTLING_EVERY_MS, useSettling } from './use-agent-handoff.js'
 import { useAskOn, usePolled } from './use-async.js'
 import { prsAgain } from './runs-changed.js'
 
@@ -12,9 +12,7 @@ import { prsAgain } from './runs-changed.js'
  * that ends leaves the checkout clean or dirty right then, not at the next poll up to ten seconds on.
  */
 export function useCheckoutStatus(projectId: string, agentId: string, turn?: boolean): AgentWorktree | null {
-  // Resting cadence is ten seconds, but a PR lookup still in flight (#1028) is an answer that
-  // lands in under a second — worth asking again for rather than showing a gap for ten.
-  // Right after a turn ends it is read every second for a while, as the branch is: the run's
+  // Resting cadence is ten seconds. Right after a turn ends it is read every second for a while, as the branch is: the run's
   // clean-up pushes, opens its pull request and removes its checkout then, and the answer in the
   // middle of that was the bar's for ten seconds.
   const [everyMs, setEveryMs] = useState(10_000)
@@ -31,7 +29,7 @@ export function useCheckoutStatus(projectId: string, agentId: string, turn?: boo
     prsAgain(),
   )
   const settling = useSettling(turn === true)
-  useEffect(() => setEveryMs(status?.prPending ? PR_PENDING_MS : settling ? SETTLING_EVERY_MS : 10_000), [status?.prPending, settling])
+  useEffect(() => setEveryMs(settling ? SETTLING_EVERY_MS : 10_000), [settling])
   // A turn that starts or ends is read at once, and the quicker pace after an end waits for that read.
   useAskOn(turn, refresh)
   useAskOn(everyMs, refresh)

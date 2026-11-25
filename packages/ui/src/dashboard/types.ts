@@ -1,5 +1,6 @@
+import type { PullRequestState } from '@openagt/hooks'
 import type { RunOptions } from '@openagt/hooks'
-import type { LinkedPr } from './pull-requests.js'
+
 import type { PublishPick } from '../publish-levels.js'
 
 // The dashboard's request/result vocabulary (#345/#396/#475): the shapes the Start / Add /
@@ -63,12 +64,6 @@ export interface StartAgentOptions {
   /** The person's saved pick of how far the run takes its work when the agent finishes. Absent, none is saved: the daemon starts the run at `commit`. A saved pick the project is not offered is held to the furthest the project goes with no pull request. */
   publish?: PublishPick
   /**
-   * The branch the run's pull request goes into, from the launcher's Auto menu, kept on the run's
-   * record for its agent and the Open PR press. Absent, the repository's default branch. A word
-   * that is no branch name refuses the Start.
-   */
-  prBase?: string
-  /**
    * Where the run runs, by its host's id (`RunHost.id`): one of the hosts beside this computer's of
    * the modules on in the project, such as a GitHub Actions runner. Absent, this computer. Refused
    * for a session with no project.
@@ -79,12 +74,6 @@ export interface StartAgentOptions {
    * copied into the session's folder. Refused for a project, which works in its own checkout.
    */
   repos?: string[]
-  /**
-   * The account at the git host this session works as, by its login: one of the accounts this
-   * computer has there. Absent, the one its runs use. The run's record keeps it, and a resume goes
-   * on as it.
-   */
-  account?: string
 }
 
 /** The outcome of a Start attempt (#345): the id of the run the run's host began, or why there is none. */
@@ -110,8 +99,6 @@ export interface AgentWorktree {
   }
   /** The branch the run's work is on: its checkout's while it has one, else the one it recorded. */
   branch?: string
-  /** The PR opened for this run's branch (#809), when there is one. */
-  pr?: LinkedPr
-  /** The PR is not known yet, rather than absent (#1028): the lookup is still running. */
-  prPending?: boolean
+  /** The PR its record names (#809), and how it stands as its git host module last read it. */
+  pr?: { number: number; url: string; state?: PullRequestState }
 }

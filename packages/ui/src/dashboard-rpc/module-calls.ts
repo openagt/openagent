@@ -1,5 +1,4 @@
 import { contextProjects, resolveProjectPath, runHostOf } from './context.js'
-import { accountsByHost, remoteAccount } from './send-as.js'
 import { findComputerModule, findProjectModule } from '../project-modules.js'
 import { providedDataChanged } from '../store/provided.js'
 import { callModuleFunction, computerHost, functionKind, serverHost, type ComputerHostDeps, type ModuleCallResult } from '../dashboard/module-host.js'
@@ -12,7 +11,7 @@ import type { ModuleOn } from '@openagt/hooks/rpc'
 import { loadAgentEvents } from '../store/index.js'
 import { pendingChoices } from '../open-choices.js'
 import { sayForModule } from '../dashboard/run-inbox.js'
-import { projectRuns } from '../store/runs.js'
+import { projectRuns, type RunPatch } from '../store/runs.js'
 
 // A module's functions (`@openagt/hooks/rpc`), which the page calls at `/_rpc/<module>/<name>`
 // (rpc-serve.ts) and no other way: this file is none of the RPCs the page calls by name.
@@ -43,6 +42,7 @@ export async function callModule(projectId: string | null, pkg: string, name: st
     questions: agentId => runQuestions(root, agentId),
     say: (agentId, line) => sayForModule(projectId, root, agentId, line),
     landed: (agentId, landed) => landedFor(root, agentId, landed),
+    pullRequest: (agentId, pr) => patchRecord(root, agentId, { pr }),
     gitAccess: async remote => (await distributionHooks()).gitAccess(remote),
     modulesOn: async opts => modulesOn(await project(), opts?.every === true),
   })
@@ -54,10 +54,14 @@ export async function callModule(projectId: string | null, pkg: string, name: st
   return result
 }
 
-/** What every function is handed of this computer: its projects, and OpenAgent's accounts at the git hosts, as the Permissions page lists them. */
+/** What every function is handed of this computer: its projects, and OpenAgent's accounts at the git hosts, as the modules' `account.access` answers for them. */
 const COMPUTER: ComputerHostDeps = {
   projects: async () => Promise.all((await contextProjects().list()).map(project => projectRefAt(project.id, project.path))),
-  accounts: { hosts: accountsByHost, sendAs: remoteAccount },
+  accounts: {
+    hosts: async () => (await distributionHooks()).gitAccounts.hosts(),
+    sendAs: async (host, login) => (await distributionHooks()).gitAccounts.sendAs(host, login),
+    mergeCommit: async (dir, branch, number) => (await distributionHooks()).gitAccounts.mergeCommit(dir, branch, number),
+  },
 }
 
 /** The project `projectId` at `root`, as a hook is given it, read once for the call and only when asked: a session with no project is none. */
@@ -97,10 +101,15 @@ function runsFound(projectId: string, root: string): (agentId: string) => Promis
 }
 
 /** Write down on run `agentId`'s record, in the project at `root`, that its work was landed: the record is what its page reads once the branch is gone. */
-async function landedFor(root: string, agentId: string, landed: { commit: string; from: string }): Promise<void> {
+function landedFor(root: string, agentId: string, landed: { commit: string; from: string }): Promise<void> {
+  return patchRecord(root, agentId, { landed })
+}
+
+/** Write `patch` down on run `agentId`'s record, in the project at `root`. */
+async function patchRecord(root: string, agentId: string, patch: RunPatch): Promise<void> {
   const runs = await projectRuns(root).catch(() => undefined)
   if (!runs) throw new Error('this project keeps no records of its runs')
-  const recorded = await runs.patch(agentId, { landed })
+  const recorded = await runs.patch(agentId, patch)
   if (!recorded.ok) throw new Error(`the record was not updated: ${recorded.error}`)
 }
 

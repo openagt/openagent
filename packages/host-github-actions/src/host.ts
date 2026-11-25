@@ -141,7 +141,7 @@ export function actionsHost(deps: ActionsHostDeps = {}): RunHost {
           status: card.status,
           ...(typeof host === 'string' ? { host } : {}),
           ...(card.branch !== undefined ? { branch: card.branch } : {}),
-          ...(card.pr ? { pr: { number: card.pr.number } } : {}),
+          ...(card.pr ? { pr: { number: card.pr.number, url: card.pr.url } } : {}),
         },
         // The run's work is on the branch its turns pushed, on origin: never a checkout of this computer's to reclaim.
         changedNothing: false,

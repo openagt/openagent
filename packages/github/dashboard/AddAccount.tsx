@@ -1,43 +1,32 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { CircleAlert, Check, Loader2 } from 'lucide-react'
-import { sendGitHostInstall, sendGitHostLogin, sendStopGitHostLogin, type GitHostRow } from '../rpc/logins.js'
-import { cn } from '../lib/utils.js'
-import { Button } from './ui/button.js'
-import { CopyButton } from './ui/copy-button.js'
-import { DIALOG_PRESSES_CLASS, Dialog } from './ui/dialog.js'
-import { FixAction, Linked, hostWords, useGitHosts, type FixVariant } from './Logins.js'
+import { Button, CopyButton, DIALOG_PRESSES_CLASS, Dialog, FixAction, Linked, NO_PROJECT, cn, useModuleHost, type FixVariant } from '@openagt/ui/module'
+import { missingWords, server, useAccounts, type AccountsRead } from './calls.js'
 
-// Adding an account of OpenAgent's at a git host, the same dialog wherever one is added (his pick
+// Adding an account of OpenAgent's on GitHub, the same dialog wherever one is added (his pick
 // over a code shown in each place's own layout): the Permissions page, the Overview's first steps,
-// an agent's accounts, the account in the gear's menu under the message box, "Back up as". It installs the host's
-// tool where it is missing, asks the host's package for a code, shows it while the person signs in
-// at the host, and closes on the account once it is there. Closing it gives the login up.
+// the account in the gear's menu under the message box. It installs gh where it is missing, asks
+// gh for a code, shows it while the person signs in on GitHub, and closes on the account once it
+// is there. Closing it gives the login up.
 
 /** How often the dialog asks the host's package how the login stands, while it is open. */
 const FOLLOW_MS = 2_000
 /** How long "@login is added" stands before the dialog closes on it. */
 const DONE_MS = 900
 
-/** The dialog that adds an account at `host`; closed while `host` is undefined. `onClose` says the login it added, if it did. */
-export function AddGitAccountDialog({ host, onClose }: { host: string | undefined; onClose: (added?: string) => void }) {
+/** The dialog that adds an account, while `open`. `onClose` says the login it added, if it did. */
+export function AddAccountDialog({ open, onClose }: { open: boolean; onClose: (added?: string) => void }) {
   return (
-    <Dialog open={host !== undefined} onOpenChange={open => !open && onClose()} title={host !== undefined ? <AddTitle host={host} /> : ''}>
-      {host !== undefined && <Adding key={host} host={host} onClose={onClose} />}
+    <Dialog open={open} onOpenChange={open => !open && onClose()} title={open ? 'Add a GitHub account' : ''}>
+      {open && <Adding onClose={onClose} />}
     </Dialog>
   )
 }
 
-function AddTitle({ host }: { host: string }) {
-  const { view } = useGitHosts()
-  const name = view?.hosts.find(row => row.host === host)?.provider?.name ?? host
-  return <>{`Add a ${name} account`}</>
-}
-
 /** The dialog's body, alive only while it is open: what it was asked and saw goes with it. */
-function Adding({ host, onClose }: { host: string; onClose: (added?: string) => void }) {
-  const { view, reload } = useGitHosts()
-  const row = view?.hosts.find(one => one.host === host)
-  const p = row?.provider
+function Adding({ onClose }: { onClose: (added?: string) => void }) {
+  const host = useModuleHost()
+  const { accounts: p, reload } = useAccounts()
   // The logins the host took when the dialog opened: one more is the account it added.
   const before = useRef<Set<string> | undefined>(undefined)
   if (p && before.current === undefined) before.current = new Set(p.accounts.filter(account => account.ok).map(account => account.login))
@@ -58,7 +47,7 @@ function Adding({ host, onClose }: { host: string; onClose: (added?: string) => 
     setSeen(false)
     setAsked(undefined)
     try {
-      const done = await sendGitHostLogin(host)
+      const done = await server(host).login(NO_PROJECT, {})
       if (done.ok) setAsked({ code: done.code, url: done.url })
       else setError(done.error)
       await reload()
@@ -103,7 +92,7 @@ function Adding({ host, onClose }: { host: string; onClose: (added?: string) => 
   pending.current = (asking || underWay !== undefined) && added === undefined
   useEffect(
     () => () => {
-      if (pending.current) void sendStopGitHostLogin(host).catch(() => undefined)
+      if (pending.current) void server(host).stopLogin(NO_PROJECT, {}).catch(() => undefined)
     },
     [host],
   )
@@ -116,8 +105,7 @@ function Adding({ host, onClose }: { host: string; onClose: (added?: string) => 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [added])
 
-  if (!view) return <Waiting words="Reading…" />
-  if (!row || !p) return <p className="text-sm text-muted-foreground">{`No package answers for ${host} yet.`}</p>
+  if (!p) return <Waiting words="Reading…" />
   if (added !== undefined)
     return (
       <p role="status" className="flex items-center gap-2 text-sm">
@@ -128,7 +116,7 @@ function Adding({ host, onClose }: { host: string; onClose: (added?: string) => 
   if (!p.installed)
     return (
       <div className="space-y-3">
-        <Install row={row} error={installError} onError={setInstallError} onChanged={reload} />
+        <Install accounts={p} error={installError} onError={setInstallError} onChanged={reload} />
         <div className={cn('flex justify-end', DIALOG_PRESSES_CLASS)}>
           <Button variant="ghost" onClick={() => onClose()}>
             Cancel
@@ -201,19 +189,19 @@ function Waiting({ words }: { words: string }) {
   )
 }
 
-/** The host's tool is not on this computer: the press that installs it, with its command; the code follows by itself. */
-function Install({ row, error, onError, onChanged }: { row: GitHostRow; error: string | undefined; onError: (error: string | undefined) => void; onChanged: () => Promise<void> }) {
-  const p = row.provider!
+/** gh is not on this computer: the press that installs it, with its command; the code follows by itself. */
+function Install({ accounts: p, error, onError, onChanged }: { accounts: AccountsRead; error: string | undefined; onError: (error: string | undefined) => void; onChanged: () => Promise<void> }) {
+  const host = useModuleHost()
   const install = async () => {
     onError(undefined)
-    const done = await sendGitHostInstall(row.host)
+    const done = await server(host).install(NO_PROJECT, {})
     if (!done.ok) onError(done.error)
     await onChanged()
   }
   const failed = error ?? p.installFailed
   return (
     <div className="space-y-2">
-      <p className="text-sm">{hostWords(row)}</p>
+      <p className="text-sm">{missingWords(p)}</p>
       {p.install ? (
         <FixAction label={`Install ${p.tool}`} busy={p.installing === true} busyWords={`Installing ${p.tool}…`} command={p.install} {...(failed !== undefined ? { failed } : {})} onPress={() => void install()} />
       ) : (
@@ -224,30 +212,27 @@ function Install({ row, error, onError, onChanged }: { row: GitHostRow; error: s
 }
 
 /**
- * Adding an account from a place of its own: `add(host)` opens the dialog, which the place draws
- * as `dialog`; `onAdded` hears the login once it is there.
+ * Adding an account from a place of its own: `add()` opens the dialog, which the place draws as
+ * `dialog`; `onAdded` hears the login once it is there.
  */
-export function useAddGitAccount(onAdded?: (login: string, host: string) => void | Promise<void>): { add: (host: string) => void; dialog: ReactNode } {
-  const [host, setHost] = useState<string | undefined>()
+export function useAddAccount(onAdded?: (login: string) => void | Promise<void>): { add: () => void; dialog: ReactNode } {
+  const [open, setOpen] = useState(false)
   const close = (added?: string) => {
-    const at = host
-    setHost(undefined)
-    if (added !== undefined && at !== undefined) void onAdded?.(added, at)
+    setOpen(false)
+    if (added !== undefined) void onAdded?.(added)
   }
-  return { add: setHost, dialog: <AddGitAccountDialog host={host} onClose={close} /> }
+  return { add: () => setOpen(true), dialog: <AddAccountDialog open={open} onClose={close} /> }
 }
 
-/** The press for a host with no account, or no tool: it opens the dialog that adds one. Nothing for a host that has one. */
-export function HostFix({ row, onChanged, size = 'default', variant, label }: { row: GitHostRow; onChanged: () => Promise<void>; size?: 'default' | 'sm' | undefined; variant?: FixVariant; /** What the press says, where the host's name stands beside it already. */ label?: string }) {
-  const adding = useAddGitAccount(onChanged)
-  const p = row.provider
-  if (!p) return null
+/** The press for no account, or no gh: it opens the dialog that adds one. Nothing once there is one. */
+export function AccountFix({ accounts: p, onChanged, size = 'default', variant, label }: { accounts: AccountsRead; onChanged: () => Promise<void>; size?: 'default' | 'sm' | undefined; variant?: FixVariant; /** What the press says, where GitHub's name stands beside it already. */ label?: string }) {
+  const adding = useAddAccount(onChanged)
   if (!p.installed && !p.install) return <p className="text-xs text-muted-foreground">{`Install ${p.tool} by hand: ${p.name} makes none for this computer.`}</p>
   if (p.installed && p.accounts.length > 0 && !p.loggingIn) return adding.dialog
   return (
     <>
       {/* On a phone a finger's 44, as every fix's press. */}
-      <Button size={size} variant={variant} aria-label={`Add a ${p.name} account`} onClick={() => adding.add(row.host)} className={cn(size === 'default' && 'max-md:h-11')}>
+      <Button size={size} variant={variant} aria-label={`Add a ${p.name} account`} onClick={adding.add} className={cn(size === 'default' && 'max-md:h-11')}>
         {label ?? `Add a ${p.name} account`}
       </Button>
       {adding.dialog}

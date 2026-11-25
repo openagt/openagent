@@ -1,10 +1,9 @@
 import { contextAddProject, contextHost, contextOtherHosts, contextProjectState, contextProjects, contextRemoveProject, contextStartedIn, resolveProjectPath } from './context.js'
-import { projectRefAt } from '../distribution-hooks.js'
-import { addressOfRemote, errorMessage, isRepoOwner, readRepoOwners, repositoryAddress, writeRepoOwners } from '@openagt/agent-data'
-import { readHosted, refreshHosted, type HostedRepo } from './hosted-repos.js'
-import { cloneAccountFor } from './send-as.js'
+import { distributionHooks, projectRefAt } from '../distribution-hooks.js'
+import { addressOfRemote, errorMessage, repositoryAddress } from '@openagt/agent-data'
 import type { StartReadiness } from '../start-readiness.js'
-import type { RunOptions } from '@openagt/hooks'
+import type { RepositoryAccount, RunOptions } from '@openagt/hooks'
+import { typedRepository } from '../typed-repository.js'
 import { isRunOptions } from '../daemon-runtime.js'
 import { SESSIONS_ID } from '../project-address.js'
 import { hasRemote } from '../has-remote.js'
@@ -13,7 +12,6 @@ import { addRepoFolder, listProjects, listRepoFolders, removeRepoFolder } from '
 import { thisComputersRepos, type FoundRepo } from '../dashboard/repos.js'
 import { cloneProject, cloneTargetOf } from '../clone-project.js'
 import { canPickDirectory, pickDirectory, type PickDirectoryResult } from '../pick-directory.js'
-import { projectGitHost } from '../store/git-host.js'
 import type { ProjectSummary } from '../dashboard/projects.js'
 import type { AddProjectResult, RemoveProjectResult, StartedInResult } from '../dashboard/types.js'
 
@@ -85,6 +83,17 @@ export async function sendAddProjectFromAddress(address: string): Promise<AddPro
   return added.ok ? { ...added, path: cloned.path } : added
 }
 
+/** The account a repository at a typed address is cloned as: the one runs use at its host, as the modules' `account.access` says; none where OpenAgent has none there. */
+async function cloneAccountFor(typed: string): Promise<RepositoryAccount | undefined> {
+  const host = typedRepository(typed)?.address.split('/')[0]
+  if (host === undefined) return undefined
+  const accounts = (await distributionHooks()).gitAccounts
+  const runs = (await accounts.hosts().catch(() => [])).find(row => row.host === host)?.runs
+  if (runs === undefined) return undefined
+  const account = await accounts.sendAs(host, runs)
+  return account.ok ? account.account : undefined
+}
+
 /**
  * Remove a project from the dashboard: it leaves the Projects list. Nothing in its folder is
  * deleted unless `files` is true: then what OpenAgent left there is removed too, and the answer
@@ -108,17 +117,16 @@ export async function sendPickProjectDirectory(): Promise<PickDirectoryResult> {
   return pickDirectory()
 }
 
-/** The repos on this computer that are not projects yet, the ones at the git hosts not here, and whether a folder can be added to look in. */
+/** The repos on this computer that are not projects yet, and whether a folder can be added to look in. */
 export interface ReposRead {
   repos: FoundRepo[]
-  /** The repositories OpenAgent's accounts and the owners the person named have at the hosts, none of them on this computer: picked, one is cloned. */
-  hosted: HostedRepo[]
+  /**
+   * The addresses of the repositories on this computer, as repos or as projects (`github.com/me/shop`):
+   * the repos the modules' accounts reach that the picker leaves out (`composer.where`), listed by their folder.
+   */
+  here: string[]
   /** The look through this computer was cut short, and one with more time is on its way: the picker asks again shortly. */
   reposLoading: boolean
-  /** The hosts are being asked: the picker asks again shortly. */
-  hostedLoading: boolean
-  /** A host did not answer the last time it was asked: the picker says its repos are missing. */
-  hostedUnreached?: true
   /** This computer can show a folder dialog, so the picker offers "Search another folder…". */
   canAddFolder: boolean
 }
@@ -129,7 +137,7 @@ export interface ReposRead {
  * already. The kept list, so the picker opens at once; an old one is crawled again behind it.
  */
 export async function onRepos(): Promise<ReposRead> {
-  const [found, projects, hosted] = await Promise.all([thisComputersRepos().read(), listProjects(), readHosted()])
+  const [found, projects] = await Promise.all([thisComputersRepos().read(), listProjects()])
   const repos = found.repos
   const pinned = new Set(projects.map(project => project.path))
   // A repository at a host that is here already, as a repo or a project, is listed once: by its folder.
@@ -141,48 +149,20 @@ export async function onRepos(): Promise<ReposRead> {
   }
   return {
     repos: repos.filter(repo => !pinned.has(repo.path)),
-    hosted: hosted.repos.filter(repo => !here.has(repo.address.toLowerCase())),
+    here: [...here],
     reposLoading: found.looking,
-    hostedLoading: hosted.loading,
-    ...(hosted.unreached ? { hostedUnreached: hosted.unreached } : {}),
     canAddFolder: canPickDirectory(),
   }
 }
 
-/** Settings › Repos: where repos are looked for, on this computer and at the git hosts. */
+/** Settings › Repos: where repos are looked for on this computer. */
 export interface RepoSources {
   /** The folders the person added, looked in beside the home folder. */
   folders: string[]
-  /** The users and organizations at a git host whose repositories are listed, as `<host>/<name>`. */
-  owners: string[]
 }
 
 export async function onRepoSources(): Promise<RepoSources> {
-  const [folders, owners] = await Promise.all([listRepoFolders(), readRepoOwners()])
-  return { folders, owners }
-}
-
-/** List one more user's or organization's repositories: `vikejs`, `github.com/vikejs` or its page's address. GitHub when no host is named. */
-export async function sendAddRepoOwner(typed: string): Promise<{ ok: true } | { ok: false; error: string }> {
-  const said = typeof typed === 'string' ? typed.trim().replace(/^https?:\/\//, '').replace(/\/+$/, '') : ''
-  const owner = said.includes('/') ? said.replace(/^([^/]+)/, host => host.toLowerCase()) : `github.com/${said.replace(/^@/, '')}`
-  if (!isRepoOwner(owner)) return { ok: false, error: `"${said.slice(0, 80)}" is not a user or organization. One looks like vikejs, or github.com/vikejs.` }
-  const owners = await readRepoOwners()
-  if (owners.some(one => one.toLowerCase() === owner.toLowerCase())) return { ok: true }
-  const written = await writeRepoOwners([...owners, owner])
-  if (!written.ok) return { ok: false, error: written.error }
-  void refreshHosted()
-  return { ok: true }
-}
-
-/** Stop listing an owner's repositories. */
-export async function sendRemoveRepoOwner(owner: string): Promise<{ ok: true } | { ok: false; error: string }> {
-  const owners = await readRepoOwners()
-  if (!owners.includes(owner)) return { ok: true }
-  const written = await writeRepoOwners(owners.filter(one => one !== owner))
-  if (!written.ok) return { ok: false, error: written.error }
-  void refreshHosted()
-  return { ok: true }
+  return { folders: await listRepoFolders() }
 }
 
 /** Stop looking for repos in a folder the person added. */
@@ -208,20 +188,18 @@ export async function sendAddRepoFolder(): Promise<{ ok: true; added: boolean } 
 
 /** What the launcher offers for a project: how far its runs can go. */
 export interface ProjectLauncher {
-  /** Whether one of the project's packages provides a git host; without one no pull request can be opened, so the publish menu stops at the branch. */
-  gitHost: boolean
   /** Whether the project's repository has an `origin` remote; without one nothing can be published, so the publish menu stops at the commit. */
   remote: boolean
   /** The address the project's repository was cloned from (`github.com/acme/shop`): its host is the git host a session pushes to, as the account it picks there. */
   address?: string
 }
 
-/** What the launcher offers for a project: whether it has a git host and a remote. `null` when the project is unknown here. */
+/** What the launcher offers for a project: whether it has a remote, and its address. `null` when the project is unknown here. */
 export async function onCommands(projectId: string): Promise<ProjectLauncher | null> {
   const cwd = await resolveProjectPath(projectId)
   if (!cwd) return null
-  const [gitHost, remote, address] = await Promise.all([projectGitHost(cwd).catch(() => undefined), hasRemote(cwd), repositoryAddress(cwd)])
-  return { gitHost: gitHost !== undefined, remote, ...(address ? { address } : {}) }
+  const [remote, address] = await Promise.all([hasRemote(cwd), repositoryAddress(cwd)])
+  return { remote, ...(address ? { address } : {}) }
 }
 
 /** A host a run may be picked to run on beside this computer's (`run.host`, #2394): its id, and its name in the "Run on" menu. */

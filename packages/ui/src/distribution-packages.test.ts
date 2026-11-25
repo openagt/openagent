@@ -56,18 +56,17 @@ test("every package the distribution lists is read from its install, in its orde
   assert.deepEqual(await distributionPackages({}), [], 'no distribution handed down: no package')
 })
 
-test("a project with nothing installed gets its runs, its branches and a repository to create from the distribution's packages, and nothing of a plugin that is off", async () => {
+test("a project with nothing installed gets its runs and its branches from the distribution's packages, and nothing of a plugin that is off", async () => {
   const root = await scratch('packages')
   try {
     assert.equal((await providedCommand(root, 'runs'))?.package, '@openagt/logs', "the runs' records, whatever logs says")
     assert.equal((await providedCommand(root, 'branches'))?.package, '@openagt/git-branches')
-    assert.equal((await providedCommand(root, 'repository'))?.package, '@openagt/github', 'the package that can create its repository')
     assert.deepEqual(
       (await packagesOf(root)).map(pkg => pkg.name),
       ['@openagt/store-filesystem', '@openagt/store-git-branch', '@openagt/git-branches', '@openagt/github', '@openagt/skills', '@openagt/ui-pane-changes', '@openagt/ui-pane-files', '@openagt/saved-prompts', '@openagt/ask'],
       "every project's core packages, the plugin that starts on, and the git store, switched on its own entry; none of the others, none of the computer's",
     )
-    assert.deepEqual((await readProjectModules(root)).map(module => module.package), ['@openagt/ask', '@openagt/git-branches', '@openagt/saved-prompts', '@openagt/skills', '@openagt/store-git-branch', '@openagt/ui-pane-changes', '@openagt/ui-pane-files'])
+    assert.deepEqual((await readProjectModules(root)).map(module => module.package), ['@openagt/ask', '@openagt/git-branches', '@openagt/github', '@openagt/saved-prompts', '@openagt/skills', '@openagt/store-git-branch', '@openagt/ui-pane-changes', '@openagt/ui-pane-files'])
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -77,9 +76,9 @@ test("every project keeps its runs' records through the logs package, and shows 
   const root = await scratch('logs')
   const modules = async (): Promise<string[]> => (await readProjectModules(root)).map(module => module.package)
   try {
-    assert.deepEqual(await modules(), ['@openagt/ask', '@openagt/git-branches', '@openagt/saved-prompts', '@openagt/skills', '@openagt/store-git-branch', '@openagt/ui-pane-changes', '@openagt/ui-pane-files'])
+    assert.deepEqual(await modules(), ['@openagt/ask', '@openagt/git-branches', '@openagt/github', '@openagt/saved-prompts', '@openagt/skills', '@openagt/store-git-branch', '@openagt/ui-pane-changes', '@openagt/ui-pane-files'])
     await switchPlugin(root, 'logs')
-    assert.deepEqual(await modules(), ['@openagt/ask', '@openagt/git-branches', '@openagt/logs', '@openagt/saved-prompts', '@openagt/skills', '@openagt/store-git-branch', '@openagt/ui-pane-changes', '@openagt/ui-pane-files'])
+    assert.deepEqual(await modules(), ['@openagt/ask', '@openagt/git-branches', '@openagt/github', '@openagt/logs', '@openagt/saved-prompts', '@openagt/skills', '@openagt/store-git-branch', '@openagt/ui-pane-changes', '@openagt/ui-pane-files'])
     assert.equal((await providedCommand(root, 'runs'))?.package, '@openagt/logs')
   } finally {
     await rm(root, { recursive: true, force: true })
@@ -113,20 +112,20 @@ test("a plugin's package, its data and its page are a project's once the plugin 
     assert.equal(await has(root, '@openagt/tickets'), true)
     assert.equal(await has(other, '@openagt/tickets'), false, "another project's row is its own")
     assert.equal(await has(root, '@openagt/queue'), false, 'a plugin that is off stays out')
-    assert.deepEqual(await modules(), ['@openagt/ask', '@openagt/git-branches', '@openagt/saved-prompts', '@openagt/skills', '@openagt/store-git-branch', '@openagt/tickets', '@openagt/ui-pane-changes', '@openagt/ui-pane-files'])
+    assert.deepEqual(await modules(), ['@openagt/ask', '@openagt/git-branches', '@openagt/github', '@openagt/saved-prompts', '@openagt/skills', '@openagt/store-git-branch', '@openagt/tickets', '@openagt/ui-pane-changes', '@openagt/ui-pane-files'])
 
     await switchPlugin(root, 'queue')
     await switchPlugin(root, 'scheduled-agents')
     assert.equal(await has(root, '@openagt/queue'), true)
-    assert.deepEqual(await modules(), ['@openagt/ask', '@openagt/git-branches', '@openagt/queue', '@openagt/saved-prompts', '@openagt/scheduled-agents', '@openagt/skills', '@openagt/store-git-branch', '@openagt/tickets', '@openagt/ui-pane-changes', '@openagt/ui-pane-files'])
+    assert.deepEqual(await modules(), ['@openagt/ask', '@openagt/git-branches', '@openagt/github', '@openagt/queue', '@openagt/saved-prompts', '@openagt/scheduled-agents', '@openagt/skills', '@openagt/store-git-branch', '@openagt/tickets', '@openagt/ui-pane-changes', '@openagt/ui-pane-files'])
 
     await switchPlugin(root, 'tickets', false)
     await switchPlugin(root, 'queue', false)
     assert.equal(await has(root, '@openagt/tickets'), false)
-    assert.deepEqual(await modules(), ['@openagt/ask', '@openagt/git-branches', '@openagt/saved-prompts', '@openagt/scheduled-agents', '@openagt/skills', '@openagt/store-git-branch', '@openagt/ui-pane-changes', '@openagt/ui-pane-files'])
+    assert.deepEqual(await modules(), ['@openagt/ask', '@openagt/git-branches', '@openagt/github', '@openagt/saved-prompts', '@openagt/scheduled-agents', '@openagt/skills', '@openagt/store-git-branch', '@openagt/ui-pane-changes', '@openagt/ui-pane-files'])
     await switchPlugin(root, 'ask', false)
     assert.ok(!(await packagesOf(root)).some(pkg => pkg.name === '@openagt/ask'), 'one that starts on goes off the same way')
-    assert.deepEqual(await modules(), ['@openagt/git-branches', '@openagt/saved-prompts', '@openagt/scheduled-agents', '@openagt/skills', '@openagt/store-git-branch', '@openagt/ui-pane-changes', '@openagt/ui-pane-files'])
+    assert.deepEqual(await modules(), ['@openagt/git-branches', '@openagt/github', '@openagt/saved-prompts', '@openagt/scheduled-agents', '@openagt/skills', '@openagt/store-git-branch', '@openagt/ui-pane-changes', '@openagt/ui-pane-files'])
   } finally {
     await rm(root, { recursive: true, force: true })
     await rm(other, { recursive: true, force: true })

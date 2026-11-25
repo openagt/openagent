@@ -294,19 +294,22 @@ test("where a run's work is: its checkout while it has one, at the branch it has
     await liveCard(repo, working, 'running', { pid: 4242, host: HERE, base: 'develop', baseCommit: start })
     assert.deepEqual(await here.find({ id: working, project }), {
       checkout,
-      record: { status: 'running', host: HERE, branch: 'agent-login-fix', pr: { number: 7 }, base: 'develop', baseCommit: start },
+      record: { status: 'running', startedAt: NOW.toISOString(), prompt: 'fix it', options: { 'agent-driver': { driver: 'claude-code' }, 'git-branches': { base: 'develop' } }, host: HERE, branch: 'agent-login-fix', pr: { number: 7, url: 'https://github.com/o/r/pull/7' }, base: 'develop', baseCommit: start },
       changedNothing: false,
     })
+
+    /** What the record of a run that ended keeps of it, beside where its work is: when it started and ended, what it was asked, its options. */
+    const endedRecord = (prompt: string) => ({ status: 'done', startedAt: NOW.toISOString(), endedAt: NOW.toISOString(), prompt, options: { 'agent-driver': { driver: 'claude-code' } } })
 
     // Ended here, its checkout gone, with no pull request and nothing landed: it changed nothing. Landed, or another computer's, it did not say so.
     const ended = '2026-09-16T14-05-00-000Z'
     await writeMarker(repo, { ...markerCard({ id: ended, startedAt: NOW.toISOString(), prompt: 'tidy', driver: 'claude-code', mark: { host: HERE } }), status: 'done', endedAt: NOW.toISOString(), branch: 'agent-tidy' })
-    assert.deepEqual(await here.find({ id: ended, project }), { record: { status: 'done', host: HERE, branch: 'agent-tidy' }, changedNothing: true })
+    assert.deepEqual(await here.find({ id: ended, project }), { record: { ...endedRecord('tidy'), host: HERE, branch: 'agent-tidy' }, changedNothing: true })
     await patchRun(repo, ended, { landed: { commit: start, from: start } })
-    assert.deepEqual(await here.find({ id: ended, project }), { record: { status: 'done', host: HERE, baseCommit: start, landed: start }, changedNothing: false })
+    assert.deepEqual(await here.find({ id: ended, project }), { record: { ...endedRecord('tidy'), host: HERE, baseCommit: start, landed: start }, changedNothing: false })
     const elsewhere = '2026-09-16T14-06-00-000Z'
     await writeMarker(repo, { ...markerCard({ id: elsewhere, startedAt: NOW.toISOString(), prompt: 'tidy', driver: 'claude-code', mark: { host: 'laptop' } }), status: 'done', endedAt: NOW.toISOString() })
-    assert.deepEqual(await here.find({ id: elsewhere, project }), { record: { status: 'done', host: 'laptop' }, changedNothing: false })
+    assert.deepEqual(await here.find({ id: elsewhere, project }), { record: { ...endedRecord('tidy'), host: 'laptop' }, changedNothing: false })
 
     // A checkout with no card yet: a run just started, found with nothing known of it. A folder that is no checkout of its own is no run's, and neither is a name that is no run's.
     const starting = '2026-09-16T14-07-00-000Z'

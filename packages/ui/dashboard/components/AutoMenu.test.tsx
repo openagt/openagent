@@ -42,8 +42,7 @@ describe('AutoMenu', () => {
   test("the gear's hover says the level in the line's words", () => {
     expect(autoSaid('nothing', ALL)).toBe('Auto off')
     expect(autoSaid('merge', ALL)).toBe('Merge on green')
-    expect(autoSaid('pr', ALL, { into: 'login-page' })).toBe('Open PR → login-page')
-    expect(autoSaid('commit', ALL, { into: 'login-page' })).toBe('Commit')
+    expect(autoSaid('pr', ALL)).toBe('Open PR')
   })
 
   test('the line is set apart from the lines above it', async () => {
@@ -81,36 +80,6 @@ describe('AutoMenu', () => {
     expect(onPublish).toHaveBeenCalledWith('merge')
   })
 
-  test('a target: the line names it and the list offers its branches at the levels that open a request, and a pick reports the branch', async () => {
-    const onPick = vi.fn()
-    const target = { into: 'login-page', picks: ['login-page', 'main'], onPick }
-    expect(await label({ publish: 'pr', target })).toBe('When it finishes: Open PR → login-page')
-    expect(await label({ publish: 'merge', target: { ...target, into: 'main' } })).toBe('When it finishes: Merge on green → main')
-    expect(await label({ publish: 'commit', target })).toBe('When it finishes: Commit')
-    cleanup()
-    renderMenu({ publish: 'pr', target })
-    await openSetupLine('When it finishes')
-    expect(screen.getByText('The pull request goes into')).toBeTruthy()
-    const row = (name: string) => screen.getByRole('menuitemradio', { name })
-    expect(row('login-page').getAttribute('aria-checked')).toBe('true')
-    expect(row('main').getAttribute('aria-checked')).toBe('false')
-    fireEvent.click(row('main'))
-    expect(onPick).toHaveBeenCalledWith('main')
-  })
-
-  test('no section: at a level that opens no request, with no target, and on a session, whose line still names its target', async () => {
-    renderMenu({ publish: 'commit', target: { into: 'login-page', picks: ['login-page', 'main'] } })
-    await openSetupLine('When it finishes')
-    expect(screen.queryByText('The pull request goes into')).toBeNull()
-    cleanup()
-    renderMenu({ publish: 'pr' })
-    await openSetupLine('When it finishes')
-    expect(screen.queryByText('The pull request goes into')).toBeNull()
-    cleanup()
-    renderMenu({ publish: 'pr', target: { into: 'login-page' } })
-    expect((await openSetupLine('When it finishes')).textContent).toBe('When it finishes: Open PR → login-page')
-    expect(screen.queryByText('The pull request goes into')).toBeNull()
-  })
 })
 
 describe('useAutoLevels', () => {
@@ -124,17 +93,25 @@ describe('useAutoLevels', () => {
     module: 'git',
     projects: ['p1'],
   })
-  const levels = (project: UiProject | undefined, gitHost: boolean, projectId = 'p1') => {
-    const modules = mountedOf({ options: { 'composer.auto': [option('commit', 'Commit'), option('branch', 'Publish branch', on => on?.remote !== undefined)] } })
+  const levels = (project: UiProject | undefined, projectId = 'p1') => {
+    const modules = mountedOf({
+      options: {
+        'composer.auto': [
+          option('commit', 'Commit'),
+          option('branch', 'Publish branch', on => on?.remote !== undefined),
+          { ...option('pr', 'Open PR', on => on === undefined || on.remote?.startsWith('github.com/') === true), package: '@me/host', module: 'host' },
+        ],
+      },
+    })
     const wrapper = ({ children }: { children: ReactNode }) => <ModulesContext.Provider value={modules}>{children}</ModulesContext.Provider>
-    return renderHook(() => useAutoLevels(projectId, project, gitHost), { wrapper }).result.current.map(level => level.id)
+    return renderHook(() => useAutoLevels(projectId, project), { wrapper }).result.current.map(level => level.id)
   }
 
-  test("Off, then each module's level where it says it is offered, then the levels that open a pull request where the project has a git host", () => {
-    expect(levels({ id: 'p1', name: 'shop', remote: 'github.com/me/shop' }, true)).toEqual(['nothing', 'commit', 'branch', 'pr', 'merge'])
-    expect(levels({ id: 'p1', name: 'shop', remote: 'example.com/me/shop' }, false)).toEqual(['nothing', 'commit', 'branch'])
-    expect(levels({ id: 'p1', name: 'shop' }, false)).toEqual(['nothing', 'commit'])
-    // A project the module is not on is offered none of its levels.
-    expect(levels(undefined, true, 'p2')).toEqual(['nothing', 'pr', 'merge'])
+  test("Off, then each module's level where it says it is offered", () => {
+    expect(levels({ id: 'p1', name: 'shop', remote: 'github.com/me/shop' })).toEqual(['nothing', 'commit', 'branch', 'pr'])
+    expect(levels({ id: 'p1', name: 'shop', remote: 'example.com/me/shop' })).toEqual(['nothing', 'commit', 'branch'])
+    expect(levels({ id: 'p1', name: 'shop' })).toEqual(['nothing', 'commit'])
+    // A project the modules are not on is offered none of their levels.
+    expect(levels(undefined, 'p2')).toEqual(['nothing'])
   })
 })

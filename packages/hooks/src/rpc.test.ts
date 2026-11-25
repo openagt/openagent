@@ -4,7 +4,7 @@ import { act, read, rpcKind, type ComputerRpcClient, type RpcClient, type RpcCom
 import { computerRpcHost, memorySettings, rpcHost } from './testing.js'
 
 const SETTINGS = memorySettings()
-const HOST: RpcHost = rpcHost({ settings: SETTINGS, root: '/work/shop', run: async () => undefined, mergeCommit: async () => ({ pending: false }) })
+const HOST: RpcHost = rpcHost({ settings: SETTINGS, root: '/work/shop', run: async () => undefined })
 
 // A module's server part, as a UI part's client is typed by it.
 const server = {

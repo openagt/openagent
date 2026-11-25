@@ -59,9 +59,12 @@ export const sendAs = act(async (host: RpcComputerHost, input: { login: string }
 export const stopSyncing = act(async (_host: RpcComputerHost, _input: object): Promise<{ ok: true } | { ok: false; error: string }> => stopSyncingPersonalFolder())
 
 /** Everything not backed up now: the person's folder, and each shared project's data. OpenAgent's accounts that could back it up are the git hosts' own read. */
-export const backup = read(async (host: RpcComputerHost): Promise<{ gaps: BackupGap[] }> => {
-  const gaps = [await personalGap(), ...(await Promise.all((await host.projects()).map(project => projectGap(project))))]
-  return { gaps: gaps.filter((gap): gap is BackupGap => gap !== undefined) }
+export const backup = read(async (host: RpcComputerHost): Promise<{ gaps: BackupGap[]; hosts: HostAccounts[] }> => {
+  const [gaps, hosts] = await Promise.all([
+    (async () => [await personalGap(), ...(await Promise.all((await host.projects()).map(project => projectGap(project))))])(),
+    host.accounts.hosts().catch((): HostAccounts[] => []),
+  ])
+  return { gaps: gaps.filter((gap): gap is BackupGap => gap !== undefined), hosts }
 })
 
 /**

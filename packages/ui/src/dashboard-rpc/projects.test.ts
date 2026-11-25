@@ -58,16 +58,16 @@ test('onProjects carries what each project’s state says: its errors, and nothi
   }
 })
 
-test('onCommands says whether the project has a git host and a remote, and its address only with a remote', async () => {
+test('onCommands says whether the project has a remote, and its address only with a remote', async () => {
   const { dir, restore } = await registered()
   const git = (...args: string[]): string => execFileSync('git', args, { cwd: dir, encoding: 'utf8' })
   try {
     provideTestContext()
     const id = (await listProjects())[0]!.id
     git('init', '-q', '-b', 'main')
-    assert.deepEqual(await onCommands(id), { gitHost: false, remote: false }, 'no remote: no address, so no git host to push to')
+    assert.deepEqual(await onCommands(id), { remote: false }, 'no remote: no address')
     git('remote', 'add', 'origin', 'https://example.com/x.git')
-    assert.deepEqual(await onCommands(id), { gitHost: false, remote: true, address: 'example.com/x' })
+    assert.deepEqual(await onCommands(id), { remote: true, address: 'example.com/x' })
     assert.equal(await onCommands('no-such-project'), null)
   } finally {
     await restore()

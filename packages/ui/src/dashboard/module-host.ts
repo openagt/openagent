@@ -1,14 +1,13 @@
 import { pathToFileURL } from 'node:url'
 import { isRunId } from '../store/index.js'
-import { cachedPrsForBranch, type LinkedPr } from './pull-requests.js'
-import type { Cached } from './cache.js'
-import type { GitAccess, GitAccounts, ProjectRef, RunFound, RunQuestion, Settings, InboxLine } from '@openagt/hooks'
-import { rpcKind, type MergeLookup, type ModuleOn, type RpcComputerHost, type RpcFunction, type RpcHost, type RpcKind } from '@openagt/hooks/rpc'
+import { pullRequestsRead } from './pr-states.js'
+import type { GitAccess, GitAccounts, ProjectRef, PullRequest, RunFound, RunQuestion, Settings, InboxLine } from '@openagt/hooks'
+import { rpcKind, type ModuleOn, type RpcComputerHost, type RpcFunction, type RpcHost, type RpcKind } from '@openagt/hooks/rpc'
 
 // The daemon's side of a module's server part (`@openagt/hooks/rpc`): the host a function is given
 // (the settings, the registered projects, OpenAgent's accounts at the git hosts; for a project's
 // module, the project's folder and the project, where its runs have their work, the questions they
-// wait on, a line said to one, a landing written down on one's record, how git reaches a remote as
+// wait on, a line said to one, a landing or a pull request written down on one's record, how pull requests stand as the module read them, how git reaches a remote as
 // an account, and what the modules on give its runs) and the one way a function is
 // called. Where a run's work is, is its host's to say; what a module makes of it is its own.
 
@@ -31,12 +30,12 @@ export interface ServerHostDeps extends ComputerHostDeps {
   say: (agentId: string, line: InboxLine) => Promise<void>
   /** Write down on a run's record that its work was landed; throws why it is not written. */
   landed: (agentId: string, landed: { commit: string; from: string }) => Promise<void>
+  /** Write down on a run's record the pull request a press opened for it; throws why it is not written. */
+  pullRequest: (agentId: string, pr: PullRequest) => Promise<void>
   /** How git reaches a remote as an account, as the distribution's `account.access` says. */
   gitAccess: (remote: string) => Promise<GitAccess | undefined>
   /** The modules on in the project, with what each gives its runs. */
   modulesOn: (opts?: { every?: boolean }) => Promise<ModuleOn[]>
-  /** The project's pull requests from a branch, as the git host last said; the production reader when absent. */
-  prs?: (root: string, branch: string) => Promise<Cached<LinkedPr[]>>
 }
 
 /** The host a function of a module of the computer's is given, called in no project. */
@@ -67,13 +66,13 @@ export function serverHost(root: string, settings: Settings, deps: ServerHostDep
       if (typeof agentId !== 'string' || !isRunId(agentId)) throw new Error('unknown session')
       return deps.landed(agentId, landed)
     },
-    gitAccess: remote => deps.gitAccess(remote),
-    async mergeCommit(branch: string, number: number): Promise<MergeLookup> {
-      const read = await (deps.prs ?? cachedPrsForBranch)(root, branch).catch((): Cached<LinkedPr[]> => ({ value: undefined, pending: false }))
-      if (read.pending && read.value === undefined) return { pending: true }
-      const pr = read.value?.find(pr => pr.number === number)
-      return pr?.mergeCommit ? { pending: false, commit: pr.mergeCommit, ...(pr.headRefOid ? { head: pr.headRefOid } : {}) } : { pending: false }
+    async pullRequest(agentId: string, pr: PullRequest): Promise<void> {
+      if (typeof agentId !== 'string' || !isRunId(agentId)) throw new Error('unknown session')
+      return deps.pullRequest(agentId, pr)
     },
+    pullRequestsRead: prs => pullRequestsRead(Array.isArray(prs) ? prs : []),
+    gitAccess: remote => deps.gitAccess(remote),
+    mergeCommit: (branch: string, number: number) => deps.accounts.mergeCommit(root, branch, number),
   }
 }
 

@@ -12,13 +12,20 @@ const sendAddProjectFromAddress = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/projects.js', () => ({ onRepos, sendAddRepoFolder, sendAddProject, sendPickProjectDirectory: vi.fn(), onCloneTarget, sendAddProjectFromAddress }))
 
 const { ProjectPicker, REPOS_SHOWN, repoDetail, shownAddress } = await import('./ProjectPicker.js')
+const { ModulesContext, mountedOf } = await import('../lib/use-modules.js')
+type WhereRead = Awaited<ReturnType<import('../lib/use-modules.js').MountedOption<'composer.where'>['repos']>>
+
+/** A module whose accounts reach repos (`composer.where`): what its read answers now. */
+const reached = vi.fn(async (): Promise<WhereRead> => ({ repos: [] }))
+const WHERE = mountedOf({ options: { 'composer.where': [{ place: 'composer.where', id: 'repos', label: 'On GitHub', repos: () => reached(), package: '@openagt/github', module: 'github', projects: [] }] } })
 
 const ALPHA: ProjectSummary = { id: 'alpha-1', path: '/home/me/alpha', name: 'alpha', activated: true, gitHost: true }
 const VIKE = { path: '/home/me/oss/vike', name: 'vike', url: 'https://github.com/vikejs/vike.git' }
 const NOTES = { path: '/home/me/notes', name: 'notes' }
 
 beforeEach(() => {
-  onRepos.mockResolvedValue({ repos: [VIKE, NOTES], hosted: [], reposLoading: false, hostedLoading: false, canAddFolder: true })
+  onRepos.mockResolvedValue({ repos: [VIKE, NOTES], here: [], reposLoading: false, canAddFolder: true })
+  reached.mockResolvedValue({ repos: [] })
 })
 afterEach(() => {
   cleanup()
@@ -32,7 +39,7 @@ function renderPicker(over: Partial<Parameters<typeof ProjectPicker>[0]> = {}) {
   const onPick = vi.fn()
   const onProjectAdded = vi.fn()
   const props = { look: 'row' as const, none: NO_PROJECT, picked: null, projects: [ALPHA], busy: false, onPick, onProjectAdded, ...over }
-  const view = render(<ProjectPicker {...props} />)
+  const view = render(<ProjectPicker {...props} />, { wrapper: ({ children }) => <ModulesContext.Provider value={WHERE}>{children}</ModulesContext.Provider> })
   return { onPick, onProjectAdded, props, ...view }
 }
 
@@ -132,16 +139,12 @@ describe('ProjectPicker', () => {
     expect(screen.queryByRole('dialog', { name: 'Add project' })).toBeNull()
   })
 
-  test("the git hosts' repos follow the ones on this computer, with their address and why they are listed; picked, one is cloned the way a typed address is", async () => {
-    onRepos.mockResolvedValue({
-      repos: [VIKE, NOTES],
-      hosted: [
-        { address: 'github.com/octo-agent/shop', url: 'https://github.com/octo-agent/shop', private: true, from: '@octo-agent' },
-        { address: 'github.com/vikejs/bati', url: 'https://github.com/vikejs/bati', private: false, description: 'Scaffolder', from: 'vikejs' },
+  test("the repos a module's accounts reach follow the ones on this computer, with why they are listed; picked, one is cloned the way a typed address is", async () => {
+    reached.mockResolvedValue({
+      repos: [
+        { address: 'github.com/octo-agent/shop', label: 'octo-agent/shop', private: true, why: '@octo-agent' },
+        { address: 'github.com/vikejs/bati', label: 'vikejs/bati', detail: 'Scaffolder', why: 'vikejs' },
       ],
-      reposLoading: false,
-      hostedLoading: false,
-      canAddFolder: false,
     })
     onCloneTarget.mockResolvedValue({ ok: true, address: 'github.com/vikejs/bati', path: '/home/me/projects/bati' })
     renderPicker()
@@ -158,33 +161,44 @@ describe('ProjectPicker', () => {
     await waitFor(() => expect(onCloneTarget).toHaveBeenCalledWith('github.com/vikejs/bati'))
   })
 
-  test('a git host that could not be reached is said so, under the repos that are listed', async () => {
-    onRepos.mockResolvedValue({ repos: [VIKE], hosted: [], reposLoading: false, hostedLoading: false, hostedUnreached: true, canAddFolder: false })
+  test('a repo on this computer already is not listed again as one to clone', async () => {
+    onRepos.mockResolvedValue({ repos: [VIKE], here: ['github.com/vikejs/vike'], reposLoading: false, canAddFolder: false })
+    reached.mockResolvedValue({ repos: [{ address: 'github.com/vikejs/vike', label: 'vikejs/vike', why: 'vikejs' }, { address: 'github.com/vikejs/bati', label: 'vikejs/bati', why: 'vikejs' }] })
     renderPicker()
     await openMenu(trigger())
-    expect(await screen.findByText('GitHub could not be reached: its repos are not listed.')).toBeTruthy()
+    await screen.findByRole('option', { name: /bati/ })
+    expect(options()).toEqual(['No project', 'alpha', 'vikegithub.com/vikejs/vike', 'vikejs/batiNot on this computer·vikejs'])
+  })
+
+  test("a module's accounts that could not all be read are said so, in its words, under the repos that are listed", async () => {
+    onRepos.mockResolvedValue({ repos: [VIKE], here: [], reposLoading: false, canAddFolder: false })
+    reached.mockResolvedValue({ repos: [], unreached: 'GitHub did not answer: some repos are missing.' })
+    renderPicker()
+    await openMenu(trigger())
+    expect(await screen.findByText('GitHub did not answer: some repos are missing.')).toBeTruthy()
     expect(screen.getByRole('option', { name: /vike/ })).toBeTruthy()
   })
 
-  test("while the git hosts are being asked, the menu says so and asks again", async () => {
-    onRepos.mockResolvedValue({ repos: [VIKE], hosted: [], reposLoading: false, hostedLoading: true, canAddFolder: false })
+  test("while a module's accounts are being asked, the menu says so and asks again", async () => {
+    onRepos.mockResolvedValue({ repos: [VIKE], here: [], reposLoading: false, canAddFolder: false })
+    reached.mockResolvedValue({ repos: [], loading: true })
     renderPicker()
     await openMenu(trigger())
-    expect(await screen.findByText('Asking GitHub for repos…')).toBeTruthy()
-    const before = onRepos.mock.calls.length
-    onRepos.mockResolvedValue({ repos: [VIKE], hosted: [{ address: 'github.com/octo/app', url: 'https://github.com/octo/app', private: false, from: '@octo' }], reposLoading: false, hostedLoading: false, canAddFolder: false })
-    await waitFor(() => expect(onRepos.mock.calls.length).toBeGreaterThan(before), { timeout: 4000 })
+    expect(await screen.findByText('Asking for the repos on GitHub…')).toBeTruthy()
+    const before = reached.mock.calls.length
+    reached.mockResolvedValue({ repos: [{ address: 'github.com/octo/app', label: 'octo/app', why: '@octo' }] })
+    await waitFor(() => expect(reached.mock.calls.length).toBeGreaterThan(before), { timeout: 4000 })
     expect(await screen.findByRole('option', { name: /octo\/app/ })).toBeTruthy()
-    expect(screen.queryByText('Asking GitHub for repos…')).toBeNull()
+    expect(screen.queryByText('Asking for the repos on GitHub…')).toBeNull()
   })
 
   test('while the look through this computer is still on its way, the menu says so and asks again', async () => {
-    onRepos.mockResolvedValue({ repos: [], hosted: [], reposLoading: true, hostedLoading: false, canAddFolder: false })
+    onRepos.mockResolvedValue({ repos: [], here: [], reposLoading: true, canAddFolder: false })
     renderPicker()
     await openMenu(trigger())
     expect(await screen.findByText('Looking for repos on this computer…')).toBeTruthy()
     const before = onRepos.mock.calls.length
-    onRepos.mockResolvedValue({ repos: [VIKE], hosted: [], reposLoading: false, hostedLoading: false, canAddFolder: false })
+    onRepos.mockResolvedValue({ repos: [VIKE], here: [], reposLoading: false, canAddFolder: false })
     await waitFor(() => expect(onRepos.mock.calls.length).toBeGreaterThan(before), { timeout: 4000 })
     expect(await screen.findByRole('option', { name: /vike/ })).toBeTruthy()
     expect(screen.queryByText('Looking for repos on this computer…')).toBeNull()
@@ -231,7 +245,7 @@ describe('ProjectPicker', () => {
 
   test('with nothing typed only the first repos are listed, and the search reaches the rest', async () => {
     const many = Array.from({ length: REPOS_SHOWN + 5 }, (_, i) => ({ path: `/home/me/r${i}`, name: `r${i}` }))
-    onRepos.mockResolvedValue({ repos: many, hosted: [], reposLoading: false, hostedLoading: false, canAddFolder: false })
+    onRepos.mockResolvedValue({ repos: many, here: [], reposLoading: false, canAddFolder: false })
     renderPicker({ projects: [] })
     await openMenu(trigger())
     await screen.findByRole('option', { name: /^r0/ })
@@ -330,7 +344,7 @@ describe('ProjectPicker', () => {
     await openMenu(trigger())
     await screen.findByRole('option', { name: /vike/ })
     const before = onRepos.mock.calls.length
-    onRepos.mockResolvedValue({ repos: [VIKE, NOTES, { path: '/work/client', name: 'client' }], hosted: [], reposLoading: false, hostedLoading: false, canAddFolder: true })
+    onRepos.mockResolvedValue({ repos: [VIKE, NOTES, { path: '/work/client', name: 'client' }], here: [], reposLoading: false, canAddFolder: true })
     fireEvent.click(screen.getByText('Search another folder…'))
     await waitFor(() => expect(sendAddRepoFolder).toHaveBeenCalledTimes(1))
     await screen.findByRole('option', { name: /client/ })

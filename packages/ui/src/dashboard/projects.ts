@@ -4,7 +4,7 @@ import { nodeFs } from '../node-fs.js'
 import { isActivated } from '../project.js'
 import { readAllAgents, type AgentMeta } from '../store/index.js'
 import type { ProjectError, StaysLocal } from '../project-state.js'
-import { projectGitHost, type GitHostFor } from '../store/git-host.js'
+import { takesRequests } from './pr-states.js'
 import { projectNameOf, repositoryAddress, sessionsHome } from '@openagt/agent-data'
 import { SESSIONS_ID } from '../project-address.js'
 
@@ -25,7 +25,7 @@ export interface ProjectSummary {
   name: string
   /** True when the repo still has its `.openagent/` marker. */
   activated: boolean
-  /** Whether one of the project's packages provides a git host; without one no pull request can be opened there. */
+  /** Whether a pull request is a next step there: OpenAgent has an account at its remote's host. Without one, the last step is the push. */
   gitHost: boolean
   /** Its repository's address, origin's (`github.com/me/shop`), as the hooks name it; none for a project with no remote. */
   remote?: string
@@ -65,8 +65,8 @@ export interface SummarizeDeps {
   isActivated?: (path: string) => Promise<boolean>
   /** The project's runs (live + archived), newest-first. Defaults to {@link readAllAgents}. */
   readAgents?: (path: string) => Promise<AgentMeta[]>
-  /** The project's git host. Defaults to {@link projectGitHost}. */
-  gitHost?: GitHostFor
+  /** Whether a pull request is a next step for the repository at that address. Defaults to {@link takesRequests}. */
+  takesRequests?: (remote: string | undefined) => Promise<boolean>
   /** The project's name. Defaults to {@link projectNameOf}: its repository's. */
   name?: (path: string) => Promise<string>
   /** Its repository's address. Defaults to {@link repositoryAddress}: origin's. */
@@ -95,11 +95,12 @@ export async function summarizeProject(record: ProjectRecord, deps: SummarizeDep
     path: record.path,
     name: await (deps.name ?? projectNameOf)(record.path).catch(() => basename(record.path)),
     activated,
-    gitHost: (await (deps.gitHost ?? projectGitHost)(record.path).catch(() => undefined)) !== undefined,
+    gitHost: false,
   }
   if (lastActivityAt) summary.lastActivityAt = lastActivityAt
   const remote = await (deps.remote ?? (path => repositoryAddress(path)))(record.path).catch(() => undefined)
   if (remote !== undefined) summary.remote = remote
+  summary.gitHost = await (deps.takesRequests ?? takesRequests)(remote).catch(() => false)
   return summary
 }
 

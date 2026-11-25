@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { GitAccess } from './account.js'
 import type { ProjectRef } from './project.js'
-import type { RunOptions, RunQuestion } from './run.js'
+import type { PullRequest, PullRequestRead, RunOptions, RunQuestion } from './run.js'
 import type { Settings } from './settings.js'
 import type { Store } from './store.js'
 
@@ -116,6 +116,21 @@ export interface AttentionArgs {
   options?: RunOptions
   /** The project's runs that ended waiting on the person, newest first, each with what it waits on. */
   waiting?: () => Promise<WaitingRun[]>
+  /** The project's runs, newest first: what a module tells the run that opened a pull request by. */
+  runs?: () => Promise<ProjectRun[]>
+  /** Say how pull requests stand, as the module just read them at its git host: the lists of runs mark each run's requests by it. */
+  pullRequestsRead?(prs: readonly PullRequestRead[]): void
+}
+
+/** One of a project's runs, as a module that says what needs the person tells it by. */
+export interface ProjectRun {
+  id: string
+  /** What every list names it by: its short name, else what it was asked; none for a run that has neither yet. */
+  name?: string
+  /** The branch it works on, or worked on. */
+  branch?: string
+  /** The pull request its record names. */
+  pr?: PullRequest
 }
 
 /** A run that ended waiting on the person, as a module that says what needs them reads it. */

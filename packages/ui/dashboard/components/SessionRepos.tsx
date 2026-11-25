@@ -122,7 +122,7 @@ export function ReposMenu({
   const above = open && box?.current != null && box.current.getBoundingClientRect().top >= ROOM_ABOVE_PX
   // Asked again shortly while the look through this computer is still on its way, and the menu is open.
   const [again, setAgain] = useState(0)
-  const repos = useLoaded<ReposRead | null>(() => onRepos().catch(() => ({ repos: [], hosted: [], reposLoading: false, hostedLoading: false, canAddFolder: false })), null, [open, again])
+  const repos = useLoaded<ReposRead | null>(() => onRepos().catch(() => ({ repos: [], here: [], reposLoading: false, canAddFolder: false })), null, [open, again])
   useEffect(() => {
     if (!open || !repos?.reposLoading) return
     const later = setTimeout(() => setAgain(k => k + 1), ASK_AGAIN_MS)

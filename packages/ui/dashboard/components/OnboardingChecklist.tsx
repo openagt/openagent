@@ -10,8 +10,6 @@ import { Skeleton } from './ui/skeleton.js'
 import { updatePreferences } from '../lib/preferences.js'
 import { AddProjectEffects } from './AddProjectEffects.js'
 import { ProjectPicker } from './ProjectPicker.js'
-import { HostFix } from './AddGitAccount.js'
-import { hostLoginState, hostWords, useGitHosts } from './Logins.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { useAttention } from '../lib/use-attention.js'
 import { attentionDetail, attentionKey, useAttentionFixes } from './Attention.js'
@@ -65,8 +63,6 @@ export function OnboardingChecklist({
   // Slower than the Overview's own 5s poll: these change at human speed.
   // Kept for the next visit: the steps open where they stood, not as titles that then grow.
   const { value: data, reload, state } = usePolled<DashboardData | null>(onDashboard, null, 10_000, [], { remember: 'onboarding:dashboard', stored: true })
-  // What sessions need on this computer: an account at each git host, and what the modules say (a coding agent to connect).
-  const { view: hosts, reload: reloadHosts } = useGitHosts()
   // The step the person opened; by default, the first one not done.
   const [picked, setPicked] = useState<string | undefined>()
   const attention = useAttention(null)
@@ -75,23 +71,6 @@ export function OnboardingChecklist({
 
   // Before the projects are read, the app's own list says whether there is one.
   const projectCount = data?.totals.projects ?? projects.length
-
-  const hostSteps: Step[] = (hosts?.hosts ?? []).flatMap(row => {
-    const p = row.provider
-    if (!p) return []
-    const done = hostLoginState(row) === 'connected'
-    const runs = p.accounts.find(account => account.runs && account.ok)?.login ?? p.accounts.find(account => account.ok)?.login
-    return [
-      {
-        key: `host:${row.host}`,
-        label: `Connect ${p.name}`,
-        description: p.installed && p.accounts.length === 0 ? `OpenAgent pushes and opens ${p.requestWord}s with an account of its own, never your own login.` : hostWords(row),
-        done,
-        ...(runs ? { doneNote: `@${runs}` } : {}),
-        action: <HostFix row={row} onChanged={reloadHosts} size="default" />,
-      },
-    ]
-  })
 
   // What the modules say needs setting up on this computer (`app.attention`), each a step with its fix.
   const moduleSteps: Step[] = setupItems.map(item => {
@@ -108,7 +87,6 @@ export function OnboardingChecklist({
 
   const steps: Step[] = [
     ...moduleSteps,
-    ...hostSteps,
     {
       key: 'project',
       label: 'Add your first project',
@@ -134,13 +112,13 @@ export function OnboardingChecklist({
   ]
 
   // No step before its reads have said where it stands: an unread project count is not "no project".
-  const loginsRead = attention !== null && hosts !== undefined
+  const loginsRead = attention !== null
   const reading = state === 'unknown' || !loginsRead
   const open = picked !== undefined && steps.some(step => step.key === picked && !step.done) ? picked : steps.find(step => !step.done)?.key
 
   const doneCount = steps.filter(step => step.done).length
   // Every step done: nothing to discover, and the box under it is how a session starts. Only once what the modules
-  // say and the git hosts are read: either can add a step, and the card waits for them rather than coming late.
+  // say is read: it can add a step, and the card waits for it rather than coming late.
   if (loginsRead && steps.every(step => step.done)) return null
   return (
     <>
@@ -173,8 +151,8 @@ export function OnboardingChecklist({
         <>
           <p className="sr-only">Loading…</p>
           {/* The steps as they will stand once read, so nothing in them moves when the answer comes: each its mark and its
-              title, the open step its words under its name (read with the git hosts, or fixed) and its presses' shapes at
-              the row's end, centred on the row. Only once what the modules say and the git hosts are read (each can add a
+              title, the open step its words under its name (read with what the modules say, or fixed) and its presses' shapes at
+              the row's end, centred on the row. Only once what the modules say is read (it can add a
               step at the top, which would push the rows drawn): nothing under the steps is drawn before they are. */}
           {loginsRead && (
             <Panel ordered aria-hidden>

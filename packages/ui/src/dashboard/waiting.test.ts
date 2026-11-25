@@ -1,14 +1,15 @@
 import { strict as assert } from 'node:assert'
-import { test } from 'node:test'
+import { beforeEach, test } from 'node:test'
 import { createHooks, defineModule, type AttentionItem, type Hooks, type WaitingRun } from '@openagt/hooks'
 import { memoryStore } from '@openagt/hooks/testing'
 import ask from '@openagt/ask/module'
 import { buildWaiting, waitingKey, type Waiting, type WaitingDeps } from './waiting.js'
+import { forgetPullRequestStates } from './pr-states.js'
 import { forgetStartedNames, nameStarted } from '@openagt/agent-driver'
 import { pendingChoices } from '../open-choices.js'
 import { eventsOf } from '../store/run-record.js'
 import type { AnyDiaryLine } from '../store/runs.js'
-import type { OpenPr } from './pull-requests.js'
+import { githubModule, type OpenPr } from '@openagt/github/module'
 import type { BranchAhead, BranchesFor } from '../store/branches.js'
 import type { ProjectSummary } from './projects.js'
 import type { LiveAgent, AgentMeta } from '../store/index.js'
@@ -17,13 +18,31 @@ import type { OpenAgentEvent } from '../events.js'
 const project = (id: string, path: string): ProjectSummary => ({ id, path, name: id, activated: true, gitHost: false })
 
 /** A distribution with no module that says anything waits: only the shell's own sources. */
+// What a test's modules read of pull requests is that test's alone.
+beforeEach(forgetPullRequestStates)
+
 const noModules = async (): Promise<Hooks> => createHooks([])
 
 /** A distribution where ask is on, as it starts: a run waiting on its question is ask's to say. */
 const withAsk = async (): Promise<Hooks> => createHooks([{ module: defineModule({ name: 'memory', hooks: { 'store.backend': memoryStore() } }) }, { module: ask, on: true }], { onError: () => {} })
 
-/** What waits on the person in `projects`, with the modules of `deps.hooks`, none unless said. */
-const build = (projects: ProjectSummary[], deps: WaitingDeps = {}) => buildWaiting(projects, { hooks: noModules, ...deps })
+/**
+ * The modules of `base`, with github's on, its projects all on GitHub, their open pull requests
+ * `prs`'s: what waits on a pull request is its to say.
+ */
+const withGithub = (prs: (cwd: string) => Promise<OpenPr[]>, base: () => Promise<Hooks> = noModules) => async (): Promise<Hooks> =>
+  createHooks(
+    [
+      // A plugin of `base` stays on; github is a core module, on with no row.
+      ...(await base()).modules.map(module => (module.plugin ? { module, on: true } : { module })),
+      { module: githubModule({ onGithub: async () => true, openRequests: prs, requestStates: async () => undefined, accounts: async () => ({ installed: true, accounts: [] }) }) },
+    ],
+    { onError: () => {} },
+  )
+
+/** What waits on the person in `projects`, with the modules of `deps.hooks`, none unless said, and github's with `prs`, the projects' open pull requests. */
+const build = (projects: ProjectSummary[], { prs, ...deps }: WaitingDeps & { prs?: (cwd: string) => Promise<OpenPr[]> } = {}) =>
+  buildWaiting(projects, { ...deps, hooks: prs ? withGithub(prs, deps.hooks) : (deps.hooks ?? noModules) })
 
 /** No paused run anywhere — keeps the PR-only tests hermetic (no disk read). */
 const noAgents = async (): Promise<LiveAgent[]> => []
@@ -141,7 +160,7 @@ test("a run waiting on the question it ended on is ask's to say, given the proje
 test('a session with no project that waits on its question is in the list too, and its sessions are read whole', async () => {
   const liveAgents = async (cwd: string): Promise<LiveAgent[]> => (cwd === '/sessions' ? [live(runningAgentMeta({ id: 's1', status: 'waiting', title: 'Greeting exchange' }), '/sessions/s1')] : [])
   const events = async () => waitingOn('gate-1', 'What would you like to do?')
-  const { items, whole } = await buildWaiting([project('a', '/a')], { prs: noPrs, liveAgents, events, hooks: withAsk }, '/sessions')
+  const { items, whole } = await buildWaiting([project('a', '/a')], { liveAgents, events, hooks: withGithub(noPrs, withAsk) }, '/sessions')
 
   assert.deepEqual(items, [
     { kind: 'waiting', module: 'ask', scope: 'run', run: 's1', id: 's1:gate-1', words: 'Needs answer', title: 'Greeting exchange', detail: 'What would you like to do?', mark: 'question', since: '2026-07-16T00:00:00Z', projectId: 'session', projectName: '' },
@@ -149,7 +168,7 @@ test('a session with no project that waits on its question is in the list too, a
   // Read whole, so a notification says a session's question as it says a project's.
   assert.deepEqual(whole, ['a', 'session'])
   // No sessions home named: the projects alone.
-  assert.deepEqual((await buildWaiting([project('a', '/a')], { prs: noPrs, liveAgents, events, hooks: withAsk })).items, [])
+  assert.deepEqual((await buildWaiting([project('a', '/a')], { liveAgents, events, hooks: withGithub(noPrs, withAsk) })).items, [])
 })
 
 test('a module is given the runs of its project that wait, newest first, each with its name, when it ended and the questions it still waits on; their diaries read only when it asks', async () => {

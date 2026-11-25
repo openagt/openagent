@@ -3,14 +3,13 @@ import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import type { PersonalFolderView } from './calls.js'
 import { github, renderCalling } from './test-host.js'
 
-// The shell's git hosts as a test says them, and its press that adds an account, which says the host it was pressed for.
-const shell = vi.hoisted(() => ({ hosts: [] as unknown[], added: [] as string[] }))
+// The press of the module that adds an account, which says the module it was pressed for.
+const shell = vi.hoisted(() => ({ added: [] as string[] }))
 vi.mock('@openagt/ui/module', async original => ({
   ...(await original<typeof import('@openagt/ui/module')>()),
-  useGitHosts: () => ({ view: { hosts: shell.hosts }, state: 'fresh', reload: async () => {} }),
-  HostFix: ({ row }: { row: { host: string; provider?: { name: string } } }) => (
-    <button type="button" onClick={() => shell.added.push(row.host)}>
-      {`Add a ${row.provider?.name ?? row.host} account`}
+  ModuleFixPress: ({ fix }: { fix: { module: string; label: string } }) => (
+    <button type="button" onClick={() => shell.added.push(fix.module)}>
+      {fix.label}
     </button>
   ),
 }))
@@ -24,9 +23,8 @@ let answers: Record<string, (input: Record<string, unknown>) => unknown>
 const render = () => renderCalling(<AgentDataSettings />, (name, input) => (name === 'folder' ? view : (answers[name] ?? (() => ({ ok: true })))(input)))
 
 beforeEach(() => {
-  view = { path: '~/.openagent', unsent: 0, projects: ['test-project', 'oa-newuser'], hosts: [{ host: 'github.com', logins: ['me-agent', 'reviewer-agent'], runs: 'reviewer-agent' }] }
+  view = { path: '~/.openagent', unsent: 0, projects: ['test-project', 'oa-newuser'], hosts: [github(['me-agent', 'reviewer-agent'], 'reviewer-agent')] }
   answers = {}
-  shell.hosts = [github([{ login: 'me-agent', runs: false, ok: true }, { login: 'reviewer-agent', runs: true, ok: true }])]
   shell.added = []
 })
 afterEach(cleanup)
@@ -59,15 +57,14 @@ describe('Settings › Your agent data', () => {
   })
 
   test("with no account of OpenAgent's at the host, nothing is sent: one is added right here, and Sync stays off until then", async () => {
-    view = { ...view, hosts: [] }
-    shell.hosts = [github([])]
+    view = { ...view, hosts: [github([])] }
     render()
     fireEvent.click(await screen.findByRole('button', { name: 'Sync with a repository' }))
     fireEvent.change(screen.getByLabelText('Repository address'), { target: { value: 'github.com/me/agent' } })
-    expect(await screen.findByText(/OpenAgent backs up to GitHub with an account of its own, never your own login/)).toBeTruthy()
+    expect(await screen.findByText(/OpenAgent backs up to github.com with an account of its own, never your own login/)).toBeTruthy()
     expect((screen.getByRole('button', { name: 'Sync' }) as HTMLButtonElement).disabled).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: 'Add a GitHub account' }))
-    expect(shell.added).toEqual(['github.com'])
+    expect(shell.added).toEqual(['github'])
   })
 
   test('a synced folder says the account it is backed up as', async () => {

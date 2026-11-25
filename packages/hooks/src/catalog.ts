@@ -112,6 +112,18 @@ export const PICKED_PROFILE = defineSetting<string | undefined>({
   parse: value => (isProfileId(value) && value !== DEFAULT_PROFILE ? value : undefined),
 })
 
+/**
+ * github's: the GitHub account every next run started on this computer works as where its options
+ * name none, one of OpenAgent's own, by its login, picked under the message box; the one runs use
+ * (Permissions › Use for runs) when unset, or when it names an account this computer no longer has.
+ */
+export const PICKED_GITHUB_ACCOUNT = defineSetting<string | undefined>({
+  key: 'github.account',
+  scope: 'computer',
+  default: undefined,
+  parse: value => (typeof value === 'string' && /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/.test(value) ? value : undefined),
+})
+
 /** Every profile, as a list shows them: Default first, as saved or built in, then the others by name. */
 export function profilesIn(saved: readonly Profile[]): Profile[] {
   const others = saved.filter(profile => profile.id !== DEFAULT_PROFILE).sort((a, b) => a.name.localeCompare(b.name))

@@ -1,9 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { cachedOpenPrs, cachedPrStates, cachedPrView, cachedPrsForBranch, forgetBranchPrs, forgetPr, linkedPrOf, onPrMoved, openPrOf, openPrs, prStates, prView, prsForBranch, prsForBranchOrThrow, type OpenPr } from './pull-requests.js'
-import type { GitHostFor, GitHostRequest, RequestsOutcome } from '../store/git-host.js'
+import { cachedOpenPrs, cachedPrStates, cachedPrView, cachedPrsForBranch, forgetBranchPrs, forgetPr, linkedPrOf, onPrMoved, openPrOf, openPrs, prStates, prView, prsForBranch, prsForBranchOrThrow, type OpenPr } from './pulls.js'
+import type { GitHostFor, GitHostRequest, RequestsOutcome } from './pulls.js'
 
-// The dashboard's pull request reads (#1820), all through the git host provider: what is asked of it,
+// The dashboard's pull request reads (#1820), all through `github requests`: what is asked of it,
 // what is kept of the answer, and which reads forgive a git host that could not answer and which
 // must not.
 
@@ -17,12 +17,6 @@ function fakeGitHost(answer: RequestsOutcome): { gitHost: GitHostFor; asked: unk
       asked.push(opts)
       return answer
     },
-    open: async () => ({ ok: false, error: 'not here' }),
-    merge: async () => ({ ok: false, error: 'not here' }),
-    bring: async () => ({ ok: false, error: 'not here' }),
-    home: async () => undefined,
-    me: async () => undefined,
-    people: async () => [],
   })
   return { gitHost, asked }
 }

@@ -2,7 +2,7 @@ import { readFile, realpath } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import type { GitAccess } from './account.js'
+import type { GitAccess, GitAccounts } from './account.js'
 import { ROUTE_PATH, type AppContext, type AppRoute, type AppStart, type AttentionArgs, type AttentionRead } from './app.js'
 import { HOOK_NAMES, MODULE_NAME, type HookName, type ModuleDefinition, type OwnRow } from './module.js'
 import { runPipeline, type OrderedStep, type PipelineResult } from './pipeline.js'
@@ -86,6 +86,8 @@ export interface Hooks {
   hosts(project?: ProjectRef): Promise<RunHost[]>
   /** How git reaches `remote` as an account: the first module with an account for it says. */
   gitAccess(remote: string): Promise<GitAccess | undefined>
+  /** OpenAgent's accounts at the git hosts, as every module's `account.access` answers for its hosts. */
+  readonly gitAccounts: GitAccounts
   /** The addresses the modules on answer for callers that are no page of the app's; a second route at a path is left out. */
   routes(): Promise<AppRoute[]>
   /**
@@ -273,6 +275,39 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
         }
       }
       return undefined
+    },
+    gitAccounts: {
+      async hosts() {
+        const said = await Promise.all(
+          (await onModules(undefined, undefined, 'account.access')).map(async module => {
+            try {
+              return (await module.hooks['account.access']?.hosts?.()) ?? []
+            } catch (error) {
+              report(module.name, 'account.access', error)
+              return []
+            }
+          }),
+        )
+        return said.flat()
+      },
+      async sendAs(host, login) {
+        for (const module of await onModules(undefined, undefined, 'account.access')) {
+          const answer = await module.hooks['account.access']?.sendAs?.(host, login)
+          if (answer) return answer
+        }
+        return { ok: false, error: `No module answers for ${host}.` }
+      },
+      async mergeCommit(dir, branch, number) {
+        for (const module of await onModules(undefined, undefined, 'account.access')) {
+          try {
+            const answer = await module.hooks['account.access']?.mergeCommit?.(dir, branch, number)
+            if (answer) return answer
+          } catch (error) {
+            report(module.name, 'account.access', error)
+          }
+        }
+        return { pending: false }
+      },
     },
     async attention(args) {
       // Asked about this computer, with no project: a plugin kept per project is asked as the

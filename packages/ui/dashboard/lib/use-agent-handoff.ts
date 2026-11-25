@@ -2,37 +2,16 @@ import { useEffect, useRef, useState } from 'react'
 import type { AgentHandoff } from '../../src/index.js'
 import { onAgentHandoff } from '../rpc/reads.js'
 import { forgetRemembered, useAskOn, usePolled, type ReadState } from './use-async.js'
-import { useAction } from './use-action.js'
-import { prsAgain } from './runs-changed.js'
 
-/** What the agent view knows about the session's branch, and how it acts on it. */
+/** What the agent view knows about the session's branch. */
 export type AgentHandoffState = {
   handoff: AgentHandoff | null
   /** What is known of the branch: an empty state isn't flashed while it is unknown. */
   state: ReadState
-  busy: boolean
-  error: string | null
-  /** Which button is in flight, so it can say "Opening PR…" rather than silently greying (#948). */
-  pending: Press | null
-  /**
-   * Runs a press. A failure is said as `failed`, the bar's own sentence, then the program's line
-   * under it. What `answered` makes of the press's answer is the bar's at once, until the branch is
-   * read again. Resolves to the answer, or undefined when the press failed.
-   */
-  act: <T>(which: Press, fn: () => Promise<T>, failed: string, answered?: (value: Exclude<T, { ok: false }>) => Partial<AgentHandoff> | undefined) => Promise<Exclude<T, { ok: false }> | undefined>
 }
 
-/** The bar's presses. */
-type Press = 'pr' | 'merge' | 'push'
-
-// The handoff read lifted out of its panel: the same answer feeds two places in the bar above the
-// message box, the summary and the actions. Reading it once keeps them from disagreeing and halves
-// the polling.
-/**
- * How soon to ask again while the daemon's pull request lookup is still out: the answer lands in
- * well under a second, and the bar says nothing about the branch until it has.
- */
-export const PR_PENDING_MS = 300
+// The handoff read lifted out of its panel: whether the bar above the message box has something
+// to say for the run's branch, and when it is over.
 
 /** How often the branch is read while nothing is moving. */
 const REST_MS = 15_000
@@ -91,19 +70,16 @@ export function handoffSays(handoff: AgentHandoff | null): boolean {
  * read and the same presses, of the copy's own branch.
  */
 export function useAgentHandoff(projectId: string, agentId: string | null | undefined, enabled = true, saving = false, working = false, repo?: string): AgentHandoffState {
-  // Polled rather than read once: a push or a PR opened from here (or from a terminal) changes
-  // what to offer, and `reload` makes the bar's own actions land immediately. Not read while the
-  // run is live (#1026): a branch still being written to has nothing to hand off yet.
-  // Same as the bar above it (#1028): fifteen seconds at rest, but a PR lookup still in flight
-  // holds the Open PR offer back, so that one is worth asking again for straight away.
+  // Polled rather than read once: a push or a merge from here (or from a terminal) changes what
+  // the branch holds. Not read while the run is live (#1026): a branch still being written to has
+  // nothing to hand off yet.
   // A run that works again writes to its branch: the answer remembered from before is not the
   // one shown when the run ends, which would put the last step back for a moment.
   const key = agentId ? `handoff:${projectId}:${agentId}${repo !== undefined ? `:${repo}` : ''}` : undefined
   useEffect(() => {
     if (working && key !== undefined) forgetRemembered(key)
   }, [working, key])
-  // How often to ask: every second while the branch is still settling, straight away again while
-  // the pull request lookup is out, every fifteen seconds at rest.
+  // How often to ask: every second while the branch is still settling, every fifteen seconds at rest.
   const [everyMs, setEveryMs] = useState(REST_MS)
   const { value: handoff, reload, refresh, state } = usePolled<AgentHandoff | null>(
     enabled && agentId ? () => (repo !== undefined ? onAgentHandoff(projectId, agentId, repo) : onAgentHandoff(projectId, agentId)) : null,
@@ -113,51 +89,14 @@ export function useAgentHandoff(projectId: string, agentId: string | null | unde
     // Remembered per run, in this browser too: going back to a run, or loading it again, shows its
     // last answer at once while it is read again. Another run's answer is never shown.
     key !== undefined ? { remember: key, stored: true } : undefined,
-    // Its pull request moved: read again with the run's row, which says so at the same time.
-    prsAgain(),
   )
   // The run's turn has just ended: its branch is read every second until it has something to say,
   // since the run's own last commit lands moments after its turn does ({@link SETTLING_MS}).
   const settling = useSettling(working, handoffSays(handoff))
-  useEffect(() => setEveryMs(handoff?.prPending ? PR_PENDING_MS : settling ? SETTLING_EVERY_MS : REST_MS), [handoff?.prPending, settling])
+  useEffect(() => setEveryMs(settling ? SETTLING_EVERY_MS : REST_MS), [settling])
   // A quicker pace reads at once, which is how the read the moment a run ends is taken at all; and
   // the clean-up done (`saving` over) may have deleted the branch or pushed it.
   useAskOn(everyMs, refresh)
   useAskOn(saving, reload)
-  const { busy, error, run } = useAction()
-  const [pending, setPending] = useState<Press | null>(null)
-  const [failed, setFailed] = useState<string | null>(null)
-  // The press's answer over the read it was pressed on, and over a newer one still looking up its
-  // pull request (#1028): the first read that knows is the branch's own word. It is its run's alone.
-  const [answer, setAnswer] = useState<{ over: AgentHandoff; with: Partial<AgentHandoff>; of: string | undefined } | null>(null)
-  const latest = useRef(handoff)
-  latest.current = handoff
-
-  const act = async <T,>(which: Press, fn: () => Promise<T>, said: string, answered?: (value: Exclude<T, { ok: false }>) => Partial<AgentHandoff> | undefined) => {
-    const of = key
-    setPending(which)
-    const outcome = await run(fn, said)
-    setFailed(outcome.ok ? null : said)
-    const over = latest.current
-    const known = outcome.ok && over ? answered?.(outcome.value) : undefined
-    if (known && over) {
-      setAnswer({ over, with: known, of })
-      setPending(null)
-      void reload()
-    } else {
-      // The button says what it is doing until the branch is read again: let go before, it read
-      // as not pressed for the beat the read takes.
-      if (outcome.ok) await reload()
-      setPending(null)
-    }
-    return outcome.ok ? outcome.value : undefined
-  }
-
-  const stands = handoff !== null && answer !== null && answer.of === key && (answer.over === handoff || handoff.prPending === true)
-  useEffect(() => {
-    if (answer && handoff && !stands) setAnswer(null)
-  }, [answer, handoff, stands])
-  const shown = stands ? { ...handoff, ...answer.with, ...(answer.with.pr ? { prPending: false } : {}) } : handoff
-  const said = error === null || failed === null || error === failed ? error : `${failed}\n${error}`
-  return { handoff: shown, state, busy, error: said, pending, act }
+  return { handoff, state }
 }

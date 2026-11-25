@@ -20,6 +20,7 @@ import { usePickerSearch } from './ui/picker-search.js'
 import { AddProjectPanel } from './AddProjectPanel.js'
 import { Facts } from './ui/panel.js'
 import { MiddleCut } from './MiddleCut.js'
+import { useWhereRepos } from './Places.js'
 
 /** How many repos the menu lists before a search: the search reaches the rest. */
 export const REPOS_SHOWN = 20
@@ -194,13 +195,16 @@ export function ProjectPicker({
   const [folderError, setFolderError] = useState<string | null>(null)
   // Read again after a folder is added: the daemon has crawled it by then.
   const [folders, setFolders] = useState(0)
-  const repos = useLoaded<ReposRead | null>(() => onRepos().catch(() => ({ repos: [], hosted: [], reposLoading: false, hostedLoading: false, canAddFolder: false })), null, [open, folders])
-  // This computer's or the git hosts' lists are still being read: asked again shortly, while the menu is open.
+  const repos = useLoaded<ReposRead | null>(() => onRepos().catch(() => ({ repos: [], here: [], reposLoading: false, canAddFolder: false })), null, [open, folders])
+  // The repos the modules' accounts reach (`composer.where`), less the ones on this computer.
+  const where = useWhereRepos(open, repos?.here ?? [], folders)
+  const whereLoading = where.some(group => group.loading)
+  // This computer's or the modules' lists are still being read: asked again shortly, while the menu is open.
   useEffect(() => {
-    if (!open || !(repos?.reposLoading || repos?.hostedLoading)) return
+    if (!open || !(repos?.reposLoading || whereLoading)) return
     const again = setTimeout(() => setFolders(k => k + 1), ASK_AGAIN_MS)
     return () => clearTimeout(again)
-  }, [open, repos])
+  }, [open, repos, whereLoading])
 
   useEffect(() => {
     if (added === null) return
@@ -220,15 +224,17 @@ export function ProjectPicker({
     () => [
       ...(repos?.repos ?? []).map((repo): Row => ({ value: `repo:${repo.path}`, label: repo.name, detail: repoDetail(repo), pick: { kind: 'repo', path: repo.path }, search: `${repo.path}\n${repo.url ?? ''}` })),
       // Not on this computer: picked, it is cloned, as an address typed is.
-      ...(repos?.hosted ?? []).map((repo): Row => ({
-        value: `hosted:${repo.address}`,
-        label: repo.address.split('/').slice(1).join('/'),
-        detail: <Facts facts={[repo.private && 'Private', 'Not on this computer', repo.from]} />,
-        pick: { kind: 'hosted', address: repo.address },
-        search: `${repo.address}\n${repo.description ?? ''}`,
-      })),
+      ...where.flatMap(group =>
+        group.repos.map((repo): Row => ({
+          value: `hosted:${repo.address}`,
+          label: repo.label,
+          detail: <Facts facts={[repo.private ? 'Private' : undefined, 'Not on this computer', repo.why]} />,
+          pick: { kind: 'hosted', address: repo.address },
+          search: `${repo.address}\n${repo.detail ?? ''}`,
+        })),
+      ),
     ],
-    [repos],
+    [repos, where],
   )
   // A button that adds one has no "none" to pick: it is what the button says.
   const groups = pickerGroups(look === 'add' ? undefined : NONE, projectRows, repoRows, typed)
@@ -370,13 +376,17 @@ export function ProjectPicker({
                   ) : !typed.trim() && repoRows.length > REPOS_SHOWN ? (
                     <p className="px-2 py-1.5 text-xs text-muted-foreground">Search to see more of the {repoRows.length} repos.</p>
                   ) : null}
-                  {repos?.hostedLoading ? (
-                    <p role="status" className="px-2 py-1.5 text-xs text-muted-foreground">
-                      Asking GitHub for repos…
-                    </p>
-                  ) : repos?.hostedUnreached ? (
-                    <p className="px-2 py-1.5 text-xs text-muted-foreground">GitHub could not be reached: its repos are not listed.</p>
-                  ) : null}
+                  {where.map(group =>
+                    group.loading ? (
+                      <p key={group.key} role="status" className="px-2 py-1.5 text-xs text-muted-foreground">
+                        {`Asking for the repos ${group.label.charAt(0).toLowerCase()}${group.label.slice(1)}…`}
+                      </p>
+                    ) : group.unreached !== undefined ? (
+                      <p key={group.key} className="px-2 py-1.5 text-xs text-muted-foreground">
+                        {group.unreached}
+                      </p>
+                    ) : null,
+                  )}
                 </div>
               </ScrollArea>
               {repos?.canAddFolder && (

@@ -3,10 +3,10 @@ import { test } from 'node:test'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { HOSTED_MAX_AGE_MS, forgetHosted, hostedWiring, readHosted } from './hosted-repos.js'
-import { onRepoSources, sendAddRepoOwner, sendRemoveRepoOwner } from './projects.js'
+import { HOSTED_MAX_AGE_MS, addOwner, forgetHosted, hostedWiring, readHosted, readOwners, removeOwner } from './hosted.js'
+import { readRepoOwners } from '@openagt/agent-data'
 
-// The git hosts' repositories the picker lists: each OpenAgent account's own, as itself, and each
+// The GitHub repositories the picker lists: each OpenAgent account's own, as itself, and each
 // owner the person named, as the account runs use; read behind the answer and kept.
 
 const listing = (owner: string, names: string[]) => ({ ok: true as const, output: { ok: true, owner, repos: names.map(name => ({ address: `github.com/${owner}/${name}`, url: `https://github.com/${owner}/${name}`, private: name.startsWith('secret') })) } })
@@ -87,19 +87,19 @@ test('a host that cannot be reached is said so, with what the others listed', ()
     assert.equal((await readHosted()).unreached, true, 'kept with the lists')
   }))
 
-test('Settings › Repos names an owner as a person types it, GitHub when no host is said, kept in their own folder', async () => {
+test('Settings › GitHub names an owner as a person types it, kept in their own folder beside what other hosts keep there', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'oa-repo-owners-'))
   const previous = process.env.XDG_CONFIG_HOME
   process.env.XDG_CONFIG_HOME = join(dir, 'cfg')
   mkdirSync(process.env.XDG_CONFIG_HOME, { recursive: true })
   const before = { ...hostedWiring }
-  Object.assign(hostedWiring, { hosts: async () => [], owners: async () => [] })
+  Object.assign(hostedWiring, { hosts: async () => [] })
   try {
-    for (const typed of ['vikejs', '@brillout', 'https://github.com/Vikejs/', 'gitlab.example.com/team']) assert.deepEqual(await sendAddRepoOwner(typed), { ok: true })
-    assert.deepEqual((await onRepoSources()).owners, ['github.com/vikejs', 'github.com/brillout', 'gitlab.example.com/team'], 'the same owner once')
-    assert.equal((await sendAddRepoOwner('vikejs/vike')).ok, false, 'a repository is no owner')
-    assert.deepEqual(await sendRemoveRepoOwner('github.com/brillout'), { ok: true })
-    assert.deepEqual((await onRepoSources()).owners, ['github.com/vikejs', 'gitlab.example.com/team'])
+    for (const typed of ['vikejs', '@brillout', 'https://github.com/Vikejs/', 'github.com/team']) assert.deepEqual(await addOwner(typed), { ok: true })
+    assert.deepEqual(await readOwners(), ['vikejs', 'brillout', 'team'], 'the same owner once')
+    assert.equal((await addOwner('vikejs/vike')).ok, false, 'a repository is no owner')
+    assert.deepEqual(await removeOwner('brillout'), { ok: true })
+    assert.deepEqual(await readRepoOwners(), ['github.com/vikejs', 'github.com/team'])
   } finally {
     Object.assign(hostedWiring, before)
     forgetHosted()

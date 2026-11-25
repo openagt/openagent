@@ -1,16 +1,8 @@
 import { hostname } from 'node:os'
-import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
-import { cachedPrView, cachedPrsForBranch, forgetBranchPrs, forgetPr, pickAgentPr, type LinkedPr, type BranchPrLookup } from './pull-requests.js'
-import type { Cached } from './cache.js'
 import type { AgentMeta } from '../store/index.js'
 import { projectBranches, type BranchesFor } from '../store/branches.js'
-import { projectGitHost, type GitHostFor } from '../store/git-host.js'
-import { projectRuns, type RunsFor } from '../store/runs.js'
-// What a finished session produced, and what is left to do with it (#799).
-//
-// Everything up to "the agent is done" was covered; the handoff back to the human was not. A
-// clean run archives its history, commits what it was holding, removes its worktree and leaves
-// the work on a branch. Nothing pushed, nothing opened, and the dashboard showed none of it.
+// What a finished session produced (#799), for the bar above its message box: whether it has
+// something to say, and when it is over.
 //
 // The read is deliberately *branch*-addressed, not worktree-addressed: the common end state has
 // no worktree left, so a checkout-based read (`onAgentWorktree`) falls back to the project root and
@@ -18,16 +10,9 @@ import { projectRuns, type RunsFor } from '../store/runs.js'
 // the project repo is only where it is read from, so a finished session reads the same whether or
 // not its checkout still exists.
 //
-// The branch's git facts and its push are the project's branches provider's (#1774), and every
-// pull request, opened or landed, is the project's git host provider's (#1820): OpenAgent asks the
-// packages the project picked, through the commands they declare (`store/branches.ts`,
-// `store/git-host.ts`), and never runs git or a git host tool itself. Opening a pull request is the two
-// composed: the push, then the open. What stays here is what is about the *run*: which of the
-// branch's pull requests is this run's, when an existing pull request is the answer and when a new
-// one is, and what the pull request says.
-//
-// Forgiving throughout: a project with no branches provider, no git host, or no remote yields a
-// handoff with less in it, never an error. Without a git host the run's last step is the push.
+// The branch's git facts are the project's branches provider's (#1774), and its next steps, a
+// pull request among them, are the modules' (`chat.handoff`). Forgiving throughout: a project with
+// no branches provider or no remote yields a handoff with less in it, never an error.
 
 /** One commit a session put on its branch. */
 export interface HandoffCommit {
@@ -81,36 +66,6 @@ export interface AgentHandoff {
   pushed: boolean
   /** The branch is already merged into the base. */
   merged: boolean
-  /** The project has a git host package (#1820): a pull request is a next step at all. Without one, the last step is the push. */
-  gitHost: boolean
-  /** The PR opened for this branch, when there is one. */
-  pr?: LinkedPr
-  /** The PR is not known yet, rather than absent (#1028): the lookup is still running. */
-  prPending?: boolean
-  /**
-   * The session kept committing after its PR merged or closed (#1512): the branch holds commits
-   * on top of the PR's head, so the PR is not the answer to that work, which needs a pull request
-   * of its own.
-   */
-  movedPastPr?: boolean
-  /**
-   * What a pull request for this branch would carry beyond the run's own work: the branch measured
-   * against the project's default branch, for a run started from another branch.
-   *
-   * A run started from a branch of this machine sits on that branch's unlanded commits, and its own
-   * work is measured from where it began ({@link base}) — which is the right count of what the run
-   * did. The pull request, though, goes to the default branch, so that branch's work rides along in
-   * it. Absent when a pull request would carry exactly what the run did, which is every run started
-   * from the branch the project starts agents from.
-   */
-  carries?: {
-    /** The branch a pull request would go to, as the branches provider names it. */
-    base: string
-    commits: number
-    files: number
-    insertions: number
-    deletions: number
-  }
   /**
    * The files the session changed and never committed, read from its own checkout (#1173).
    *
@@ -132,32 +87,10 @@ export interface AgentHandoff {
 
 /** Injectable seams so the reader is unit-testable off disk and off the provider. */
 export interface AgentHandoffDeps {
-  pr?: BranchPrLookup
   /** The project's checkouts and branches (default the project's provider, {@link projectBranches}). */
   branches?: BranchesFor
-  /** The project's git host (default the project's provider, {@link projectGitHost}). */
-  gitHost?: GitHostFor
-  /**
-   * When the agent started (ISO), so the PR lookup can tell the agent's own PR from an earlier agent's
-   * on the same branch name (#1251). Without it, only an open PR is trusted.
-   */
-  since?: string
-  /**
-   * Which of the run's own PRs answers, when it has more than one (#1512). Identity questions want
-   * the first; a handoff decision comparing the branch tip against a PR's head wants the last one
-   * that saw the branch, or work a later PR already landed reads as unlanded. See {@link pickAgentPr}.
-   */
-  order?: 'first' | 'latest'
   /** The commit the run's own work begins at ({@link AgentMeta.baseCommit}): what the branch is measured from. */
   from?: string
-  /** How git is asked whether the branch holds commits on top of its PR's head (default the real one). */
-  git?: GitRunner
-  /**
-   * When the run ended ({@link AgentMeta.endedAt}), so a pull request it opened on its way out is
-   * not missed: a cached answer read while the run still worked cannot know about one, and the bar
-   * would go on offering to open a request the branch already has. See {@link lookupAgentPr}.
-   */
-  endedAt?: string
 }
 
 /**
@@ -174,127 +107,13 @@ export function leftNothing(agent: { status?: string; host?: string; pr?: unknow
 }
 
 /**
- * The branch's PR as it applies to *this* run: the injected seam when the caller gave one, else
- * the cached history filtered through {@link pickAgentPr} with the agent's start time (#1251).
- */
-async function lookupAgentPr(cwd: string, branch: string, deps: AgentHandoffDeps): Promise<Cached<LinkedPr | undefined> & { latest?: LinkedPr | undefined }> {
-  if (deps.pr) {
-    const value = await deps.pr(cwd, branch).catch(() => undefined)
-    return { value, latest: value, pending: false }
-  }
-  let prs = await cachedPrsForBranch(cwd, branch).catch((): Cached<LinkedPr[]> => ({ value: undefined, pending: false }))
-  if (answeredBefore(prs.at, deps.endedAt)) {
-    forgetBranchPrs(cwd, branch)
-    forgetPr(cwd, branch)
-    prs = await cachedPrsForBranch(cwd, branch).catch((): Cached<LinkedPr[]> => ({ value: undefined, pending: false }))
-  }
-  // `latest` beside the run's own PR: whether the session moved past its PR is asked of the PR
-  // that last saw the branch ({@link pickAgentPr}).
-  return {
-    value: prs.value ? pickAgentPr(prs.value, deps.since, deps.order) : undefined,
-    latest: prs.value ? pickAgentPr(prs.value, deps.since, 'latest') : undefined,
-    pending: prs.pending,
-  }
-}
-
-/**
- * Whether a cached pull request answer is from before the run ended, and so cannot have seen what
- * the run did on its way out.
- *
- * A run told to publish its own work opens its pull request as it finishes. The lookup cached while
- * it was still working says the branch has none, and that answer lives for a minute — long enough
- * for the bar to offer "Open PR" for a branch that already has one, which is the single mistake
- * that bar exists to prevent. An answer taken before the run's own end is thrown away rather than
- * trusted; one taken after it has seen everything the run did.
- *
- * Nothing is thrown away for a run still going (no end to be older than), for an answer that was
- * never read, or for a record whose end is not a date.
- */
-export function answeredBefore(at: number | undefined, endedAt: string | undefined): boolean {
-  if (at === undefined || endedAt === undefined) return false
-  const ended = Date.parse(endedAt)
-  return Number.isFinite(ended) && at < ended
-}
-
-/** The cached single-PR read {@link resolveAgentPr} asks for the recorded PR's current state. */
-export type CachedBranchPrLookup = (cwd: string, branch?: string) => Promise<Cached<LinkedPr | undefined>>
-
-/** What {@link resolveAgentPr} needs to know about an agent: structurally satisfied by {@link AgentMeta}. */
-export interface PrAgent {
-  id: string
-  branch?: string
-  /** The pull request the agent recorded when one was opened for it (E6). */
-  pr?: { number: number; url: string }
-}
-
-/**
- * The pull request that belongs to an agent: the one it recorded (E6), read live for its state.
- *
- * The number is a fact about the agent, so the agent writes it down — at the moment its handoff opens
- * the PR, or when the dashboard's button does after the process is gone. Every surface then reads
- * the same integer instead of re-deriving it.
- *
- * What that replaced: a three-way branch-name ladder (the recorded branch, then a branch built from
- * the session name, then the run-id branch, because a hands-off web agent's checkout is gone and its
- * session name may be a reused pin) plus a timestamp heuristic on top of it, so that a predecessor's PR on
- * a shared branch name was not mistaken for this agent's. Three sources and a guess, standing in for
- * one integer nobody had written down — the same lesson the `branch` event (#1277) already learned.
- *
- * The *state* is still read live, because it changes without this agent doing anything: a PR merges,
- * a human closes it. That read rides the PR-lookup cache (#1028), and `pending` while it is warming means the
- * caller can ask again rather than render "no PR".
- */
-export async function resolveAgentPr(
-  cwd: string,
-  agent: PrAgent,
-  prs: CachedBranchPrLookup = cachedPrView,
-): Promise<Cached<LinkedPr | undefined>> {
-  if (!agent.pr) return { value: undefined, pending: false }
-  const branch = agent.branch
-  const read = await prs(cwd, branch).catch((): Cached<LinkedPr | undefined> => ({ value: undefined, pending: false }))
-  // The live read is about the recorded PR's *state*; a different number on the branch is some
-  // other PR and never this agent's answer.
-  if (read.value && read.value.number === agent.pr.number) return { value: read.value, pending: false }
-  // Nothing live to say, so the recorded fact stands on its own: an agent whose PR is on a branch this
-  // machine cannot see still has a PR, and its number and URL are what the surfaces need.
-  return { value: { ...agent.pr, state: read.pending ? 'OPEN' : 'UNKNOWN', title: '' }, pending: read.pending }
-}
-
-/**
- * Merge a finished session's open PR (#1391): the Merge action, pressed by a human saying "it's
- * good, land it". The landing itself is the git host provider's (`merge <number>`): armed to merge on
- * green, merged at once where it is already green, or watched by the provider where the
- * repository allows no auto-merge; a draft is marked ready on the way. Refuses when the agent has
- * no PR or it is no longer open — "already merged" is an answer, not an action.
- */
-export async function mergeAgentPr(
-  cwd: string,
-  agent: PrAgent,
-  deps: { gitHost?: GitHostFor; prs?: CachedBranchPrLookup } = {},
-): Promise<HandoffResult> {
-  const pr = (await resolveAgentPr(cwd, agent, deps.prs)).value
-  if (!pr) return { ok: false, error: 'this session has no pull request to merge' }
-  if (pr.state !== 'OPEN') return { ok: false, error: `this session's PR is already ${pr.state.toLowerCase()}` }
-  const gitHost = await (deps.gitHost ?? projectGitHost)(cwd).catch(() => undefined)
-  if (!gitHost) return { ok: false, error: 'this project has no git host package to merge with' }
-  const merged = await gitHost.merge(pr.number)
-  if (!merged.ok) return { ok: false, error: merged.error }
-  // The PR's cached state just changed, so the branch's cached read must go or the bar keeps
-  // offering a merge for a PR that landed (#1028).
-  const branch = agent.branch
-  forgetPr(cwd, branch)
-  if (branch !== undefined) forgetBranchPrs(cwd, branch)
-  return { ok: true, url: pr.url, number: pr.number, merge: merged.outcome }
-}
-
-/**
  * Read what a finished session left behind, for `branch`: the branch's git facts from the
- * project's branches provider, and the run's own pull request from OpenAgent's lookup.
+ * project's branches provider.
  *
  * Returns undefined only when the project has no branches provider, or the provider did not
  * answer for the branch. A branch that no longer exists still returns a handoff (with
  * `exists: false`), because "that branch is gone" is itself the answer the dashboard needs to
- * show — and its PR is a remote question, still answerable (#1255).
+ * show.
  */
 export async function readAgentHandoff(
   cwd: string,
@@ -305,10 +124,6 @@ export async function readAgentHandoff(
   if (!branches) return undefined
   const [state] = await branches.show([branch], deps.from)
   if (!state) return undefined
-  const gitHost = await (deps.gitHost ?? projectGitHost)(cwd).catch(() => undefined)
-  // Read through the cache and allowed to arrive late (#1028): the branch's facts are local
-  // git, and none of them should wait on the git host.
-  const pr = await lookupAgentPr(cwd, branch, deps)
   const commits = state.commits.map(commit => ({ sha: commit.sha, short: commit.sha.slice(0, 7), subject: commit.subject }))
   const files = state.files.map(file => ({ path: file.path, insertions: file.insertions, deletions: file.deletions, binary: file.binary }))
   return {
@@ -327,10 +142,6 @@ export async function readAgentHandoff(
     hasRemote: state.hasRemote,
     pushed: state.pushed,
     merged: state.merged,
-    gitHost: gitHost !== undefined,
-    ...(pr.value ? { pr: pr.value } : {}),
-    ...(pr.pending ? { prPending: true } : {}),
-    ...((await commitsPastPr(cwd, pr.latest, commits, deps.git)) ? { movedPastPr: true } : {}),
     ...(state.pendingFiles ? { pendingFiles: state.pendingFiles } : {}),
     ...(state.copiedFrom ? { copiedFrom: state.copiedFrom } : {}),
   }
@@ -347,208 +158,13 @@ export async function readAgentHandoff(
  */
 export async function readRunHandoff(
   cwd: string,
-  agent: Pick<AgentMeta, 'id' | 'startedAt' | 'endedAt' | 'branch' | 'baseCommit' | 'landed' | 'status' | 'host' | 'pr'>,
+  agent: Pick<AgentMeta, 'id' | 'branch' | 'baseCommit' | 'landed' | 'status' | 'host' | 'pr'>,
   deps: AgentHandoffDeps = {},
 ): Promise<AgentHandoff | undefined> {
   const at = agent.branch ?? agent.landed
   if (at === undefined) return undefined
-  // A commit has no pull request to look up: only a branch is asked of the git host.
-  const noPr: AgentHandoffDeps = agent.branch === undefined ? { pr: async () => undefined } : {}
-  const handoff = await readAgentHandoff(cwd, at, { since: agent.startedAt, ...(agent.endedAt !== undefined ? { endedAt: agent.endedAt } : {}), ...(agent.baseCommit !== undefined ? { from: agent.baseCommit } : {}), ...deps, ...noPr })
+  const handoff = await readAgentHandoff(cwd, at, { ...(agent.baseCommit !== undefined ? { from: agent.baseCommit } : {}), ...deps })
   if (!handoff) return undefined
   if (agent.landed !== undefined) return { ...handoff, landed: true }
-  if (!handoff.exists) return leftNothing(agent) ? { ...handoff, unchanged: true } : handoff
-  // Only a run that began somewhere other than the default branch can carry more than its own
-  // work, and only its own branch can be measured again: the extra read is skipped for every
-  // other run.
-  const carries = agent.baseCommit !== undefined ? await carriedToDefault(cwd, handoff, deps) : undefined
-  return carries ? { ...handoff, carries } : handoff
-}
-
-/**
- * What a pull request for this run's branch would carry, when that is more than the run's own work
- * ({@link AgentHandoff.carries}).
- *
- * The same read as the handoff's, measured from the project's default branch rather than from the
- * commit the run began at: a run started from a local branch sits on that branch's unlanded commits,
- * and a pull request takes the whole stack. Nothing when the two reads agree — the run started from
- * the default branch after all — and nothing when the branch cannot be measured against it.
- */
-async function carriedToDefault(cwd: string, own: AgentHandoff, deps: AgentHandoffDeps): Promise<AgentHandoff['carries']> {
-  const branches = await (deps.branches ?? projectBranches)(cwd).catch(() => undefined)
-  if (!branches) return undefined
-  const [state] = await branches.show([own.branch]).catch(() => [])
-  if (!state?.exists || state.base === undefined) return undefined
-  const insertions = state.files.reduce((sum, file) => sum + file.insertions, 0)
-  const deletions = state.files.reduce((sum, file) => sum + file.deletions, 0)
-  if (state.files.length === own.files.length && insertions === own.insertions && deletions === own.deletions) return undefined
-  return { base: state.base, commits: state.commits.length, files: state.files.length, insertions, deletions }
-}
-
-/**
- * What a handoff action did. The PR's `number` rides along with its `url` (E6), because the number
- * is the fact worth *recording* — every surface that wants an agent's PR then reads it off the agent
- * rather than re-deriving it later.
- */
-export type HandoffResult = { ok: true; url?: string; number?: number; merge?: GitHostMergeOutcome } | { ok: false; error: string }
-
-/** How a merge pressed here went: merged at once, armed on the git host to merge once its checks pass, or watched by its provider to merge then. */
-type GitHostMergeOutcome = 'merged' | 'auto-armed' | 'watching'
-
-/**
- * Open a PR for a branch: the two providers composed (#1820). The branches provider pushes the
- * branch (`push --branch`), then the git host provider opens its request (`open --branch`), into
- * the run's own target when it has one, else the git host's default. A branch that already has an open request is answered as it is.
- * The branch has a PR now, so the cached "no PR" must go or the bar would keep offering to open
- * one for the next minute (#1028) — both caches: the single-PR view and the history.
- */
-async function publishBranch(cwd: string, branch: string, draft: { title: string; body: string; base?: string; draft?: boolean }, branches: BranchesFor, gitHost: GitHostFor): Promise<HandoffResult> {
-  const source = await branches(cwd).catch(() => undefined)
-  if (!source) return { ok: false, error: 'this project has no branches provider to push with' }
-  const gitHostSource = await gitHost(cwd).catch(() => undefined)
-  if (!gitHostSource) return { ok: false, error: 'this project has no git host package to open a pull request with' }
-  const pushed = await source.push(branch)
-  if (!pushed.ok) return { ok: false, error: pushed.error }
-  const opened = await gitHostSource.open(branch, { title: draft.title, body: draft.body, ...(draft.base !== undefined ? { base: draft.base } : {}), ...(draft.draft ? { draft: true } : {}) })
-  if (!opened.ok) return { ok: false, error: opened.error }
-  forgetPr(cwd, branch)
-  forgetBranchPrs(cwd, branch)
-  return { ok: true, url: opened.request.url, number: opened.request.number }
-}
-
-/**
- * Push a finished session's branch (#1820): the last step where the project has no git host, or the
- * step a person wants on its own. The branches provider pushes it under its clean rule; a branch
- * only the remote has is already there. Refuses a session that recorded no branch.
- */
-export async function pushAgentBranch(cwd: string, agent: Pick<AgentMeta, 'id' | 'branch'>, deps: { branches?: BranchesFor } = {}): Promise<HandoffResult> {
-  const branch = agent.branch
-  if (branch === undefined) return { ok: false, error: 'this session recorded no branch to push' }
-  const source = await (deps.branches ?? projectBranches)(cwd).catch(() => undefined)
-  if (!source) return { ok: false, error: 'this project has no branches provider to push with' }
-  const pushed = await source.push(branch)
-  return pushed.ok ? { ok: true } : { ok: false, error: pushed.error }
-}
-
-/**
- * Whether the session kept committing after its PR merged or closed (#1512): the PR carries a
- * head, the branch has a tip, and they disagree. False for an open PR (pushed commits still land
- * on it), for a headless read (an older cache or injected lookup — never risk a duplicate PR on
- * a guess), and for a gone branch (no tip to compare; the PR stays the best answer, #1255).
- */
-function movedPastPr(state: Pick<AgentHandoff, 'pr' | 'commits'>): boolean {
-  if (!state.pr || state.pr.state === 'OPEN') return false
-  const tip = state.commits[0]?.sha
-  return Boolean(state.pr.headRefOid && tip && state.pr.headRefOid !== tip)
-}
-
-/**
- * Whether the branch holds commits on top of the head of its merged or closed PR: what the bar
- * offers the next pull request on. Narrower than {@link movedPastPr}, which a person's click is
- * checked by: a PR whose head the branch does not build on was updated on the git host, and the
- * branch here has nothing that PR did not land. Asked of git rather than read off the commits,
- * which no longer hold the PR's head once it is merged and the default branch is fetched.
- */
-async function commitsPastPr(cwd: string, pr: LinkedPr | undefined, commits: HandoffCommit[], git: GitRunner = nodeGitRunner()): Promise<boolean> {
-  const tip = commits[0]?.sha
-  const head = pr?.headRefOid
-  if (!pr || pr.state === 'OPEN' || !head || !tip || head === tip) return false
-  return git(['merge-base', '--is-ancestor', head, tip], cwd).then(() => true, () => false)
-}
-
-/**
- * Open a PR for a finished session, deciding from what the agent recorded which cases should not
- * open one. Reads the branch's handoff first: a branch that no longer exists, or a session that
- * changed nothing, is a clear error rather than an empty PR, and a branch that already has a PR
- * returns that one. Title and body say what its commits did ({@link commitsPrText}). This is the handoff decision the
- * dashboard's open-PR button offers; the RPC layer only resolves which run it is about, and the
- * two providers do the pushing and the opening.
- */
-export async function openAgentPullRequest(
-  cwd: string,
-  agent: AgentMeta,
-  options: { draft?: boolean; branches?: BranchesFor; gitHost?: GitHostFor; pr?: BranchPrLookup; git?: GitRunner } = {},
-): Promise<HandoffResult> {
-  const branch = agent.branch
-  if (branch === undefined) return { ok: false, error: 'this session recorded no branch to open a PR from' }
-  const branches = options.branches ?? projectBranches
-  const gitHost = options.gitHost ?? projectGitHost
-  // `latest` order (#1512), because the `movedPastPr` decision below compares the branch tip
-  // against a PR's head: against the *first* PR, work a second one already landed reads as
-  // unlanded and this opens a third for it.
-  const handoff = await readAgentHandoff(cwd, branch, { since: agent.startedAt, order: 'latest', branches, gitHost, ...(options.pr ? { pr: options.pr } : {}), ...(agent.baseCommit !== undefined ? { from: agent.baseCommit } : {}) }).catch(() => undefined)
-  // The agent's PR first, even when its branch is gone locally: a hands-off web agent's branch only
-  // ever existed on the remote, and its PR is the answer the button exists to give (#1255).
-  // Unless the session demonstrably kept committing after that PR merged or closed (#1512) —
-  // then the old PR is not the answer, the new work needs its own.
-  if (handoff?.pr && !movedPastPr(handoff)) return { ok: true, url: handoff.pr.url, number: handoff.pr.number }
-  if (handoff && !handoff.exists) return { ok: false, error: `branch ${branch} no longer exists` }
-  // Refuse rather than open an empty PR: a session that changed nothing has nothing to hand off.
-  if (handoff?.empty) return { ok: false, error: 'this session produced no commits to open a PR for' }
-  // Its commits are still counted once the default branch has them, from where its work began: nothing is left to open one for.
-  if (handoff?.merged) return { ok: false, error: 'this session’s work is already merged' }
-  const text = handoff ? await commitsPrText(cwd, agent, handoff.commits, handoff.name, options.git) : { title: agentPrTitle(agent), body: agentPrBody(agent) }
-  return publishBranch(cwd, branch, { ...text, ...(agent.prBase !== undefined ? { base: agent.prBase } : {}), ...(options.draft ? { draft: true } : {}) }, branches, gitHost)
-}
-
-/**
- * The little a handoff needs to know about the agent it is for: which branch, and what to say on
- * the PR. Narrower than {@link AgentMeta} so a caller cannot quietly start depending on the rest
- * of the agent's state.
- */
-export type HandoffAgent = Pick<AgentMeta, 'id' | 'branch' | 'intent'> & Partial<Pick<AgentMeta, 'startedAt'>>
-
-/**
- * The PR title for a session (#1102).
- *
- * Two rungs, each a name for the work the session did: the branch the agent named its work with
- * (#1725), else the session id — which says little, but says it honestly. An agent that publishes
- * its own work titles its own PR; this is only the title of one a person opens for it.
- *
- * The prompt the session was given is not among them. It used to be, cut to 72 characters, and a
- * squash merge made that permanent: `main` ended up carrying instructions truncated mid-sentence
- * as commit subjects, which describe neither what changed nor even a whole thought (#1618).
- */
-function agentPrTitle(agent: Pick<HandoffAgent, 'id' | 'branch'>, name?: string): string {
-  // The name the branches provider answers for the branch comes before the branch itself:
-  // OpenAgent draws the name it is given and never cuts the package's prefix off a branch.
-  return name ?? agent.branch ?? `Session ${agent.id}`
-}
-
-/**
- * The PR body where none of the branch's commits can be read: what was asked for, and which
- * session did it.
- */
-function agentPrBody(agent: HandoffAgent): string {
-  const lines: string[] = []
-  const opening = agent.intent?.trim()
-  if (opening) lines.push(opening, '')
-  lines.push(`Opened from OpenAgent session \`${agent.id}\`.`)
-  return lines.join('\n')
-}
-
-/**
- * The PR title and body for a session's commits (newest first), saying what the pull request does
- * rather than what the session was asked: a scheduled run is asked `/work-queue`, which a reviewer
- * cannot read anything from. One commit is the pull request, as the git host fills one in itself:
- * its subject the title, the rest of its message the body, which carries the `Closes …` lines the
- * agent wrote. Several are listed, oldest first, under the branch's name. A message git cannot read
- * leaves the subject alone.
- */
-async function commitsPrText(cwd: string, agent: HandoffAgent, commits: HandoffCommit[], name: string | undefined, git: GitRunner = nodeGitRunner()): Promise<{ title: string; body: string }> {
-  const footer = `Opened from OpenAgent session \`${agent.id}\`.`
-  const only = commits.length === 1 ? commits[0]! : undefined
-  if (!only) {
-    const listed = [...commits].reverse().map(commit => `- ${commit.subject}`)
-    return { title: agentPrTitle(agent, name), body: [...listed, '', footer].join('\n') }
-  }
-  const message = await git(['log', '-1', '--format=%B', only.sha], cwd).catch(() => '')
-  // Past the subject, less the co-author lines: the pull request names its author itself.
-  const rest = message
-    .split('\n')
-    .slice(1)
-    .filter(line => !/^co-authored-by:/i.test(line))
-    .join('\n')
-    .trim()
-  return { title: only.subject, body: [...(rest ? [rest, ''] : []), footer].join('\n') }
+  return !handoff.exists && leftNothing(agent) ? { ...handoff, unchanged: true } : handoff
 }

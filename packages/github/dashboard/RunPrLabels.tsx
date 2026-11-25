@@ -1,12 +1,21 @@
 import { GitPullRequest } from 'lucide-react'
-import { cn } from '../lib/utils.js'
-import { PR_MARKS, prStateOf } from '../lib/pr-marks.js'
-import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
+import { PR_MARKS, Tooltip, TooltipContent, TooltipTrigger, cn, prStateOf, useModuleHost, usePolled, type UiChatLabelsProps } from '@openagt/ui/module'
+import { server } from './calls.js'
+
+/** How often a run's requests are read again while its page shows: a merge on GitHub changes their marks. */
+const EVERY_MS = 15_000
+
+/** The run's pull requests, at the end of the row above its message box (`chat.labels`), read from its record and GitHub. */
+export function RunPrs({ projectId, agentId }: UiChatLabelsProps) {
+  const host = useModuleHost()
+  const { value } = usePolled(() => server(host).runPrs(projectId, { agentId }), [], EVERY_MS, [projectId, agentId], { remember: `github:prs:${projectId}:${agentId}` })
+  return <RunPrLabels prs={value} />
+}
 
 /**
  * The run's pull requests, at the right end of the row above its message box, the last one ending
- * on the box's edge: one label each (his pick), oldest first, its mark in the git host's colour for
- * how it stands, as its row in the sidebar marks it, and its number; a link to the request. The
+ * on the box's edge: one label each (his pick), oldest first, its mark in GitHub's colour for how
+ * it stands, as its row in the sidebar marks it, and its number; a link to the request. The
  * state's word is in the label's hover and its name, not drawn. A run that moved its work to a new
  * branch opened a request for each, and all of them are its work. A state not read yet is a plain mark.
  */
@@ -26,7 +35,7 @@ export function RunPrLabels({ prs }: { prs: readonly { number: number; url: stri
                   href={pr.url}
                   target="_blank"
                   rel="noreferrer"
-                  aria-label={`PR #${pr.number}${mark ? ` ${mark.word}` : ''}, on the git host`}
+                  aria-label={`PR #${pr.number}${mark ? ` ${mark.word}` : ''}, on GitHub`}
                   className="inline-flex h-6 shrink-0 items-center gap-1 rounded-full border border-border px-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
                 />
               }

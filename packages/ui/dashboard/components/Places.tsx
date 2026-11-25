@@ -1,7 +1,7 @@
 import { useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ChevronDown, Loader2 } from 'lucide-react'
 import type { RunOptions } from '@openagt/hooks'
-import { moduleHost, type ActionPlace, type ActionPlaces, type UiActionResult, type UiComposerControlProps, type UiComposerIn, type UiControlSaid, type UiOffer, type ViewPlace, type ViewPlaces } from '../module/index.js'
+import { moduleHost, type ActionPlace, type ActionPlaces, type UiActionResult, type UiComposerControlProps, type UiComposerIn, type UiControlSaid, type UiOffer, type UiWhereRepo, type ViewPlace, type ViewPlaces } from '../module/index.js'
 import { DEFAULT_ORDER, useMountedModules, type MountedAction, type MountedView } from '../lib/use-modules.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
@@ -329,4 +329,55 @@ export function HandoffOffers({ projectId, agentId, repo, again }: { projectId: 
       {overlay}
     </>
   )
+}
+
+/** The repos one module's accounts reach, as the project picker lists them under its heading (`composer.where`). */
+export interface WhereRepos {
+  key: string
+  label: string
+  description?: string
+  repos: UiWhereRepo[]
+  /** Some are still being read: the picker asks again shortly. */
+  loading: boolean
+  /** In words, why some are missing: an account could not be read. */
+  unreached?: string
+}
+
+/**
+ * The repos the modules' accounts reach (`composer.where`), each module's under its heading, the
+ * ones in `here` (on this computer already, by address) left out: read while `asking`, and again
+ * whenever `again` changes. A module whose read fails lists none.
+ */
+export function useWhereRepos(asking: boolean, here: readonly string[], again: unknown = 0): WhereRepos[] {
+  const options = useMountedModules().options['composer.where']
+  const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
+  const [read, setRead] = useState<WhereRepos[]>([])
+  const optionsKey = options.map(option => `${option.package}/${option.id}`).join('\n')
+  useEffect(() => {
+    if (!asking) return
+    let live = true
+    void Promise.all(
+      options.map(async (option): Promise<WhereRepos | undefined> => {
+        const said = await option.repos(moduleHost({ ...services, package: option.package }) as never).catch(() => undefined)
+        if (!said) return undefined
+        return {
+          key: `${option.package}/${option.id}`,
+          label: option.label,
+          ...(option.description !== undefined ? { description: option.description } : {}),
+          repos: said.repos,
+          loading: said.loading === true,
+          ...(said.unreached !== undefined ? { unreached: said.unreached } : {}),
+        }
+      }),
+    ).then(answers => {
+      if (live) setRead(answers.filter((answer): answer is WhereRepos => answer !== undefined))
+    })
+    return () => {
+      live = false
+    }
+    // The options by their keys: a new list of the same ones asks nothing again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [asking, optionsKey, services, again])
+  const on = useMemo(() => new Set(here.map(address => address.toLowerCase())), [here])
+  return useMemo(() => read.map(group => ({ ...group, repos: group.repos.filter(repo => !on.has(repo.address.toLowerCase())) })), [read, on])
 }

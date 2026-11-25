@@ -75,7 +75,8 @@ test('Next in "Add project" keeps the keyboard while it waits and takes no secon
 
 test('Escape in a question over a working run closes the question and stops nothing', needsChrome, async () => {
   await flow('escape-question', async page => {
-    await page.route('**/_rpc/onRepositoryOffer', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ret: { repository: 'demo/shop', name: 'GitHub' } }) }))
+    // github's offer of a repository for the project, as its server part would answer it.
+    await page.route(`**/_rpc/${encodeURIComponent('@openagt/github')}/repositoryOffer`, route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ret: { ok: true, output: { repository: 'demo/shop' } } }) }))
     let stops = 0
     await page.route('**/_rpc/sendStop', route => (stops++, route.fallback()))
     await start(page, 'hold the escape')
@@ -99,14 +100,13 @@ test('Escape in a question over a working run closes the question and stops noth
 test("a git account forgotten from its row leaves the keyboard in its host's section", needsChrome, async () => {
   await flow('forget-account', async page => {
     let forgotten = false
-    const account = (login: string) => ({ login, ok: true })
-    await page.route('**/_rpc/onGitHosts', route =>
-      route.fulfill({
-        contentType: 'application/json',
-        body: JSON.stringify({ ret: { hosts: [{ host: 'github.com', projects: ['shop'], provider: { name: 'GitHub', requestWord: 'pull request', tool: 'gh', installed: true, install: 'gh', accounts: forgotten ? [account('alice')] : [account('alice'), account('bob')] } }] } }),
-      }),
+    const account = (login: string) => ({ login, runs: login === 'alice', ok: true, avatar: '' })
+    // github's own calls (`@openagt/github`), as its server part would answer them.
+    const answer = (output: unknown) => ({ contentType: 'application/json', body: JSON.stringify({ ret: { ok: true, output } }) })
+    await page.route(`**/_rpc/${encodeURIComponent('@openagt/github')}/accounts`, route =>
+      route.fulfill(answer({ host: 'github.com', name: 'GitHub', requestWord: 'pull request', logo: '<svg/>', tool: 'gh', installed: true, install: 'gh', accounts: forgotten ? [account('alice')] : [account('alice'), account('bob')], projects: ['shop'] })),
     )
-    await page.route('**/_rpc/sendForgetGitHostAccount', route => ((forgotten = true), route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ret: { ok: true } }) })))
+    await page.route(`**/_rpc/${encodeURIComponent('@openagt/github')}/forget`, route => ((forgotten = true), route.fulfill(answer({ ok: true }))))
     await page.reload()
     await page.getByRole('link', { name: 'Permissions', exact: true }).click()
     await page.getByRole('button', { name: 'More for @bob' }).click()

@@ -1,26 +1,23 @@
 import { useState } from 'react'
 import { CircleAlert, Loader2 } from 'lucide-react'
-import { Button, HostFix, SendAs, firstSendAs, useGitHosts, useModuleHost, type GitHostRow } from '@openagt/ui/module'
+import { Button, ModuleFixPress, SendAs, firstSendAs, useModuleHost } from '@openagt/ui/module'
 import type { HostAccounts } from '@openagt/hooks'
 import { server, type BackupGap } from './calls.js'
 import { backupChanged, useBackup } from './use-backup.js'
 
 // Settings › Your agent data, at its top: the agents' data that is not backed up, and the fix, here
 // (his pick over a trip to the Permissions page): with no account of OpenAgent's at the host, the
-// press that adds one, in its dialog; with one, "Back up as" and the press that sends
-// what waited. The person picks the account, even when there is only one: nothing is sent as an
-// account they did not name.
+// press of the module answering for it that adds one; with one, "Back up as" and the press that
+// sends what waited. The person picks the account, even
+// when there is only one: nothing is sent as an account they did not name.
 
-/** OpenAgent's accounts at a host that the host still takes, as a "Back up as" select offers them. */
-export function accountsAt(row: GitHostRow | undefined, host: string): HostAccounts {
-  const accounts = row?.provider?.accounts.filter(account => account.ok) ?? []
-  const runs = accounts.find(account => account.runs)?.login
-  return { host, logins: accounts.map(account => account.login), ...(runs !== undefined ? { runs } : {}) }
+/** OpenAgent's accounts at `host` among `hosts`, as a "Back up as" select offers them: none there when it has none. */
+export function accountsAt(hosts: readonly HostAccounts[], host: string): HostAccounts {
+  return hosts.find(row => row.host === host) ?? { host, logins: [] }
 }
 
 export function BackupNotice({ onChanged }: { onChanged?: () => void }) {
-  const { view } = useBackup()
-  const { view: hosts, reload: reloadHosts } = useGitHosts()
+  const { view, reload } = useBackup()
   if (!view || view.gaps.length === 0) return null
   const byHost = new Map<string, BackupGap[]>()
   for (const gap of view.gaps) byHost.set(gap.host, [...(byHost.get(gap.host) ?? []), gap])
@@ -32,13 +29,11 @@ export function BackupNotice({ onChanged }: { onChanged?: () => void }) {
         Not backed up
       </p>
       {[...byHost].map(([host, gaps]) => {
-        const row = hosts?.hosts.find(one => one.host === host)
-        const name = row?.provider?.name ?? host
-        const at = accountsAt(row, host)
+        const at = accountsAt(view.hosts, host)
         return (
           <div key={host} className="space-y-2">
             <p className="text-xs text-muted-foreground">
-              {`OpenAgent backs up to ${name} with an account of its own, never your own login. Until then, changes are kept on this computer.`}
+              {`OpenAgent backs up to ${host} with an account of its own, never your own login. Until then, changes are kept on this computer.`}
             </p>
             {at.logins.length === 0 ? (
               <>
@@ -49,7 +44,8 @@ export function BackupNotice({ onChanged }: { onChanged?: () => void }) {
                     </li>
                   ))}
                 </ul>
-                {row ? <HostFix row={row} onChanged={reloadHosts} size="sm" /> : <p className="text-xs text-muted-foreground">{`No package answers for ${host} yet.`}</p>}
+                {/* The press of the module answering for the host adds one, here (his pick over a trip to the Permissions page). */}
+                {at.add ? <ModuleFixPress fix={at.add} onFixed={() => void reload()} /> : <SendAs host={at} value={undefined} onChange={() => {}} />}
               </>
             ) : (
               <ul className="space-y-2">

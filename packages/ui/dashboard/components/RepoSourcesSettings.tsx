@@ -1,10 +1,9 @@
 import { useState } from 'react'
 import { FolderPlus, X } from 'lucide-react'
-import { onRepoSources, sendAddRepoFolder, sendAddRepoOwner, sendRemoveRepoFolder, sendRemoveRepoOwner, type RepoSources } from '../rpc/projects.js'
+import { onRepoSources, sendAddRepoFolder, sendRemoveRepoFolder, type RepoSources } from '../rpc/projects.js'
 import { useLoaded } from '../lib/use-async.js'
 import { useAction } from '../lib/use-action.js'
 import { Button } from './ui/button.js'
-import { Input } from './ui/input.js'
 import { Section } from './ui/section.js'
 import { PathStrip } from './PathStrip.js'
 import { SettingsItem, SettingsItems, SettingsRowShapes, SettingsSection } from './SettingsRows.js'
@@ -14,10 +13,9 @@ import { Slot } from './ui/slot.js'
 export const REPO_SOURCES_ENTRY = 'repos'
 
 /**
- * Settings › Repos: where the project picker finds repos besides the projects (Rom's design:
- * "repos crawled from the filesystem, plus added directories, GitHub users/orgs, and the OA
- * accounts' repos"). The users and organizations named here are kept in the person's own folder,
- * the same on each computer; the folders added are this computer's.
+ * Settings › Repos: where the project picker finds repos on this computer besides the projects
+ * (Rom's design: "repos crawled from the filesystem, plus added directories"). The folders added
+ * are this computer's; the repos the modules' accounts reach are theirs (`composer.where`).
  */
 export function RepoSourcesSettings() {
   const [read, setRead] = useState(0)
@@ -38,70 +36,21 @@ export function RepoSourcesSettings() {
   )
 }
 
-/** The users and organizations named, and the folders added, with the presses that change them. */
+/** The folders added, with the presses that change them. */
 function Sources({ sources, onChanged }: { sources: RepoSources; onChanged: () => void }) {
-  const [owner, setOwner] = useState('')
-  const { busy, error, reset, run } = useAction()
+  const { busy, error, run } = useAction()
   const again = (outcome: { ok: boolean }) => {
     if (outcome.ok) onChanged()
     return outcome
   }
 
-  const add = () =>
-    void run(() => sendAddRepoOwner(owner), 'Could not add it.').then(outcome => {
-      if (again(outcome).ok) setOwner('')
-    })
-  const removeOwner = (name: string) => void run(() => sendRemoveRepoOwner(name), 'Could not remove it.').then(again)
   const removeFolder = (folder: string) => void run(() => sendRemoveRepoFolder(folder), 'Could not remove it.').then(again)
   // The picker's own "Search another folder…": this computer's folder dialog, the folder picked added.
   const addFolder = () => void run(() => sendAddRepoFolder(), 'Could not add it.').then(again)
 
   return (
-    <SettingsSection description="Where the project picker finds repos, besides your projects. OpenAgent's own GitHub accounts list their repos there too.">
+    <SettingsSection description="Where the project picker finds repos on this computer, besides your projects.">
       <div className="flex flex-col gap-8">
-        <Section title="GitHub users and organizations">
-          <div className="space-y-6">
-            <p className="max-w-md text-xs text-faint-foreground">Their repos are listed in the picker, read as the GitHub account runs use; picked, one is cloned. The same on each of your computers.</p>
-            {sources.owners.length > 0 && (
-              <SettingsItems aria-label="GitHub users and organizations">
-                {sources.owners.map(name => (
-                  <SettingsItem
-                    key={name}
-                    title={name.replace(/^github\.com\//, '')}
-                    actions={
-                      <Button variant="ghost" size="icon-sm" className="-mr-1.5" aria-label={`Remove ${name}`} disabled={busy} onClick={() => removeOwner(name)}>
-                        <X className="size-4" aria-hidden />
-                      </Button>
-                    }
-                  />
-                ))}
-              </SettingsItems>
-            )}
-            <form
-              className="flex items-center gap-2"
-              onSubmit={event => {
-                event.preventDefault()
-                if (owner.trim()) add()
-              }}
-            >
-              <Input
-                name="github-owner"
-                aria-label="GitHub user or organization"
-                placeholder="user or organization"
-                value={owner}
-                disabled={busy}
-                onChange={event => {
-                  setOwner(event.target.value)
-                  reset()
-                }}
-                className="w-60 max-md:h-11 max-md:flex-1"
-              />
-              <Button type="submit" variant="secondary" disabled={!owner.trim()} loading={busy} className="max-md:h-11">
-                Add
-              </Button>
-            </form>
-          </div>
-        </Section>
         {/* Its press stands at the heading's right on a desktop; on a phone, where both would cut the heading, under the
             heading's line of help, the three one group. */}
         <Section title="Folders searched on this computer" className="relative">

@@ -66,7 +66,8 @@ so the run can tell them apart; `agent-driver` fetches it. The menu is shown for
 a remote whose folder is on a branch.
 
 A run started from another branch origin has opens its pull request into that branch, unless the
-Auto menu says main. Otherwise the pull request goes to main.
+gear's **Pull request into** line (`@openagt/github`) says main. Otherwise the pull request goes to
+main.
 
 A session with no project may have repos as context, ticked in **Context** under the box:
 `agent-driver` copies each into the session's folder.
@@ -80,9 +81,10 @@ project, each ticked, tickable off, and which of the project's own skills stay i
 as the profile has them until a pick there. The picks are the run's options (`plugins.without`,
 `skills.project`): the run gets none of the skills or steps of a plugin it goes without, and the
 project skills not picked are left out of its checkout with git's sparse checkout, nothing
-committed. The record keeps them, and a resume goes on with them. The session's GitHub account (the
-**GitHub account** line) goes with the Start: `agent-driver` hands it to the run's process in
-`OPENAGENT_GIT_ACCOUNT`.
+committed. The record keeps them, and a resume goes on with them. **GitHub account**
+(`@openagt/github`) picks the account every next run on this computer works as on GitHub, else the
+one runs use (Permissions › Use for runs); a profile can name its own. The run works as it, and its
+record keeps it.
 
 Before a Start, the launcher asks the host's check, for the picked coding agent: its
 `problems` (a coding agent not installed or logged out) are said in red and its `warnings` in

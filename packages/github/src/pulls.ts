@@ -1,22 +1,50 @@
-import { projectGitHost, type GitHostFor, type GitHostRequest, type GitHostSource, type RequestsOutcome } from '../store/git-host.js'
 import { cachedRead, invalidate, type Cached } from './cache.js'
+import { homeUrlFor } from './home.js'
+import { cliAnswer } from './host-accounts.js'
+import type { PullRequestRead } from '@openagt/hooks'
+import type { MergeLookup } from '@openagt/hooks/rpc'
+import type { Request, RequestsQuery } from './requests.js'
 
 /**
- * The pull requests the dashboard reads (#1820), in one place, all through the project's git host
- * provider (`../store/git-host.ts`): a branch's request, a branch's whole request history, and the
- * project's open requests. Reads only: opening and landing are `agent-handoff.ts`'s, through the
- * same provider. OpenAgent runs no git host tool; a project with no git host package has no pull
- * requests, and every read here answers "none" for it.
+ * The pull requests the dashboard reads (#1820), in one place, each asked of GitHub with this
+ * package's own `requests`, as the account runs use: a branch's request, a branch's whole request
+ * history, and the project's open requests. Reads only: opening and landing are `handoff.ts`'s. A
+ * repository that is not on GitHub has no pull requests here, and every read answers "none" for it.
  *
- * The shapes are OpenAgent's own ({@link LinkedPr}, {@link OpenPr}), copied out of what the
- * provider answers rather than passed through, so a field a provider adds cannot leak into what
- * callers store.
+ * The shapes are the dashboard's own ({@link LinkedPr}, {@link OpenPr}), copied out of what
+ * `requests` answers rather than passed through, so a field it adds cannot leak into what callers
+ * keep.
  *
  * Every read here keeps what it answered of each request as the newest word on it ({@link readRequests}),
  * and every cached read answers each request as that newest word says: a branch's read and the
  * project's listing are cached apart, each on its own clock, and a request merged said "merged"
  * in the session's header and "open" in its sidebar row until the listing's turn came.
  */
+
+/** A pull request as `requests` prints it. */
+export type GitHostRequest = Request
+
+/** What a read of requests answered: the requests, or why there are none. */
+export type RequestsOutcome = { ok: true; requests: Request[] } | { ok: false; error: string }
+
+/** Where a repository's requests are read; none for a repository that is not on GitHub. */
+export interface GitHostSource {
+  requests(query: RequestsQuery): Promise<RequestsOutcome>
+}
+
+/** The requests of the repository at `cwd`, or none for one that is not on GitHub. */
+export type GitHostFor = (cwd: string) => Promise<GitHostSource | undefined>
+
+/** The repository at `cwd`'s requests on GitHub, read with `github requests` in this process; none for a repository that is not on GitHub. */
+export const projectGitHost: GitHostFor = async cwd => {
+  if ((await homeUrlFor(cwd).catch(() => undefined)) === undefined) return undefined
+  return {
+    requests: async query => {
+      const said = await cliAnswer(['requests', ...(query.branch !== undefined ? [`--branch=${query.branch}`] : []), ...(query.state !== undefined ? ['--state', query.state] : []), ...(query.since !== undefined ? ['--since', query.since] : [])], cwd)
+      return said.ok ? { ok: true, requests: Array.isArray(said.output) ? (said.output as Request[]) : [] } : said
+    },
+  }
+}
 
 /** Every request read here, by its address, as the read asked last said it, and that read's turn. */
 const newest = new Map<string, { request: GitHostRequest; turn: number }>()
@@ -52,6 +80,11 @@ async function readRequests(source: GitHostSource, query: Parameters<GitHostSour
   }
   if (moved) for (const listener of [...moveListeners]) listener()
   return listed
+}
+
+/** How every request read here stands, as the newest read of each says: what the lists of runs mark each run's requests by (`pullRequestsRead`). */
+export function requestsRead(): PullRequestRead[] {
+  return [...newest.values()].map(({ request }) => ({ url: request.url, state: listedStateOf(request), ...(request.title ? { title: request.title } : {}), ...(request.branch ? { branch: request.branch } : {}) }))
 }
 
 /** A request as the newest read says it: the newest word on the same address, else as it was read. */
@@ -255,6 +288,17 @@ export async function cachedPrStates(cwd: string, gitHost: GitHostFor = projectG
 export async function cachedPrsForBranch(cwd: string, branch: string, gitHost: GitHostFor = projectGitHost): Promise<Cached<LinkedPr[]>> {
   const read = await cachedRead(branchPrsCacheKey(cwd, branch), () => prsForBranch(cwd, branch, gitHost))
   return read.value ? { ...read, value: read.value.map(newestOf) } : read
+}
+
+/**
+ * The commit request `number` of `branch` merged as, and the branch's last commit it merged, as the
+ * cache last read the branch's requests: still being asked while a first read is out.
+ */
+export async function mergeLookup(cwd: string, branch: string, number: number, gitHost: GitHostFor = projectGitHost): Promise<MergeLookup> {
+  const read = await cachedPrsForBranch(cwd, branch, gitHost).catch((): Cached<LinkedPr[]> => ({ value: undefined, pending: false }))
+  if (read.pending && read.value === undefined) return { pending: true }
+  const pr = read.value?.find(one => one.number === number)
+  return pr?.mergeCommit ? { pending: false, commit: pr.mergeCommit, ...(pr.headRefOid ? { head: pr.headRefOid } : {}) } : { pending: false }
 }
 
 /** Forget a branch's PR history, after an action that changes it (opening one). */

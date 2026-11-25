@@ -508,8 +508,12 @@ export interface UiWhereRepo {
   address: string
   /** Its name in the list: `me/shop`. */
   label: string
-  /** What the list says after its name: its description. */
+  /** Its description: what a search finds it by too. */
   detail?: string
+  /** Only some can see it. */
+  private?: true
+  /** Why it is listed, said after its name: the account it is one of, or the owner the person named. */
+  why?: string
   /** When it was last pushed to, ISO: the list shows the newest first. */
   pushedAt?: string
 }

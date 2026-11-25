@@ -30,7 +30,7 @@ const AGENTS = {
   stopped: [session, said, { kind: 'end', ok: false, stopped: true }],
   'waiting for an answer': [session, said, { kind: 'end', ok: false, waiting: true }],
 } as unknown as Record<string, OpenAgentEvent[]>
-const DIRTY: AgentWorktree = { checkout: { path: '/w', dirty: true, sizeBytes: 5 * 1024 * 1024 }, branch: 'agent-dark-mode', pr: { number: 7, url: 'https://github.com/o/r/pull/7', state: 'OPEN', title: 'Dark mode' } }
+const DIRTY: AgentWorktree = { checkout: { path: '/w', dirty: true, sizeBytes: 5 * 1024 * 1024 }, branch: 'agent-dark-mode', pr: { number: 7, url: 'https://github.com/o/r/pull/7', state: 'open' } }
 
 const lastSession = () => menus.filter(menu => menu['agentId'] !== undefined).at(-1)!
 

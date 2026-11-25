@@ -213,6 +213,7 @@ export function fakeApp(given: Partial<AppContext> = {}): AppContext {
 const NO_ACCOUNTS: GitAccounts = {
   hosts: async () => [],
   sendAs: async host => ({ ok: false, error: `OpenAgent has no account at ${host}` }),
+  mergeCommit: async () => ({ pending: false }),
 }
 
 /**
@@ -241,6 +242,10 @@ export function rpcHost(given: Partial<RpcHost> = {}): RpcHost {
     say: async () => {
       throw new Error('no run of this test takes a line')
     },
+    pullRequest: async () => {
+      throw new Error('no run of this test keeps a record')
+    },
+    pullRequestsRead: () => {},
     landed: async () => {
       throw new Error('no run of this test keeps a record')
     },

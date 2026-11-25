@@ -177,16 +177,20 @@ export async function openMenu(trigger: Element): Promise<void> {
   })
 }
 
+/** A box with no module's controls in it: the gear's menu stays mounted shut, as a box with controls keeps it. */
+const NO_CONTROLS = { in: 'launcher', options: {}, onChange: () => {}, busy: false } as const
+
 /**
  * The gear under a message box around `lines` of its menu (SessionSetup.tsx): a line is a part of
- * that menu and is drawn only inside it. `said` is what the gear's hover says.
+ * that menu, kept mounted with it shut as a module's line is, so what it says and a dialog it opens
+ * outlive the menu. `said` is what the gear's hover says.
  */
 export function GearMenu({ lines, said = '', warn, busy = false }: { lines: ReactNode; said?: string; warn?: boolean; busy?: boolean }) {
   const box = useRef<HTMLDivElement>(null)
   return (
     <>
       <div ref={box} />
-      <SessionSetupMenu setup={{ lines, said, warn }} box={box} busy={busy} />
+      <SessionSetupMenu setup={{ lines, said, warn }} box={box} busy={busy} controls={NO_CONTROLS} />
     </>
   )
 }

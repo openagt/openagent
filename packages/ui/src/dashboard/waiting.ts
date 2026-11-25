@@ -1,11 +1,11 @@
-import type { Attention, Hooks, WaitingRun } from '@openagt/hooks'
+import type { Attention, Hooks, ProjectRun, WaitingRun } from '@openagt/hooks'
 import { checkoutsFirst, listAgents, loadAgentEvents, readLiveMetas, type LiveAgent, type AgentMeta } from '../store/index.js'
 import { pendingChoices } from '../open-choices.js'
 import type { OpenAgentEvent } from '../events.js'
 import type { ProjectSummary, ProjectionRead } from './projects.js'
 import { projectBranches, type BranchesFor } from '../store/branches.js'
 import { unpublishedRuns, type Unpublished } from './unpublished.js'
-import { cachedOpenPrs, type PrLister } from './pull-requests.js'
+import { pullRequestsRead, requestedBranches } from './pr-states.js'
 import { waitingKey } from './keys.js'
 import { needsWord } from './waiting-words.js'
 import { runName } from '../run-name.js'
@@ -38,7 +38,6 @@ export interface Waiting extends Attention {
 
 /** Injectable seam so {@link buildWaiting} is unit-testable off disk. */
 export interface WaitingDeps {
-  prs?: PrLister
   /** The reader of the runs that have a checkout (default {@link readLiveMetas}): a waiting run keeps its own; the runs the modules are asked about (#636). */
   liveAgents?: (cwd: string) => Promise<LiveAgent[]>
   /** One run's events, by the project's path and the run's id (default {@link loadAgentEvents}): where a waiting run's questions are read. */
@@ -74,7 +73,8 @@ export async function buildWaiting(projects: ProjectSummary[], deps: WaitingDeps
   // PR would otherwise appear once per entry, and so would what waits on a run: both entries share
   // the repository's records, so each finds the run. Collapse by identity, keeping the first (newest-sorted).
   const seen = new Set<string>()
-  const identity = (item: Waiting) => (item.module === 'github' ? `github:${item.id ?? ''}` : item.scope === 'run' ? `${item.module}:run:${item.run ?? ''}:${item.id ?? ''}` : waitingKey(item))
+  // An item named by an address (a pull request's) is one thing in every project it is listed in.
+  const identity = (item: Waiting) => (item.id !== undefined && /^https?:\/\//.test(item.id) ? `${item.module}:${item.id}` : item.scope === 'run' ? `${item.module}:run:${item.run ?? ''}:${item.id ?? ''}` : waitingKey(item))
   const unique = items.filter(item => (seen.has(identity(item)) ? false : (seen.add(identity(item)), true)))
   return { items: oneStepPerRun(unique), whole }
 }
@@ -105,7 +105,6 @@ function oneStepPerRun(items: Waiting[]): Waiting[] {
 
 /** One project's items, and whether every one of its sources answered. */
 async function projectWaiting(project: ProjectSummary, deps: WaitingDeps, hooks: Hooks): Promise<{ id: string; items: Waiting[]; whole: boolean }> {
-  const prs = deps.prs ?? cachedOpenPrs
   const liveAgents = deps.liveAgents ?? readLiveMetas
   const events = deps.events ?? loadAgentEvents
   // A project is read whole only when every one of its sources answered. Each `unread()` below is
@@ -120,42 +119,17 @@ async function projectWaiting(project: ProjectSummary, deps: WaitingDeps, hooks:
   const liveRead = liveAgents(project.path)
     .then(agents => withStartedNames(agents))
     .catch(() => undefined)
-  const [open, recorded, live, modules] = await Promise.all([
-    prs(project.path).catch(() => undefined),
-    (deps.agents ?? listAgents)(project.path).then(agents => withStartedNames(agents)).catch(() => undefined),
-    liveRead,
-    modulesWaiting(project, hooks, () => waitingRuns(project, liveRead, events)),
-  ])
+  const recordedRead = (deps.agents ?? listAgents)(project.path)
+    .then(agents => withStartedNames(agents))
+    .catch(() => undefined)
   // Newest first: a branch name reused by a later run, or a run continued on it, is that run's now.
-  const runs = [...(live ?? []), ...(recorded ?? [])].sort((a, b) => b.startedAt.localeCompare(a.startedAt))
-  if (open === undefined) unread()
+  const runs = async (): Promise<ProjectRun[]> =>
+    [...((await liveRead) ?? []), ...((await recordedRead) ?? [])]
+      .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
+      .map(run => ({ id: run.id, ...(runName(run) !== undefined ? { name: runName(run)! } : {}), ...(run.branch !== undefined ? { branch: run.branch } : {}), ...(run.pr ? { pr: run.pr } : {}) }))
+  const [recorded, live, modules] = await Promise.all([recordedRead, liveRead, modulesWaiting(project, hooks, () => waitingRuns(project, liveRead, events), runs)])
   if (!modules.whole) unread()
   const items: Waiting[] = modules.items.map(item => ({ ...item, ...inProject }))
-  for (const pr of open ?? []) {
-    // The run that opened it, by the request its record names, else by the branch a run's record or
-    // checkout names (#1774): what tells a run's draft from one opened by hand, and where a click on
-    // the row goes, the conversation rather than the git host.
-    const run = runs.find(agent => agent.pr?.url === pr.url) ?? (pr.headRefName !== undefined ? runs.find(agent => agent.branch === pr.headRefName) : undefined)
-    // A draft opened by hand is not asking for review, so it stays off the list. A draft on a
-    // run's branch is the opposite (#1102): the agent opened it as a draft so it does not ping
-    // reviewers, and if the list then dropped it too, nothing
-    // would tell anyone the work exists — which is the whole of #860 again.
-    if (pr.isDraft && !run) continue
-    items.push({
-      kind: 'waiting',
-      module: 'github',
-      ...(run ? { scope: 'run', run: run.id } : { scope: 'project' }),
-      id: pr.url,
-      words: needsWord('pr'),
-      title: (run && runName(run)) ?? pr.title,
-      detail: `#${pr.number}`,
-      mark: 'pull-request',
-      ...(pr.createdAt ? { since: pr.createdAt } : {}),
-      // A row of a request no run here opened opens it on the git host.
-      fix: { label: `Open PR #${pr.number}`, href: pr.url },
-      ...inProject,
-    })
-  }
   if (live === undefined) unread()
   // A finished run whose work never left the machine is a "needs you" too (#860). Until then the
   // list only knew about a PR that is *already on the git host* and an agent parked on a gate, so an agent
@@ -166,7 +140,9 @@ async function projectWaiting(project: ProjectSummary, deps: WaitingDeps, hooks:
   // nothing by itself, so every finished run with work of its own reaches here until a person
   // publishes it, or the agent does on their ask.
   if (recorded === undefined) unread()
-  const requested = project.gitHost && open ? new Set(open.map(pr => pr.headRefName)) : undefined
+  // A branch with an open request is published, as the modules read the requests just now; where
+  // one of them could not say, a pushed branch is not counted.
+  const requested = project.gitHost && modules.whole ? requestedBranches() : undefined
   // A run continued in its checkout works again, whatever its record says of its first leg (#768).
   items.push(...(await unpushedFor(project, checkoutsFirst(live ?? [], recorded ?? []), deps.branches ?? projectBranches, unread, requested)))
   return { id: project.id, items, whole: sawEverything }
@@ -188,10 +164,10 @@ async function sessionsWaiting(home: string, deps: WaitingDeps, hooks: Hooks): P
 }
 
 /** What the modules on in the project say waits on the person there, given its runs that wait; asked only of a distribution where one says anything. No project: the sessions that have none. */
-async function modulesWaiting(project: ProjectSummary | undefined, hooks: Hooks, waiting: () => Promise<WaitingRun[]>): Promise<{ items: (Attention & { kind: 'waiting' })[]; whole: boolean }> {
+async function modulesWaiting(project: ProjectSummary | undefined, hooks: Hooks, waiting: () => Promise<WaitingRun[]>, runs?: () => Promise<ProjectRun[]>): Promise<{ items: (Attention & { kind: 'waiting' })[]; whole: boolean }> {
   if (!hooks.modules.some(module => module.hooks['app.attention'])) return { items: [], whole: true }
   try {
-    const read = await hooks.attention({ ...(project ? { project: await projectRefAt(project.id, project.path) } : {}), waiting })
+    const read = await hooks.attention({ ...(project ? { project: await projectRefAt(project.id, project.path) } : {}), waiting, ...(runs ? { runs } : {}), pullRequestsRead })
     return { items: read.items.filter((item): item is Attention & { kind: 'waiting' } => item.kind === 'waiting'), whole: read.whole }
   } catch {
     return { items: [], whole: false }

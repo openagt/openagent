@@ -8,9 +8,6 @@ const HOUR = 60 * 60_000
 /** A git host that knows one account, counting the emails it is asked. */
 function host(asked: string[][]): GitHostSource {
   return {
-    requests: async () => ({ ok: true, requests: [] }),
-    open: async () => ({ ok: false, error: 'no' }),
-    merge: async () => ({ ok: false, error: 'no' }),
     home: async () => undefined,
     people: async emails => {
       asked.push([...emails])

@@ -46,7 +46,7 @@ export function WorkRow({
   path?: string | undefined
   /** What the branch holds, in a phrase. */
   summary?: ReactNode
-  pr?: { number: number; url: string; state: string; title: string } | undefined
+  pr?: { number: number; url: string; state?: string | undefined; title?: string | undefined } | undefined
   /** The next step (Commit, Open PR, Merge), or the words that stand where it would be. */
   actions?: ReactNode
   /** Why the next step just failed. */
@@ -72,9 +72,9 @@ export function WorkRow({
           <Tooltip key="pr">
             <TooltipTrigger render={<a href={pr.url} target="_blank" rel="noreferrer" className="relative flex shrink-0 items-center gap-1.5 text-primary hover:underline" />}>
               <span>PR #{pr.number}</span>
-              <span className="rounded-full border border-border px-1.5 uppercase text-muted-foreground">{pr.state.toLowerCase()}</span>
+              {pr.state !== undefined && <span className="rounded-full border border-border px-1.5 uppercase text-muted-foreground">{pr.state.toLowerCase()}</span>}
             </TooltipTrigger>
-            <TooltipContent>{pr.title}</TooltipContent>
+            <TooltipContent>{pr.title || `PR #${pr.number}`}</TooltipContent>
           </Tooltip>
         ),
       ]}
