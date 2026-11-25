@@ -40,4 +40,4 @@ What it brings:
 Every talk with a remote goes as an account of OpenAgent's (`RpcHost.gitAccess`, which the git
 host's module answers), never the person's own login. Its Node part is the module (`./module`), with
 a server part for the dashboard's reads and presses (`./server`), and the `branches` command its
-runs and the dashboard's records call (`SKILL.md`).
+runs call (`SKILL.md`).

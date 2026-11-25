@@ -66,15 +66,16 @@ project's main branch, fetched first; **My local branch**, the branch the projec
 on, with its commits that are not pushed (edits that are not committed are not carried); or
 another of the branches origin has now, fetched first. The pick is saved per project. The local
 pick names the branch, and another of origin's its full name (`refs/remotes/origin/<branch>`),
-so the run can tell them apart; `agent-driver` fetches it. The menu is shown for a project with
-a remote whose folder is on a branch.
+so the run can tell them apart; `@openagt/git-branches`, whose menu it is, fetches it before it
+makes the run's branch. The menu is shown for a project with a remote whose folder is on a branch.
 
 A run started from another branch origin has opens its pull request into that branch, unless the
 gear's **Pull request into** line (`@openagt/github`) says main. Otherwise the pull request goes to
 main.
 
-A session with no project may have repos as context, ticked in **Context** under the box:
-`agent-driver` copies each into the session's folder.
+A session with no project may have repos as context, ticked in **Repos** under the box
+(`@openagt/git-branches`), which copies each into the session's folder; **Context** beside it holds
+the files the next message goes with.
 
 The gear's menu under the box starts with the modules' lines. **Profile** (`@openagt/profiles`)
 picks the profile of every next run on this computer: a name and a saved set of run options, kept with

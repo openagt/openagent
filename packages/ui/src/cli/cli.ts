@@ -35,7 +35,7 @@ ${helpRows([
 
 ${helpText('The dashboard listens on this computer only.')}
 
-${helpText("Everything else is the dashboard: it shows a project's runs from their files, and starts one on this computer's run host, the module OpenAgent is distributed with that runs it.")}`
+${helpText("Everything else is the dashboard: it shows a project's runs as their hosts say them, and starts one on this computer's run host, the module OpenAgent is distributed with that runs it.")}`
 
 /** What the CLI itself accepts: three options, no verbs (D4). */
 export interface CliArgs {

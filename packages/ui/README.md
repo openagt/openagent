@@ -13,11 +13,18 @@ Where `#12` in a chat leads is the `chat.references` option of the module that a
 project's host, and the people behind commit emails, whose pictures the lists of runs show
 (`UiHost.people`), are the `people` of its `account.access`.
 
-It names no coding agent either. Each agent's name, mark and models come from its
-`run.agent`. `@openagt/agent-driver` draws the rest in the places the shell keeps for modules:
+It names no coding agent either. Each agent's name, mark and models, and the words its calls are
+said in in the chat, come from its `run.agent`. `@openagt/agent-driver` draws the rest in the places the shell keeps for modules:
 the menu under the message box, the usage card, what a run needs before it can start, the
 agents' updates, and where the images a message goes with are kept (`composer.images`). Its host
-(`run.host`) starts, stops, deletes and names this computer's runs.
+(`run.host`) starts, stops, deletes and names this computer's runs, and gives a run only the Auto
+level its project can reach.
+
+It reads no git either. Where a run's work is (its branch, the branch it started from, its pull
+requests) is what its host says of it (`RunSummary`), and the rows above a session's message box,
+its project's and its copies of repos', with their next steps, are `@openagt/git-branches`'
+(`chat.work`, `chat.handoff`). What a module's press did is written on the run's record as that
+module's own facts (`RpcHost.record`).
 
 It reads no git either. The panel of a session's work above its message box holds the modules'
 rows (`chat.work`): `@openagt/git-branches` draws the project's row and one per copy of a repo
