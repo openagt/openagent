@@ -1,7 +1,7 @@
-import { stat } from 'node:fs/promises'
-import { join } from 'node:path'
+import { realpath, stat } from 'node:fs/promises'
+import { isAbsolute, join } from 'node:path'
 import { DATA_BRANCH, isSafeAgentId } from './branch-names.js'
-import { errorMessage, nodeGitRunner, originDefaultBranch } from './git.js'
+import { checkoutRoot, errorMessage, nodeGitRunner, originDefaultBranch } from './git.js'
 import { type GitRunner, START_FROM, isBranchName, type StartFrom, type RunFound } from '@openagt/hooks'
 import { act, read, type RpcHost } from '@openagt/hooks/rpc'
 import { bringBranch } from './bring.js'
@@ -252,6 +252,22 @@ export const startBranches = read(async (host: RpcHost, _input: object): Promise
   const [listed, main] = await Promise.all([git ? branchesOnOrigin(host.root, git) : undefined, originDefaultBranch(host.root)])
   if (!listed) return {}
   return { branches: listed.filter(branch => branch !== DATA_BRANCH && `origin/${branch}` !== main) }
+})
+
+/**
+ * The branches a copy of the repo in `folder` can start from, read live from its origin as an
+ * account of OpenAgent's: its main branch, origin's default, and the others, the branch that holds
+ * the runs' records left out. `branches` is absent where origin could not be read; nothing at all
+ * for a folder that is no repository's top, or one with no origin.
+ */
+export const repoBranches = read(async (host: RpcHost, { folder }: { folder: string }): Promise<{ main?: string; branches?: string[] }> => {
+  if (typeof folder !== 'string' || !isAbsolute(folder)) return {}
+  const top = await checkoutRoot(folder).catch(() => undefined)
+  if (top === undefined || (await realpath(top).catch(() => top)) !== (await realpath(folder).catch(() => folder))) return {}
+  const main = (await originDefaultBranch(folder).catch(() => undefined))?.slice('origin/'.length)
+  const git = await originGit(folder, host.gitAccess)
+  const listed = git ? await branchesOnOrigin(folder, git) : undefined
+  return { ...(main !== undefined ? { main } : {}), ...(listed ? { branches: listed.filter(branch => branch !== DATA_BRANCH && branch !== main) } : {}) }
 })
 
 /** Pick where every next run of the project started on this computer starts from; none: the main branch. */

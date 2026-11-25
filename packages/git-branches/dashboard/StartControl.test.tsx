@@ -2,12 +2,14 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import { forgetRemembered, type ModuleCallResult, type UiComposerControlProps } from '@openagt/ui/module'
 import { fakeHost, hoverTooltip, openMenu, renderWithHost } from '@openagt/ui/module/testing'
+import type { RunOptions } from '@openagt/hooks'
 import type { StartFrom } from './calls.js'
 import { StartControl } from './StartControl.js'
 
-// The branch a run starts from, in the row above the message box (`composer.control` at
-// `start`), its module's calls as a test answers them: in the launcher, the menu that picks it for
-// every next run of the project; in a session, the branch its record says it started from.
+// The branch a run starts from, in the row under the message box (`composer.control` at
+// `context`), its module's calls as a test answers them: in the launcher, the menu that picks it for
+// every next run of the project, "Branches" with a row per repo once the session copies repos; in a
+// session, the branch its record says it started from.
 
 const LOCAL = { kind: 'local' } as const
 const published = (branch: string) => ({ kind: 'published', branch }) as const
@@ -20,6 +22,7 @@ const call = vi.fn(async (_projectId: string, name: string, input: object): Prom
   if (name === 'startBranches') return onStartBranches().then(output => ({ ok: true as const, output }), (err: Error) => ({ ok: false as const, error: err.message }))
   if (name === 'pickStart') return picks(input), { ok: true, output: { ok: true } }
   if (name === 'startedFrom') return { ok: true, output: { from: 'main', on: 'agent-fix-it' } }
+  if (name === 'repoBranches') return { ok: true, output: { main: 'trunk', branches: ['dev', 'release'] } }
   return { ok: false, error: `no ${name} here` }
 })
 const host = fakeHost('@openagt/git-branches', { call })
@@ -209,5 +212,30 @@ describe("a session's start", () => {
     cleanup()
     const { container } = renderWithHost(<StartControl {...props} in="profile" />, host)
     expect(container.textContent).toBe('')
+  })
+})
+
+describe('Branches, with repos copied into the session', () => {
+  test("a row per repo, the project's first, each with the branch it starts from; a copy's pick goes with the Start, and its main branch picked again drops it", async () => {
+    const onChange = vi.fn()
+    const options: RunOptions = { publish: 'commit', 'git-branches': { repos: [{ name: 'notes', from: '/home/me/notes' }] } }
+    renderWithHost(<StartControl in="launcher" projectId="p1" options={options} onChange={onChange} busy={false} say={() => {}} />, host)
+    const button = await screen.findByRole('button', { name: 'Branches each repo starts from' })
+    expect(button.textContent).toBe('Branches')
+    await openMenu(button)
+    const rows = await screen.findAllByRole('menuitem')
+    await waitFor(() => expect(rows.map(row => row.textContent)).toEqual(['This projectmain', 'notestrunk']))
+    fireEvent.click(rows[1]!)
+    // The branch it starts from is ticked.
+    expect((await screen.findByRole('menuitemradio', { name: 'trunk' })).querySelector('.lucide-check')).not.toBeNull()
+    expect(screen.getByRole('menuitemradio', { name: 'dev' }).querySelector('.lucide-check')).toBeNull()
+    fireEvent.click(await screen.findByRole('menuitemradio', { name: 'dev' }))
+    expect(onChange).toHaveBeenLastCalledWith({ publish: 'commit', 'git-branches': { repos: [{ name: 'notes', from: '/home/me/notes', base: 'dev' }] } })
+  })
+
+  test('with no project, only the copies have a row', async () => {
+    renderWithHost(<StartControl in="launcher" options={{ 'git-branches': { repos: [{ name: 'notes', from: '/home/me/notes', base: 'dev' }] } }} onChange={() => {}} busy={false} say={() => {}} />, host)
+    await openMenu(await screen.findByRole('button', { name: 'Branches each repo starts from' }))
+    expect((await screen.findAllByRole('menuitem')).map(row => row.textContent)).toEqual(['notesdev'])
   })
 })

@@ -64,8 +64,8 @@ export function runArgs(run: SpawnedRun): string[] {
   if (run.prBase !== undefined) args.push('--pr-base', run.prBase)
   if (run.branch !== undefined) args.push('--branch', run.branch)
   if (run.for !== undefined) args.push('--for', run.for)
-  // One argument, the folders one per line: the process reads them as the start did.
-  if (run.repos !== undefined && run.repos.length > 0) args.push(`--repos=${run.repos.map(repo => repo.from).join('\n')}`)
+  // One argument, the folders one per line, each with the branch its copy starts from after a tab: the process reads them as the start did.
+  if (run.repos !== undefined && run.repos.length > 0) args.push(`--repos=${run.repos.map(repo => (repo.base !== undefined ? `${repo.from}\t${repo.base}` : repo.from)).join('\n')}`)
   // One argument, the projects as JSON: names may hold anything.
   if (run.projects !== undefined && run.projects.length > 0) args.push(`--projects=${JSON.stringify(run.projects)}`)
   return args

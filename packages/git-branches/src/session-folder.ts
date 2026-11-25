@@ -1,7 +1,7 @@
 import { mkdir, readdir, realpath, rm, rmdir, stat } from 'node:fs/promises'
 import { isAbsolute, join, resolve } from 'node:path'
 import { checkoutRoot, nodeGitRunner, originDefaultBranch } from './git.js'
-import { type GitRunner, originUrl } from '@openagt/hooks'
+import { type GitRunner, isBranchName, originUrl } from '@openagt/hooks'
 import { sessionFolder } from './sessions.js'
 import { agentBranchName } from './branch-names.js'
 import { isCopyName, nameRepos, type SessionRepo } from './repo-names.js'
@@ -47,6 +47,7 @@ export async function checkedRepos(repos: readonly SessionRepo[], git: GitRunner
     // git names a repository's top by its real path: the folder is compared as it really is.
     const [top, real] = isAbsolute(repo.from) ? await Promise.all([checkoutRoot(repo.from, git).catch(() => undefined), realpath(repo.from).catch(() => undefined)]) : []
     if (top === undefined || top !== real) throw new Error(`${repo.from} is not a git repository`)
+    if (repo.base !== undefined && !isBranchName(repo.base)) throw new Error(`not a branch name: ${repo.base}`)
   }
   return [...repos]
 }
@@ -60,7 +61,7 @@ const ORIGIN_FETCH_MS = 20_000
  * branches), and its default branch is asked of origin too, where the clone had the branch the
  * folder was on. Nothing when origin does not answer in time or has no default branch to name.
  */
-async function originStart(copy: string, git: GitRunner): Promise<string | undefined> {
+async function originStart(copy: string, base: string | undefined, git: GitRunner): Promise<string | undefined> {
   let timer: ReturnType<typeof setTimeout> | undefined
   const capped = new Promise<false>(resolve => {
     timer = setTimeout(() => resolve(false), ORIGIN_FETCH_MS)
@@ -68,7 +69,16 @@ async function originStart(copy: string, git: GitRunner): Promise<string | undef
   })
   const fetched = await Promise.race([git(['fetch', '--quiet', '--prune', 'origin'], copy).then(() => true, () => false), capped])
   clearTimeout(timer)
-  if (!fetched) return undefined
+  if (!fetched) {
+    if (base !== undefined) throw new Error(`origin could not be reached for the branch ${base}`)
+    return undefined
+  }
+  // A branch picked for the copy: origin's, as origin has it now.
+  if (base !== undefined) {
+    const there = (await git(['rev-parse', '--verify', '--quiet', `refs/remotes/origin/${base}`], copy).catch(() => '')).trim()
+    if (!there) throw new Error(`origin has no branch ${base}`)
+    return `origin/${base}`
+  }
   // The clone's `origin/HEAD` names the branch the folder was on: origin says its own, or it names none.
   await git(['remote', 'set-head', 'origin', '--auto'], copy).catch(() => git(['remote', 'set-head', 'origin', '--delete'], copy).catch(() => {}))
   return originDefaultBranch(copy, git)
@@ -105,7 +115,7 @@ export const SESSION_FOLDER_STAYS = 'a session folder stays'
  * Each repo the session has is a copy in it, under its name: a clone of the repo's folder, on a new
  * branch `agent-<id>`, its `origin` the repo's own (none when the repo has none, so nothing goes
  * back into the folder it came from). The branch starts from origin's default branch as origin has
- * it now, as a project's run does: what the folder is on, and commits it holds that were never
+ * it now, as a project's run does, or from origin's branch the repo names (`base`): what the folder is on, and commits it holds that were never
  * pushed, are the person's, and a pull request of the copy carries the session's work alone. A
  * repo with no origin, or one whose origin does not answer, starts from the folder as it is
  * committed. A clone and not a worktree: the repo is not
@@ -124,7 +134,8 @@ export async function openSessionFolder(home: string, id: string, repos: readonl
     await git(['clone', '--quiet', '--', repo.from, copy], path)
     const origin = await originUrl(repo.from, git)
     await git(origin ? ['remote', 'set-url', 'origin', origin] : ['remote', 'remove', 'origin'], copy)
-    const start = origin ? await originStart(copy, git) : undefined
+    if (repo.base !== undefined && !origin) throw new Error(`${repo.name} has no origin to start from ${repo.base}`)
+    const start = origin ? await originStart(copy, repo.base, git) : undefined
     await git(['checkout', '--quiet', '--no-track', '-b', agentBranchName(id), ...(start !== undefined ? [start] : [])], copy)
     // Where the copy starts, kept in the copy itself: what it holds beyond it is the session's work, pushed or not.
     await git(['config', START_KEY, (await git(['rev-parse', 'HEAD'], copy)).trim()], copy)

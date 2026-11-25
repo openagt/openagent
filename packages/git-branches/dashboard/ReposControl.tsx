@@ -196,8 +196,12 @@ export function ReposMenu({
       {...search.root}
       onValueChange={rows => {
         const folders = rows.map(row => row.path)
-        // A session keeps the repos it has: a new one is named beside them.
-        onChange(kept ? [...kept, ...nameRepos(folders.filter(folder => !kept.some(repo => repo.from === folder)), kept)] : nameRepos(folders))
+        // A session keeps the repos it has: a new one is named beside them. A repo picked already keeps the branch picked for it.
+        const named = kept ? [...kept, ...nameRepos(folders.filter(folder => !kept.some(repo => repo.from === folder)), kept)] : nameRepos(folders)
+        onChange(named.map(repo => {
+          const base = picked.find(had => had.from === repo.from)?.base
+          return base !== undefined ? { ...repo, base } : repo
+        }))
       }}
     >
       <Tooltip>

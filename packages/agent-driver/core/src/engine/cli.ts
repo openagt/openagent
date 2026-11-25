@@ -1,4 +1,4 @@
-import { isAbsolute } from 'node:path'
+import { isAbsolute, resolve } from 'node:path'
 import { PLUGINS_WITHOUT_ENV, PROFILE_ENV, PROJECT_SKILLS_ENV } from './names.js'
 import { Refused, UsageError, inRepo, parseCommandArgs, runCommandLine, helpRows, helpText, type Command } from '@openagt/hooks/command'
 import { errorMessage, nodeGitRunner, sessionsHomeOf, projectRoot, sessionRepos, type SessionProject } from '@openagt/git-branches'
@@ -33,7 +33,7 @@ ${helpRows([
   ['--pr-base <branch>', `with --pr-base, the --publish sentence names <branch> as the branch its pull request goes into, instead of origin's default branch`],
   ['--branch <name>', `with --branch, the run works on <name>, a branch that exists, such as a person's pull request's, instead of a fresh one`],
   ['--for <thread>', `with --for, the run's record names what it was started for, a thread's address on the git host, so the next call there finds it`],
-  ['--repos <folders>', `with --repos, each git repository among <folders>, one per line, is copied into the session's folder (below)`],
+  ['--repos <folders>', `with --repos, each git repository among <folders>, one per line, is copied into the session's folder (below); a branch after a tab on its line is the branch of its origin the copy starts from`],
   ['--projects <json>', `with --projects, a JSON list of { "name", "dir" }, the agent may bring each of those projects into the session itself: \`npx @openagt/git-branches@0.1 add <name>\` copies one into the session's folder`],
 ])}
 
@@ -151,12 +151,15 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
       if (gitFlag !== undefined) throw new UsageError(`--${gitFlag} is for a run in a project: a session with no project has no git`)
       if (publish !== undefined && values.repos === undefined && values.resume === undefined) throw new UsageError('--publish needs --repos in a session with no project: its copies of repos are what it publishes')
     }
-    // The repos a session has as context, in a project or with none, one folder per line, each copied into the session's folder.
-    const folders = (values.repos ?? '').split('\n').map(line => line.trim()).filter(Boolean)
-    const repos = folders.length > 0 ? await sessionRepos(folders, git).catch((err: unknown) => {
+    // The repos a session has as context, in a project or with none, one folder per line, each copied into the session's folder;
+    // after a tab, the branch of its origin its copy starts from.
+    const given = (values.repos ?? '').split('\n').map(line => line.split('\t').map(part => part.trim())).filter(([folder]) => folder)
+    const bases = new Map(given.flatMap(([folder, base]) => (base ? [[resolve(folder!), base] as const] : [])))
+    const named = given.length > 0 ? await sessionRepos(given.map(([folder]) => folder!), git).catch((err: unknown) => {
       const line = errorMessage(err)
       throw new Refused({ ok: false, reason: 'not-a-repo', detail: line }, line)
     }) : undefined
+    const repos = named?.map(repo => (bases.has(repo.from) ? { ...repo, base: bases.get(repo.from)! } : repo))
     const projects = values.projects !== undefined ? projectsFlag(values.projects) : undefined
     if (values.started !== undefined && (values.id === undefined || Number.isNaN(Date.parse(values.started)))) throw new UsageError('--started is the time a run spawned with --id was asked for, like 2026-10-09T10:00:00.000Z')
     // The account at the git host picked for this session, by whoever started the run: in the environment ({@link GIT_ACCOUNT_ENV}).

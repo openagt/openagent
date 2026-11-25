@@ -260,6 +260,8 @@ test('--repos is read one folder per line, and handed on to the run\'s process; 
     assert.match(err[0] ?? '', /--repos goes with a text on a resume/)
     const repos = [{ name: 'repo', from: repo }, { name: 'other', from: '/x/other' }]
     assert.ok(runArgs({ id: ID, prompt: 'Read', repos }).includes(`--repos=${repo}\n/x/other`))
+    // A copy picked to start from a branch of its origin: the branch after a tab on its line.
+    assert.ok(runArgs({ id: ID, prompt: 'Read', repos: [{ name: 'repo', from: repo, base: 'dev' }] }).includes(`--repos=${repo}\tdev`))
     assert.ok(resumeArgs({ id: ID, text: 'More', repos: [repo, '/x/other'] }).includes(`--repos=${repo}\n/x/other`), 'a resume hands on the folders its message gives')
     // The projects the session may bring in go as one JSON argument, and only to a new run: a resume has its record's.
     const projects = [{ name: 'shop', dir: '/w/shop' }]

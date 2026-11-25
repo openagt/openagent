@@ -80,7 +80,7 @@ export interface Lasting {
 /** The repos a mark names, as far as they are repos: anything else there is left out. */
 function reposOf(value: unknown): SessionRepo[] | undefined {
   if (!Array.isArray(value)) return undefined
-  return value.flatMap(repo => (repo && typeof repo === 'object' && typeof repo.name === 'string' && typeof repo.from === 'string' ? [{ name: repo.name as string, from: repo.from as string }] : []))
+  return value.flatMap(repo => (repo && typeof repo === 'object' && typeof repo.name === 'string' && typeof repo.from === 'string' ? [{ name: repo.name as string, from: repo.from as string, ...(typeof repo.base === 'string' ? { base: repo.base as string } : {}) }] : []))
 }
 
 /** The projects a mark names, as far as they are projects: anything else there is left out. */

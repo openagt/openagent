@@ -1,10 +1,15 @@
 // How a session's repos are named in its folder, by whoever writes the run's options: the launcher's
 // Context picker in the browser, the `run --repos` command. Node-free, so both name them alike.
 
-/** A repo a session has as context: the folder it is copied from, and the name of its copy in the session's folder. */
+/**
+ * A repo a session has as context: the folder it is copied from, the name of its copy in the
+ * session's folder, and the branch of origin's its copy starts from, by its name; origin's default
+ * branch when none is named.
+ */
 export interface SessionRepo {
   name: string
   from: string
+  base?: string
 }
 
 /** A folder's own name, the last part of its path. */

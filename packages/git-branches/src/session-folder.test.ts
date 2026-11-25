@@ -4,7 +4,7 @@ import { mkdtemp, realpath, rm, stat, symlink, writeFile } from 'node:fs/promise
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { nodeGitRunner } from './git.js'
-import { addSessionRepos, copiedFrom, dropUntouchedCopies, foundCopies, openSessionFolder, sessionRepos } from './session-folder.js'
+import { addSessionRepos, checkedRepos, copiedFrom, dropUntouchedCopies, foundCopies, openSessionFolder, sessionRepos } from './session-folder.js'
 import { readBranchStates } from './branch-state.js'
 
 // Where a session's copy of a repo starts, with real git: origin's default branch as origin has
@@ -46,6 +46,24 @@ test("a copy starts from origin's default branch as origin has it: not from the 
     assert.equal((await git(['rev-list', '--count', 'origin/main..HEAD'], copy)).trim(), '0', 'a pull request of it would carry nothing yet')
     assert.equal((await git(['config', '--get', 'openagent.start'], copy)).trim(), at.pushed, 'where it started is kept in the copy')
     assert.equal(await headOf(at.repo), at.local, "the folder is left as it was")
+  } finally {
+    await rm(at.dir, { recursive: true, force: true })
+  }
+})
+
+test("a copy picked to start from one of origin's branches starts there; a branch origin has not refuses the run, saying which", async () => {
+  const at = await repoAhead()
+  try {
+    // origin has a branch dev, one commit past main.
+    await git(['checkout', '-q', '-b', 'dev', 'main'], at.repo)
+    const dev = await commit(at.repo, 'dev.md', 'dev work')
+    await git(['push', '-q', 'origin', 'dev'], at.repo)
+    const { path } = await openSessionFolder(join(at.dir, 'home'), 'run7', [{ name: 'app', from: at.repo, base: 'dev' }], git)
+    const copy = join(path, 'app')
+    assert.equal(await headOf(copy), dev, "origin's dev")
+    assert.equal((await git(['branch', '--show-current'], copy)).trim(), 'agent-run7')
+    await assert.rejects(openSessionFolder(join(at.dir, 'home'), 'run8', [{ name: 'app', from: at.repo, base: 'gone' }], git), /origin has no branch gone/)
+    await assert.rejects(checkedRepos([{ name: 'app', from: at.repo, base: '--upload-pack=x' }], git), /not a branch name/)
   } finally {
     await rm(at.dir, { recursive: true, force: true })
   }
