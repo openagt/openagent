@@ -36,6 +36,8 @@ function host(deps: LocalHostDeps = {}): { host: RunHost; runs: SpawnedRun[]; re
       spawnResume: async (_repo, run) => void resumes.push(run),
       ready: async () => NOTHING_WRONG,
       loginFor: async () => undefined,
+      takesRequests: async () => true,
+      hasOrigin: async () => true,
       host: HERE,
       startingMs: 0,
       naming: { names: () => false, name: async () => undefined, prepare: async () => {} },
@@ -44,7 +46,7 @@ function host(deps: LocalHostDeps = {}): { host: RunHost; runs: SpawnedRun[]; re
   }
 }
 
-const projectAt = (dir: string): ProjectRef => ({ id: 'shop', name: 'shop', dir })
+const projectAt = (dir: string): ProjectRef => ({ id: 'shop', name: 'shop', dir, remote: 'git.example.com/me/shop' })
 
 /** A run's live card in its checkout, as its process keeps it while it works. */
 async function liveCard(repo: string, id: string, status: string, caller: Record<string, unknown>): Promise<void> {
@@ -184,6 +186,31 @@ test('a start that cannot make a run is refused before anything is spawned: a pi
     await assert.rejects(here.start({ project, prompt: 'x', options: { 'agent-driver': { driver: 'codex' } } }), /^Error: Codex is not logged in\.$/)
     assert.equal(runs.length, 0)
     assert.deepEqual(await here.check!({ project, options: { 'agent-driver': { driver: 'codex' } } }), { problems: ['Codex is not logged in.'], warnings: [] })
+  } finally {
+    await removeRepo(repo)
+  }
+})
+
+test("a run goes no further than its project can reach: with no remote the commit, the branch where no module has an account of OpenAgent's at the remote's host; with no project the pick as made", async () => {
+  const repo = await testRepo()
+  try {
+    const asked: string[] = []
+    let origin = false
+    const { host: here, runs } = host({ takesRequests: async remote => (asked.push(remote), remote.startsWith('git.example.com/')), hasOrigin: async () => origin, settings: async () => memorySettings() })
+    const level = async (project: ProjectRef | undefined, publish: 'commit' | 'branch' | 'pr' | 'merge'): Promise<string | undefined> => {
+      await here.start({ ...(project ? { project } : {}), prompt: 'x', options: { publish, 'git-branches': { repos: [{ name: 'app', from: '/me/app' }] } }, title: false })
+      return runs.at(-1)?.publish
+    }
+    const { remote: _none, ...local } = projectAt(repo)
+    assert.equal(await level(projectAt(repo), 'merge'), 'commit', 'no origin: the commit')
+    assert.equal(await level(local, 'commit'), 'commit')
+    origin = true
+    assert.equal(await level({ ...local, remote: 'elsewhere.dev/me/shop' }, 'pr'), 'branch')
+    assert.equal(await level({ ...local, remote: 'elsewhere.dev/me/shop' }, 'branch'), 'branch')
+    assert.equal(await level(local, 'merge'), 'branch', 'an origin with no address a host answers for: the branch')
+    assert.equal(await level(projectAt(repo), 'merge'), 'merge')
+    assert.equal(await level(undefined, 'merge'), 'merge')
+    assert.deepEqual(asked, ['elsewhere.dev/me/shop', 'git.example.com/me/shop'], 'a level that is reached anyway asks nothing')
   } finally {
     await removeRepo(repo)
   }

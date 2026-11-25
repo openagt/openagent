@@ -163,9 +163,9 @@ describe('Settings › Appearance', () => {
 describe('the Settings list', () => {
   const mounted = (sections: MountedView<'settings.section'>[]): MountedModules => mountedOf({ views: { 'settings.section': sections } })
   const PROJECTS = [
-    { id: 'p1', name: 'gemstack', gitHost: true },
-    { id: 'p2', name: 'other', gitHost: true },
-    { id: 'p3', name: 'plain', gitHost: true },
+    { id: 'p1', name: 'gemstack' },
+    { id: 'p2', name: 'other' },
+    { id: 'p3', name: 'plain' },
   ]
   /** A package's settings that says which projects it was given. */
   const Given = ({ projects }: { projects: { name: string }[] }) => <p>{`for: ${projects.map(p => p.name).join(', ') || 'no project'}`}</p>

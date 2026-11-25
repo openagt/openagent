@@ -15,8 +15,8 @@ const { Dialog } = await import('./ui/dialog.js')
 const run = (id: string, fields: Partial<AgentMeta> = {}): AgentMeta => ({ id, status: 'done', startedAt: '2026-11-01T10:00:00Z', updatedAt: '2026-11-01T10:00:00Z', ...fields }) as AgentMeta
 const found = (projectId: string, id: string, title: string): FoundAgent => ({ projectId, projectName: projectId, agent: { id, status: 'done', title, startedAt: '2026-01-01T10:00:00Z' } })
 
-const SHOP = { id: 'shop', path: '/shop', name: 'shop', activated: true, gitHost: true }
-const BLOG = { id: 'blog', path: '/blog', name: 'blog', activated: true, gitHost: true }
+const SHOP = { id: 'shop', path: '/shop', name: 'shop', activated: true }
+const BLOG = { id: 'blog', path: '/blog', name: 'blog', activated: true }
 
 const WAITING: Waiting = { projectId: 'shop', projectName: 'shop', kind: 'waiting', module: 'ask', scope: 'run', run: 'r-ask', words: 'Needs answer', title: 'Pick a colour', mark: 'question' }
 

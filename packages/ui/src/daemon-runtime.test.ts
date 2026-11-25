@@ -94,7 +94,7 @@ test('a Start picked to run on another host goes to that host, one a module on i
   }
 })
 
-test('a Start goes no further than the project can, the commit with no remote, the branch with a remote and no git host; with no pick it commits, and with Nothing it is given no level', async () => {
+test("a Start hands its host the Auto level picked, which goes as far as the project lets it there: with no pick the run commits, and with Off it is given no level", async () => {
   const home = await project()
   const env = { ...process.env, XDG_CONFIG_HOME: join(home, 'cfg') }
   await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
@@ -104,20 +104,15 @@ test('a Start goes no further than the project can, the commit with no remote, t
   try {
     execFileSync('git', ['init', '-q'], { cwd: home })
     assert.deepEqual(await runtime.onStart('Fix it', { publish: 'merge' }), { ok: true, agentId: 'run-1' })
-    assert.equal(level(), 'commit', 'no remote: the commit')
+    assert.equal(level(), 'merge', 'the pick, as the person made it')
     // No pick saved: the daemon starts the run at the commit, which pushes nothing.
     await runtime.onStart('Fix it')
-    assert.equal(level(), 'commit', 'no pick, no remote: the commit')
+    assert.equal(level(), 'commit', 'no pick: the commit')
     // Off is a pick: the run is given no level.
     await runtime.onStart('Fix it', { publish: 'nothing' })
     assert.equal(level(), undefined, 'Off saved: no level')
-    execFileSync('git', ['remote', 'add', 'origin', 'https://example.com/x.git'], { cwd: home })
-    await runtime.onStart('Fix it', { publish: 'merge' })
-    assert.equal(level(), 'branch', 'a remote and no git host: the branch')
-    await runtime.onStart('Fix it')
-    assert.equal(level(), 'commit', 'no pick, a remote: the commit all the same')
-    await runtime.onStart('Fix it', { publish: 'commit' })
-    assert.equal(level(), 'commit', 'Commit saved: the commit, the remote or not')
+    await runtime.onStart('Fix it', { publish: 'branch' })
+    assert.equal(level(), 'branch')
   } finally {
     await rm(home, { recursive: true, force: true })
   }

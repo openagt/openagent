@@ -7,9 +7,7 @@ import { ownRunsWatch } from './dashboard/runs-watch.js'
 import { liveScreen } from './screens.js'
 import { errorMessage, sessionsHome, projectId } from '@openagt/agent-data'
 import { listProjects, projectRefAt } from './distribution-hooks.js'
-import { isPublishPick, publishLevelOf, publishPickIn } from './publish-levels.js'
-import { hasRemote } from './has-remote.js'
-import { takesRequests } from './dashboard/pr-states.js'
+import { isPublishPick, publishLevelOf } from './publish-levels.js'
 import { projectAddresses, SESSIONS_ID } from './project-address.js'
 import { readySessionsHome } from './sessions-home.js'
 
@@ -88,14 +86,11 @@ export function createProjectRuntime({ cwd, env, host, otherHosts = async () => 
     if (refused !== undefined) return { ok: false, error: refused }
     const projectCwd = noProject ? await readySessionsHome(sessionsHome(env)) : await resolveProject(targetProjectId)
     if (!projectCwd) return { ok: false, error: `unknown project: ${targetProjectId}` }
-    // The pick in force is decided here, so every Start goes the same way whichever page sent it:
-    // with none saved the run commits and pushes nothing, and with one the project is not offered
-    // it goes as far as the project does with no pull request: its branch pushed where OpenAgent
-    // has no account at its remote's host to open one as, or its work committed where there is no remote.
-    // With no project the level is for the session's copies of repos, whatever host each is on: the pick as sent.
-    const publish = noProject
-      ? options.publish !== undefined && isPublishPick(options.publish) ? publishLevelOf(options.publish) : undefined
-      : publishLevelOf(publishPickIn(options.publish, await takesRequests((await projectRefAt(targetProjectId ?? homeId, projectCwd).catch(() => undefined))?.remote), await hasRemote(projectCwd)))
+    // With none saved, a run in a project commits its work and pushes nothing; how far the project
+    // lets a pick go is its host's to say. With no project the level is for the session's copies of
+    // repos: the pick as sent, none when there is none.
+    const picked = options.publish !== undefined && isPublishPick(options.publish) ? options.publish : undefined
+    const publish = noProject ? (picked !== undefined ? publishLevelOf(picked) : undefined) : publishLevelOf(picked ?? 'commit')
     const project = noProject ? undefined : await projectRefAt(targetProjectId ?? homeId, projectCwd)
     // The host picked to run it, among the project's: one no module on in the project has refuses the Start.
     const runsOn = options.host === undefined || options.host === host.id ? host : (await otherHosts(project)).find(other => other.id === options.host)

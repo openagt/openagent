@@ -38,6 +38,17 @@ export async function gitHostEnv(repo: string, user?: string, accounts?: GitAcco
   return { ok: false, error: said?.error ?? `${session ? 'OpenAgent has no git host here' : 'this project has no git host'}, so no run can work as ${user}` }
 }
 
+/**
+ * Whether a pull request can be opened at the host of `remote`, a repository's address
+ * (`git.example.com/me/shop`): one of the modules has an account of OpenAgent's there
+ * (`account.access`' `hosts`). A host none of them can be asked about takes none.
+ */
+export async function takesRequests(remote: string, accounts?: GitAccounts): Promise<boolean> {
+  const host = remote.split('/')[0]
+  const rows = await (accounts ?? (await handedDownAccounts()))?.hosts().catch(() => [])
+  return (rows ?? []).some(row => row.host === host)
+}
+
 /** Whether a module answers for the git host of the project at `repo`; a session with no project may reach one all the same. */
 export async function hasGitHost(repo: string, accounts?: GitAccounts): Promise<boolean> {
   if ((await sessionsHomeOf(repo)) !== undefined) return true

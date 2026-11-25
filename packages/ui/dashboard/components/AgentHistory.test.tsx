@@ -659,7 +659,7 @@ describe('whose run a row is', () => {
   })
 })
 
-const proj = (id: string, name: string): ProjectSummary => ({ id, path: `/${id}`, name, activated: true, gitHost: false })
+const proj = (id: string, name: string): ProjectSummary => ({ id, path: `/${id}`, name, activated: true })
 
 describe('AgentHistory New button (#new-button)', () => {
   test('with no project, New starts a session with no project', () => {
@@ -795,10 +795,9 @@ describe('the project select (#1513)', () => {
     path: '/repos/p1',
     name: 'alpha',
     activated: true,
-    gitHost: false,
     errors: [{ id: 'store-git-branch:data-sync', title: 'Not syncing with the remote', message: 'the data branch could not be pushed: Permission denied (publickey)', since: '2026-08-20T10:00:00.000Z' }],
   }
-  const idle: ProjectSummary = { id: 'p2', path: '/repos/p2', name: 'beta', activated: false, gitHost: false }
+  const idle: ProjectSummary = { id: 'p2', path: '/repos/p2', name: 'beta', activated: false }
 
   test('it names the picked project, or "All projects" when none is picked', () => {
     const { unmount } = renderRail(<AgentHistory projectId={null} scope="p2" agents={[]} selectedAgentId={null} onSelect={() => {}} projects={[stranded, idle]} />)
@@ -809,8 +808,8 @@ describe('the project select (#1513)', () => {
   })
 
   test('two projects with the same name say which folder each is in, on the button, in the menu and in the name of each row', async () => {
-    const work: ProjectSummary = { id: 'shop-1', path: '/home/me/work/shop', name: 'shop', activated: true, gitHost: false }
-    const clients: ProjectSummary = { id: 'shop-2', path: '/home/me/clients/shop', name: 'shop', activated: true, gitHost: false }
+    const work: ProjectSummary = { id: 'shop-1', path: '/home/me/work/shop', name: 'shop', activated: true }
+    const clients: ProjectSummary = { id: 'shop-2', path: '/home/me/clients/shop', name: 'shop', activated: true }
     const projects = [work, clients, idle]
     const recentAgents = [
       { projectId: 'shop-2', projectName: 'shop', agent: agent({ id: 'b1', status: 'done', intent: 'second' }) },

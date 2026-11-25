@@ -6,7 +6,6 @@ import { isActivated } from '../project.js'
 import { readRuns, type AgentMeta } from '../store/index.js'
 import { contextHosts } from '../dashboard-rpc/context.js'
 import type { ProjectError, StaysLocal } from '../project-state.js'
-import { takesRequests } from './pr-states.js'
 import { projectNameOf, repositoryAddress, sessionsHome } from '@openagt/agent-data'
 import { SESSIONS_ID } from '../project-address.js'
 
@@ -27,8 +26,6 @@ export interface ProjectSummary {
   name: string
   /** True when the repo still has its `.openagent/` marker. */
   activated: boolean
-  /** Whether a pull request is a next step there: OpenAgent has an account at its remote's host. Without one, the last step is the push. */
-  gitHost: boolean
   /** Its repository's address, origin's (`git.example.com/me/shop`), as the hooks name it; none for a project with no remote. */
   remote?: string
   /** ISO timestamp of the project's newest activity: its most recent session. */
@@ -67,8 +64,6 @@ export interface SummarizeDeps {
   isActivated?: (path: string) => Promise<boolean>
   /** The project's runs, newest-first: its hosts' by default. */
   readAgents?: (record: ProjectRecord) => Promise<AgentMeta[]>
-  /** Whether a pull request is a next step for the repository at that address. Defaults to {@link takesRequests}. */
-  takesRequests?: (remote: string | undefined) => Promise<boolean>
   /** The project's name. Defaults to {@link projectNameOf}: its repository's. */
   name?: (path: string) => Promise<string>
   /** Its repository's address. Defaults to {@link repositoryAddress}: origin's. */
@@ -97,12 +92,10 @@ export async function summarizeProject(record: ProjectRecord, deps: SummarizeDep
     path: record.path,
     name: await (deps.name ?? projectNameOf)(record.path).catch(() => basename(record.path)),
     activated,
-    gitHost: false,
   }
   if (lastActivityAt) summary.lastActivityAt = lastActivityAt
   const remote = await (deps.remote ?? (path => repositoryAddress(path)))(record.path).catch(() => undefined)
   if (remote !== undefined) summary.remote = remote
-  summary.gitHost = await (deps.takesRequests ?? takesRequests)(remote).catch(() => false)
   return summary
 }
 

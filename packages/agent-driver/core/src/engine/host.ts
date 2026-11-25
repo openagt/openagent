@@ -3,13 +3,14 @@ import { hostname } from 'node:os'
 import { appendInbox, imagesOf, promptLines, takeInbox } from '../inbox.js'
 import { deleteRun, findRun, patchRun } from '../record-store.js'
 import { isRunId, type RunCard, type RunPatch } from '../record.js'
-import { PLUGINS_WITHOUT_ENV, PROFILE_ENV, PROJECT_SKILLS_ENV, isSkillName, sessionFolder, sessionsHome, sessionsHomeOf } from '@openagt/agent-data'
-import { LOCAL_HOST, MODULE_NAME, isBranchName, NAME_RUNS, PICKED_AGENT, PICKED_PROFILE, isProfileId, type AgentPick, type ProjectRef, type Settings, type RunFacts, type RunFound, type RunHost, type RunInput, type RunOptions, type RunReadiness, type RunRef, type RunRequest, type InboxLine, type PromptLine, type RunAgent } from '@openagt/hooks'
+import { PLUGINS_WITHOUT_ENV, PROFILE_ENV, PROJECT_SKILLS_ENV, isSkillName, originUrl, sessionFolder, sessionsHome, sessionsHomeOf } from '@openagt/agent-data'
+import { LOCAL_HOST, MODULE_NAME, PUBLISH_LEVELS, isBranchName, NAME_RUNS, PICKED_AGENT, PICKED_PROFILE, isProfileId, type AgentPick, type ProjectRef, type Settings, type RunFacts, type RunFound, type RunHost, type RunInput, type RunOptions, type RunReadiness, type RunRef, type RunRequest, type InboxLine, type PromptLine, type RunAgent } from '@openagt/hooks'
 import { discardWorktree, worktreePath } from '@openagt/git-branches'
 import { listedRuns, liveCard, ownFolder, runEvents, standing, type RunReadsDeps } from '../reads/run-reads.js'
 import { handedDownSettings, runProfile } from './profile.js'
 import { inboxPath, liveDir } from './live-card.js'
 import { isPublish, NO_PUBLISH } from './records.js'
+import { takesRequests } from './git-host.js'
 import { isPidAlive } from './run-lock.js'
 import { profileLoginFor, detachResume, detachRun, GIT_ACCOUNT_ENV, readyToRun, spawnResume, spawnRun } from './runner.js'
 import type { RunRequest as AskedRun } from './run.js'
@@ -46,6 +47,10 @@ export interface LocalHostDeps {
   naming?: Pick<ReadyNaming, 'names' | 'name' | 'prepare'>
   /** The coding agents, which say how one of their sessions is picked back up: the distribution's. */
   agents?: () => Promise<readonly RunAgent[]>
+  /** Whether a pull request can be opened at the host of `remote`, a repository's address, as one of OpenAgent's accounts there: the modules' (`account.access`). */
+  takesRequests?: (remote: string) => Promise<boolean>
+  /** Whether the project's folder has an `origin` remote, the one every push goes to: its git's. */
+  hasOrigin?: (dir: string) => Promise<boolean>
 }
 
 /** How long a Stop waits for a run just started to name its process: as long as a page shows a run as starting. */
@@ -59,6 +64,23 @@ export function localHost(deps: LocalHostDeps = {}): RunHost {
   const startingMs = deps.startingMs ?? STARTING_MS
   const settings = deps.settings ?? (() => handedDownSettings())
   const naming = (): Pick<ReadyNaming, 'names' | 'name' | 'prepare'> => deps.naming ?? (readyNaming ??= new ReadyNaming())
+  const requestsAt = deps.takesRequests ?? (remote => takesRequests(remote))
+  const hasOrigin = deps.hasOrigin ?? (async dir => (await originUrl(dir)) !== undefined)
+
+  /**
+   * The options with an Auto level the project can reach, so every Start goes as far whichever page
+   * sent it: with no `origin` nothing leaves this computer, so the level stops at the commit; where
+   * no module has an account of OpenAgent's at the host of the project's address, no pull request is
+   * opened as one, so it stops at the branch. A session with no project takes each of its copies of
+   * repos as far as picked, whatever host each is on.
+   */
+  const reachable = async (project: ProjectRef | undefined, options: RunOptions): Promise<RunOptions> => {
+    if (project === undefined || options.publish === undefined) return options
+    const level = PUBLISH_LEVELS.indexOf(options.publish)
+    if (level <= PUBLISH_LEVELS.indexOf('commit')) return options
+    if (!(await hasOrigin(project.dir))) return { ...options, publish: 'commit' }
+    return level <= PUBLISH_LEVELS.indexOf('branch') || (project.remote !== undefined && (await requestsAt(project.remote))) ? options : { ...options, publish: 'branch' }
+  }
   /** The coding agent a run that names none is on: the distribution's first. */
   const firstAgent = async (): Promise<string | undefined> => (await codingAgents().catch(() => []))[0]?.id
   /** How this host's runs are read: its summaries name it, and each coding agent says how its sessions are picked back up. */
@@ -138,7 +160,7 @@ export function localHost(deps: LocalHostDeps = {}): RunHost {
     },
 
     async start({ project, prompt, images, options: picked, title }) {
-      const given = withoutIdleLevel(project, picked)
+      const given = await reachable(project, withoutIdleLevel(project, picked))
       refuse(project, given)
       await refuseImages(images)
       // A run whose options name no profile, or no coding agent, is on the ones picked for every next run on this computer.

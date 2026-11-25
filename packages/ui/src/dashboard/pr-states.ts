@@ -1,5 +1,4 @@
 import type { PullRequestRead, PullRequestState } from '@openagt/hooks'
-import { distributionHooks } from '../distribution-hooks.js'
 
 // How pull requests stand, as the modules last read them at their git host (`pullRequestsRead`):
 // what the lists of runs mark each run's requests by, and what tells a branch with an open request
@@ -44,12 +43,3 @@ export function onPrMoved(listener: () => void): () => void {
   return () => void listeners.delete(own)
 }
 
-/**
- * Whether a pull request is a next step for a repository at `remote` (`host/path`): OpenAgent has
- * an account at its host, as the modules' `account.access` says. Without one, the last step is the push.
- */
-export async function takesRequests(remote: string | undefined): Promise<boolean> {
-  const host = remote?.split('/')[0]
-  if (host === undefined) return false
-  return (await (await distributionHooks()).gitAccounts.hosts().catch(() => [])).some(row => row.host === host)
-}

@@ -10,7 +10,6 @@ function deps(over: SummarizeDeps): SummarizeDeps {
   return {
     isActivated: async () => true,
     readAgents: async () => [],
-    takesRequests: async () => false,
     ...over,
   }
 }
@@ -31,18 +30,10 @@ test("summarizeProject names the project as its repository is named, and one wit
   assert.equal(summary.path, '/repos/app-a')
 })
 
-test("gitHost says whether a pull request is a next step at the project's remote; a lookup that fails reads as none", async () => {
-  assert.equal((await summarizeProject(RECORD, deps({}))).gitHost, false)
-  const asked: (string | undefined)[] = []
-  const takes = deps({ remote: async () => 'github.com/o/r', takesRequests: async remote => (asked.push(remote), true) })
-  assert.equal((await summarizeProject(RECORD, takes)).gitHost, true)
-  assert.deepEqual(asked, ['github.com/o/r'])
-  const failing = deps({
-    takesRequests: async () => {
-      throw new Error('no accounts read')
-    },
-  })
-  assert.equal((await summarizeProject(RECORD, failing)).gitHost, false)
+test("the summary says its repository's address, origin's; a project with no remote, or one whose address cannot be read, has none", async () => {
+  assert.equal((await summarizeProject(RECORD, deps({ remote: async () => 'github.com/o/r' }))).remote, 'github.com/o/r')
+  assert.equal('remote' in (await summarizeProject(RECORD, deps({ remote: async () => undefined }))), false)
+  assert.equal('remote' in (await summarizeProject(RECORD, deps({ remote: async () => Promise.reject(new Error('no git')) }))), false)
 })
 
 test('lastActivityAt is the newest run (#645)', async () => {
