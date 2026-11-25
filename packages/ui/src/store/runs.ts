@@ -45,8 +45,6 @@ export interface AgentMeta {
   gitAccount?: string
   /** The branch the run's pull request goes into; absent, the repository's default branch. */
   prBase?: string
-  /** The repos a session with no project has as context: each one's name, which its copy's folder in the session's folder has, and the folder it was copied from. */
-  repos?: { name: string; from: string }[]
   /** How far the run takes its work when its agent finishes: `commit`, `branch`, `pr` or `merge`; absent on a run with none. The session's "Auto" pick shows it. */
   publish?: string
   /** The last commit of the run's work, once its main agent landed it: its branch is gone, and its changes are read from this commit. */
@@ -73,10 +71,6 @@ export interface AgentMeta {
   prTitle?: string
   /** The pull requests the run opened before {@link pr}, oldest first, each marked with how it stands like {@link prState}. */
   earlierPrs?: { number: number; url: string; state?: 'open' | 'draft' | 'merged' | 'closed' }[]
-  /** How many commits of the run's own wait on its branch, never pushed: marked on the way to the dashboard. */
-  unpublished?: number
-  /** How many files the run's checkout left uncommitted, marked like {@link unpublished}. */
-  uncommitted?: number
   /** Where this run executes: a host's id for a run on a host beside this computer's (`run.host`: GitHub Actions' `actions`, a cloud session's `web`), absent for one on this computer. */
   target?: string
   /** The model the run's agent was started with; absent when it was left on the agent's own default. */
@@ -115,7 +109,6 @@ export function metaOf(run: RunSummary, local: string): AgentMeta {
     ...(branchFacts?.baseCommit !== undefined ? { baseCommit: branchFacts.baseCommit } : {}),
     ...(gitAccount !== undefined ? { gitAccount } : {}),
     ...(github?.prBase !== undefined ? { prBase: github.prBase } : {}),
-    ...(branches?.repos !== undefined ? { repos: branches.repos } : {}),
     ...(run.options?.publish !== undefined ? { publish: run.options.publish } : {}),
     ...(branchFacts?.landed !== undefined ? { landed: branchFacts.landed } : {}),
     ...(run.options !== undefined ? { options: run.options } : {}),

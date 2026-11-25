@@ -9,7 +9,7 @@ vi.mock('../rpc/control.js', () => ({ sendMessage, sendStop }))
 vi.mock('./AutoMenu.js', () => ({
   autoSaid: (publish: string, _levels: unknown, target?: { into: string }) => `auto ${publish}${target ? ` → ${target.into}` : ''}`,
   useAutoLevels: () => [],
-  autoCovers: (project: string | null, copies: number) => (copies === 0 ? undefined : project ? `for ${project} and copies` : 'for copies'),
+  autoCovers: (noProject: boolean) => (noProject ? 'for copies' : undefined),
   AutoMenu: ({ publish, onPublish, covers }: { publish: string; onPublish: (pick: string) => void; covers?: string }) => (
     <span>
       Auto: {publish}
@@ -20,9 +20,9 @@ vi.mock('./AutoMenu.js', () => ({
   ),
 }))
 vi.mock('../lib/use-project-launcher.js', () => ({ useProjectLauncher: () => ({ gitHost: true, remote: true }) }))
-// The Context picker reads the projects; here it is a stand-in that says what it was given.
+// The Context picker is tested on its own; here it is a stand-in that says what it was given.
 vi.mock('./ContextMenu.js', () => ({
-  SessionContextMenu: ({ context, repos }: { context: Set<string>; repos: readonly { name: string }[] }) => <span>Context · {[...repos.map(repo => repo.name), ...context].join(', ')}</span>,
+  ContextMenu: ({ files }: { files: readonly string[] }) => <span>Context · {files.join(', ')}</span>,
 }))
 
 // The Composer is exercised by its own tests; here it only has to hand back a submit and report
@@ -107,23 +107,10 @@ describe('AgentComposer row under the box', () => {
     expect(screen.getByTestId('composer-controls').textContent).toBe('Context · src/app.ts')
   })
 
-  test('a session in a project says the repos it started with, its copies, beside the files picked for the next message', () => {
-    const contextSet = { context: new Set(['src/app.ts']), add: vi.fn(), remove: vi.fn(), toggle: vi.fn(), reset: vi.fn() }
-    renderComposer({ contextSet, repos: [{ name: 'api', from: '/w/api' }] })
-    expect(screen.getByTestId('composer-controls').textContent).toBe('Context · api, src/app.ts')
-  })
-
-  test("a session with no project: Auto for its copies of repos in the gear; after it Context is the launcher's button, saying how many repos it started with", () => {
-    renderComposer({ projectId: 'session', repos: [{ name: 'vike', from: '/home/me/oss/vike' }, { name: 'notes', from: '/home/me/notes' }] })
-    expect(screen.getByTestId('composer-setup').textContent).toBe('Auto: nothing (for copies)pick Open PRpick Commit')
-    const controls = screen.getByTestId('composer-controls')
-    expect(within(controls).getByRole('button', { name: 'Context: 2 repos' }).textContent).toBe('Context · 2 repos')
-    expect(within(controls).queryByRole('combobox')).toBeNull()
-  })
-
-  test('a session with no project and no repo has its Context all the same', () => {
+  test("a session with no project: Auto for its copies of repos in the gear; no file Context after it, the repos being a module's control", () => {
     renderComposer({ projectId: 'session' })
-    expect(within(screen.getByTestId('composer-controls')).getByRole('button', { name: 'Context' }).textContent).toBe('Context')
+    expect(screen.getByTestId('composer-setup').textContent).toBe('Auto: nothing (for copies)pick Open PRpick Commit')
+    expect(screen.getByTestId('composer-controls').textContent).toBe('')
   })
 
   test("the gear's hover says the setup with its menu shut: the level", () => {
@@ -132,10 +119,10 @@ describe('AgentComposer row under the box', () => {
     cleanup()
     renderComposer()
     expect(screen.getByTestId('composer-setup').dataset.said).toBe('auto nothing')
-    // No project and no repo: no level is said.
+    // No project: the level is said all the same, for the repos a module's control gives it.
     cleanup()
     renderComposer({ projectId: 'session' })
-    expect(screen.getByTestId('composer-setup').dataset.said).toBe('')
+    expect(screen.getByTestId('composer-setup').dataset.said).toBe('auto nothing')
     expect(screen.getByTestId('composer-setup').dataset.warn).toBe('false')
   })
 })

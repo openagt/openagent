@@ -253,6 +253,7 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
     gitAccess,
     lifecycle,
     skills: (args, opts) => hooks.skills(args, opts),
+    runs: async project => (await Promise.all((await hooks.hosts(project)).map(host => host.list(project)))).flat(),
   })
   const startOne = async (module: ModuleDefinition, start: AppStart): Promise<void> => {
     const stop = new AbortController()

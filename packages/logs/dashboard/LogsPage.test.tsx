@@ -359,30 +359,28 @@ test('a project that gave the whole page of 50 runs has older ones: the page say
   expect(screen.queryByText(/^The last 50 runs/)).toBeNull()
 })
 
-test("a run whose work never left this machine says what it needs in the sidebar's words: a commit, else a push, or a pull request where the project can open one", async () => {
+test("a run whose work never left this machine says what it needs as what waits on its run says it, and how much", async () => {
   const host = hostWith(
     [],
     [
-      { id: 'r1', startedAt: at(now - 3000), endedAt: at(now), status: 'done', title: 'Committed a login page', name: 'agent-1', unpublished: 1 },
-      { id: 'r2', startedAt: at(now - 2000), endedAt: at(now), status: 'done', title: 'Left files', name: 'agent-2', uncommitted: 2, unpublished: 3 },
+      { id: 'r1', startedAt: at(now - 3000), endedAt: at(now), status: 'done', title: 'Committed a login page', name: 'agent-1' },
+      { id: 'r2', startedAt: at(now - 2000), endedAt: at(now), status: 'done', title: 'Left files', name: 'agent-2' },
       { id: 'r3', startedAt: at(now - 1000), endedAt: at(now), status: 'done', title: 'Pushed', name: 'agent-3' },
     ],
   )
-  const page = (gitHost: boolean) => (
+  const said = (run: string, words: string, detail: string, mark: 'changes' | 'branch') => ({ kind: 'waiting' as const, module: 'git-branches', scope: 'run' as const, run, id: `${mark}:${run}`, words, detail, mark, projectId: 'p1', projectName: 'alpha' })
+  shell.items = [said('r1', 'Needs push', '1 commit', 'branch'), said('r2', 'Needs commit', '2 files', 'changes')]
+  render(
     <ModuleHostContext.Provider value={host}>
-      <LogsPage projects={[{ id: 'p1', name: 'alpha', ...(gitHost ? { remote: 'github.com/me/alpha' } : {}) }]} projectId={null} path={[]} />
-    </ModuleHostContext.Provider>
+      <LogsPage projects={[{ id: 'p1', name: 'alpha' }]} projectId={null} path={[]} />
+    </ModuleHostContext.Provider>,
   )
-  render(page(false))
   const row = async (name: string) => (await screen.findAllByText(name))[0]!.closest('li')!
   // Two facts of the line, joined by its one dot as its others are.
   expect((await row('Committed a login page')).textContent).toContain('Needs push·1 commit')
   expect((await row('Left files')).textContent).toContain('Needs commit·2 files')
   expect((await row('Pushed')).textContent).not.toMatch(/Needs/)
-  cleanup()
-  forgetRemembered()
-  render(page(true))
-  expect((await row('Committed a login page')).textContent).toContain('Needs PR·1 commit')
+  shell.items = []
 })
 
 test("each project's newest 50 runs are read through the server part; a project whose read fails is named with why, and the others still show", async () => {

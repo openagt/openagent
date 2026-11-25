@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { GitAccess } from './account.js'
 import type { ProjectRef } from './project.js'
 import type { GivenSkill } from './loader.js'
-import type { PullRequest, PullRequestRead, RunOptions, RunQuestion, SkillArgs } from './run.js'
+import type { PullRequest, PullRequestRead, RunOptions, RunQuestion, RunSummary, SkillArgs } from './run.js'
 import type { Settings } from './settings.js'
 import type { Store } from './store.js'
 
@@ -26,6 +26,12 @@ export interface AppContext {
   readonly lifecycle: ProjectsLifecycle
   /** The skills the modules give a run, as the app's `skills` answers them: with `every`, every module's, the plugins that are off too. */
   skills(args: SkillArgs, opts?: { every?: boolean }): Promise<GivenSkill[]>
+  /**
+   * The runs of `project`, or with none the sessions with no project's, as every host the modules
+   * give there lists them (`run.host`): a working run as it stands now. A host that cannot list
+   * them throws, so "no runs" is never a guess.
+   */
+  runs(project?: ProjectRef): Promise<RunSummary[]>
 }
 
 /**

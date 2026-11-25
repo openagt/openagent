@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { makeWorld, waitFor, release, git } from './harness.js'
-import { onAgent, onAgents, onAgentHandoff, onAgentWorktree, onRetainedWorktrees, onActivity, onRecentAgents } from '../dashboard-rpc/reads.js'
+import { onAgent, onAgents, onAgentHandoff, onAgentWorktree, onActivity, onRecentAgents } from '../dashboard-rpc/reads.js'
 import { sendStart } from '../dashboard-rpc/control.js'
 import { callModule } from '../dashboard-rpc/module-calls.js'
 
@@ -44,7 +44,7 @@ test("start a run on this computer's host, watch it live, and read the recorded 
     // The run's tool reclaimed the checkout and published nothing: nothing is left to remove,
     // and the branch is on this machine only.
     await world.waitRetired(project, agentId)
-    assert.deepEqual(await rpc(onRetainedWorktrees)(project.id), [])
+    assert.equal((await rpc(onAgentWorktree)(project.id, agentId))?.checkout, undefined)
     assert.ok((await git(project.cwd, 'branch', '--list', `agent-${agentId}`)).includes(`agent-${agentId}`), 'the run\'s branch is still here')
     assert.equal((await git(project.cwd, 'ls-remote', '--heads', 'origin')).includes(`agent-${agentId}`), false, 'and not on origin')
     // Its header then says only what is true of the run: the branch it recorded, and no checkout

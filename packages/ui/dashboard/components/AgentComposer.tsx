@@ -11,8 +11,7 @@ import { keepDraft, keepDraftImages, keptDraft, keptDraftImages } from '../lib/d
 import { DaemonDown } from '../lib/use-daemon-health.js'
 import { Button } from './ui/button.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
-import { SessionContextMenu } from './ContextMenu.js'
-import { SessionReposSaid } from './SessionRepos.js'
+import { ContextMenu } from './ContextMenu.js'
 import { AutoMenu, autoCovers, autoSaid, useAutoLevels } from './AutoMenu.js'
 import { isPublishPick, type PublishPick } from '../../src/client.js'
 import { useProjectLauncher } from '../lib/use-project-launcher.js'
@@ -65,7 +64,6 @@ export function AgentComposer({
   contextSet,
   publish,
   row,
-  repos,
   options,
 }: {
   projectId: string
@@ -97,8 +95,6 @@ export function AgentComposer({
   publish?: string | undefined
   /** The row above the box: where the session started. */
   row?: ReactNode
-  /** The repos the session has as copies, as its record says. */
-  repos?: readonly { name: string; from: string }[] | undefined
   /** The session's run options, as its record keeps them: what its box's controls say (`composer.control`). */
   options?: RunOptions | undefined
 }) {
@@ -279,9 +275,7 @@ export function AgentComposer({
 
   // What the gear's hover says of the session's setup with its menu shut.
   const noProject = projectId === SESSIONS_ID
-  // What a level acts on: the project, or with none the session's copies of repos.
-  const publishes = !noProject || (repos?.length ?? 0) > 0
-  const setupSaid = publishes ? autoSaid(picked ?? recorded, levels) : ''
+  const setupSaid = autoSaid(picked ?? recorded, levels)
 
   return (
     // The box stands on the chat's 16 inset at every width, as the chat's cards do, so on a desktop its
@@ -305,18 +299,17 @@ export function AgentComposer({
         {...(contextSet ? { addContext: contextSet.add, removeContext: contextSet.remove } : {})}
         // The launcher's gear, line for line in its places: the modules' lines, as the session's record
         // keeps its options; then, set apart and still a pick, "When it finishes". After the
-        // gear, Context: the repos the session started with, said, and in a project the files picked for the next message; for a session with no project,
-        // no git to take its work further with.
+        // gear, in a project, Context: the files picked for the next message; then the modules' controls there.
         controlBox={controlBox}
         setup={{
           said: setupSaid,
           lines: (
             <>
-              {publishes && <AutoMenu publish={picked ?? recorded} levels={levels} onPublish={pick => setPicked(pick === recorded ? null : pick)} covers={autoCovers(noProject ? null : 'the project', repos?.length ?? 0)} />}
+              <AutoMenu publish={picked ?? recorded} levels={levels} onPublish={pick => setPicked(pick === recorded ? null : pick)} covers={autoCovers(noProject)} />
             </>
           ),
         }}
-        controls={noProject ? <SessionReposSaid repos={repos ?? []} /> : contextSet && <SessionContextMenu repos={repos ?? []} context={contextSet.context} busy={busy} onToggle={contextSet.toggle} />}
+        controls={!noProject && contextSet && <ContextMenu files={[...contextSet.context]} busy={busy} onRemove={contextSet.toggle} />}
         idleControl={idleControl}
         notes={
           <>

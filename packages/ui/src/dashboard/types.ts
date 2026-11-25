@@ -46,11 +46,6 @@ export interface StartAgentOptions {
    * for a session with no project.
    */
   host?: string
-  /**
-   * The repos a session with no project has as context, by their folders on this computer: each is
-   * copied into the session's folder. Refused for a project, which works in its own checkout.
-   */
-  repos?: string[]
 }
 
 /** The outcome of a Start attempt (#345): the id of the run the run's host began, or why there is none. */
@@ -71,8 +66,6 @@ export interface AgentWorktree {
     path: string
     /** Uncommitted changes present in it. */
     dirty: boolean
-    /** Size on disk, bytes. Only read once nothing is writing to it, and best-effort even then. */
-    sizeBytes?: number
   }
   /** The branch the run's work is on: its checkout's while it has one, else the one it recorded. */
   branch?: string

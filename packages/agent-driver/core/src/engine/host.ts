@@ -137,7 +137,8 @@ export function localHost(deps: LocalHostDeps = {}): RunHost {
       return ready(dir, driver)
     },
 
-    async start({ project, prompt, images, options: given, title }) {
+    async start({ project, prompt, images, options: picked, title }) {
+      const given = withoutIdleLevel(project, picked)
       refuse(project, given)
       await refuseImages(images)
       // A run whose options name no profile, or no coding agent, is on the ones picked for every next run on this computer.
@@ -342,8 +343,19 @@ async function refuseImages(images: unknown): Promise<void> {
 }
 
 /**
+ * The options with no Auto level where it has nothing to act on: a session with no project
+ * publishes its copies of repos, and with none it has nothing to publish. The launcher offers the
+ * level before its repos are picked, which another module's control does.
+ */
+function withoutIdleLevel(project: ProjectRef | undefined, options: RunOptions): RunOptions {
+  if (project || options.publish === undefined || options['git-branches']?.repos?.length) return options
+  const { publish: _idle, ...rest } = options
+  return rest
+}
+
+/**
  * Picks that cannot make a run, refused before anything is spent: what a session with no project
- * has no git for, a level for one with no repo, and names that are not names. The run's process
+ * has no git for, and names that are not names. The run's process
  * reads its picks off its command line and its environment: only what reads as the thing it names goes there.
  */
 function refuse(project: ProjectRef | undefined, options: RunOptions): void {
@@ -351,8 +363,6 @@ function refuse(project: ProjectRef | undefined, options: RunOptions): void {
   if (!project && (branches.base !== undefined || branches.branch !== undefined || options.github?.prBase !== undefined || options.skills?.project !== undefined)) {
     throw new Error('A session with no project has no git: no branch to start from or work on, and no project skills.')
   }
-  // Its copies of repos are what such a session publishes: with none, a level has nothing to act on.
-  if (!project && options.publish !== undefined && !branches.repos?.length) throw new Error('A session with no project and no repo has nothing to publish.')
   if (branches.branch !== undefined && branches.base !== undefined) throw new Error('A run given a branch to work on starts from no other.')
   if (options.github?.account !== undefined && !/^\S+$/.test(options.github.account)) throw new Error('An account is named by its login.')
   // The branch a pull request goes into ends up on the run's command line: only a branch name goes there.

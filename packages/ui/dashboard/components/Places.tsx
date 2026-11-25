@@ -260,7 +260,9 @@ export function useMenuActions<P extends 'chat.menu' | 'project.menu' | 'person.
     return (
       <DropdownMenuItem key={offered.key} disabled={pending !== null} onClick={() => press(offered)} {...(offered.offer.title !== undefined ? { title: offered.offer.title } : {})} className={offered.offer.danger ? 'text-danger' : undefined}>
         {pending === offered.key ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : Icon ? <Icon className="h-3.5 w-3.5" aria-hidden /> : null}
-        {label}
+        <span className="flex-1">{label}</span>
+        {/* What it says beside it, at the item's right: a checkout's size on disk. */}
+        {offered.offer.note !== undefined && <span className="ml-auto pl-3 text-xs text-muted-foreground">{offered.offer.note}</span>}
       </DropdownMenuItem>
     )
   })

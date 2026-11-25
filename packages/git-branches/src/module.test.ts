@@ -1,11 +1,11 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { mkdtemp, realpath, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { nodeGitRunner } from '@openagt/agent-data'
-import { RunOrder, type GitBranchesFacts, type ProjectRef, type RunContext, type RunStep } from '@openagt/hooks'
-import { fakeRun } from '@openagt/hooks/testing'
+import { RunOrder, type GitBranchesFacts, type ProjectRef, type RunContext, type RunStep, type RunSummary } from '@openagt/hooks'
+import { fakeApp, fakeRun } from '@openagt/hooks/testing'
 import { gitBranchesModule } from './module.js'
 import { SESSION_FOLDER_STAYS } from './session-folder.js'
 import { worktreePath } from './worktree.js'
@@ -185,5 +185,59 @@ test('a run in a project with repos: its checkout of the project, a copy of each
     await rm(p.dir, { recursive: true, force: true })
     await rm(other.dir, { recursive: true, force: true })
     await rm(home, { recursive: true, force: true })
+  }
+})
+
+test('the repos a run is given are checked before anything is made: a name that is no folder name, two alike, or a folder that is no repository top refuses it', async () => {
+  const p = await project()
+  const other = await project()
+  const home = await realpath(await mkdtemp(join(tmpdir(), 'git-branches-home-')))
+  const before = process.env.XDG_CONFIG_HOME
+  process.env.XDG_CONFIG_HOME = home
+  try {
+    await mkdir(join(other.dir, 'src'))
+    const { checkout } = steps()
+    const refused = async (repos: { name: string; from: string }[], reason: RegExp) => {
+      const ctx = fakeRun({ id: 'run9', options: { 'git-branches': { repos } } })
+      await assert.rejects(async () => checkout.run(ctx), reason)
+      assert.equal(ctx.workspace, undefined, 'no folder was made')
+    }
+    await refused([{ name: '../escape', from: other.dir }], /not a name for a copy of a repo: \.\.\/escape/)
+    await refused([{ name: 'a', from: other.dir }, { name: 'a', from: p.dir }], /not a name for a copy of a repo: a/)
+    await refused([{ name: 'src', from: join(other.dir, 'src') }], /is not a git repository/)
+    await refused([{ name: 'home', from: home }], /is not a git repository/)
+  } finally {
+    if (before === undefined) delete process.env.XDG_CONFIG_HOME
+    else process.env.XDG_CONFIG_HOME = before
+    await rm(p.dir, { recursive: true, force: true })
+    await rm(other.dir, { recursive: true, force: true })
+    await rm(home, { recursive: true, force: true })
+  }
+})
+
+test("a finished run's work left on this machine is what waits on the person: its commits never pushed, as its project's runs say it", async () => {
+  const p = await project()
+  const origin = await realpath(await mkdtemp(join(tmpdir(), 'git-branches-origin-')))
+  try {
+    await git(['init', '-q', '--bare', origin], origin)
+    await git(['remote', 'add', 'origin', origin], p.dir)
+    await git(['push', '-q', 'origin', 'main'], p.dir)
+    await git(['fetch', '-q', 'origin'], p.dir)
+    await git(['remote', 'set-head', 'origin', 'main'], p.dir)
+    await git(['checkout', '-q', '-b', 'agent-run1'], p.dir)
+    await writeFile(join(p.dir, 'cart.txt'), 'cart\n')
+    await git(['add', '-A'], p.dir)
+    await git(['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'cart'], p.dir)
+    await git(['checkout', '-q', 'main'], p.dir)
+    const done: RunSummary = { id: 'run1', host: 'here', status: 'done', startedAt: '2026-07-16T00:00:00Z', endedAt: '2026-07-16T01:00:00Z', prompt: 'add the cart', facts: { 'git-branches': { branch: 'agent-run1' } } }
+    const attention = gitBranchesModule({ git }).hooks['app.attention']!
+    const items = await attention({ project: p }, fakeApp({ runs: async project => (project?.id === p.id ? [done] : []) }))
+    assert.deepEqual(
+      items.filter(item => item.kind === 'waiting').map(item => [item.id, item.words, item.detail, item.run]),
+      [['unpushed:run1', 'Needs push', '1 commit', 'run1']],
+    )
+  } finally {
+    await rm(p.dir, { recursive: true, force: true })
+    await rm(origin, { recursive: true, force: true })
   }
 })

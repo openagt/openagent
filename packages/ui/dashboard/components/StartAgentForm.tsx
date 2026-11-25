@@ -14,9 +14,8 @@ import { useLoaded } from '../lib/use-async.js'
 import { promptWithContext } from '../lib/use-context-set.js'
 import { keepDraft, keepDraftImages, stashPendingDraft } from '../lib/draft-handoff.js'
 import { AutoMenu, autoCovers, autoPickIn, autoSaid, useAutoLevels } from './AutoMenu.js'
-import { ProjectContextMenu, isRepoPath } from './ContextMenu.js'
+import { ContextMenu } from './ContextMenu.js'
 import { Composer, type ComposerHandle } from './Composer.js'
-import { ReposMenu, folderName, type PickedRepo } from './SessionRepos.js'
 import { Dots } from './ToolCalls.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
 import { shortcut } from '../lib/shortcut.js'
@@ -40,14 +39,14 @@ const STARTING_SAID_AFTER_MS = 300
 // line a press fixes is said with its press inside: logging the agent in here. All of it is said
 // above the box, over the page, where the Start's own line is: the box does not move when it
 // comes or goes.
-// The Context picker (#439/#314) gives the run files to look at and other repos to work with: the
-// picked files ride the prompt as one `Context:` line at its end, and the repos go with the Start,
-// which copies them for the session.
+// The Context picker (#439/#314) gives the run files to look at: the picked files ride the prompt as
+// one `Context:` line at its end. The repos a session works with are a module's control after it
+// (`composer.control` at `context`), which writes them to the run's options.
 // The row above the box says where the Start goes: the "Run on" pick, which the Composer draws
 // first, then the modules' controls there (`composer.control` at `start`: the project, the projects
 // module's picker, and the branch the agent starts from).
 // Under the box, first, the gear: the session's setup in one menu (SessionSetup.tsx), then the
-// Context picker; the model menu is at the right. The gear's hover says its picks, so nothing is hidden.
+// Context picker and the modules' controls there; the model menu is at the right. The gear's hover says its picks, so nothing is hidden.
 // Its last line, set apart, "When it finishes": what the agent does by itself then (the Auto level).
 // In it, how far the run takes its work: Off, then the levels the modules offer (`composer.auto`),
 // then Open PR and Merge on green where the project has a git host.
@@ -57,9 +56,8 @@ const STARTING_SAID_AFTER_MS = 300
 // The gear's first lines are the modules' (`composer.control` at `setup`): what they pick goes with
 // the Start in its run options.
 // With no project (`SESSIONS_ID`), the run starts in a folder of its own on this computer: the row
-// says "No project", and nothing about a repository is offered, no branch, no Auto level. Its Context, under the box where a project's is, is the repos the session
-// works with (SessionRepos.tsx): each is copied into the session's folder, and none is made a project. A repo
-// ticked in a project's Context is copied the same way, beside the run's checkout of the project.
+// says "No project", and nothing about a repository is offered, no branch. It has no file Context:
+// it has no files of a project's to point at.
 export function StartAgentForm({
   projectId,
   projectName,
@@ -69,15 +67,12 @@ export function StartAgentForm({
   addContext,
   removeContext,
   toggleContext,
-  projects,
   onPickProject,
   onOverview = false,
 }: {
   projectId: string
   /** The box is the Overview's: as wide as the page's cards, whose edges it stands on, where the launcher's is a session's message box's. */
   onOverview?: boolean
-  /** Every project, for the repos a session with no project works with (SessionRepos). */
-  projects: readonly ProjectSummary[]
   /** Another project, or no project, was picked for the session: the launcher opens its "New agent session" page, the Overview shows that project's. */
   onPickProject: (projectId: string) => void
   /** The project's name, for the row above the box; absent until the projects are read. */
@@ -117,9 +112,6 @@ export function StartAgentForm({
   const preferences = usePreferences()
   const launcher = useProjectLauncher(projectId)
   const noProject = projectId === SESSIONS_ID
-  // The repos a session with no project has as context, until it starts or another project is picked.
-  const [repos, setRepos] = useState<PickedRepo[]>([])
-  useEffect(() => setRepos([]), [projectId])
   // What the modules' controls picked for the next run alone (`composer.control`), until it starts or another project is picked.
   const [options, setOptions] = useState<RunOptions>({})
   useEffect(() => setOptions({}), [projectId])
@@ -150,25 +142,20 @@ export function StartAgentForm({
   // fixed: the host's own check says what is still in the way.
   const runItems = (attention ?? []).filter(item => item.scope === 'run').length
   const readiness = useLoaded(() => (host ? onStartCheck(projectId, options, host.id) : onStartCheck(projectId, options)), null, [projectId, JSON.stringify(options), runItems, host?.id])
-  // A project's Context holds files, said at the prompt's end, and repos, which the run copies as it does with no project.
-  const ticked = noProject ? repos : [...context].filter(isRepoPath).map(path => ({ path, name: folderName(path) }))
-  // What a level acts on: the project, or with none the copies of repos, once one is ticked.
-  const publishes = !noProject || ticked.length > 0
   // What the gear's hover says of its own line with the menu shut; the modules' lines say theirs.
-  const setupSaid = publishes ? autoSaid(publishPick, levels) : ''
+  const setupSaid = autoSaid(publishPick, levels)
 
   const submit = async (text: string, { images }: { images: string[] }) => {
     setNote(STARTING)
     const { publish: _publish, ...unpublished } = startPicks(preferences)
     const withImages = images.length > 0 ? { images } : {}
-    const result = await start(projectId, promptWithContext(text, [...context].filter(path => !isRepoPath(path))), {
+    const result = await start(projectId, promptWithContext(text, noProject ? [] : [...context]), {
       ...withImages,
       ...(Object.keys(options).length > 0 ? { options } : {}),
       // A project's Start carries the saved pick alone, and the daemon holds it to what the project is offered; with no
-      // project the pick in force goes with the repos it is for, and none with no repo.
-      ...(noProject ? (publishes ? { ...unpublished, publish: publishPick } : unpublished) : startPicks(preferences)),
+      // project the pick in force goes, for the repos it has.
+      ...(noProject ? { ...unpublished, publish: publishPick } : startPicks(preferences)),
       ...(host ? { host: host.id } : {}),
-      ...(ticked.length > 0 ? { repos: ticked.map(repo => repo.path) } : {}),
     })
     setNote(null)
     if (result) {
@@ -182,12 +169,10 @@ export function StartAgentForm({
         keepDraftImages(`launcher:${projectId}`, [])
         onAgentStarted?.(text, result.agentId, host?.label, {
           ...(Object.keys(options).length > 0 ? { options } : {}),
-          ...(publishes ? { publish: publishPick } : {}),
+          publish: publishPick,
           ...withImages,
-          ...(ticked.length > 0 ? { repos: ticked.map(repo => ({ name: repo.name, from: repo.path })) } : {}),
         }) // select the run we just started (#761)
       }).finally(() => composerRef.current?.clear())
-      setRepos([])
       setOptions({})
     } else setRefused(true)
   }
@@ -217,13 +202,12 @@ export function StartAgentForm({
           said: setupSaid,
           lines: (
             <>
-              {publishes && <AutoMenu publish={publishPick} levels={levels} onPublish={pick => updatePreferences({ publish: pick })} covers={autoCovers(noProject ? null : projectName, ticked.length)} />}
+              <AutoMenu publish={publishPick} levels={levels} onPublish={pick => updatePreferences({ publish: pick })} covers={autoCovers(noProject)} />
             </>
           ),
         }}
-        // After the gear, Context: a project's picker, or, with no project, the repos the session works with, folders
-        // on this computer copied into the session's folder.
-        controls={noProject ? <ReposMenu picked={repos} projects={projects} busy={busy} onChange={setRepos} /> : <ProjectContextMenu projectId={projectId} context={context} busy={busy} onToggle={toggleContext} />}
+        // After the gear, a project's Context: the files picked for the message.
+        controls={noProject ? undefined : <ContextMenu files={[...context]} busy={busy} onRemove={toggleContext} />}
         onSubmit={submit}
         onPromptChange={value => {
           typed.current = value

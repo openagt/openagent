@@ -13,19 +13,26 @@ What it brings:
   size of the change, its commits and files in the hover. A row per copy of a repo the session
   holds work in follows the project's (`chat.work`).
 - **The next steps there** (`chat.handoff`), each offered from what the branch holds: Commit, which
-  asks the agent to commit what it left uncommitted; Discard changes, asked first; Publish branch, a
+  asks the agent to commit what it left uncommitted, the bar saying "Committing…" while it does; Discard changes, asked first; Publish branch, a
   push as one of OpenAgent's accounts; Merge, for a project with no remote, on this machine; and a
   copy's work brought back to the folder it was copied from. A pull request is the git host module's.
-- **Remove worktree** in the session's menu (`chat.menu`), with the checkout's size on disk in its
-  hover.
+- **Remove worktree** in the session's menu (`chat.menu`), with the checkout's size on disk beside
+  it.
 - **The branch a run starts from**, in the row above the message box (`composer.control` at
   `start`): in the launcher a menu of the project's main branch, the folder's own branch and what
   origin has now, its pick kept for every next run of the project on this computer (the
   `git-branches.startFrom` setting); in a session, the branch it started from.
+- **The repos a session works with**, under the message box (`composer.control` at `context`): in
+  the launcher, a menu of the projects and of every module's repos on this computer
+  (`composer.where`), each ticked into the run's options under the name its copy will have in the
+  session's folder; in a session, the repos it started with.
 - **Commit and Publish branch** in the "When it finishes" menu (`composer.auto`), Publish branch only
   where the work can be pushed.
 - **What a project needs** (`app.attention`): its folder behind its remote's main branch, with
-  Update folder as the fix (`attention.fix`), and a start pick gone from origin.
+  Update folder as the fix (`attention.fix`), and a start pick gone from origin. **What waits on
+  the person** there: a finished run's files left uncommitted ("Needs commit") and its commits never
+  pushed ("Needs push"), read from the project's runs (`AppContext.runs`) and this package's own
+  branches.
 
 Every talk with a remote goes as an account of OpenAgent's (`RpcHost.gitAccess`, which the git
 host's module answers), never the person's own login. Its Node part is the module (`./module`), with

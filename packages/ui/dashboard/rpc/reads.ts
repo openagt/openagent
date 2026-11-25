@@ -12,7 +12,6 @@ export type * from '../../src/dashboard-rpc/reads.js'
 
 export const onAgents = rpc<typeof impl.onAgents>('onAgents')
 export const onModuleAgents = rpc<typeof impl.onModuleAgents>('onModuleAgents')
-export const onRetainedWorktrees = rpc<typeof impl.onRetainedWorktrees>('onRetainedWorktrees')
 export const onAgentWorktree = rpc<typeof impl.onAgentWorktree>('onAgentWorktree')
 export const onAgent = rpc<typeof impl.onAgent>('onAgent')
 export const onAgentsDoing = rpc<typeof impl.onAgentsDoing>('onAgentsDoing')

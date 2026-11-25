@@ -1,7 +1,8 @@
 import { stat } from 'node:fs/promises'
 import { errorMessage, nodeGitRunner, sessionsHome, type GitRunner } from '@openagt/agent-data'
 import { publishedBase } from '@openagt/agent-data/names'
-import { START_FROM, defineModule, isBranchName, RunOrder, type AppContext, type AttentionArgs, type AttentionItem, type ModuleDefinition, type RunContext, type Settings } from '@openagt/hooks'
+import { START_FROM, defineModule, isBranchName, RunOrder, type AppContext, type AttentionArgs, type AttentionItem, type ModuleDefinition, type ProjectRef, type RunContext, type Settings } from '@openagt/hooks'
+import { readBranchesAhead } from './branch-ahead.js'
 import { agentBranchName } from './branch-names.js'
 import { attachCheckout, createCheckout } from './checkout.js'
 import { cleanup } from './cleanup.js'
@@ -9,7 +10,9 @@ import { readFolderBehind } from './folder-behind.js'
 import { branchesOnOrigin } from './origin-branches.js'
 import { originGit } from './origin-git.js'
 import { reclaimWorktree } from './reclaim.js'
-import { dropUntouchedCopies, openSessionFolder, SESSION_FOLDER_STAYS } from './session-folder.js'
+import { isCopyName } from './repo-names.js'
+import { checkedRepos, dropUntouchedCopies, openSessionFolder, SESSION_FOLDER_STAYS } from './session-folder.js'
+import { unpublishedItems, unpublishedRuns } from './unpublished.js'
 import { currentBranch, worktreeBranch, worktreePath, type AddedWorktree } from './worktree.js'
 
 /**
@@ -18,8 +21,8 @@ import { currentBranch, worktreeBranch, worktreePath, type AddedWorktree } from 
  * reclaimed once the record says how the run ended; a project removed with its files, the agents'
  * checkouts taken back (`cleanup.ts`). What it finds out is in the run's facts
  * (`RunFacts['git-branches']`), which the run's record keeps and a resume starts from. What needs
- * the person (`app.attention`): a project's folder behind its remote, and a branch picked to start
- * from that origin no longer has.
+ * the person (`app.attention`): a run's work left uncommitted or never pushed, a project's folder
+ * behind its remote, and a branch picked to start from that origin no longer has.
  */
 
 /** What the module works with; the real one when absent. */
@@ -62,8 +65,10 @@ export default gitBranchesModule()
  */
 async function makeCheckout(ctx: RunContext, git: GitRunner): Promise<void> {
   const options = ctx.options['git-branches'] ?? {}
+  // The repos are named by whoever wrote the options: a name that is no folder's, or a folder that is no repository's, refuses the run.
+  const repos = await checkedRepos(options.repos ?? [], git)
   if (!ctx.project) {
-    ctx.workspace = (await openSessionFolder(sessionsHome(), ctx.id, options.repos, git)).path
+    ctx.workspace = (await openSessionFolder(sessionsHome(), ctx.id, repos, git)).path
     return
   }
   const { dir } = ctx.project
@@ -84,8 +89,8 @@ async function makeCheckout(ctx: RunContext, git: GitRunner): Promise<void> {
     ctx.workspace = checkout.path
     ctx.facts['git-branches'] = { branch: checkout.branch, ...(options.branch === undefined ? await startCommit(checkout.path, git) : {}) }
   }
-  if (options.repos === undefined || options.repos.length === 0) return
-  const copies = await openSessionFolder(sessionsHome(), ctx.id, options.repos, git)
+  if (repos.length === 0) return
+  const copies = await openSessionFolder(sessionsHome(), ctx.id, repos, git)
   ctx.facts['git-branches'] = { ...ctx.facts['git-branches'], copies: { folder: copies.path, branch: agentBranchName(ctx.id), made: copies.made.map(({ name, from }) => ({ name, from })) } }
 }
 
@@ -145,7 +150,8 @@ async function reclaim(ctx: RunContext, git: GitRunner): Promise<void> {
     )
     facts.reclaimed = reclaimed.ok ? { reclaimed: true, ...(reclaimed.branchesDeleted ? { deleted: reclaimed.branchesDeleted } : {}) } : { reclaimed: false, reason: reclaimed.reason }
     // Its copies of repos: the ones it never touched go with the run, the rest stay with their work.
-    const repos = ctx.options['git-branches']?.repos ?? []
+    // Only names of copies: a run refused over a name it was given made no copy by it.
+    const repos = (ctx.options['git-branches']?.repos ?? []).filter(repo => isCopyName(repo.name))
     if (repos.length > 0) await dropUntouchedCopies(sessionsHome(), ctx.id, repos, git).catch(() => {})
   }
 }
@@ -155,8 +161,9 @@ const ORIGIN_KEPT_MS = 60_000
 const onOrigin = new Map<string, { at: number; branches: Promise<string[] | undefined> }>()
 
 /**
- * What needs the person, as this module sees it: a project's folder behind its remote's main
- * branch, which a press brings up (`attention.fix` `update-folder`); and, for the run the launcher
+ * What needs the person, as this module sees it: the work its runs left on this machine,
+ * uncommitted or never pushed; a project's folder behind its remote's main branch, which a press
+ * brings up (`attention.fix` `update-folder`); and, for the run the launcher
  * would start, a branch picked to start from that origin no longer has, so the person is told
  * above the box rather than by a run that fails to make its checkout. Origin is asked as an
  * account of OpenAgent's; where none reaches it, the clone's own copy counts, and a pick is not
@@ -165,8 +172,8 @@ const onOrigin = new Map<string, { at: number; branches: Promise<string[] | unde
 async function attention(args: AttentionArgs, app: AppContext, git: GitRunner): Promise<AttentionItem[]> {
   const project = args.project
   if (!project) return []
-  const origin = await originGit(project.dir, remote => app.gitAccess(remote), git).catch(() => undefined)
-  const items: AttentionItem[] = []
+  const [origin, unpublished] = await Promise.all([originGit(project.dir, remote => app.gitAccess(remote), git).catch(() => undefined), workLeft(project, app, git)])
+  const items: AttentionItem[] = [...unpublished]
   const behind = await readFolderBehind(project.dir, { git, origin }).catch(() => undefined)
   if (behind) {
     items.push({
@@ -188,6 +195,30 @@ async function attention(args: AttentionArgs, app: AppContext, git: GitRunner): 
       items.push({ kind: 'setup', scope: 'run', id: 'start-branch-gone', words: `The branch ${pick.branch} is no longer on origin.`, detail: 'Pick another branch to start from.' })
     }
   }
+  return items
+}
+
+/** How long what the runs left is kept, per project: every list of what waits asks every few seconds, and so does the launcher. */
+const LEFT_KEPT_MS = 5_000
+const left = new Map<string, { at: number; items: Promise<AttentionItem[]> }>()
+
+/**
+ * The project's finished runs whose work never left this machine (`unpublished.ts`), as items
+ * waiting on the person, read from this package's own checkouts and branches. A read that failed
+ * throws, so the project is not read whole, and is not kept.
+ */
+function workLeft(project: ProjectRef, app: AppContext, git: GitRunner): Promise<AttentionItem[]> {
+  const known = left.get(project.dir)
+  if (known && Date.now() - known.at < LEFT_KEPT_MS) return known.items
+  const items = (async () => {
+    const runs = await app.runs(project)
+    return unpublishedItems(runs, await unpublishedRuns(runs, (branches, from) => readBranchesAhead(project.dir, branches, git, from)))
+  })()
+  const read = { at: Date.now(), items }
+  left.set(project.dir, read)
+  items.catch(() => {
+    if (left.get(project.dir) === read) left.delete(project.dir)
+  })
   return items
 }
 

@@ -466,7 +466,6 @@ describe('a first visit, the projects not read yet', () => {
     const answer = holdProjects()
     const id = '2026-11-14T23-05-03-506Z'
     answers.set('onAgents', () => [{ id, status: 'done', startedAt: '2026-11-14T23:05:03.506Z', updatedAt: '2026-11-14T23:06:00.000Z', intent: 'tidy up' }])
-    answers.set('onRetainedWorktrees', () => [])
     window.history.replaceState(null, '', `/${PROJECT.name}/${id}`)
     render(<App />)
     const foot = await screen.findByTestId('chat-bottom')
@@ -757,7 +756,6 @@ describe('module cards on the Overview (#1818)', () => {
     const run = { id: '9-d', status: 'done', startedAt: '2026-07-19T16:05:44.756Z', updatedAt: '2026-07-19T16:06:21.000Z', intent: 'tidy up' }
     let listed: unknown[] = []
     answers.set('onAgents', () => listed)
-    answers.set('onRetainedWorktrees', () => [])
     window.history.replaceState(null, '', '/')
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'start' }))
@@ -800,7 +798,6 @@ describe('the project select (#1513)', () => {
       ],
       whole: [],
     }))
-    answers.set('onRetainedWorktrees', () => [])
     answers.set('onDashboard', () => ({ totals: { projects: 2 }, active: [] }))
     // The agents at work, as the shell reads them for the mark and the Overview alike.
     answers.set('onOverview', () => ({
@@ -1225,7 +1222,6 @@ describe('the Context of a session continued from its box', () => {
     answers.set('onDocs', () => [])
     answers.set('onProjectFiles', () => [])
     answers.set('onAgentChanges', () => [])
-    answers.set('onRetainedWorktrees', () => [])
     answers.set('onAgents', () => [{ id: '7-e', status: 'done', startedAt: '2026-07-19T16:05:44.756Z', updatedAt: '2026-07-19T16:06:21.000Z', intent: 'app ran' }])
     window.history.replaceState(null, '', '/app/7-e')
     render(<App />)
@@ -1330,7 +1326,6 @@ describe('the shell on a phone', () => {
       answers.set('onAgentChanges', () => [])
       answers.set('onDocs', () => [])
       answers.set('onProjectFiles', () => [])
-      answers.set('onRetainedWorktrees', () => [])
       answers.set('onAgents', () => [{ id, status: 'done', startedAt: '2026-11-14T23:05:03.506Z', updatedAt: '2026-11-14T23:06:00.000Z', intent: 'pick a name' }])
       answers.set('onWaiting', () => ({ items: [{ kind: 'waiting', projectId: PROJECT.id, projectName: 'app', module: 'ask', scope: 'run', run: id, words: 'Needs answer', title: 'Pick a name' }], whole: [PROJECT.id] }))
 

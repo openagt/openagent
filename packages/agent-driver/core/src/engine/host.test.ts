@@ -189,6 +189,14 @@ test('a start that cannot make a run is refused before anything is spawned: a pi
   }
 })
 
+test('a session with no project and no repo starts with no Auto level: it has nothing to publish; with a repo the level goes', async () => {
+  const { host: here, runs } = host({ settings: async () => memorySettings() })
+  await here.start({ prompt: 'x', options: { publish: 'pr' } })
+  assert.equal(runs[0]?.publish, undefined)
+  await here.start({ prompt: 'x', options: { publish: 'pr', 'git-branches': { repos: [{ name: 'app', from: '/me/app' }] } } })
+  assert.equal(runs[1]?.publish, 'pr')
+})
+
 test('a line said to a working run goes to its inbox; one to a run that ended resumes it; a resume needs a run of the project', async () => {
   const repo = await testRepo()
   try {

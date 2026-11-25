@@ -8,7 +8,7 @@ import { PersonMark, personName } from './PersonMark.js'
 import { effortLabel } from '../lib/effort.js'
 import type { ComponentType } from 'react'
 import type { AgentMeta, AgentStatus, RecentAgent, ProjectSummary, Waiting } from '../../src/index.js'
-import { needsWord, waitingKey } from '../../src/client.js'
+import { waitingKey } from '../../src/client.js'
 import type { ModuleHostPerson } from '../module/index.js'
 import { buttonVariants } from './ui/button.js'
 import { inPlace } from '../lib/in-place.js'
@@ -270,6 +270,8 @@ export function AgentHistory({
 
   // A run listed in "Waiting on you" is not listed again in the Log.
   const waitingListed = new Set(waiting.slice(0, WAITING_SHOWN).flatMap(item => (item.run !== undefined ? [`${item.projectId}:${item.run}`] : [])))
+  // What waits on each run, by its project and its id: a row marks the work it left on this machine.
+  const waitingByRun = new Map(waiting.flatMap(item => (item.run !== undefined ? [[`${item.projectId}:${item.run}`, item] as const] : [])))
   const logged = rows.filter(row => !waitingListed.has(`${row.projectId}:${row.agent.id}`))
   // What a row shows beside its name and its age, and what the list is cut by: the person's picks
   // from the button beside "Log", all off until asked for. One project's list has no projects to cut it by.
@@ -323,9 +325,7 @@ export function AgentHistory({
       {...(hostOf(row.agent.target) !== undefined ? { host: { id: hostOf(row.agent.target)!, projectId: row.projectId } } : {})}
       {...(row.agent.otherHost && row.agent.host ? { startedOn: row.agent.host } : {})}
       prs={runPrs(row.agent)}
-      {...(row.agent.unpublished ? { unpublished: row.agent.unpublished } : {})}
-      {...(row.agent.uncommitted ? { uncommitted: row.agent.uncommitted } : {})}
-      gitHost={projects.find(p => p.id === row.projectId)?.gitHost !== false}
+      {...workOf(waitingByRun.get(`${row.projectId}:${row.agent.id}`))}
       href={row.href}
       onClick={leave(row.onClick)}
       onNear={row.onNear}
@@ -816,6 +816,18 @@ function PrMarks({ prs }: { prs: readonly RunPr[] }) {
 /** A state's word as a line of its own starts: "Open", "Needs answer". */
 const capitalised = (word: string): string => word.charAt(0).toUpperCase() + word.slice(1)
 
+/** The work a run left on this machine, as a row marks it: the mark of the item that says it, and its words. */
+export interface RunWork {
+  mark: 'changes' | 'branch'
+  said: string
+}
+
+/** A row's work mark, from what waits on its run: files never committed, or a branch never published. Nothing for any other item. */
+function workOf(item: Waiting | undefined): { work?: RunWork } {
+  if (item?.mark !== 'changes' && item?.mark !== 'branch') return {}
+  return { work: { mark: item.mark, said: [item.words, item.detail].filter(Boolean).join(' · ') } }
+}
+
 // One agent row, one line: the state's mark, the session's name and how long ago it started, as
 // Claude Code on the web lists its sessions. The name comes first (his pick, 2026-11-24): the row
 // used to carry the project, the person and the coding agent's logo too, wherever the rows of a
@@ -845,9 +857,7 @@ function AgentHistoryRow({
   host,
   startedOn,
   prs = [],
-  unpublished,
-  uncommitted,
-  gitHost = true,
+  work,
   person,
   account,
   name,
@@ -891,12 +901,8 @@ function AgentHistoryRow({
   startedOn?: string | undefined
   /** The run's pull requests, each with how it stands when the git host said: glyphs before the age. */
   prs?: readonly RunPr[]
-  /** How many commits of its own wait on its branch, never pushed: the Human Queue's "Needs PR", marked where a pull request would be. */
-  unpublished?: number | undefined
-  /** How many files its checkout left uncommitted: the Human Queue's "Needs commit", in the same place. */
-  uncommitted?: number | undefined
-  /** Whether its project can open a pull request: commits never pushed need one, else a push. */
-  gitHost?: boolean
+  /** The work it left on this machine, as what waits on the person says it: files never committed, or a branch never published. */
+  work?: RunWork | undefined
   /** Whose run it is, by the email its record is kept under. */
   person?: string | undefined
   /** Their account at the project's git host, when it said: their picture. */
@@ -920,13 +926,8 @@ function AgentHistoryRow({
   const { state: marked, word } = runState({ status, saving })
   const prWords = prs.map(pr => `#${pr.number}${pr.state ? ` ${PR_MARKS[pr.state].word}` : ''}`)
   const prSaid = prs.length > 0 ? `${prs.length === 1 ? 'PR' : 'PRs'} ${prWords.join(', ')}` : undefined
-  // Work that never left the machine, in the Human Queue's words and icon, gray (his pick): files left
-  // uncommitted first, since committing them is the run's next step.
-  const left = uncommitted
-    ? { Icon: FilePen, said: `${needsWord('uncommitted')} · ${uncommitted} file${uncommitted === 1 ? '' : 's'}` }
-    : unpublished
-      ? { Icon: GitBranch, said: `${needsWord('unpushed', gitHost)} · ${unpublished} commit${unpublished === 1 ? '' : 's'}` }
-      : undefined
+  // Work that never left the machine, in the Human Queue's words and icon, gray (his pick).
+  const left = work ? { Icon: work.mark === 'changes' ? FilePen : GitBranch, said: work.said } : undefined
   const personWords = person ? personSaid(person, account) : undefined
   const agentSaid = ran ? [ran.label, ...(model ? [model] : [])].join(' · ') : undefined
   // Everything about the run in one sentence, the row's name for a reader that cannot see its

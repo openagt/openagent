@@ -3,8 +3,7 @@ import { stat } from 'node:fs/promises'
 import { originDefaultBranch } from '@openagt/agent-data'
 import { moduleAgents, type ModuleAgent, type ModuleAgentsWanted } from '../dashboard/module-agents.js'
 import { join } from 'node:path'
-import { doingOf, readRunEvents, readRuns, type AgentDoing, type AgentMeta, isRunId, projectBranches } from '../store/index.js'
-import { listProjectWorktrees } from '../worktrees.js'
+import { doingOf, readRunEvents, readRuns, type AgentDoing, type AgentMeta, isRunId } from '../store/index.js'
 import { projectGitHost, type GitHostHome } from '../store/git-host.js'
 import { readDocs, type WorkspaceDoc } from '../dashboard/docs.js'
 import { buildOverview, buildRecentAgents, type FoundAgent, type Overview, type RecentAgent } from '../dashboard/overview.js'
@@ -20,7 +19,7 @@ import type { AgentWorktree } from '../dashboard/types.js'
 import { crawlRepoFiles } from '../project.js'
 import { contextHosts, contextProject, contextProjects, contextRun, resolveProjectPath, resolveAgentPath, runHostOf } from './context.js'
 import type { RunEvent } from '@openagt/hooks'
-import { markOtherHost, withRowMarks } from '../dashboard/run-rows.js'
+import { markOtherHost, withPrStates } from '../dashboard/run-rows.js'
 import type { ProjectRef, RunRef } from '@openagt/hooks'
 
 // The read model behind the dashboard (#405): the agent history, an agent's replay, and the
@@ -43,12 +42,12 @@ async function withProjects<T>(build: (projects: ProjectSummary[]) => Promise<T>
 export async function onAgents(projectId: string): Promise<AgentMeta[]> {
   const at = await contextProject(projectId)
   const cwd = await resolveProjectPath(projectId)
-  return at && cwd ? runRows(at.project, cwd) : []
+  return at && cwd ? runRows(at.project) : []
 }
 
-/** A project's runs as its list shows them: its hosts' runs, marked with what the modules read of them off its folder here (`cwd`). */
-async function runRows(project: ProjectRef | undefined, cwd: string): Promise<AgentMeta[]> {
-  return withRowMarks(cwd, (await readRuns(contextHosts(), project)).map(agent => markOtherHost(agent)))
+/** A project's runs as its list shows them: its hosts' runs, marked with what the modules read of them. */
+async function runRows(project: ProjectRef | undefined): Promise<AgentMeta[]> {
+  return withPrStates((await readRuns(contextHosts(), project)).map(agent => markOtherHost(agent)))
 }
 
 /** A run of the project `projectId`, as its host is asked about it; none for a project that is not on the list. */
@@ -68,22 +67,8 @@ export async function onModuleAgents(projectId: string, wanted: ModuleAgentsWant
 }
 
 /**
- * The agent ids that still have a worktree on disk (#737). An agent that failed or was stopped keeps
- * its checkout so you can go look at what it was holding; this is how the dashboard knows which
- * finished run has one to offer removing. Live agents are excluded — their worktree is in use.
- */
-export async function onRetainedWorktrees(projectId: string): Promise<string[]> {
-  const cwd = await resolveProjectPath(projectId)
-  if (!cwd) return []
-  const at = await contextProject(projectId)
-  const runs = at ? await readRuns(contextHosts(), at.project).catch((): AgentMeta[] => []) : []
-  const rows = await listProjectWorktrees(cwd, runs, { sizes: false }).catch((): never[] => [])
-  return rows.filter(row => !row.live).map(row => row.agentId)
-}
-
-/**
- * Where a session is working (#798): the checkout it has, its branch, whether it is holding
- * uncommitted changes, and — once it is no longer live — what that checkout costs on disk.
+ * Where a session is working (#798): the checkout it has, its branch, and whether it is holding
+ * uncommitted changes.
  *
  * The dashboard could not answer "where is this session working". The git status bar reads the
  * *project*, so a session's own branch was visible nowhere, and a worktree an agent kept (#737) was
@@ -115,13 +100,8 @@ export async function onAgentWorktree(projectId: string, agentId: string): Promi
     if (!agent) return null
     return { ...(agent.branch ? { branch: agent.branch } : {}), ...(pr ? { pr } : {}) }
   }
-  // Size is only read for a checkout nothing is writing to: a live agent's tree changes under the
-  // poll, and a size over a build directory mid-build is a cost with no answer worth having. The
-  // provider's sized listing is where a checkout's size comes from (#1774).
-  const running = found?.record?.status === 'running'
-  const size = running ? undefined : (await (await projectBranches(root).catch(() => undefined))?.list({ sizes: true }).catch(() => []))?.find(row => row.id === agentId)?.sizeBytes
   return {
-    checkout: { path: checkout.path, dirty: status.dirty, ...(size !== undefined ? { sizeBytes: size } : {}) },
+    checkout: { path: checkout.path, dirty: status.dirty },
     branch: status.branch,
     // A session's branch is exactly the thing that has a PR (#809), so the bar can show it
     // like the project's does.
@@ -182,10 +162,10 @@ async function pooledRuns(limit?: number): Promise<RecentAgent[]> {
     buildRecentAgents(
       projects,
       {
-        agents: project => runRows({ id: project.id, name: project.name, dir: project.path }, project.path),
+        agents: project => runRows({ id: project.id, name: project.name, dir: project.path }),
         sessions: async () => {
           const home = await resolveProjectPath(SESSIONS_ID)
-          return home ? runRows(undefined, home) : []
+          return home ? runRows(undefined) : []
         },
       },
       limit,

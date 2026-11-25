@@ -59,6 +59,9 @@ export const copies = read(async (_host: RpcHost, { agentId }: { agentId: string
 /** What the Commit press says to the run: it commits its own work, in its own words. */
 export const COMMIT_ASK = 'Commit your work.'
 
+/** The runs asked to commit, by id, until they are seen not working again: what the bar says while the agent does it. */
+const commitAsked = new Set<string>()
+
 /**
  * Ask the run to commit what it left uncommitted: the agent commits, not the dashboard. It knows
  * what it changed and writes the message, and nothing is committed on its behalf.
@@ -67,10 +70,22 @@ export const commit = act(async (host: RpcHost, { agentId }: { agentId: string }
   if (!isRunId(agentId)) return { ok: false, error: 'Unknown session.' }
   try {
     await host.say(agentId, { kind: 'message', text: COMMIT_ASK })
+    commitAsked.add(agentId)
     return { ok: true }
   } catch (err) {
     return { ok: false, error: `Could not ask the agent to commit: ${errorMessage(err)}` }
   }
+})
+
+/**
+ * Whether the run is doing what a Commit press asked: asked from this dashboard, and working since.
+ * The ask is forgotten once the run is seen not working: what its branch holds then says the rest.
+ */
+export const committing = read(async (host: RpcHost, { agentId }: { agentId: string }): Promise<boolean> => {
+  if (!isRunId(agentId) || !commitAsked.has(agentId)) return false
+  if (isWorking((await host.run(agentId))?.record?.status)) return true
+  commitAsked.delete(agentId)
+  return false
 })
 
 /**
