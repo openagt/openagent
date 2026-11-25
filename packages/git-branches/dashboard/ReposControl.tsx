@@ -1,5 +1,5 @@
 import { useContext, useEffect, useMemo, useState } from 'react'
-import { Check, FolderGit2, Search } from 'lucide-react'
+import { Check, FolderGit2, Lock, Plus, Search, X } from 'lucide-react'
 import {
   BoxOfRow,
   cn,
@@ -11,6 +11,7 @@ import {
   MenuMark,
   MiddleCut,
   rowButtonClass,
+  RowChevron,
   ScrollArea,
   Tooltip,
   TooltipContent,
@@ -95,22 +96,30 @@ type Group = {
 }
 
 /**
- * The groups the menu lists for a search: the projects of this computer, then the repos that are
- * no project, the picked ones among them. With nothing typed, only the first {@link REPOS_SHOWN}
- * repos and every picked one; a search finds any of them, by name, folder or address.
+ * The groups the menu lists for a search, as Claude Code on the web lists its repos: the picked
+ * ones on top, then the projects of this computer and the repos that are no project, none of them
+ * picked. With nothing typed, only the first {@link REPOS_SHOWN} repos; a search finds any of
+ * them, by name, folder or address, and keeps every picked one in sight.
  */
 export function repoGroups(projects: readonly Row[], repos: readonly Row[], picked: readonly SessionRepo[], typed: string): Group[] {
   const query = typed.trim().toLowerCase()
   const isPicked = (row: Row) => picked.some(repo => repo.from === row.path)
-  const kept = (rows: readonly Row[], most: number) => {
-    const matching = rows.filter(row => !query || `${row.label}\n${row.search}`.toLowerCase().includes(query))
-    const shown = new Set(matching.slice(0, most))
-    return matching.filter(row => shown.has(row) || isPicked(row))
-  }
+  const matching = (rows: readonly Row[], most: number) => rows.filter(row => !isPicked(row) && (!query || `${row.label}\n${row.search}`.toLowerCase().includes(query))).slice(0, most)
   return [
-    { value: 'projects', label: 'Projects', items: kept(projects, SEARCH_SHOWN) },
-    { value: 'repos', label: 'Repos', items: kept(repos, query ? SEARCH_SHOWN : REPOS_SHOWN) },
+    { value: 'picked', label: '', items: picked.map<Row>(repo => ({ value: `picked:${repo.from}`, label: repo.name, detail: repo.from, path: repo.from, search: repo.from })) },
+    { value: 'projects', label: 'Projects', items: matching(projects, SEARCH_SHOWN) },
+    { value: 'repos', label: 'Repos', items: matching(repos, query ? SEARCH_SHOWN : REPOS_SHOWN) },
   ].filter(group => group.items.length > 0)
+}
+
+/**
+ * What the Repos button says, as Claude Code on the web's repo button: the first repo and how many
+ * more. With a project, its own repo leads and the copies are the more; with none, the first copy,
+ * or "Repos" while there is none.
+ */
+export function reposLabel(project: string | undefined, picked: readonly SessionRepo[]): { first: string; more: number } {
+  if (project !== undefined) return { first: project, more: picked.length }
+  return picked.length === 0 ? { first: 'Repos', more: 0 } : { first: picked[0]!.name, more: picked.length - 1 }
 }
 
 /** What the Repos button's hover says of a session's repos, with or without any. */
@@ -121,18 +130,20 @@ export function reposSaid(names: readonly string[]): string {
 /** How many repos, in words: what the button's name says after it. */
 const counted = (count: number): string => `${count} repo${count === 1 ? '' : 's'}`
 
-// The menu under the box, one on both pages (his pick, over "Add repo" and a chip per repo in the
-// row above the box): the repos the session works with (Rom's "repos are just context"), ticked on
-// and off, as many as wanted, from the projects of this computer and the repos the modules offer.
-// The button says how many, and its hover their names. A tick does the same with a project and
-// with none, and the menu's heading says it: the run copies the repo into the session's folder,
-// and leaves the repo's own folder as it was.
+// The menu under the box, one on both pages: the repos the session works with (Rom's "repos are
+// just context"), as Claude Code on the web's repo picker (his pick D, 11-26). The picked ones are
+// on top, each with a × that takes it off and its tick; a project's own repo leads them, kept with
+// the project (a lock, no ×), and so do the copies a session already has. Every other row has a +
+// always in sight (the web's shows only under the pointer, which hid that more than one repo can be
+// picked), and a press anywhere on it adds it: the run copies the repo into the session's folder,
+// and leaves the repo's own folder as it was. The button says the first repo and how many more.
 export function ReposMenu({
   picked,
   projects,
   busy,
   onChange,
   without,
+  project,
   kept,
 }: {
   picked: readonly SessionRepo[]
@@ -142,6 +153,8 @@ export function ReposMenu({
   onChange: (picked: SessionRepo[]) => void
   /** A folder left out of the list: the session's own project. */
   without?: string | undefined
+  /** The session's own project, by its name: its repo leads the picked ones, kept with the project. */
+  project?: string | undefined
   /** In a session: the repos it has, ticked and kept; a repo ticked beside them goes with its next message. */
   kept?: readonly SessionRepo[] | undefined
 }) {
@@ -164,7 +177,12 @@ export function ReposMenu({
   )
   const groups = repoGroups(projectRows, repoRows, picked, typed)
   // The picked ones as the menu's rows: a row is the same repo as a pick by its folder.
-  const pickedRows = picked.map<Row>(repo => ({ value: `picked:${repo.from}`, label: repo.name, detail: repo.from, path: repo.from, search: repo.from }))
+  const pickedRows = groups.find(group => group.value === 'picked')?.items ?? []
+  const isPicked = (row: Row) => picked.some(repo => repo.from === row.path)
+  const isKept = (row: Row) => kept?.some(repo => repo.from === row.path) === true
+  // What a picked row says beside its name: a copy beside the project, or one going with the next message.
+  const tagOf = (row: Row): string | undefined => (kept && !isKept(row) ? 'with your next message' : project !== undefined ? 'copy' : undefined)
+  const label = reposLabel(project, picked)
 
   return (
     <Combobox.Root<Row, true>
@@ -191,11 +209,11 @@ export function ReposMenu({
               className={MENU_TRIGGER_OPEN_CLASS}
               {...search.trigger}
               render={
-                <button type="button" className={rowButtonClass}>
+                <button type="button" className={cn(rowButtonClass, 'max-w-[14rem]!')}>
                   <FolderGit2 className="size-4 shrink-0" aria-hidden />
-                  <span className="truncate">
-                    Repos{picked.length > 0 && <span className="text-primary"> · {picked.length}</span>}
-                  </span>
+                  <span className="truncate">{label.first}</span>
+                  {label.more > 0 && <span className="shrink-0 text-muted-foreground">+{label.more}</span>}
+                  <RowChevron />
                 </button>
               }
             />
@@ -213,39 +231,55 @@ export function ReposMenu({
             </div>
             <ScrollArea viewportClassName="h-[min(20rem,calc(var(--available-height)-5rem))]">
               <div className={MENU_BODY_CLASS}>
-                {/* What a tick does. */}
-                <p className="px-2 pt-1 pb-0.5 text-xs text-muted-foreground">{kept ? "Repos copied into this session's folder: a new one with your next message" : "Repos copied into the session's folder"}</p>
+                {/* The project's own repo leads, kept with the project. */}
+                {project !== undefined && without !== undefined && (
+                  <div role="presentation" className={cn(MENU_ITEM_CLASS, 'cursor-default')}>
+                    <MenuMark>
+                      <FolderGit2 className="size-3.5" aria-hidden />
+                    </MenuMark>
+                    <RowWords label={project} detail={without} tag="project" />
+                    <Lock className="size-3.5 shrink-0 text-muted-foreground" aria-label="Kept with the project" />
+                    <MenuMark className="w-4 justify-center">
+                      <Check className="size-4" aria-hidden />
+                    </MenuMark>
+                  </div>
+                )}
                 <Combobox.Empty className="px-2 py-1.5 text-xs text-muted-foreground empty:hidden">{repos === null ? '' : 'No repo by that name.'}</Combobox.Empty>
                 <Combobox.List>
                   {(group: Group) => (
                     <Combobox.Group key={group.value} items={group.items}>
-                      <Combobox.GroupLabel className="px-2 pt-2 pb-1 text-xs font-semibold text-muted-foreground">{group.label}</Combobox.GroupLabel>
+                      {group.label ? <Combobox.GroupLabel className="px-2 pt-2 pb-1 text-xs font-semibold text-muted-foreground">{group.label}</Combobox.GroupLabel> : null}
                       <Combobox.Collection>
                         {(row: Row) => (
                           <Combobox.Item key={row.value} value={row} className={MENU_ITEM_CLASS}>
                             <MenuMark>
                               <FolderGit2 className="size-3.5" aria-hidden />
                             </MenuMark>
-                            <span className="min-w-0 flex-1 leading-5">
-                              <span className="block truncate">{row.label}</span>
-                              {/* Its path on one line, cut in its middle: where it starts and the folder it ends in show, and the
-                                  whole of it is in the title and said to a screen reader. */}
-                              <span data-line2 title={row.detail} className="flex min-w-0 text-xs leading-4 text-muted-foreground">
-                                <MiddleCut text={row.detail} />
-                              </span>
-                            </span>
-                            {/* The picked one is marked at the right, where every menu's mark stands. */}
-                            <MenuMark className="w-4 justify-center">
-                              <Combobox.ItemIndicator>
-                                <Check className="size-4" aria-hidden />
-                              </Combobox.ItemIndicator>
-                            </MenuMark>
+                            <RowWords label={row.label} detail={row.detail} tag={isPicked(row) ? tagOf(row) : undefined} />
+                            {/* At the right, where every menu's mark stands: a picked one's × (a lock for one the session keeps) and its tick; any other's +. */}
+                            {isPicked(row) ? (
+                              <>
+                                {isKept(row) ? <Lock className="size-3.5 shrink-0 text-muted-foreground" aria-label="Copied already" /> : <X className="size-3.5 shrink-0 text-muted-foreground" aria-label="Take it off" />}
+                                <MenuMark className="w-4 justify-center">
+                                  <Check className="size-4" aria-hidden />
+                                </MenuMark>
+                              </>
+                            ) : (
+                              <MenuMark className="w-4 justify-center">
+                                <span className="flex size-4 items-center justify-center rounded-sm border border-border text-primary">
+                                  <Plus className="size-3" aria-label="Add" />
+                                </span>
+                              </MenuMark>
+                            )}
                           </Combobox.Item>
                         )}
                       </Combobox.Collection>
                     </Combobox.Group>
                   )}
                 </Combobox.List>
+                <p className="px-2 pt-1.5 pb-1 text-xs text-muted-foreground">
+                  {project !== undefined ? "The project's repo comes with the project. + copies another repo into the session's folder." : kept ? "Repos already copied stay. + copies one more for your next message." : "+ copies a repo into the session's folder."}
+                </p>
                 {repos === null || repos.loading ? (
                   <p role="status" className="px-2 py-1.5 text-xs text-muted-foreground">Looking for repos on this computer…</p>
                 ) : !typed.trim() && repos.repos.length > REPOS_SHOWN ? (
@@ -257,6 +291,23 @@ export function ReposMenu({
         </Combobox.Positioner>
       </Combobox.Portal>
     </Combobox.Root>
+  )
+}
+
+/** A row's words: its name, with a word on it (`project`, `copy`), and its folder or address under it, cut in its middle. */
+function RowWords({ label, detail, tag }: { label: string; detail: string; tag?: string | undefined }) {
+  return (
+    <span className="min-w-0 flex-1 leading-5">
+      <span className="flex min-w-0 items-center gap-1.5">
+        <span className="truncate">{label}</span>
+        {tag && <span className="shrink-0 rounded-full border border-border px-1.5 text-xs leading-4 text-muted-foreground">{tag}</span>}
+      </span>
+      {/* Its path on one line, cut in its middle: where it starts and the folder it ends in show, and the
+          whole of it is in the title and said to a screen reader. */}
+      <span data-line2 title={detail} className="flex min-w-0 text-xs leading-4 text-muted-foreground">
+        <MiddleCut text={detail} />
+      </span>
+    </span>
   )
 }
 
@@ -278,5 +329,6 @@ export function ReposControl({ in: box, projectId, options, recorded, onChange, 
   const repos = options['git-branches']?.repos ?? []
   // In a session, the repos its record names stay ticked; a tick beside them goes with the next message.
   const kept = box === 'session' ? (recorded?.['git-branches']?.repos ?? []) : undefined
-  return <ReposMenu picked={repos} projects={projects} busy={busy} kept={kept} onChange={picked => onChange(withRepos(options, picked))} without={projects.find(project => project.id === projectId)?.path} />
+  const own = projects.find(project => project.id === projectId)
+  return <ReposMenu picked={repos} projects={projects} busy={busy} kept={kept} onChange={picked => onChange(withRepos(options, picked))} without={own?.path} project={own ? folderName(own.path) : undefined} />
 }
