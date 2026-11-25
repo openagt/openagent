@@ -12,7 +12,7 @@ import { createContext } from 'react'
 export const FileLinks = createContext<((path: string) => (() => void) | undefined) | undefined>(undefined)
 
 /**
- * Where `#12` in an answer leads: the project's page on GitHub, under which `issues/12` opens the
- * issue or the pull request of that number. Given by the agent's page; without it `#12` is text.
+ * Where `#12` in an answer leads: the page of the issue or the pull request of that number at the
+ * project's git host. Given by the agent's page; without it, or with no page for a number, `#12` is text.
  */
-export const IssueLinks = createContext<string | undefined>(undefined)
+export const IssueLinks = createContext<((number: number) => string | undefined) | undefined>(undefined)

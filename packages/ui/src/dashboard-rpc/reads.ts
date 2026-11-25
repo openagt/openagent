@@ -5,7 +5,6 @@ import { moduleAgents, type ModuleAgent, type ModuleAgentsWanted } from '../dash
 import { join } from 'node:path'
 import { doingOf, readRunEvents, readRuns, type AgentDoing, type AgentMeta, isRunId, projectBranches } from '../store/index.js'
 import { listProjectWorktrees } from '../worktrees.js'
-import { projectGitHost, type GitHostHome } from '../store/git-host.js'
 import { readDocs, type WorkspaceDoc } from '../dashboard/docs.js'
 import { buildOverview, buildRecentAgents, type FoundAgent, type Overview, type RecentAgent } from '../dashboard/overview.js'
 import { buildWaiting, type Waiting } from '../dashboard/waiting.js'
@@ -248,14 +247,6 @@ export async function onProjectFiles(projectId: string, agentId?: string): Promi
   // The checkout `agentId` names: its own while the run is live, else the project's root (#738).
   const cwd = await resolveAgentPath(projectId, agentId)
   return cwd ? crawlRepoFiles(cwd).catch(() => []) : []
-}
-
-/** The project's page on its git host and the git host's name (#489, #1820), or null: no git host package, or no remote there. */
-export async function onGitHostHome(projectId: string): Promise<GitHostHome | null> {
-  const cwd = await resolveProjectPath(projectId)
-  if (!cwd) return null
-  const gitHost = await projectGitHost(cwd).catch(() => undefined)
-  return (await gitHost?.home()) ?? null
 }
 
 /**

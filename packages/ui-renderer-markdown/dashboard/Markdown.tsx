@@ -587,14 +587,14 @@ const LINK_CLASS = 'text-primary underline underline-offset-2 break-all'
 // A name in the text (a file, a branch, a command) is on a faint fill, so it stands out from the
 // sentence around it, as Claude Code on the web sets one.
 const CODE_CLASS = 'rounded-sm bg-foreground/[0.075] px-1 py-px text-[0.9em]'
-// `#12` as a link: the issue or pull request of that number, on the project's GitHub page.
+// `#12` as a link: the issue or pull request of that number, at the project's git host.
 const ISSUE_CLASS = 'whitespace-nowrap rounded-sm bg-primary/10 px-1.5 text-primary hover:bg-primary/15'
 
 function IssueRef({ number }: { number: string }) {
-  const home = useContext(IssueLinks)
-  if (!home) return `#${number}`
+  const page = useContext(IssueLinks)?.(Number(number))
+  if (!page) return `#${number}`
   return (
-    <a href={`${home}/issues/${number}`} target="_blank" rel="noreferrer" className={ISSUE_CLASS}>
+    <a href={page} target="_blank" rel="noreferrer" className={ISSUE_CLASS}>
       #{number}
     </a>
   )

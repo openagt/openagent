@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { makeWorld } from './harness.js'
 import { onProjects } from '../dashboard-rpc/projects.js'
 import { callModule } from '../dashboard-rpc/module-calls.js'
-import { onGitHostHome, onAgents, onDocs } from '../dashboard-rpc/reads.js'
+import { onAgents, onDocs } from '../dashboard-rpc/reads.js'
 import { onPreferences, patchPreferences } from '../dashboard-rpc/preferences.js'
 import { sendStart } from '../dashboard-rpc/control.js'
 
@@ -51,7 +51,6 @@ test('unknown projects degrade quietly: reads are empty, writes are refused (#42
   try {
     await world.addProject()
     assert.deepEqual(await rpc(onAgents)('no-such-project'), [])
-    assert.equal(await rpc(onGitHostHome)('no-such-project'), null)
     const refused = await rpc(sendStart)('no-such-project', 'do something')
     assert.equal(refused.ok, false)
   } finally {
