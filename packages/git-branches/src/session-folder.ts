@@ -1,6 +1,8 @@
 import { mkdir, realpath, rm, rmdir, stat } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
-import { checkoutRoot, nodeGitRunner, originDefaultBranch, originUrl, sessionFolder, type GitRunner } from '@openagt/agent-data'
+import { checkoutRoot, nodeGitRunner, originDefaultBranch } from './git.js'
+import { type GitRunner, originUrl } from '@openagt/hooks'
+import { sessionFolder } from './sessions.js'
 import { agentBranchName } from './branch-names.js'
 import { isCopyName, nameRepos, type SessionRepo } from './repo-names.js'
 

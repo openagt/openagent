@@ -1,5 +1,5 @@
-import { nodeGitRunner, originUrl, remoteHostOf, type GitRunner } from '@openagt/agent-data'
-import type { GitAccess } from '@openagt/hooks'
+import { nodeGitRunner } from './git.js'
+import { type GitRunner, originUrl, remoteHostOf, type GitAccess } from '@openagt/hooks'
 
 /** How git reaches a remote as an account: the distribution's `account.access`, as a module's host or its attention is given it. */
 export type ReachRemote = (remote: string) => Promise<GitAccess | undefined>

@@ -1,7 +1,9 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { parse as parseYaml } from 'yaml'
-import { SKILLS_DIRS } from '@openagt/agent-data'
+
+/** Where coding agents read a project's skills: Claude Code's folder, and the shared one Codex reads. */
+export const SKILLS_DIRS = ['.claude/skills', '.agents/skills'] as const
 
 /**
  * A project's own skills (#2394, its agent skills): the ones its repository keeps where the

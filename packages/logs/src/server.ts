@@ -1,4 +1,4 @@
-import { nodeGitRunner } from '@openagt/agent-data'
+import { nodeGitRunner } from '@openagt/git-branches'
 import { read, type RpcHost } from '@openagt/hooks/rpc'
 import type { PersonActivity } from './people.js'
 import { newestRuns, peopleAt, records } from './reads.js'

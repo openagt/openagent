@@ -31,6 +31,14 @@
     "./rpc": {
       "types": "./dist/rpc.d.ts",
       "default": "./dist/rpc.js"
+    },
+    "./command": {
+      "types": "./dist/command.d.ts",
+      "default": "./dist/command.js"
+    },
+    "./repository-address": {
+      "types": "./dist/repository-address.d.ts",
+      "default": "./dist/repository-address.js"
     }
   },
   "scripts": {
@@ -41,8 +49,8 @@
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "typescript": "^7.0.2",
-    "@types/react": "^19.2.0"
+    "@types/react": "^19.2.0",
+    "typescript": "^7.0.2"
   },
   "publishConfig": {
     "access": "public"

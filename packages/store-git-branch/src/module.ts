@@ -1,4 +1,4 @@
-import { readSharing } from '@openagt/agent-data'
+import { readSharing } from '@openagt/store-filesystem'
 import { defineModule } from '@openagt/hooks'
 import { SHARE_ENTRY } from './entry.js'
 import { backupAttention } from './backup-attention.js'

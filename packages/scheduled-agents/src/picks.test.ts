@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { projectId } from '@openagt/agent-data'
+import { projectId } from '@openagt/projects'
 import { SCHEDULED_COMMANDS } from '@openagt/hooks'
 import { memorySettings } from '@openagt/hooks/testing'
 import { cleanup, SWITCHES_AND_PACES } from './cleanup.js'

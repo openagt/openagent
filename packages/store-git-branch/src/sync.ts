@@ -1,4 +1,4 @@
-import { pullProjectData } from '@openagt/agent-data'
+import { pullProjectData } from '@openagt/store-filesystem'
 import type { AppAttention, AppLifecycle, ProjectRef } from '@openagt/hooks'
 
 /**

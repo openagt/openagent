@@ -4,7 +4,7 @@ import { execFile } from 'node:child_process'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { lstat, mkdir, mkdtemp, readFile, readlink, realpath, rm, stat, writeFile } from 'node:fs/promises'
-import { nodeGitRunner } from '@openagt/agent-data'
+import { nodeGitRunner } from './git.js'
 import { CLI_BIN_DIR, reconcileBranchLinks, runCli, worktreePath } from './index.js'
 
 // #1725: the command line is the package's functions for an agent in a shell, so every command

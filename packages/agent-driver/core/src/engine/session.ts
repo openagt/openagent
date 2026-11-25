@@ -1,7 +1,7 @@
 import { AgentExitError } from '../cli-session.js'
 import { ConversationGoneError } from '../gone.js'
 import { imagesOf, promptLines, promptOf, takeInbox } from '../inbox.js'
-import { errorMessage } from '@openagt/agent-data'
+import { errorMessage } from '@openagt/git-branches'
 import type { RunAsking, RunOutcome, DriverPromptOptions, DriverSession, DriverTurn, LogEndStatus, PromptLine, Question } from '@openagt/hooks'
 import type { Leg } from './leg.js'
 import { inboxPath } from './live-card.js'

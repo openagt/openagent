@@ -1,7 +1,8 @@
 import { lstat, readdir, rm, rmdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import { DATA_BRANCH, OPENAGENT_DIR, clearSharing, errorMessage, nodeGitRunner, removeFileBranch, removePersonalData, SHARE_SETTING, type GitRunner } from '@openagt/agent-data'
-import type { CleanupReport } from '@openagt/hooks'
+import { DATA_BRANCH, errorMessage, nodeGitRunner } from '@openagt/git-branches'
+import { OPENAGENT_DIR, type GitRunner, type CleanupReport } from '@openagt/hooks'
+import { clearSharing, removeFileBranch, removePersonalData, SHARE_SETTING } from '@openagt/store-filesystem'
 
 /**
  * What OpenAgent left in a project's folder, removed: what a person asks for with the box in the

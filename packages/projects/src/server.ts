@@ -1,5 +1,4 @@
-import { addressOfRemote, repositoryAddress } from '@openagt/agent-data'
-import { PROJECTS } from '@openagt/hooks'
+import { addressOfRemote, repositoryAddress, PROJECTS } from '@openagt/hooks'
 import { act, read, type RpcComputerHost } from '@openagt/hooks/rpc'
 import { addFolder, type AddResult } from './add.js'
 import { cloneProject, cloneTarget, cloneTargetOf } from './clone.js'

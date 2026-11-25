@@ -1,4 +1,4 @@
-import { isRepoOwner, readRepoOwners, writeRepoOwners } from '@openagt/agent-data'
+import { isRepoOwner, readRepoOwners, writeRepoOwners } from '@openagt/projects'
 import { HOST } from './accounts.js'
 import { cliAnswer, hostAccounts } from './host-accounts.js'
 

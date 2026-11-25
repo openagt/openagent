@@ -3,7 +3,8 @@ import { mkdir, mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { nodeGitRunner, writeSharing } from '@openagt/agent-data'
+import { nodeGitRunner } from '@openagt/git-branches'
+import { writeSharing } from '@openagt/store-filesystem'
 import gitBranch, { SHARE_ENTRY } from './module.js'
 
 // store-git-branch's row: whether the person shares the project's data on its branch, the clone's

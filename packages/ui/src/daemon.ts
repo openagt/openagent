@@ -10,7 +10,7 @@ import { registryPreferencesStore } from './registry.js'
 import { readySessionsHome } from './sessions-home.js'
 import { distributionHooks, localHostOf } from './distribution-hooks.js'
 import type { Hooks, ProjectRef, RunHost } from '@openagt/hooks'
-import { sessionsHome } from '@openagt/agent-data'
+import { sessionsHome } from '@openagt/git-branches'
 import { readSecureAddress, SECURE_PORT, type SecureAddress } from './secure-address.js'
 import type { StartedProject } from './dashboard/types.js'
 

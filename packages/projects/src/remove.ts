@@ -1,4 +1,4 @@
-import { fileBranchRepo, projectKey } from '@openagt/agent-data'
+import { fileBranchRepo, projectKeyAt } from '@openagt/store-filesystem'
 import { PROJECTS, type CleanupReport, type ProjectsLifecycle, type Settings } from '@openagt/hooks'
 import { isFolder, projectRefAt, unlistProject } from './list.js'
 import { removeProjectFiles } from './remove-files.js'
@@ -30,12 +30,12 @@ export async function removeListed(ctx: { settings: Settings; lifecycle: Project
   // same repository, or a clone of it whose records the personal folder keeps in the same
   // directory, they stay.
   const repository = await fileBranchRepo(record.path)
-  const key = await projectKey(repository ?? record.path)
+  const key = await projectKeyAt(repository ?? record.path)
   let recordsUsedBy: string | undefined
   for (const other of listed) {
     if (other.id === id) continue
     const otherRepository = await fileBranchRepo(other.path)
-    if ((repository !== undefined && otherRepository === repository) || (await projectKey(otherRepository ?? other.path)) === key) recordsUsedBy = other.path
+    if ((repository !== undefined && otherRepository === repository) || (await projectKeyAt(otherRepository ?? other.path)) === key) recordsUsedBy = other.path
   }
   return { ok: true, cleanup: await removeProjectFiles(record.path, cleaned, { recordsUsedBy }) }
 }

@@ -14,8 +14,7 @@
 import { createContext, useContext } from 'react'
 import type { Activity as ActivityItem, AgentStatus, ProjectionRead, Waiting as WaitingItem } from '../../src/index.js'
 import type { ModuleAgent, ModuleAgentsWanted } from '../../src/dashboard/module-agents.js'
-import { callModule, runComputerCommand, runModuleCommand } from '../rpc/modules.js'
-import type { ModuleCallResult, ModuleCommandResult } from '../rpc/modules.js'
+import { callModule, runComputerCommand, runModuleCommand, type ModuleCallResult, type ModuleCommandResult } from '../rpc/modules.js'
 import type { ComputerRpcClient, RpcClient } from '@openagt/hooks/rpc'
 import { DaemonDown } from '../lib/use-daemon-health.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
@@ -330,10 +329,9 @@ export { SettingsFoot, SettingsItem, SettingsItems, SettingsSection, SettingsRow
 export { Avatar } from '../components/PersonMenu.js'
 export { usePerson, personChanged } from '../lib/use-person.js'
 export { CommandLine, FixAction, Linked, PackageLogo, type FixVariant } from '../components/Logins.js'
-// A "Send as" select of OpenAgent's accounts at a host (`RpcHost.accounts`), and a typed repository's address read.
+// A "Send as" select of OpenAgent's accounts at a host (`RpcHost.accounts`).
 export { SendAs, firstSendAs } from '../components/SendAs.js'
 export { ModuleFixPress } from '../components/Attention.js'
-export { typedRepository, type TypedRepository } from '../../src/typed-repository.js'
 export { PathStrip } from '../components/PathStrip.js'
 
 export { Dialog, BACKDROP_CLASS, DIALOG_POPUP_CLASS, DIALOG_PRESSES_CLASS } from '../components/ui/dialog.js'

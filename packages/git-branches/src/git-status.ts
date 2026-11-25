@@ -1,4 +1,5 @@
-import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
+import { nodeGitRunner } from './git.js'
+import type { GitRunner } from '@openagt/hooks'
 
 // A checkout's git status (#491, part of #488): the branch it is on, and whether its tree holds
 // uncommitted changes, a local git read. What the project's row above a working run's message box

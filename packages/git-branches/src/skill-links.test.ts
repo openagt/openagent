@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { mkdir, mkdtemp, readFile, readlink, realpath, rm, symlink, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { pathToFileURL } from 'node:url'
-import { nodeGitRunner } from '@openagt/agent-data'
+import { nodeGitRunner } from './git.js'
 import { createCheckout, relinkCheckout } from './checkout.js'
 import { HARNESS_SKILL_DIRS, linkSkill, SKILL_DIR, SKILL_NAME, skillLink, skillLinkPaths } from './skill-links.js'
 

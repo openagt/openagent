@@ -1,4 +1,5 @@
-import { nodeGitRunner, originDefaultBranch, type GitRunner } from '@openagt/agent-data'
+import { nodeGitRunner, originDefaultBranch } from './git.js'
+import type { GitRunner } from '@openagt/hooks'
 import { currentBranch } from './worktree.js'
 
 // A project's folder behind its remote (#2421). An agent's checkout starts from the remote's main

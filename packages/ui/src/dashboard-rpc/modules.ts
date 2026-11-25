@@ -3,7 +3,7 @@ import { contextProjects, resolveProjectPath } from './context.js'
 import { SESSIONS_ID } from '../project-address.js'
 import { findComputerModule, findProjectModule, readComputerModules, readProjectModules, runModuleCommand as runCommand, type ModuleCommandResult } from '../project-modules.js'
 import { broughtModuleUrl, computerModuleUrl, moduleUrl, versionedModuleUrl } from '../dashboard/module-serve.js'
-import { pullProjectData } from '@openagt/agent-data'
+import { pullProjectData } from '@openagt/store-filesystem'
 
 export type { ModuleCommandResult } from '../project-modules.js'
 

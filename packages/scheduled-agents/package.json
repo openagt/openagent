@@ -41,13 +41,14 @@
     "clean": "rm -rf dist dist-test"
   },
   "dependencies": {
+    "@openagt/agent-driver": "workspace:*",
     "@openagt/agent-driver-claude-code": "workspace:*",
     "@openagt/agent-driver-codex": "workspace:*",
-    "@openagt/agent-data": "workspace:*",
     "@openagt/git-branches": "workspace:*",
-    "@openagt/agent-driver": "workspace:*",
-    "yaml": "^2.5.0",
-    "@openagt/hooks": "workspace:*"
+    "@openagt/hooks": "workspace:*",
+    "@openagt/projects": "workspace:*",
+    "@openagt/store-filesystem": "workspace:*",
+    "yaml": "^2.5.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",

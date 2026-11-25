@@ -1,4 +1,5 @@
-import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
+import { nodeGitRunner } from '@openagt/git-branches'
+import type { GitRunner } from '@openagt/hooks'
 import type { FileGitStatus } from './status.js'
 import { CONTEXT_LINES, cutToPreview, readConfinedFile, safeRepoPath } from './confined.js'
 

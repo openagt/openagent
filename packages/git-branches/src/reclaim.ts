@@ -1,4 +1,5 @@
-import { nodeGitRunner, originDefaultBranch, type GitRunner } from '@openagt/agent-data'
+import { nodeGitRunner, originDefaultBranch } from './git.js'
+import type { GitRunner } from '@openagt/hooks'
 import { isAgentBranch } from './branch-names.js'
 import {
   currentBranch,

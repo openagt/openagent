@@ -3,7 +3,7 @@ import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { nodeGitRunner } from '@openagt/agent-data'
+import { nodeGitRunner } from './git.js'
 import { readFolderBehind, updateFolder } from './folder-behind.js'
 
 // A project's folder behind its remote (#2421), on real repositories: a remote, the project's

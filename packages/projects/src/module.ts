@@ -1,6 +1,6 @@
 import { join } from 'node:path'
-import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
-import { defineModule, PROJECTS, RunOrder, type ModuleDefinition, type RunContext } from '@openagt/hooks'
+import { nodeGitRunner } from '@openagt/git-branches'
+import { type GitRunner, defineModule, PROJECTS, RunOrder, type ModuleDefinition, type RunContext } from '@openagt/hooks'
 import { givenFolder } from './add.js'
 import { noProjectYet } from './attention.js'
 

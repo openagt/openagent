@@ -3,9 +3,9 @@ import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { nodeGitRunner, writeSharing } from '@openagt/agent-data'
+import { nodeGitRunner } from '@openagt/git-branches'
+import { writeSharing, filesystemBackend, foldersOf, type Folders } from '@openagt/store-filesystem'
 import { chainStore, projectScope, type ProjectRef, type Store } from '@openagt/hooks'
-import { filesystemBackend, foldersOf, type Folders } from '@openagt/store-filesystem'
 import { gitBranchBackend } from './backend.js'
 
 // A shared project's data on its agent-data branch: saves committed and pushed there, reads off

@@ -1,4 +1,4 @@
-import type { GitRunner } from '@openagt/agent-data'
+import type { GitRunner } from '@openagt/hooks'
 
 /** How long a read of origin's branches waits: past this, origin counts as not reached. */
 const ORIGIN_WAIT_MS = 10_000

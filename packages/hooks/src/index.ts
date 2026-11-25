@@ -2,7 +2,9 @@
 // calls them. A module's Node part default-exports `defineModule({ name, hooks })` from its
 // package's `./module` entry; a distribution lists the modules, and `loadDistribution` loads them.
 // Its UI part's hooks, the places of the shell they fill, are `@openagt/hooks/ui` (`./ui.ts`), and
-// its server part's functions, which the UI part calls, `@openagt/hooks/rpc` (`./rpc.ts`).
+// its server part's functions, which the UI part calls, `@openagt/hooks/rpc` (`./rpc.ts`). The
+// conventions every module's command keeps are `@openagt/hooks/command` (`./command.ts`), and a
+// repository's address, read without git for browser-side code too, `@openagt/hooks/repository-address`.
 export { RunOrder, StoreOrder } from './order.js'
 export {
   PERSONAL_PARTS,
@@ -50,7 +52,9 @@ export {
   type WrittenCard,
 } from './agent.js'
 export { saidCall, type AgentCalls, type CallFamily, type CallKind, type CallWords, type SaidCall } from './calls.js'
-export type { ProjectRef } from './project.js'
+export { OPENAGENT_DIR, type ProjectRef } from './project.js'
+export { originUrl, projectNameOf, repositoryAddress, repositorySpelling, type GitRunner } from './origin.js'
+export { addressOfRemote, remoteHostOf, spellingOfRemote, typedRepository, type TypedRepository } from './repository-address.js'
 export {
   PUBLISH_LEVELS,
   type Publish,

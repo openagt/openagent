@@ -1,4 +1,5 @@
-import { commandReader, nodeGitRunner } from '@openagt/agent-data'
+import { commandReader } from '@openagt/store-filesystem'
+import { nodeGitRunner } from '@openagt/git-branches'
 import type { AppContext, AttentionArgs, AttentionItem, ProjectRef } from '@openagt/hooks'
 import { POPULATE_ACTION, populateId } from './module.js'
 import { TICKETS_DIR } from './names.js'

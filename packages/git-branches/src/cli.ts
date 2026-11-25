@@ -1,5 +1,7 @@
 import { resolve } from 'node:path'
-import { GIT_FAILED, Refused, UsageError, checkoutRoot, inRepo, nodeGitRunner, parseCommandArgs, runCommandLine, helpRows, helpText, type Command, type GitRunner } from '@openagt/agent-data'
+import { GIT_FAILED, checkoutRoot, nodeGitRunner } from './git.js'
+import type { GitRunner } from '@openagt/hooks'
+import { Refused, UsageError, inRepo, parseCommandArgs, runCommandLine, helpRows, helpText, type Command } from '@openagt/hooks/command'
 import { isSafeAgentId, sessionNameOf } from './branch-names.js'
 import { branchPushed, currentBranch, isWorktreeRoot, projectRoot, worktreeBranch, worktreeClean, worktreeDirEntries, worktreeSize } from './worktree.js'
 import { nameBranch, type NameBranchRefusal } from './name.js'

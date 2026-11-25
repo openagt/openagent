@@ -1,5 +1,6 @@
 import { basename } from 'node:path'
-import { errorMessage, nodeGitRunner, type GitRunner } from '@openagt/agent-data'
+import { errorMessage, nodeGitRunner } from '@openagt/git-branches'
+import type { GitRunner } from '@openagt/hooks'
 import type { GhRunner } from './gh.js'
 
 /**

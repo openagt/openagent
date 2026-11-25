@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import { test } from 'node:test'
-import { agentBranchName, isAgentBranch, isSafeAgentId, sessionNameOf } from './branch-names.js'
+import { agentBranchName, isAgentBranch, isSafeAgentId, publishedBase, publishedBranch, sessionNameOf } from './branch-names.js'
 
 test('sessionNameOf reads the session name off a renamed agent branch (#1725)', () => {
   assert.equal(sessionNameOf('agent-add-comments', 'r1'), 'add-comments')
@@ -28,4 +29,18 @@ test('an agent branch is the one a checkout was created on or a renamed one; nev
   assert.equal(isAgentBranch('agent-data'), false, 'the data branch carries the prefix but is nobody\'s')
   assert.equal(isSafeAgentId('data'), false, 'agent-data is the data branch')
   assert.equal(isSafeAgentId('data-2'), true)
+})
+
+// Browser-side code imports this entry (`@openagt/git-branches/branch-names`): one node module
+// here drags node-only code into a page's bundle, and the bundler says so only as a warning, in
+// another package's build.
+test('the branch names import nothing, so browser-side code can import them', async () => {
+  const source = await readFile(new URL('./branch-names.js', import.meta.url), 'utf8')
+  assert.doesNotMatch(source, /^\s*(import|export .* from)\b/m)
+})
+
+test('a run is told to start from origin\'s copy of a branch by its full name, read back as the branch', () => {
+  assert.equal(publishedBase('main'), 'refs/remotes/origin/main')
+  assert.equal(publishedBranch(publishedBase('main')), 'main')
+  assert.equal(publishedBranch('main'), undefined)
 })

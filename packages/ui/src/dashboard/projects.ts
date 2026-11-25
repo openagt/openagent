@@ -1,12 +1,12 @@
 import { basename } from 'node:path'
-import type { ProjectRecord } from '@openagt/hooks'
+import { type ProjectRecord, projectNameOf, repositoryAddress } from '@openagt/hooks'
 import { listProjects } from '../distribution-hooks.js'
 import { nodeFs } from '../node-fs.js'
 import { isActivated } from '../project.js'
 import { readRuns, type AgentMeta } from '../store/index.js'
 import { contextHosts } from '../dashboard-rpc/context.js'
 import type { ProjectError, StaysLocal } from '../project-state.js'
-import { projectNameOf, repositoryAddress, sessionsHome } from '@openagt/agent-data'
+import { sessionsHome } from '@openagt/git-branches'
 import { SESSIONS_ID } from '../project-address.js'
 
 /**

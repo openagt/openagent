@@ -50,8 +50,10 @@
     "clean": "rm -rf dist dist-test"
   },
   "dependencies": {
-    "@openagt/agent-data": "workspace:*",
-    "@openagt/hooks": "workspace:*"
+    "@openagt/agent-driver": "workspace:*",
+    "@openagt/git-branches": "workspace:*",
+    "@openagt/hooks": "workspace:*",
+    "@openagt/store-filesystem": "workspace:*"
   },
   "devDependencies": {
     "@openagt/ui-renderer-markdown": "workspace:*",

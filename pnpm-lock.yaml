@@ -39,15 +39,6 @@ importers:
         specifier: ^7.0.2
         version: 7.0.2
 
-  packages/agent-data:
-    devDependencies:
-      '@types/node':
-        specifier: ^20.0.0
-        version: 20.19.43
-      typescript:
-        specifier: ^7.0.2
-        version: 7.0.2
-
   packages/agent-driver/claude-code:
     dependencies:
       '@openagt/agent-driver':
@@ -82,15 +73,18 @@ importers:
 
   packages/agent-driver/core:
     dependencies:
-      '@openagt/agent-data':
-        specifier: workspace:*
-        version: link:../../agent-data
       '@openagt/git-branches':
         specifier: workspace:*
         version: link:../../git-branches
       '@openagt/hooks':
         specifier: workspace:*
         version: link:../../hooks
+      '@openagt/projects':
+        specifier: workspace:*
+        version: link:../../projects
+      '@openagt/store-filesystem':
+        specifier: workspace:*
+        version: link:../../store-filesystem
       yaml:
         specifier: ^2.5.0
         version: 2.9.0
@@ -101,9 +95,6 @@ importers:
       '@openagt/notifications-command':
         specifier: workspace:*
         version: link:../../notifications-command
-      '@openagt/projects':
-        specifier: workspace:*
-        version: link:../../projects
       '@openagt/skills':
         specifier: workspace:*
         version: link:../../skills
@@ -201,9 +192,6 @@ importers:
 
   packages/browser:
     dependencies:
-      '@openagt/agent-data':
-        specifier: workspace:*
-        version: link:../agent-data
       '@openagt/hooks':
         specifier: workspace:*
         version: link:../hooks
@@ -362,9 +350,6 @@ importers:
 
   packages/discord:
     dependencies:
-      '@openagt/agent-data':
-        specifier: workspace:*
-        version: link:../agent-data
       '@openagt/hooks':
         specifier: workspace:*
         version: link:../hooks
@@ -378,9 +363,6 @@ importers:
 
   packages/git-branches:
     dependencies:
-      '@openagt/agent-data':
-        specifier: workspace:*
-        version: link:../agent-data
       '@openagt/hooks':
         specifier: workspace:*
         version: link:../hooks
@@ -430,15 +412,15 @@ importers:
 
   packages/github:
     dependencies:
-      '@openagt/agent-data':
-        specifier: workspace:*
-        version: link:../agent-data
       '@openagt/git-branches':
         specifier: workspace:*
         version: link:../git-branches
       '@openagt/hooks':
         specifier: workspace:*
         version: link:../hooks
+      '@openagt/projects':
+        specifier: workspace:*
+        version: link:../projects
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.0.0
@@ -485,12 +467,12 @@ importers:
 
   packages/github-auto-reply:
     dependencies:
-      '@openagt/agent-data':
-        specifier: workspace:*
-        version: link:../agent-data
       '@openagt/agent-driver':
         specifier: workspace:*
         version: link:../agent-driver/core
+      '@openagt/git-branches':
+        specifier: workspace:*
+        version: link:../git-branches
       '@openagt/github':
         specifier: workspace:*
         version: link:../github
@@ -519,12 +501,12 @@ importers:
 
   packages/host-claude-web:
     dependencies:
-      '@openagt/agent-data':
-        specifier: workspace:*
-        version: link:../agent-data
       '@openagt/agent-driver':
         specifier: workspace:*
         version: link:../agent-driver/core
+      '@openagt/git-branches':
+        specifier: workspace:*
+        version: link:../git-branches
       '@openagt/github':
         specifier: workspace:*
         version: link:../github
@@ -535,6 +517,9 @@ importers:
         specifier: 3.2.1
         version: 3.2.1
     devDependencies:
+      '@openagt/store-filesystem':
+        specifier: workspace:*
+        version: link:../store-filesystem
       '@tailwindcss/vite':
         specifier: ^4.0.0
         version: 4.3.2(vite@8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
@@ -593,9 +578,12 @@ importers:
         specifier: workspace:*
         version: link:../hooks
     devDependencies:
-      '@openagt/agent-data':
+      '@openagt/git-branches':
         specifier: workspace:*
-        version: link:../agent-data
+        version: link:../git-branches
+      '@openagt/store-filesystem':
+        specifier: workspace:*
+        version: link:../store-filesystem
       '@tailwindcss/vite':
         specifier: ^4.0.0
         version: 4.3.2(vite@8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
@@ -641,9 +629,9 @@ importers:
 
   packages/install:
     dependencies:
-      '@openagt/agent-data':
+      '@openagt/hooks':
         specifier: workspace:*
-        version: link:../agent-data
+        version: link:../hooks
       '@openagt/ui':
         specifier: workspace:*
         version: link:../ui
@@ -657,15 +645,18 @@ importers:
 
   packages/logs:
     dependencies:
-      '@openagt/agent-data':
-        specifier: workspace:*
-        version: link:../agent-data
       '@openagt/agent-driver':
         specifier: workspace:*
         version: link:../agent-driver/core
+      '@openagt/git-branches':
+        specifier: workspace:*
+        version: link:../git-branches
       '@openagt/hooks':
         specifier: workspace:*
         version: link:../hooks
+      '@openagt/store-filesystem':
+        specifier: workspace:*
+        version: link:../store-filesystem
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.0.0
@@ -899,12 +890,15 @@ importers:
 
   packages/projects:
     dependencies:
-      '@openagt/agent-data':
+      '@openagt/git-branches':
         specifier: workspace:*
-        version: link:../agent-data
+        version: link:../git-branches
       '@openagt/hooks':
         specifier: workspace:*
         version: link:../hooks
+      '@openagt/store-filesystem':
+        specifier: workspace:*
+        version: link:../store-filesystem
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.0.0
@@ -954,12 +948,18 @@ importers:
 
   packages/queue:
     dependencies:
-      '@openagt/agent-data':
+      '@openagt/git-branches':
         specifier: workspace:*
-        version: link:../agent-data
+        version: link:../git-branches
       '@openagt/hooks':
         specifier: workspace:*
         version: link:../hooks
+      '@openagt/projects':
+        specifier: workspace:*
+        version: link:../projects
+      '@openagt/store-filesystem':
+        specifier: workspace:*
+        version: link:../store-filesystem
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.0.0
@@ -1055,9 +1055,6 @@ importers:
 
   packages/scheduled-agents:
     dependencies:
-      '@openagt/agent-data':
-        specifier: workspace:*
-        version: link:../agent-data
       '@openagt/agent-driver':
         specifier: workspace:*
         version: link:../agent-driver/core
@@ -1073,6 +1070,12 @@ importers:
       '@openagt/hooks':
         specifier: workspace:*
         version: link:../hooks
+      '@openagt/projects':
+        specifier: workspace:*
+        version: link:../projects
+      '@openagt/store-filesystem':
+        specifier: workspace:*
+        version: link:../store-filesystem
       yaml:
         specifier: ^2.5.0
         version: 2.9.0
@@ -1122,9 +1125,6 @@ importers:
 
   packages/skills:
     dependencies:
-      '@openagt/agent-data':
-        specifier: workspace:*
-        version: link:../agent-data
       '@openagt/git-branches':
         specifier: workspace:*
         version: link:../git-branches
@@ -1180,9 +1180,9 @@ importers:
 
   packages/store-filesystem:
     dependencies:
-      '@openagt/agent-data':
+      '@openagt/git-branches':
         specifier: workspace:*
-        version: link:../agent-data
+        version: link:../git-branches
       '@openagt/hooks':
         specifier: workspace:*
         version: link:../hooks
@@ -1196,9 +1196,9 @@ importers:
 
   packages/store-git-branch:
     dependencies:
-      '@openagt/agent-data':
+      '@openagt/git-branches':
         specifier: workspace:*
-        version: link:../agent-data
+        version: link:../git-branches
       '@openagt/hooks':
         specifier: workspace:*
         version: link:../hooks
@@ -1254,9 +1254,9 @@ importers:
 
   packages/store-git-repository:
     dependencies:
-      '@openagt/agent-data':
+      '@openagt/git-branches':
         specifier: workspace:*
-        version: link:../agent-data
+        version: link:../git-branches
       '@openagt/hooks':
         specifier: workspace:*
         version: link:../hooks
@@ -1309,12 +1309,18 @@ importers:
 
   packages/tickets:
     dependencies:
-      '@openagt/agent-data':
+      '@openagt/agent-driver':
         specifier: workspace:*
-        version: link:../agent-data
+        version: link:../agent-driver/core
+      '@openagt/git-branches':
+        specifier: workspace:*
+        version: link:../git-branches
       '@openagt/hooks':
         specifier: workspace:*
         version: link:../hooks
+      '@openagt/store-filesystem':
+        specifier: workspace:*
+        version: link:../store-filesystem
     devDependencies:
       '@openagt/ui-renderer-markdown':
         specifier: workspace:*
@@ -1367,9 +1373,6 @@ importers:
       '@base-ui/react':
         specifier: 1.9.0
         version: 1.9.0(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      '@openagt/agent-data':
-        specifier: workspace:*
-        version: link:../agent-data
       '@openagt/hooks':
         specifier: workspace:*
         version: link:../hooks
@@ -1656,9 +1659,9 @@ importers:
 
   packages/ui-pane-changes:
     dependencies:
-      '@openagt/agent-data':
+      '@openagt/git-branches':
         specifier: workspace:*
-        version: link:../agent-data
+        version: link:../git-branches
       '@openagt/hooks':
         specifier: workspace:*
         version: link:../hooks
@@ -1708,9 +1711,9 @@ importers:
 
   packages/ui-pane-files:
     dependencies:
-      '@openagt/agent-data':
+      '@openagt/git-branches':
         specifier: workspace:*
-        version: link:../agent-data
+        version: link:../git-branches
       '@openagt/hooks':
         specifier: workspace:*
         version: link:../hooks

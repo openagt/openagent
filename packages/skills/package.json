@@ -39,9 +39,8 @@
     "clean": "rm -rf dist dist-test"
   },
   "dependencies": {
-    "@openagt/agent-data": "workspace:*",
-    "@openagt/hooks": "workspace:*",
     "@openagt/git-branches": "workspace:*",
+    "@openagt/hooks": "workspace:*",
     "yaml": "^2.5.0"
   },
   "devDependencies": {

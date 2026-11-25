@@ -1,8 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import type { GitRunner } from '@openagt/agent-data'
+import type { GitRunner, RunFound } from '@openagt/hooks'
 import type { Handoff } from '@openagt/git-branches'
-import type { RunFound } from '@openagt/hooks'
 import { prHandoffOf, readRunPr, requestText, type PrRead } from './handoff.js'
 import type { GitHostFor, GitHostRequest, LinkedPr } from './pulls.js'
 

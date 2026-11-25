@@ -29,8 +29,7 @@ import {
   type UiHost,
   type UiWhereRepo,
 } from '@openagt/ui/module'
-import { addressOfRemote } from '@openagt/agent-data/repository-address'
-import { typedRepository } from '../src/typed-repository.js'
+import { addressOfRemote, typedRepository } from '@openagt/hooks/repository-address'
 import type { ReposRead } from '../src/server.js'
 import { addFolderToSearch, readRepos } from './calls.js'
 import { AddProjectPanel } from './AddProjectPanel.js'

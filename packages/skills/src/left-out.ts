@@ -1,5 +1,6 @@
-import { nodeGitRunner, SKILLS_DIRS, type GitRunner } from '@openagt/agent-data'
-import type { SkillsOptions } from '@openagt/hooks'
+import { nodeGitRunner } from '@openagt/git-branches'
+import { SKILLS_DIRS } from './project-skills.js'
+import type { GitRunner, SkillsOptions } from '@openagt/hooks'
 
 /** Which of the project's own skills a run keeps: every one, none, or the ones named. */
 export type ProjectSkillsPick = NonNullable<SkillsOptions['project']>

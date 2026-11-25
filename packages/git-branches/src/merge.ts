@@ -1,4 +1,5 @@
-import { gitReason, nodeGitRunner, type GitRunner } from '@openagt/agent-data'
+import { gitReason, nodeGitRunner } from './git.js'
+import type { GitRunner } from '@openagt/hooks'
 import { isAgentBranch } from './branch-names.js'
 import { checkoutOn, currentBranch, worktreeClean } from './worktree.js'
 

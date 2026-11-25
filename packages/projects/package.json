@@ -19,6 +19,10 @@
     "dist"
   ],
   "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
     "./package.json": "./package.json",
     "./module": {
       "types": "./dist/module.d.ts",
@@ -35,8 +39,9 @@
     "clean": "rm -rf dist dist-test"
   },
   "dependencies": {
-    "@openagt/agent-data": "workspace:*",
-    "@openagt/hooks": "workspace:*"
+    "@openagt/git-branches": "workspace:*",
+    "@openagt/hooks": "workspace:*",
+    "@openagt/store-filesystem": "workspace:*"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",

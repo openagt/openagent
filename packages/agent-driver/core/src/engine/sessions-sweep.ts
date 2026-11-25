@@ -1,5 +1,5 @@
 import { hostname } from 'node:os'
-import { errorMessage, sessionsHome } from '@openagt/agent-data'
+import { errorMessage, sessionsHome } from '@openagt/git-branches'
 import type { AppContext } from '@openagt/hooks'
 import { isPidAlive } from './run-lock.js'
 import { sweep } from './sweep.js'

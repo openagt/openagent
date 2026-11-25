@@ -4,7 +4,7 @@ import { callModuleFunction, computerHost, functionKind, serverHost, type Comput
 import { distributionHooks, projectRefAt, runRefAt } from '../distribution-hooks.js'
 import { SESSIONS_ID } from '../project-address.js'
 
-import { pullProjectData } from '@openagt/agent-data'
+import { pullProjectData } from '@openagt/store-filesystem'
 import type { ProjectRef, RunFacts, RunFound, RunQuestion, RunRef } from '@openagt/hooks'
 import type { ModuleOn } from '@openagt/hooks/rpc'
 import { readRunEvents } from '../store/index.js'

@@ -1,6 +1,6 @@
 import { basename } from 'node:path'
 import { realpath, stat } from 'node:fs/promises'
-import type { GitRunner } from '@openagt/agent-data'
+import type { GitRunner } from '@openagt/hooks'
 import { agentBranchName, agentIdFromWorktreeDir } from './branch-names.js'
 import { discardWorktree, reclaimWorktree, type ReclaimOutcome } from './reclaim.js'
 import { worktreePath } from './worktree.js'

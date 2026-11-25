@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { nodeGitRunner } from '@openagt/agent-data'
+import { nodeGitRunner } from '@openagt/git-branches'
 import { holderOf } from './holder.js'
 
 const git = nodeGitRunner()

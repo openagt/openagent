@@ -1,4 +1,6 @@
-import { commandReader, nodeGitRunner, projectId } from '@openagt/agent-data'
+import { commandReader } from '@openagt/store-filesystem'
+import { nodeGitRunner } from '@openagt/git-branches'
+import { projectId } from '@openagt/projects'
 import { SCHEDULED_COMMANDS, type SchedulePace } from '@openagt/hooks'
 import { read } from '@openagt/hooks/rpc'
 import { QUEUE_COMMAND } from './module.js'

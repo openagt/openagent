@@ -3,7 +3,7 @@ export type { SteerResult }
 import { openInApp, type OpenTarget, type OpenResult } from '../dashboard/open-in-app.js'
 import { contextPreferences, contextStartAgent, resolveProjectPath, resolveAgentPath, runHostOf } from './context.js'
 import { runRefAt } from '../distribution-hooks.js'
-import { errorMessage } from '@openagt/agent-data'
+import { errorMessage } from '../error-message.js'
 import { isRunId } from '../store/index.js'
 import { withAgentLock } from '../agent-locks.js'
 import type {

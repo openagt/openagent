@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { nodeGitRunner } from '@openagt/agent-data'
+import { nodeGitRunner } from '@openagt/git-branches'
 import { leftOutSkillPaths, projectSkillNames } from './left-out.js'
 
 const git = nodeGitRunner()

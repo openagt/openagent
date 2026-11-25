@@ -1,4 +1,4 @@
-import { branchReach, type BranchReach } from '@openagt/agent-data'
+import { branchReach, type BranchReach } from '@openagt/store-filesystem'
 import type { Hooks } from '@openagt/hooks'
 import { cachedRead } from './dashboard/cache.js'
 import { distributionHooks, projectRefAt } from './distribution-hooks.js'

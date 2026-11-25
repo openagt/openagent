@@ -50,8 +50,10 @@
     "clean": "rm -rf dist dist-test"
   },
   "dependencies": {
-    "@openagt/agent-data": "workspace:*",
-    "@openagt/hooks": "workspace:*"
+    "@openagt/git-branches": "workspace:*",
+    "@openagt/hooks": "workspace:*",
+    "@openagt/projects": "workspace:*",
+    "@openagt/store-filesystem": "workspace:*"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",

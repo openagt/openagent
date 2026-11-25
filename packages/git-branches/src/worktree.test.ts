@@ -3,7 +3,9 @@ import { test } from 'node:test'
 import { join } from 'node:path'
 import { mkdir, mkdtemp, rm, writeFile, stat, realpath, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { nodeGitRunner, type GitRunner, BRANCHES_DIR } from '@openagt/agent-data'
+import { nodeGitRunner } from './git.js'
+import type { GitRunner } from '@openagt/hooks'
+import { BRANCHES_DIR, agentBranchName, publishedBase } from './branch-names.js'
 import {
   addWorktree,
   attachWorktree,
@@ -21,8 +23,6 @@ import {
   leaveOut,
   FRESH_START_FETCH_MS,
 } from './worktree.js'
-import { agentBranchName } from './branch-names.js'
-import { publishedBase } from '@openagt/agent-data/names'
 
 const REPO = '/repo'
 

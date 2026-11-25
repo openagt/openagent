@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
-import { projectId } from '@openagt/agent-data'
+import { projectId } from '../project-id.js'
 import type { AgentMeta, AgentStatus } from '../store/index.js'
 import { FIXTURE_PLUGINS, makeFixtureRepo } from './fixture.js'
 

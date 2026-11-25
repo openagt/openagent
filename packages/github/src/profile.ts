@@ -1,4 +1,4 @@
-import { errorMessage } from '@openagt/agent-data'
+import { errorMessage } from '@openagt/git-branches'
 
 /**
  * A GitHub user's public profile: the name and picture a person copies into OpenAgent as their

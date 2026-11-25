@@ -1,5 +1,7 @@
-import { clearRemoteAccount, originUrl, pullProjectData, readPersonalFolder, readRemoteAccount, readSharing, remoteHostOf, repositoryAddress, shareProjectDataAs, writeRemoteAccount } from '@openagt/agent-data'
-import type { GitAccounts, ProjectRef } from '@openagt/hooks'
+import { clearRemoteAccount, errorMessage, nodeGitRunner, readRemoteAccount, writeRemoteAccount, type RemoteAccount } from '@openagt/git-branches'
+import { originUrl, remoteHostOf, repositoryAddress, type GitAccounts, type ProjectRef } from '@openagt/hooks'
+import { fileBranchRepo, pullProjectData, readSharing, type ProjectDataDeps } from '@openagt/store-filesystem'
+import { readPersonalFolder } from './folder-sync.js'
 import { personalFolderShown } from './shown.js'
 
 // What is not backed up: the agents' data that syncs with a repository at a git host, with no
@@ -56,6 +58,17 @@ export async function sendProjectDataAs(root: string, login: string, accounts: G
   if (host === undefined) return { ok: false, error: 'This project is sent to no git host.' }
   const account = await accounts.sendAs(host, login)
   return account.ok ? shareProjectDataAs(root, account.account) : account
+}
+
+/** Send the shared project's data as another of OpenAgent's accounts from now on: what was not sent yet goes with the next write. */
+export async function shareProjectDataAs(cwd: string, account: RemoteAccount, deps: ProjectDataDeps = {}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const git = deps.git ?? nodeGitRunner()
+  const repo = (await fileBranchRepo(cwd, git)) ?? cwd
+  if (!(await readSharing(repo, git))) return { ok: false, error: 'the project is not shared' }
+  return writeRemoteAccount(repo, account, git).then(
+    () => ({ ok: true as const }),
+    err => ({ ok: false as const, error: errorMessage(err) }),
+  )
 }
 
 /** What git said went wrong, as a person reads it: its last line, not the command it ran. */

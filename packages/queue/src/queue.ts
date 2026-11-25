@@ -1,4 +1,4 @@
-import { readProjectFile } from '@openagt/agent-data'
+import { readProjectFile } from '@openagt/store-filesystem'
 import { QUEUE_FILE } from './names.js'
 
 // The agent queue, `TODO_AGENTS.md`: every task agents will work on next, in markdown list items

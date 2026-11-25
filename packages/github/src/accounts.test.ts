@@ -8,7 +8,7 @@ import type { GhRunner } from './gh.js'
 import { accountLogins, ghState, isAccountDir, loginUnderWay, runEnv, runsAccount, settleAdded, startLogin, stopLogin, useForRuns } from './accounts.js'
 import { jobState, startJob } from './job.js'
 import { gitDirsOf } from './module.js'
-import { sessionFolder, sessionsHome } from '@openagt/agent-data'
+import { sessionFolder, sessionsHome } from '@openagt/git-branches'
 import { runCli, type CliDeps } from './cli.js'
 
 // OpenAgent's own GitHub accounts, one gh folder each, and the one runs use: the person's own gh,

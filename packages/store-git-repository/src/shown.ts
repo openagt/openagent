@@ -1,5 +1,6 @@
 import { homedir } from 'node:os'
-import { spellingOfRemote, type PersonalFolderState } from '@openagt/agent-data'
+import { spellingOfRemote } from '@openagt/hooks'
+import type { PersonalFolderState } from './folder-sync.js'
 
 /** The person's own folder as a page shows it: its path with the home directory as `~`, the repository it syncs with as `host/path`, and that repository's page. */
 export interface PersonalFolderShown {

@@ -1,5 +1,5 @@
 import { homedir, userInfo } from 'node:os'
-import { nodeGitRunner } from '@openagt/agent-data'
+import { nodeGitRunner } from '../git.js'
 import { PERSON_INFO, type PersonInfo } from '@openagt/hooks'
 import { distributionSettings } from '../distribution-hooks.js'
 

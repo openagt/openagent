@@ -1,4 +1,6 @@
-import { gitignorePath, nodeGitRunner, type GitRunner } from '@openagt/agent-data'
+import { gitignorePath } from '@openagt/projects'
+import { nodeGitRunner } from './git.js'
+import type { GitRunner } from '@openagt/hooks'
 import { nodeFs } from './node-fs.js'
 
 /**

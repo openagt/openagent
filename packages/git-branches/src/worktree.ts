@@ -1,9 +1,9 @@
 import { execFile } from 'node:child_process'
 import { basename, dirname, join } from 'node:path'
 import { readdir, realpath, stat } from 'node:fs/promises'
-import { nodeGitRunner, checkoutRoot, gitReason, originDefaultBranch, type GitRunner, BRANCHES_DIR } from '@openagt/agent-data'
-import { isSafeAgentId, isAgentBranch, agentBranchName, agentIdFromWorktreeDir } from './branch-names.js'
-import { publishedBranch } from '@openagt/agent-data/names'
+import { nodeGitRunner, checkoutRoot, gitReason, originDefaultBranch } from './git.js'
+import type { GitRunner } from '@openagt/hooks'
+import { BRANCHES_DIR, isSafeAgentId, isAgentBranch, agentBranchName, agentIdFromWorktreeDir, publishedBranch } from './branch-names.js'
 
 /**
  * Git-worktree lifecycle for concurrent agents (#453/#735): give each agent its own

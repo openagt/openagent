@@ -64,6 +64,8 @@ export { INBOX_FILE } from './engine/live-card.js'
 export { localHost, type LocalHostDeps } from './engine/host.js'
 export { ReadyNaming, type ReadyNamingDeps } from './engine/ready-naming.js'
 export { forgetStartedNames, nameStarted, withStartedNames } from './engine/started-names.js'
+// The environment a run is started with: a module's tool in the run names the run, its profile and its picks by it.
+export { AGENT_ID_ENV, PLUGINS_WITHOUT_ENV, PROFILE_ENV, PROJECT_SKILLS_ENV, isSkillName } from './engine/names.js'
 // The models a coding agent offers, as its adapter asks it once per account.
 export { modelsAskedOnce, firstAccountOf, modelsOf, type AgentModels, type ModelsAsked } from './models.js'
 export { NAME_FILE_ENV, givenName, nameHandOver } from './engine/title.js'

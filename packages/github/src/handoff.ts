@@ -1,6 +1,5 @@
-import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
-import { readBranchStates, readHandoff, workAt, type Handoff, type HandoffCommit, type WorkAt } from '@openagt/git-branches'
-import type { RunFound } from '@openagt/hooks'
+import { nodeGitRunner, readBranchStates, readHandoff, workAt, type Handoff, type HandoffCommit, type WorkAt } from '@openagt/git-branches'
+import type { GitRunner, RunFound } from '@openagt/hooks'
 import { homeUrlFor } from './home.js'
 import { cachedPrsForBranch, forgetBranchPrs, forgetPr, pickAgentPr, prsForBranch, prsForBranchOrThrow, projectGitHost, type GitHostFor, type LinkedPr } from './pulls.js'
 

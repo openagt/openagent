@@ -1,4 +1,4 @@
-import { addressOfRemote } from '@openagt/agent-data'
+import { addressOfRemote } from '@openagt/hooks'
 
 /**
  * The address a person typed, as git is given it: a host's address as it is (`https://…`,

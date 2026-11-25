@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { HOSTED_MAX_AGE_MS, addOwner, forgetHosted, hostedWiring, readHosted, readOwners, removeOwner } from './hosted.js'
-import { readRepoOwners } from '@openagt/agent-data'
+import { readRepoOwners } from '@openagt/projects'
 
 // The GitHub repositories the picker lists: each OpenAgent account's own, as itself, and each
 // owner the person named, as the account runs use; read behind the answer and kept.

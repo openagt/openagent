@@ -1,6 +1,6 @@
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { excludeFromGit } from '@openagt/agent-data'
+import { excludeFromGit } from '@openagt/git-branches'
 import { RUNNER_DIR, RUNS_DIR } from './names.js'
 
 /**

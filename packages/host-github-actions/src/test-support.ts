@@ -1,7 +1,8 @@
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { DATA_BRANCH, nodeGitRunner, writeSharing } from '@openagt/agent-data'
+import { DATA_BRANCH, nodeGitRunner } from '@openagt/git-branches'
+import { writeSharing } from '@openagt/store-filesystem'
 import type { FetchLike } from './actions.js'
 
 // What the tests work with: a GitHub that answers the REST calls a run's turns make, from what a

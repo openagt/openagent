@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Button, Input, ModuleFixPress, PathStrip, SendAs, SettingsRow, SettingsRowShapes, SettingsSection, Slot, firstSendAs, typedRepository, useAction, useModuleHost, usePolled } from '@openagt/ui/module'
+import { Button, Input, ModuleFixPress, PathStrip, SendAs, SettingsRow, SettingsRowShapes, SettingsSection, Slot, firstSendAs, useAction, useModuleHost, usePolled } from '@openagt/ui/module'
+import { typedRepository } from '@openagt/hooks/repository-address'
 import type { HostAccounts } from '@openagt/hooks'
 import { server, type PersonalFolderView } from './calls.js'
 import { BackupNotice, accountsAt } from './BackupNotice.js'
