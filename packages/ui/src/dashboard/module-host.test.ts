@@ -20,10 +20,7 @@ const NO_RUNS: ServerHostDeps = {
   say: async () => {
     throw new Error('unknown session')
   },
-  landed: async () => {
-    throw new Error('unknown session')
-  },
-  pullRequest: async () => {
+  record: async () => {
     throw new Error('unknown session')
   },
   modulesOn: async () => [],
@@ -60,12 +57,13 @@ test("a run's open questions and a line said to it go through its host, by the r
   assert.deepEqual(said, [[run, { kind: 'answer', question: 'Which one?', answer: 'A' }]])
 })
 
-test("a pull request is written down on a run by its id alone, and how pull requests stand is kept for the lists of runs", async () => {
+test("what a press did is written down on a run by its id alone, as a module's facts, and how pull requests stand is kept for the lists of runs", async () => {
   const written: unknown[][] = []
-  const host = serverHost('/p', SETTINGS, { ...NO_RUNS, pullRequest: async (...args) => void written.push(args) })
-  await host.pullRequest('r1', { number: 5, url: 'https://github.com/o/r/pull/5' })
-  await assert.rejects(host.pullRequest('../etc', { number: 5, url: 'u' }), /unknown session/)
-  assert.deepEqual(written, [['r1', { number: 5, url: 'https://github.com/o/r/pull/5' }]])
+  const host = serverHost('/p', SETTINGS, { ...NO_RUNS, record: async (...args) => void written.push(args) })
+  await host.record('r1', { github: { pr: { number: 5, url: 'https://github.com/o/r/pull/5' } } })
+  await assert.rejects(host.record('../etc', { github: { pr: { number: 5, url: 'u' } } }), /unknown session/)
+  await assert.rejects(host.record('r1', null as never), /one slice per module/)
+  assert.deepEqual(written, [['r1', { github: { pr: { number: 5, url: 'https://github.com/o/r/pull/5' } } }]])
   host.pullRequestsRead([{ url: 'https://github.com/o/r/pull/5', state: 'merged', title: 'A fix' }])
   assert.deepEqual(pullRequestState('https://github.com/o/r/pull/5'), { state: 'merged', title: 'A fix' })
 })

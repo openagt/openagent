@@ -9,7 +9,7 @@ import type { GitAccess, GitAccounts } from './account.js'
 import type { InboxLine } from './agent.js'
 import type { ProjectsLifecycle } from './app.js'
 import type { ProjectRef } from './project.js'
-import type { PullRequest, PullRequestRead, RunFound, RunQuestion } from './run.js'
+import type { PullRequestRead, RunFacts, RunFound, RunQuestion } from './run.js'
 import type { Settings } from './settings.js'
 
 /** Where a pull request stands on the git host: still being asked, or answered (with its merge commit when merged, and the last commit of the branch it merged, when the git host says it). */
@@ -52,18 +52,12 @@ export interface RpcHost extends RpcComputerHost {
    */
   say(agentId: string, line: InboxLine): Promise<void>
   /**
-   * Write down on a run's record that its work was landed on this computer, its branch merged into
-   * the project's default branch and gone: `commit` is the branch's last commit, `from` the commit
-   * its work began at, so what it changed is still read once the branch is gone. Throws, in words
-   * for the person, where the record cannot be written.
+   * Write down on a run's record what the module found out about it once the run had ended, in the
+   * module's own slice of its facts (`RunFacts`): what a press did that every surface reads off the
+   * record, such as the pull request it opened, or the commit a branch landed as once it is gone.
+   * Throws, in words for the person, where the record cannot be written.
    */
-  landed(agentId: string, landed: { commit: string; from: string }): Promise<void>
-  /**
-   * Write down on a run's record the pull request a press opened for its work once the run had
-   * ended: every surface reads a run's request off its record. Throws, in words for the person,
-   * where the record cannot be written.
-   */
-  pullRequest(agentId: string, pr: PullRequest): Promise<void>
+  record(agentId: string, facts: RunFacts): Promise<void>
   /** Say how pull requests stand, as the module just read them at its git host: the lists of runs mark each run's requests by it. */
   pullRequestsRead(prs: readonly PullRequestRead[]): void
   /**

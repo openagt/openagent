@@ -2,14 +2,14 @@ import { pathToFileURL } from 'node:url'
 import { isRunId } from '../store/index.js'
 import { providedDataChanged } from '../store/provided.js'
 import { pullRequestsRead } from './pr-states.js'
-import type { GitAccounts, Hooks, ProjectRef, PullRequest, RunFound, RunQuestion, InboxLine } from '@openagt/hooks'
+import type { GitAccounts, Hooks, ProjectRef, RunFacts, RunFound, RunQuestion, InboxLine } from '@openagt/hooks'
 import { rpcKind, type ModuleOn, type RpcComputerHost, type RpcFunction, type RpcHost, type RpcKind } from '@openagt/hooks/rpc'
 
 // The daemon's side of a module's server part (`@openagt/hooks/rpc`): the host a function is given
 // (the settings, the registered projects, OpenAgent's accounts at the git hosts, the modules'
 // accounts and the app's word to the modules; for a project's module, the project's folder and the
-// project, where its runs have their work, the questions they wait on, a line said to one, a landing
-// or a pull request written down on one's record, how pull requests stand as the module read them,
+// project, where its runs have their work, the questions they wait on, a line said to one, what a
+// press did written down on one's record, how pull requests stand as the module read them,
 // and what the modules on give its runs) and the one way a function is
 // called. Where a run's work is, is its host's to say; what a module makes of it is its own.
 
@@ -30,10 +30,8 @@ export interface ServerHostDeps extends ComputerHostDeps {
   questions: (agentId: string) => Promise<RunQuestion[]>
   /** Say one line to a run of the project through its host; throws why it is not said. */
   say: (agentId: string, line: InboxLine) => Promise<void>
-  /** Write down on a run's record that its work was landed; throws why it is not written. */
-  landed: (agentId: string, landed: { commit: string; from: string }) => Promise<void>
-  /** Write down on a run's record the pull request a press opened for it; throws why it is not written. */
-  pullRequest: (agentId: string, pr: PullRequest) => Promise<void>
+  /** Write down on a run's record what a module's press did, in its slice of the run's facts; throws why it is not written. */
+  record: (agentId: string, facts: RunFacts) => Promise<void>
   /** The modules on in the project, with what each gives its runs. */
   modulesOn: (opts?: { every?: boolean }) => Promise<ModuleOn[]>
 }
@@ -83,13 +81,10 @@ export function serverHost(root: string, app: AppOfHost, deps: ServerHostDeps): 
       if (typeof agentId !== 'string' || !isRunId(agentId)) throw new Error('unknown session')
       return deps.say(agentId, line)
     },
-    async landed(agentId: string, landed: { commit: string; from: string }): Promise<void> {
+    async record(agentId: string, facts: RunFacts): Promise<void> {
       if (typeof agentId !== 'string' || !isRunId(agentId)) throw new Error('unknown session')
-      return deps.landed(agentId, landed)
-    },
-    async pullRequest(agentId: string, pr: PullRequest): Promise<void> {
-      if (typeof agentId !== 'string' || !isRunId(agentId)) throw new Error('unknown session')
-      return deps.pullRequest(agentId, pr)
+      if (typeof facts !== 'object' || facts === null || Array.isArray(facts)) throw new Error('facts are written as one slice per module')
+      return deps.record(agentId, facts)
     },
     pullRequestsRead: prs => pullRequestsRead(Array.isArray(prs) ? prs : []),
     mergeCommit: (branch: string, number: number) => deps.accounts.mergeCommit(root, branch, number),

@@ -118,7 +118,8 @@ export const merge = act(async (host: RpcHost, { agentId }: { agentId: string })
   if (!merged.ok) return { ok: false, error: `Could not merge the branch: ${mergeRefusalLine(merged)}` }
   if (!merged.deleted) return { ok: true }
   try {
-    await host.landed(agentId, { commit: merged.commit, from: merged.from })
+    // Its work is read from the commit it landed as once the branch is gone, measured from where it began.
+    await host.record(agentId, { 'git-branches': { landed: merged.commit, baseCommit: merged.from } })
     return { ok: true }
   } catch (err) {
     // The merge is in whatever the record says; a record that could not be written is said, since the page reads the record.

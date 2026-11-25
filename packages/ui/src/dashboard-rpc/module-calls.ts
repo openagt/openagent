@@ -40,8 +40,7 @@ export async function callModule(projectId: string | null, pkg: string, name: st
     find: runsFound(projectId, root),
     questions: agentId => runQuestions(projectId, root, agentId),
     say: (agentId, line) => sayForModule(projectId, root, agentId, line),
-    landed: (agentId, landed) => recordFor(projectId, root, agentId, { 'git-branches': { landed: landed.commit, baseCommit: landed.from } }),
-    pullRequest: (agentId, pr) => recordFor(projectId, root, agentId, { github: { pr } }),
+    record: (agentId, facts) => recordFor(projectId, root, agentId, facts),
     modulesOn: async opts => modulesOn(await project(), opts?.every === true),
   })
   const result = await callModuleFunction(module.server, name, host, input)
@@ -102,7 +101,7 @@ function runsFound(projectId: string, root: string): (agentId: string) => Promis
 
 /**
  * Write `facts` down on run `agentId`'s record, in the project at `root`, through the run's host
- * (`RunHost.record`): its work landed, or the pull request a press opened for it. The record is
+ * (`RunHost.record`): what a module's press did, such as the pull request it opened. The record is
  * what its page reads once the branch is gone.
  */
 async function recordFor(projectId: string, root: string, agentId: string, facts: RunFacts): Promise<void> {

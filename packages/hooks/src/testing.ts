@@ -257,13 +257,10 @@ export function rpcHost(given: Partial<RpcHost> = {}): RpcHost {
     say: async () => {
       throw new Error('no run of this test takes a line')
     },
-    pullRequest: async () => {
+    record: async () => {
       throw new Error('no run of this test keeps a record')
     },
     pullRequestsRead: () => {},
-    landed: async () => {
-      throw new Error('no run of this test keeps a record')
-    },
     modulesOn: async () => [],
     ...given,
   }
