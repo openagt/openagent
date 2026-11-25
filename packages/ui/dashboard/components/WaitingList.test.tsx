@@ -10,8 +10,8 @@ afterEach(cleanup)
 const item = (over: Partial<Waiting>): Waiting => ({ kind: 'waiting', module: 'github', scope: 'project', words: 'Needs merge', projectId: 'p1', projectName: 'test-project', title: 't', ...over })
 const asks = (run: string, title: string, question: string, over: Partial<Waiting> = {}) => item({ module: 'ask', scope: 'run', run, id: `${run}:q`, words: 'Needs answer', title, detail: question, mark: 'question', ...over })
 const uncommitted = (run: string, title = 't', files?: number) => item({ module: 'git-branches', scope: 'run', run, id: `uncommitted:${run}`, words: 'Needs commit', title, ...(files ? { detail: files === 1 ? '1 file' : `${files} files` } : {}), mark: 'changes' })
-const unpushed = (run: string, title: string, commits: number, gitHost: boolean) =>
-  item({ module: 'git-branches', scope: 'run', run, id: `unpushed:${run}`, words: needsWord('unpushed', gitHost), title, detail: commits === 1 ? '1 commit' : `${commits} commits`, mark: 'branch' })
+const unpushed = (run: string, title: string, commits: number) =>
+  item({ module: 'git-branches', scope: 'run', run, id: `unpushed:${run}`, words: 'Needs push', title, detail: commits === 1 ? '1 commit' : `${commits} commits`, mark: 'branch' })
 const request = (number: number, title: string, url: string, run?: string) =>
   item({ module: 'github', ...(run ? { scope: 'run' as const, run } : {}), id: url, words: 'Needs merge', title, detail: `#${number}`, mark: 'pull-request', fix: { label: `Open PR #${number}`, href: url } })
 
@@ -22,8 +22,8 @@ describe('the rows of what waits on the person', () => {
         items={[
           asks('r1', 'Interactive question', 'What kind of work?'),
           uncommitted('r2', 'Create test.md file', 1),
-          unpushed('r3', 'AI essay', 2, true),
-          unpushed('r4', 'Local only', 1, false),
+          unpushed('r3', 'AI essay', 2),
+          unpushed('r4', 'Local only', 1),
           request(2, 'Add README sentence', 'u2', 'r5'),
         ]}
         onOpenAgent={() => {}}
@@ -34,7 +34,7 @@ describe('the rows of what waits on the person', () => {
     expect(links).toEqual([
       'Needs answerInteractive questionWhat kind of work?',
       'Needs commitCreate test.md file1 file',
-      'Needs PRAI essay2 commits',
+      'Needs pushAI essay2 commits',
       'Needs pushLocal only1 commit',
       'Needs mergeAdd README sentence#2',
     ])
@@ -75,8 +75,7 @@ describe('the rows of what waits on the person', () => {
   })
 
   test('the words are one rule, for every list that shows what a run needs', () => {
-    expect((['awaiting', 'uncommitted', 'unpushed', 'pr'] as RunNeed[]).map(need => needsWord(need))).toEqual(['Needs answer', 'Needs commit', 'Needs PR', 'Needs merge'])
-    expect(needsWord('unpushed', false)).toBe('Needs push')
+    expect((['awaiting', 'pr'] as RunNeed[]).map(need => needsWord(need))).toEqual(['Needs answer', 'Needs merge'])
   })
 
   test("an item that names no mark has a plain dot; one about no run and with no page to open says what waits, and is no press", () => {

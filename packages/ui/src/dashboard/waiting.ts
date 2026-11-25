@@ -4,8 +4,6 @@ import { contextRuns, runHostOf } from '../dashboard-rpc/context.js'
 import { pendingChoices } from '../open-choices.js'
 import type { RunEvent } from '@openagt/hooks'
 import type { ProjectSummary, ProjectionRead } from './projects.js'
-import { projectBranches, type BranchesFor } from '../store/branches.js'
-import { unpublishedRuns, type Unpublished } from './unpublished.js'
 import { cachedOpenPrs, type PrLister } from './pull-requests.js'
 import { waitingKey } from './keys.js'
 import { needsWord } from './waiting-words.js'
@@ -21,8 +19,7 @@ export { waitingKey } from './keys.js'
 // What waits on the person (#632, #2394), across the projects: the `waiting` items of
 // `app.attention`, every module's (a run waiting on the question it ended on is ask's), asked with
 // the project's runs that wait, and the ones the shell still finds itself until their modules say
-// them (#2394's step 6): the open pull requests (github's), a finished run's work never published
-// (git-branches'). Each is said in the
+// them (#2394's step 6): the open pull requests (github's). Each is said in the
 // hook's shape, by the module it is whose, so no reader tells the two apart. #627 notifications
 // ride this whole set.
 
@@ -40,12 +37,10 @@ export interface Waiting extends Attention {
 /** Injectable seam so {@link buildWaiting} is unit-testable off disk. */
 export interface WaitingDeps {
   prs?: PrLister
-  /** A project's runs, or with none the sessions with no project's, as their hosts say them (default {@link contextRuns}): the runs the modules are asked about (#636), and the work never published (#860). */
+  /** A project's runs, or with none the sessions with no project's, as their hosts say them (default {@link contextRuns}): the runs the modules are asked about (#636). */
   agents?: (project: ProjectSummary | undefined) => Promise<AgentMeta[]>
   /** One run's events, as its host says them (default {@link readRunEvents}): where a waiting run's questions are read. */
   events?: (project: ProjectSummary | undefined, agentId: string) => Promise<RunEvent[] | undefined>
-  /** The project's checkouts and branches (default the project's provider, {@link projectBranches}): where a branch's state is read (#860). */
-  branches?: BranchesFor
   /** The modules whose `app.attention` is asked (default the distribution's). */
   hooks?: () => Promise<Hooks>
 }
@@ -149,17 +144,7 @@ async function projectWaiting(project: ProjectSummary, deps: WaitingDeps, hooks:
       ...inProject,
     })
   }
-  // A finished run whose work never left the machine is a "needs you" too (#860). Until then the
-  // list only knew about a PR that is *already on the git host* and an agent parked on a gate, so an agent
-  // that committed real code and stopped produced neither, and nothing told anyone: the overview
-  // drops it (it filters on `running`) and the handoff panel is behind clicking into that agent.
-  //
-  // Surfacing only: this says there is a decision waiting, it does not take it. A run publishes
-  // nothing by itself, so every finished run with work of its own reaches here until a person
-  // publishes it, or the agent does on their ask.
   if (recorded === undefined) unread()
-  const requested = project.gitHost && open ? new Set(open.map(pr => pr.headRefName)) : undefined
-  items.push(...(await unpushedFor(project, recorded ?? [], deps.branches ?? projectBranches, unread, requested)))
   return { id: project.id, items, whole: sawEverything }
 }
 
@@ -212,45 +197,4 @@ async function waitingRuns(project: ProjectSummary | undefined, read: Promise<Ag
       return { id: meta.id, ...(name !== undefined ? { name } : {}), ...(endedAt ? { endedAt } : {}), questions: questions.map(question => ({ ...question, options: [...question.options] })) }
     }),
   )
-}
-
-/**
- * The finished runs of a project whose work never left this machine (#860), as
- * {@link unpublishedRuns} finds them for the list of runs too: files left uncommitted first, since
- * committing them is the run's next step, else commits never pushed. The provider answers git
- * facts only, so the git host PR lookup the handoff summary makes per branch is never paid here: an
- * open PR means the branch was pushed, and the pull requests above are what surface it. `requested`
- * is the branches of those open PRs, from the same cached read, where the project has a git host.
- */
-async function unpushedFor(project: ProjectSummary, agents: AgentMeta[], branches: BranchesFor, unread: () => void, requested: ReadonlySet<string | undefined> | undefined): Promise<Waiting[]> {
-  let found: Map<string, Unpublished>
-  try {
-    found = await unpublishedRuns(project.path, agents, branches, requested && (async () => requested))
-  } catch {
-    unread()
-    return []
-  }
-  return agents.flatMap((agent): Waiting[] => {
-    const work = found.get(agent.id)
-    if (!work) return []
-    // Committing the files is a new step from publishing them, and is said anew once they are.
-    const left =
-      work.uncommitted > 0
-        ? { id: `uncommitted:${agent.id}`, words: needsWord('uncommitted'), detail: work.uncommitted === 1 ? '1 file' : `${work.uncommitted} files`, mark: 'changes' as const }
-        : // An unknown count says nothing rather than the contradictory "0 commits".
-          { id: `unpushed:${agent.id}`, words: needsWord('unpushed', project.gitHost), ...(work.commits ? { detail: work.commits === 1 ? '1 commit' : `${work.commits} commits` } : {}), mark: 'branch' as const }
-    return [
-      {
-        kind: 'waiting',
-        module: 'git-branches',
-        scope: 'run',
-        run: agent.id,
-        ...left,
-        title: runName(agent) ?? work.branch,
-        ...(agent.updatedAt ? { since: agent.updatedAt } : {}),
-        projectId: project.id,
-        projectName: project.name,
-      },
-    ]
-  })
 }

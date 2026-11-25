@@ -3,13 +3,10 @@
 // so the words read as what waits, not as a button that would do it. Node-free: the pages say them
 // too, beside the items the daemon says them in.
 
-/** What waits on a run: the answer to its question, its files committed, its work published, its pull request merged. */
-export type RunNeed = 'awaiting' | 'uncommitted' | 'unpushed' | 'pr'
+/** What waits on a run: the answer to its question, its pull request merged. */
+export type RunNeed = 'awaiting' | 'pr'
 
-/** What a run needs, in two words. Work never pushed asks for a pull request where the project can open one, else for a push. */
-export function needsWord(need: RunNeed, gitHost = true): string {
-  if (need === 'awaiting') return 'Needs answer'
-  if (need === 'uncommitted') return 'Needs commit'
-  if (need === 'unpushed') return gitHost ? 'Needs PR' : 'Needs push'
-  return 'Needs merge'
+/** What a run needs, in two words. */
+export function needsWord(need: RunNeed): string {
+  return need === 'awaiting' ? 'Needs answer' : 'Needs merge'
 }

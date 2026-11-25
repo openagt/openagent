@@ -1,8 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { markOtherHost, withPrStates, withUnpublished } from './run-rows.js'
+import { markOtherHost, withPrStates } from './run-rows.js'
 import type { AgentMeta } from '../store/index.js'
-import type { BranchAhead, BranchesFor, BranchesSource } from '../store/branches.js'
 
 test('a run another machine\'s daemon started is handed to the dashboard as from another host (#1648)', () => {
   const run = (host?: string): AgentMeta => ({ status: 'done', id: 'r', startedAt: '', updatedAt: '', ...(host ? { host } : {}) }) as AgentMeta
@@ -28,25 +27,4 @@ test('each run with a pull request is marked with how it stands and its title; o
   // The requests a run opened before its last one are marked the same way.
   const [moved] = await withPrStates('/repo', [{ ...run('f', 8), earlierPrs: [{ number: 7, url: 'https://example.com/pull/7' }, { number: 99, url: 'https://example.com/pull/99' }] }], states)
   assert.deepEqual(moved!.earlierPrs, [{ number: 7, url: 'https://example.com/pull/7', state: 'merged' }, { number: 99, url: 'https://example.com/pull/99' }])
-})
-
-test('each finished run whose work never left the machine is marked with its commits, by the Human Queue\'s rule; a provider that cannot be read marks none', async () => {
-  const run = (id: string, branch: string, over: Partial<AgentMeta> = {}): AgentMeta => ({ id, status: 'done', startedAt: '2026-10-18T13:00:00.000Z', updatedAt: '2026-10-18T13:00:00.000Z', branch, ...over })
-  const counts: Record<string, Partial<BranchAhead>> = { 'agent-a': { ahead: 2 }, 'agent-left': { ahead: 0, merged: true, uncommitted: 3 }, 'agent-pushed': { pushed: true }, 'agent-gone': { gone: true }, 'agent-running': {}, 'the-framework/old': { agent: false, ahead: 1173 } }
-  const answering = (ahead: BranchesSource['ahead']): BranchesFor => async () => ({ list: async () => [], show: async () => [], ahead, push: async () => ({ ok: true, pushed: true }), merge: async () => ({ ok: false, error: 'no' }), bring: async () => ({ ok: false, error: 'no' }), remove: async () => ({ ok: true }) })
-  const branches = answering(async asked =>
-    asked.map(branch => ({ branch, exists: true, agent: true, ahead: 1, hasRemote: true, pushed: false, gone: false, merged: false, uncommitted: 0, ...counts[branch] })),
-  )
-  // A run with a pull request published, even on a branch that reads as never pushed: one pushed without an upstream whose copy the merge deleted.
-  const withPr = run('q', 'agent-a', { pr: { number: 9, url: 'https://example.com/pull/9' } })
-  const agents = [run('l', 'agent-left'), run('a', 'agent-a'), run('p', 'agent-pushed'), run('g', 'agent-gone'), run('r', 'agent-running', { status: 'running' }), run('o', 'the-framework/old'), withPr]
-  const marked = await withUnpublished('/repo', agents, branches)
-  assert.deepEqual(marked[0]!.uncommitted, 3, 'files left uncommitted, and no commits to say')
-  assert.ok(!('unpublished' in marked[0]!))
-  assert.deepEqual(marked.slice(1).map(agent => [agent.id, agent.unpublished]), [['a', 2], ['p', undefined], ['g', undefined], ['r', undefined], ['o', undefined], ['q', undefined]])
-  assert.ok(!('unpublished' in marked[2]!) && !('uncommitted' in marked[1]!))
-  const failing = answering(async () => {
-    throw new Error('not a repo')
-  })
-  assert.deepEqual(await withUnpublished('/repo', agents, failing), agents)
 })

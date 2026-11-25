@@ -524,3 +524,21 @@ test('a project may not go while a module refuses it: the first refusal is said,
   assert.equal(await broken.lifecycle.refusal(P1), 'runs could not tell whether the project may go: the locks could not be read')
   assert.deepEqual(errors.map(error => `${error.module} ${error.hook}`), ['runs app.lifecycle.refuseRemoval'])
 })
+
+test("a module's app lists the runs of a project, or of no project, as every host there lists them", async () => {
+  const here = fakeHost({ id: 'here' })
+  const there = fakeHost({ id: 'there' })
+  const seen: AppContext[] = []
+  const hooks = hooksOf([
+    { module: defineModule({ name: 'agent-driver', hooks: { 'run.host': [here] } }) },
+    { module: defineModule({ name: 'host-elsewhere', hooks: { 'run.host': [there] } }) },
+    { module: defineModule({ name: 'git-branches', hooks: { 'app.attention': (_args, app) => (seen.push(app), []) } }) },
+  ])
+  await here.start({ project: P1, prompt: 'one', options: {} })
+  await there.start({ project: P1, prompt: 'two', options: {} })
+  await here.start({ prompt: 'none', options: {} })
+  await hooks.attention({ project: P1 })
+  const app = seen[0]!
+  assert.deepEqual((await app.runs(P1)).map(run => `${run.host}: ${run.prompt}`), ['here: one', 'there: two'])
+  assert.deepEqual((await app.runs()).map(run => run.prompt), ['none'])
+})

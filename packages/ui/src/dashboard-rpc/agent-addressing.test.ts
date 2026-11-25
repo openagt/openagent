@@ -5,7 +5,7 @@ import { mkdtemp, rm, mkdir, writeFile, readFile, realpath, stat } from 'node:fs
 import { hostname, tmpdir } from 'node:os'
 import { sendStop, sendMessage, sendOpenPullRequest } from './control.js'
 import { callModule } from './module-calls.js'
-import { onRetainedWorktrees, onAgents, onRecentAgents } from './reads.js'
+import { onRetainedWorktrees, onAgents, onWaiting } from './reads.js'
 import { listTestProject } from '../test-projects.js'
 import { DATA_BRANCH, fileBranchPath, nodeGitRunner, projectId as idFor } from '@openagt/agent-data'
 import { worktreePath, addWorktree, agentBranchName } from '@openagt/git-branches'
@@ -379,18 +379,15 @@ test('a run another computer started is not continued from here: a message and a
   }
 })
 
-test('a project\'s list of runs and all projects\' together mark a run\'s row alike: work it left uncommitted shows in both', async () => {
+test("work a run left uncommitted is what waits on the person, as the module that keeps its checkout says it", async () => {
   const ctx = await projectWithWorktreeAgent({ pid: 0, host: hostname() }, { status: 'done' })
   try {
     // Ended, its branch recorded on its card, a file it never committed left in its checkout.
     const card = join(worktreePath(ctx.dir, ctx.agentId), OPENAGENT_DIR, `${ctx.agentId}.json`)
     await writeFile(card, JSON.stringify({ ...JSON.parse(await readFile(card, 'utf8')), branch: agentBranchName(ctx.agentId) }))
     await writeFile(join(worktreePath(ctx.dir, ctx.agentId), 'draft.md'), 'not committed\n')
-    const marks = (rows: { id: string; uncommitted?: number; unpublished?: number }[]) => rows.filter(row => row.id === ctx.agentId).map(row => [row.uncommitted, row.unpublished])
-    const own = marks(await onAgents(ctx.projectId))
-    assert.equal(own.length, 1)
-    assert.ok((own[0]![0] ?? 0) > 0, 'the uncommitted file is marked')
-    assert.deepEqual(marks((await onRecentAgents()).filter(row => row.projectId === ctx.projectId).map(row => row.agent)), own)
+    const items = (await onWaiting()).items.filter(item => item.run === ctx.agentId)
+    assert.deepEqual(items.map(item => [item.module, item.id, item.words]), [['git-branches', `uncommitted:${ctx.agentId}`, 'Needs commit']])
   } finally {
     ctx.restore()
     await rm(ctx.dir, { recursive: true, force: true })

@@ -71,10 +71,6 @@ export interface AgentMeta {
   prTitle?: string
   /** The pull requests the run opened before {@link pr}, oldest first, each marked with how it stands like {@link prState}. */
   earlierPrs?: { number: number; url: string; state?: 'open' | 'draft' | 'merged' | 'closed' }[]
-  /** How many commits of the run's own wait on its branch, never pushed: marked on the way to the dashboard. */
-  unpublished?: number
-  /** How many files the run's checkout left uncommitted, marked like {@link unpublished}. */
-  uncommitted?: number
   /** Where this run executes: a host's id for a run on a host beside this computer's (`run.host`: GitHub Actions' `actions`, a cloud session's `web`), absent for one on this computer. */
   target?: string
   /** The model the run's agent was started with; absent when it was left on the agent's own default. */

@@ -29,7 +29,10 @@ What it brings:
 - **Commit and Publish branch** in the "When it finishes" menu (`composer.auto`), Publish branch only
   where the work can be pushed.
 - **What a project needs** (`app.attention`): its folder behind its remote's main branch, with
-  Update folder as the fix (`attention.fix`), and a start pick gone from origin.
+  Update folder as the fix (`attention.fix`), and a start pick gone from origin. **What waits on
+  the person** there: a finished run's files left uncommitted ("Needs commit") and its commits never
+  pushed ("Needs push"), read from the project's runs (`AppContext.runs`) and this package's own
+  branches.
 
 Every talk with a remote goes as an account of OpenAgent's (`RpcHost.gitAccess`, which the git
 host's module answers), never the person's own login. Its Node part is the module (`./module`), with

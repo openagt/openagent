@@ -228,13 +228,13 @@ export function computerRpcHost(given: Partial<RpcComputerHost> = {}): RpcComput
 
 /**
  * The app a module's life is told (`app.lifecycle`), for its tests: no project, a store and settings
- * in memory, never aborted, and the rest as {@link computerRpcHost}'s, with no skill given, unless
- * `given` says otherwise.
+ * in memory, never aborted, and the rest as {@link computerRpcHost}'s, with no skill given and no
+ * run, unless `given` says otherwise.
  */
 export function fakeApp(given: Partial<AppContext> = {}): AppContext {
   const store = given.store ?? chainStore([memoryStore()])
   const { gitAccess, lifecycle } = computerRpcHost()
-  return { projects: async () => [], store, settings: settingsIn(store), signal: new AbortController().signal, gitAccess, lifecycle, skills: async () => [], ...given }
+  return { projects: async () => [], store, settings: settingsIn(store), signal: new AbortController().signal, gitAccess, lifecycle, skills: async () => [], runs: async () => [], ...given }
 }
 
 /**
