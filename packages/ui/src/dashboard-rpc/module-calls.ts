@@ -1,6 +1,5 @@
 import { contextProjects, resolveProjectPath, runHostOf } from './context.js'
 import { findComputerModule, findProjectModule } from '../project-modules.js'
-import { providedDataChanged } from '../store/provided.js'
 import { callModuleFunction, computerHost, functionKind, serverHost, type ComputerHostDeps, type ModuleCallResult } from '../dashboard/module-host.js'
 import { distributionHooks, projectRefAt, runRefAt } from '../distribution-hooks.js'
 import { SESSIONS_ID } from '../project-address.js'
@@ -22,7 +21,7 @@ export type { ModuleCallResult } from '../dashboard/module-host.js'
  * module's browser part reads, or changes, what a command cannot answer fast enough. Refused for
  * an unknown project, a package that is not a module of that project, and a module with no server
  * part. An act is followed as a command's is (`modules.ts`' runModuleCommand): the project's data is
- * converged with origin, and what was read of the package's data is forgotten. With `null` for
+ * converged with origin. With `null` for
  * the project, it is a call of a package that is this computer's ({@link callComputerModule}).
  */
 export async function callModule(projectId: string | null, pkg: string, name: string, input: unknown): Promise<ModuleCallResult> {
@@ -45,10 +44,7 @@ export async function callModule(projectId: string | null, pkg: string, name: st
     modulesOn: async opts => modulesOn(await project(), opts?.every === true),
   })
   const result = await callModuleFunction(module.server, name, host, input)
-  if (kind === 'act') {
-    await pullProjectData(root, { log: () => {} }).catch(() => {})
-    providedDataChanged(root, pkg)
-  }
+  if (kind === 'act') await pullProjectData(root, { log: () => {} }).catch(() => {})
   return result
 }
 
@@ -122,16 +118,11 @@ async function runQuestions(projectId: string, root: string, agentId: string): P
 /**
  * Call function `name` of the server part of a package that is this computer's, in no project:
  * what such a module keeps is the computer's or the person's (their name and picture), so it is
- * read and changed with no project added, here only. Refused for any other package. After an act,
- * what was read of every project's data is read anew.
+ * read and changed with no project added, here only. Refused for any other package.
  */
 async function callComputerModule(pkg: string, name: string, input: unknown): Promise<ModuleCallResult> {
   const module = await findComputerModule(pkg).catch(() => undefined)
   if (!module) return { ok: false, error: `${pkg} is not this computer's` }
   if (!module.server) return { ok: false, error: `${pkg} has no server part` }
-  const kind = await functionKind(module.server, name)
-  const result = await callModuleFunction(module.server, name, computerHost(await distributionHooks(), COMPUTER), input)
-  // What such a module changes may be any project's data, in the person's own folder (what a sync took in): every project's is read anew.
-  if (kind === 'act') for (const project of await contextProjects().list().catch(() => [])) providedDataChanged(project.path)
-  return result
+  return callModuleFunction(module.server, name, computerHost(await distributionHooks(), COMPUTER), input)
 }

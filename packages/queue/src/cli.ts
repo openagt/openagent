@@ -17,8 +17,7 @@ import { appendQueueEntry, insertQueueEntry, parseQueueEntries, removeQueueEntry
  *
  * The package's own module changes the queue through the same command, as an agent does, and
  * reads it through its server part. `--local` reads this machine's copy (the directory a writer
- * writes to) with no fetch, fast enough to poll: the package declares the command as OpenAgent's
- * queue provider (`"openagent": { "queue": "queue" }`), which reads `queue --local`.
+ * writes to) with no fetch, fast enough to poll.
  */
 
 export const USAGE = `usage: queue [command]

@@ -4,7 +4,7 @@ import { openInApp, type OpenTarget, type OpenResult } from '../dashboard/open-i
 import { contextPreferences, contextStartAgent, resolveProjectPath, resolveAgentPath, runHostOf } from './context.js'
 import { runRefAt } from '../distribution-hooks.js'
 import { errorMessage } from '@openagt/agent-data'
-import { isRunId, projectBranches } from '../store/index.js'
+import { isRunId } from '../store/index.js'
 import { withAgentLock } from '../agent-locks.js'
 import type {
   DeleteAgentResult,
@@ -107,8 +107,6 @@ export async function sendDeleteAgent(projectId: string, agentId: string): Promi
       const host = await runHostOf(run)
       if (!host.delete) return { ok: false, error: `A session on ${host.label} is not deleted from here.` }
       await host.delete(run)
-      // Its checkout went: the project's checkouts are read again on the next look.
-      projectBranches.changed(cwd)
       return { ok: true }
     } catch (err) {
       return { ok: false, error: errorMessage(err) }

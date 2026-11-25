@@ -1,6 +1,5 @@
 import { pathToFileURL } from 'node:url'
 import { isRunId } from '../store/index.js'
-import { providedDataChanged } from '../store/provided.js'
 import { pullRequestsRead } from './pr-states.js'
 import type { GitAccounts, Hooks, ProjectRef, PullRequest, RunFound, RunQuestion, InboxLine } from '@openagt/hooks'
 import { rpcKind, type ModuleOn, type RpcComputerHost, type RpcFunction, type RpcHost, type RpcKind } from '@openagt/hooks/rpc'
@@ -43,8 +42,7 @@ export type AppOfHost = Pick<Hooks, 'settings' | 'gitAccess' | 'lifecycle'>
 
 /**
  * The host a function of a module of the computer's is given, called in no project. A project
- * taken off the list is told to every module through `app`, and what this daemon read of its data
- * is read anew.
+ * taken off the list is told to every module through `app`.
  */
 export function computerHost(app: AppOfHost, deps: ComputerHostDeps): RpcComputerHost {
   return {
@@ -55,11 +53,7 @@ export function computerHost(app: AppOfHost, deps: ComputerHostDeps): RpcCompute
     lifecycle: {
       added: project => app.lifecycle.added(project),
       refusal: project => app.lifecycle.refusal(project),
-      async removed(project, removal) {
-        const cleaned = await app.lifecycle.removed(project, removal)
-        providedDataChanged(project.dir)
-        return cleaned
-      },
+      removed: (project, removal) => app.lifecycle.removed(project, removal),
     },
   }
 }

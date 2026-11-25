@@ -12,7 +12,7 @@ import { setDashboardContext } from '../dashboard-rpc/context.js'
 import { createProjectRuntime, type ProjectRuntime } from '../daemon-runtime.js'
 import { projectId } from '@openagt/agent-data'
 import { registryPreferencesStore } from '../registry.js'
-import { projectBranches, type AgentMeta, type AgentStatus } from '../store/index.js'
+import type { AgentMeta, AgentStatus } from '../store/index.js'
 import { findRun } from '@openagt/agent-driver'
 import { worktreePath } from '@openagt/git-branches'
 import { FIXTURE_PLUGINS, makeFixtureRepo } from './fixture.js'
@@ -21,7 +21,7 @@ import { streamAgentEvents } from '../dashboard-rpc/events.js'
 import { callModule } from '../dashboard-rpc/module-calls.js'
 import { sendSwitchPlugin } from '../dashboard-rpc/plugins.js'
 import { sendStart, sendStop } from '../dashboard-rpc/control.js'
-import { onAgents } from '../dashboard-rpc/reads.js'
+import { onAgents, onRunCheckout } from '../dashboard-rpc/reads.js'
 import type { RunEvent } from '@openagt/hooks'
 import type { StartAgentOptions } from '../dashboard/types.js'
 
@@ -204,11 +204,10 @@ export async function makeWorld(): Promise<StoryWorld> {
     },
 
     async waitRetired(project, agentId, timeoutMs = 30_000) {
-      // Through the product's own read of the checkouts, the branches provider's list shared for a
-      // few seconds (#1774): what a story asserts or acts on next reads the same list, so "retired"
-      // means gone from there, not merely gone from disk.
+      // Through the product's own read of the run's checkout, as its host finds it: what a story
+      // asserts or acts on next reads the same, so "retired" means gone from there.
       await waitFor(
-        async () => ((await (await projectBranches(project.cwd))?.list().catch(() => []))?.some(checkout => checkout.id === agentId) ? undefined : true),
+        async () => ((await onRunCheckout(project.id, agentId)) === null ? true : undefined),
         `run ${agentId}'s worktree to be retired`,
         timeoutMs,
       )

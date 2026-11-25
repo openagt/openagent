@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { projectId } from '@openagt/agent-data'
 import { DISTRIBUTION_ENV } from '@openagt/hooks'
-import { computerPackages, distributionPackages, lookupProvided, packagesOf, providedCommand, type DashboardPackage } from './distribution-packages.js'
+import { computerPackages, distributionPackages, packagesOf, type DashboardPackage } from './distribution-packages.js'
 import { distributionHooks, projectRefAt } from './distribution-hooks.js'
 import { readComputerModules, readProjectModules } from './project-modules.js'
 import TEST_DISTRIBUTION, { handDownTestDistribution } from './test-distribution.js'
@@ -54,10 +54,9 @@ test("every package the distribution lists is read from its install, in its orde
   assert.deepEqual(await distributionPackages({}), [], 'no distribution handed down: no package')
 })
 
-test("a project with nothing installed gets its branches from the distribution's packages, and nothing of a plugin that is off", async () => {
+test("a project with nothing installed gets its packages from the distribution, and nothing of a plugin that is off", async () => {
   const root = await scratch('packages')
   try {
-    assert.equal((await providedCommand(root, 'branches'))?.package, '@openagt/git-branches')
     assert.deepEqual(
       (await packagesOf(root)).map(pkg => pkg.name),
       ['@openagt/store-filesystem', '@openagt/store-git-branch', '@openagt/git-branches', '@openagt/github', '@openagt/skills', '@openagt/ui-pane-changes', '@openagt/ui-pane-files', '@openagt/saved-prompts', '@openagt/ask'],
@@ -159,21 +158,6 @@ test("a project's own dependencies bring nothing: neither a copy of the distribu
     await switchPlugin(root, 'tickets')
     const module = (await readProjectModules(root)).find(module => module.package === '@openagt/tickets')
     assert.ok(module && module.version !== '9.9.9' && !module.dir.startsWith(root), "its page is the distribution's copy, not the one in the project")
-  } finally {
-    await rm(root, { recursive: true, force: true })
-  }
-})
-
-test('two packages of the distribution that provide one kind provide it neither, and say why', async () => {
-  const root = await scratch('two')
-  try {
-    await withPackages(
-      [
-        { entry: { package: 'one-branches' }, fields: { openagent: { branches: 'one-branches' } } },
-        { entry: { package: 'other-branches' }, fields: { openagent: { branches: 'other-branches' } } },
-      ],
-      async () => assert.deepEqual(await lookupProvided(root, 'branches'), { problem: '2 packages of the distribution provide branches: one-branches, other-branches' }),
-    )
   } finally {
     await rm(root, { recursive: true, force: true })
   }

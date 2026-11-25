@@ -20,8 +20,8 @@ export type SteerResult = { ok: true } | { ok: false; error: string }
  * The key every action on one run locks under (`agent-locks.ts`): a Remove, a Delete and an Open
  * PR on the same run each run their own git; serialized, whichever runs second finds the state
  * the first one left and acts on that. The project and the run's id, not the checkout's path:
- * the path is the branches provider's to know, and an Open PR on a run whose checkout is gone
- * still locks the run.
+ * the path is the run's host's to know, and an Open PR on a run whose checkout is gone still
+ * locks the run.
  */
 export function agentLockKey(cwd: string, agentId: string): string {
   return `${cwd}\0${agentId}`

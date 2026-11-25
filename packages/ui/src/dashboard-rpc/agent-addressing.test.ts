@@ -49,7 +49,7 @@ async function projectWithWorktreeAgent(
 }> {
   const dir = await realpath(await mkdtemp(join(tmpdir(), 'openagent-addressing-')))
   const agentId = '2026-07-19T10-00-00-000Z'
-  // A real repository with a real checkout: the project's branches provider lists the checkouts (#1774).
+  // A real repository with a real checkout, as the run's host finds it.
   const git = nodeGitRunner()
   await git(['init', '-q'], dir)
   await git(['config', 'user.email', 't@t'], dir)

@@ -86,13 +86,9 @@ export {
   SKILLS_DIRS,
   packageBins,
   readManifest,
-  declaring,
   runPackageCommand,
-  callPackageCommand,
   type PackageManifest,
   type ProjectPackage,
-  type ProvidedCommand,
-  type ProvidedCommandLookup,
   type PackageCommandResult,
-} from './provided-command.js'
+} from './package-command.js'
 export { projectId } from './project-id.js'

@@ -1373,9 +1373,6 @@ importers:
       '@openagt/agent-driver':
         specifier: workspace:*
         version: link:../agent-driver/core
-      '@openagt/git-branches':
-        specifier: workspace:*
-        version: link:../git-branches
       '@openagt/hooks':
         specifier: workspace:*
         version: link:../hooks
@@ -1494,6 +1491,9 @@ importers:
       '@openagt/discord':
         specifier: workspace:*
         version: link:../discord
+      '@openagt/git-branches':
+        specifier: workspace:*
+        version: link:../git-branches
       '@openagt/github':
         specifier: workspace:*
         version: link:../github
