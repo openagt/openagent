@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { Waiting } from '../../src/index.js'
-import { needsWord, type RunNeed } from '../../src/client.js'
 import { WaitingList, holdsBack } from './WaitingList.js'
 
 afterEach(cleanup)
@@ -72,10 +71,6 @@ describe('the rows of what waits on the person', () => {
     rerender(<WaitingList items={[uncommitted('r1'), { ...uncommitted('r2'), projectId: 'p2', projectName: 'shop' }]} onOpenAgent={() => {}} />)
     expect(screen.getByText('test-project')).toBeTruthy()
     expect(screen.getByText('shop')).toBeTruthy()
-  })
-
-  test('the words are one rule, for every list that shows what a run needs', () => {
-    expect((['awaiting', 'pr'] as RunNeed[]).map(need => needsWord(need))).toEqual(['Needs answer', 'Needs merge'])
   })
 
   test("an item that names no mark has a plain dot; one about no run and with no page to open says what waits, and is no press", () => {

@@ -22,8 +22,6 @@ export { pendingChoices } from './open-choices.js'
 // The identity of what waits on the person (#627). Pure, so the dashboard and its plugins share it
 // with the item type rather than keeping a copy that drifts silently.
 export { waitingKey } from './dashboard/keys.js'
-// What a run needs of the person, in the two words every list says it in.
-export { needsWord, type RunNeed } from './dashboard/waiting-words.js'
 export type { ProjectionRead } from './dashboard/projects.js'
 
 

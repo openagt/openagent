@@ -320,7 +320,7 @@ export { StartAgentButton, StartAgentPress, type StartMenuItem } from '../compon
 export { ButtonGroup, ButtonGroupSeparator } from '../components/ui/button-group.js'
 export { LinkActions, useLinkActions, type LinkActionOffer, type ProjectLinks, type LinkTargets } from '../components/LinkActions.js'
 export { PersonMark, personName } from '../components/PersonMark.js'
-export { needsWord, waitingKey, type RunNeed } from '../../src/client.js'
+export { waitingKey } from '../../src/client.js'
 export { WaitingList, holdsBack } from '../components/WaitingList.js'
 export { useWaiting, type WaitingRead } from '../lib/use-waiting.js'
 export { usePeople, personSaid } from '../lib/use-people.js'

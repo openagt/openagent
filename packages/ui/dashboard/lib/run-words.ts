@@ -22,7 +22,7 @@ const QUIET = 'text-muted-foreground'
 
 const RUN_STATES: Record<string, RunState> = {
   running: { word: 'working', said: 'working', cell: 'working', tone: 'text-info', line: QUIET },
-  // A run parked on a question: the two words every list of what waits on the person says (needsWord), so the run reads the same in every list.
+  // A run parked on a question.
   waiting: { word: 'needs answer', said: 'waits on your answer', cell: 'waiting', tone: 'text-muted-foreground', line: 'text-warning' },
   saving: { word: 'saving…', said: 'saving', cell: 'working', tone: 'text-muted-foreground', line: QUIET },
   done: { word: 'done', said: 'done', cell: 'done', tone: 'text-success', line: QUIET },
