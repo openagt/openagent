@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type Ref } from 'react'
-import { Ellipsis, Loader2, Plus, Settings } from 'lucide-react'
+import { Ellipsis, Loader2, Plus } from 'lucide-react'
 import {
   Button,
   ComposerControls,
@@ -7,9 +7,7 @@ import {
   Dialog,
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuTrigger,
   Input,
   Label,
@@ -17,13 +15,9 @@ import {
   Panel,
   PanelRow,
   PanelShape,
+  SetupRows,
   Slot,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-  cn,
   holdEntry,
-  rowButtonClass,
   useControlsSaid,
   useIsMobile,
   useModuleHost,
@@ -213,8 +207,6 @@ function ProfileEditor({ host, profile, onDone }: { host: ModuleHost; profile?: 
   const [nameRefused, setNameRefused] = useState(false)
   const isDefault = profile?.id === DEFAULT_PROFILE
   const box: ControlBox = { in: 'profile', options: draft.options, onChange: options => setDraft(d => ({ ...d, options })), busy }
-  const { said, onSaid } = useControlsSaid(profile?.id)
-  const facts = Object.values(said).map(one => one.words)
   const save = async () => {
     setBusy(true)
     setError(undefined)
@@ -311,29 +303,13 @@ function ProfileEditor({ host, profile, onDone }: { host: ModuleHost; profile?: 
             )}
           </div>
         )}
-        {/* Its run options, as under the message box: the gear's lines in their menu, then the row's controls at its right. */}
+        {/* Its run options as a form's rows (his pick A of three, 2026-11-26): the coding agent and its accounts, then the gear's lines, each its pick at the right. */}
         <div className="space-y-1.5">
           <p className="text-sm font-medium">Its sessions</p>
-          <div className="flex min-h-10 items-center gap-1 rounded-lg border border-border px-1 py-1">
-            <DropdownMenu>
-              <Tooltip>
-                <TooltipTrigger render={<DropdownMenuTrigger type="button" disabled={busy} aria-label="Profile setup" className={cn(rowButtonClass, 'shrink-0')} />}>
-                  <Settings className="size-4 shrink-0" aria-hidden />
-                </TooltipTrigger>
-                <TooltipContent>{facts.join(' · ') || 'What its sessions get'}</TooltipContent>
-              </Tooltip>
-              <DropdownMenuContent side="bottom" align="start" keepMounted className="w-[21rem] max-w-[calc(100vw-2rem)]">
-                <DropdownMenuGroup>
-                  <DropdownMenuLabel className="font-normal">This profile</DropdownMenuLabel>
-                  <ComposerControls at="setup" box={box} onSaid={onSaid} />
-                </DropdownMenuGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <div className="ml-auto flex min-w-0 items-center gap-1">
-              <ComposerControls at="row" box={box} onSaid={onSaid} />
-            </div>
-          </div>
-          {facts.length > 0 && <p className="text-xs text-muted-foreground">{facts.join(' · ')}</p>}
+          <SetupRows>
+            <ComposerControls at="row" box={box} />
+            <ComposerControls at="setup" box={box} />
+          </SetupRows>
         </div>
       </form>
     </Dialog>

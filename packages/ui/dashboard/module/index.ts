@@ -282,7 +282,7 @@ export { OptionLabel } from '../components/ui/option-label.js'
 // The message box's rows, as a control there draws its item (`composer.control`).
 export { rowButtonClass, rowItemClass, RowChevron, RowSaid, RowItem, BoxOfRow } from '../components/ui/row-item.js'
 // A line of the gear's menu under the message box (`composer.control` at `setup`).
-export { SetupLine, SetupPress, SetupSaid } from '../components/SessionSetup.js'
+export { PICK_CLASS as SETUP_PICK_CLASS, SetupLine, SetupPress, SetupRow, SetupRows, SetupSaid, useSetupRows } from '../components/SessionSetup.js'
 // The places a module draws itself: a profile's editor draws every control of the message box, the usage card the usage bar's line.
 export { ComposerControls, HandoffOffers, ViewsAt, useViewsAt, useControlsSaid, useOptionsAt, type ControlBox, type ControlsSaid } from '../components/Places.js'
 export { ModuleSlot } from '../components/ModulePageView.js'

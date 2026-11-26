@@ -1,9 +1,9 @@
 import { useEffect, type ReactNode } from 'react'
-import { Check } from 'lucide-react'
+import { Bot, Check, Users } from 'lucide-react'
 import type { AgentDriverOptions, RunOptions } from '@openagt/hooks'
 import {
-  Checkbox,
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
@@ -16,6 +16,9 @@ import {
   Facts,
   PackageLogo,
   RowChevron,
+  SETUP_PICK_CLASS,
+  SetupLine,
+  SetupRow,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -122,11 +125,14 @@ export function AgentMenu({
   onChange,
   effort,
   busy,
+  triggerClassName = rowButtonClass,
 }: {
   agents: MenuAgent[]
   /** The agent picked; the first when none is. */
   driver: string | undefined
   model: string | undefined
+  /** The press's look: the row under the box's, else a form's pick (a profile's editor). */
+  triggerClassName?: string
   /** Set the agent and model together (a model is always picked within its agent). */
   onChange: (driver: string, model: string) => void
   effort?: EffortChoice | undefined
@@ -145,7 +151,7 @@ export function AgentMenu({
   return (
     <DropdownMenu>
       <Tooltip>
-        <TooltipTrigger render={<DropdownMenuTrigger type="button" disabled={busy} aria-label={said} className={rowButtonClass} />}>
+        <TooltipTrigger render={<DropdownMenuTrigger type="button" disabled={busy} aria-label={said} className={triggerClassName} />}>
           {/* The model by its name, "Default" where none is picked: the button never says nothing but a mark. */}
           <ModelWords logo={current?.logo} name={current?.logo !== undefined ? (currentModelLabel ?? DEFAULT_MODEL_WORD) : [current?.label, currentModelLabel ?? DEFAULT_MODEL_WORD].join(' ')} effort={level} />
           <RowChevron />
@@ -268,6 +274,7 @@ function PickAgent({ in: box, options, onChange, busy, say }: UiComposerControlP
   if (agents.length === 0) return null
   const menu = (
     <AgentMenu
+      {...(box === 'profile' ? { triggerClassName: SETUP_PICK_CLASS } : {})}
       agents={withAccounts}
       driver={agent?.id}
       model={shown.model}
@@ -278,15 +285,18 @@ function PickAgent({ in: box, options, onChange, busy, say }: UiComposerControlP
     />
   )
   if (box !== 'profile') return menu
+  // In a profile's editor, rows of its form (his pick A): the agent and its model, then each agent's accounts.
   return (
-    <div className="space-y-4">
-      {menu}
+    <>
+      <SetupRow icon={<Bot aria-hidden />} label="Coding agent">
+        {menu}
+      </SetupRow>
       {agents.map(one =>
         one.list === 'claude' || one.list === 'codex' ? (
           <ProfileAccounts key={one.value} label={one.label} list={one.list} picked={slice[one.list] ?? []} busy={busy} onChange={accounts => onChange(withSlice(options, { ...slice, [one.list!]: accounts }))} />
         ) : null,
       )}
-    </div>
+    </>
   )
 }
 
@@ -307,34 +317,30 @@ function ProfileAccounts({ label, list, picked, busy, onChange }: { label: strin
 }
 
 /**
- * A coding agent's accounts to pick from: "Every account, also new ones", ticked while none is
- * picked, is every one of this computer's, also one added later; one or more ticked, those alone,
- * where the computer has them. This computer's own login, logged out, is offered only while it is
- * picked, and says so.
+ * A coding agent's accounts to pick from, a line of the profile's form whose list ticks them:
+ * "Every account, also new ones", ticked while none is picked, is every one of this computer's,
+ * also one added later; one or more ticked, those alone, where the computer has them. This
+ * computer's own login, logged out, is offered only while it is picked, and says so.
  */
 export function AccountPicks({ label, accounts: all, picked, busy, onTick, onAll }: { label: string; accounts: readonly AccountRow[]; picked: Set<string>; busy: boolean; onTick: (id: string, on: boolean) => void; onAll: () => void }) {
   const accounts = all.filter(account => !account.loggedOut || picked.has(account.id))
   if (accounts.length === 0) return null
+  const nameOf = (account: AccountRow) => (account.loggedOut ? `${account.name}, not logged in` : account.name)
+  const value = picked.size === 0 ? 'Every account' : accounts.filter(account => picked.has(account.id)).map(nameOf).join(', ') || [...picked].join(', ')
   return (
-    <fieldset className="space-y-1.5">
-      <legend className="text-sm font-medium">{`${label} accounts`}</legend>
-      <div className="flex flex-wrap gap-3">
+    <SetupLine icon={<Users aria-hidden />} label={`${label} accounts`} value={value} disabled={busy} className="w-72">
+      <DropdownMenuGroup>
+        <DropdownMenuLabel className="font-normal">{picked.size === 0 ? `All of this computer's ${label} accounts, the next free one taking over at a limit.` : 'Only these, where the computer the run goes to has them.'}</DropdownMenuLabel>
         {/* Left by ticking an account, as a radio is left by picking another. */}
-        <label className="flex cursor-pointer items-center gap-2 text-sm">
-          <Checkbox checked={picked.size === 0} onCheckedChange={checked => checked === true && onAll()} disabled={busy} aria-label={`Every ${label} account, also new ones`} />
+        <DropdownMenuCheckboxItem checked={picked.size === 0} onCheckedChange={checked => checked && onAll()} aria-label={`Every ${label} account, also new ones`}>
           Every account, also new ones
-        </label>
-        {accounts.map(account => {
-          const name = account.loggedOut ? `${account.name}, not logged in` : account.name
-          return (
-            <label key={account.id} className="flex cursor-pointer items-center gap-2 text-sm">
-              <Checkbox checked={picked.has(account.id)} onCheckedChange={checked => onTick(account.id, checked === true)} disabled={busy} aria-label={`${label} account ${name}`} />
-              {name}
-            </label>
-          )
-        })}
-      </div>
-      <p className="text-xs text-muted-foreground">{picked.size === 0 ? `All of this computer's ${label} accounts, the next free one taking over at a limit.` : `Only these, where the computer the run goes to has them.`}</p>
-    </fieldset>
+        </DropdownMenuCheckboxItem>
+        {accounts.map(account => (
+          <DropdownMenuCheckboxItem key={account.id} checked={picked.has(account.id)} onCheckedChange={checked => onTick(account.id, checked)} aria-label={`${label} account ${nameOf(account)}`}>
+            <span className="truncate">{nameOf(account)}</span>
+          </DropdownMenuCheckboxItem>
+        ))}
+      </DropdownMenuGroup>
+    </SetupLine>
   )
 }

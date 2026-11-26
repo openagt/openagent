@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
-import { DropdownMenuCheckboxItem, forgetRemembered, type ModuleCallResult, type UiComposerControlProps } from '@openagt/ui/module'
+import { DropdownMenuCheckboxItem, SetupLine, forgetRemembered, type ModuleCallResult, type UiComposerControlProps } from '@openagt/ui/module'
 import { fakeHost, mountedOf, openMenu, renderWithHost, type MountedView } from '@openagt/ui/module/testing'
 import { ProfilesPage } from './ProfilesPage.js'
 
@@ -21,15 +21,17 @@ const callComputer = vi.fn(async (name: string, _input: object): Promise<ModuleC
 const sent = (name: string) => callComputer.mock.calls.filter(([called]) => called === name).map(([, input]) => input)
 const host = fakeHost('@openagt/profiles', { callComputer })
 
-/** Another module's line of the gear: whether runs get its plugin, as a tick, and in a few words. */
+/** Another module's line of the gear: whether runs get its plugin, as a tick in its list, and in a few words. */
 function LogsControl({ options, onChange, say }: UiComposerControlProps) {
   const without = options.plugins?.without ?? []
   const off = without.includes('logs')
   useEffect(() => say({ words: off ? 'Without logs' : 'Every plugin' }), [say, off])
   return (
-    <DropdownMenuCheckboxItem checked={!off} onCheckedChange={() => onChange({ ...options, plugins: { without: off ? [] : ['logs'] } })}>
-      Plugin logs
-    </DropdownMenuCheckboxItem>
+    <SetupLine icon={null} label="Plugins" value={off ? 'Without logs' : 'Every plugin'}>
+      <DropdownMenuCheckboxItem checked={!off} onCheckedChange={() => onChange({ ...options, plugins: { without: off ? [] : ['logs'] } })}>
+        Plugin logs
+      </DropdownMenuCheckboxItem>
+    </SetupLine>
   )
 }
 const CONTROL: MountedView<'composer.control'> = { place: 'composer.control', id: 'logs', at: 'setup', View: LogsControl, package: '@acme/logs', module: 'logs', projects: ['p1'] }
@@ -82,12 +84,15 @@ describe('the Profiles page', () => {
     expect(within(rows[1]!).getByRole('button', { name: 'Remove Reviewer' })).toBeTruthy()
   })
 
-  test("a profile's editor draws the message box's controls on its options: a pick there is the profile's, saved under its own id", async () => {
+  test("a profile's editor draws the message box's controls on its options, each a row of a form, its pick at the right: a pick there is the profile's, saved under its own id", async () => {
     render()
     fireEvent.click(await screen.findByRole('button', { name: 'Edit Reviewer' }))
     const editor = screen.getByRole('dialog', { name: 'Editing Reviewer' })
-    expect(within(editor).getByText('Without logs')).toBeTruthy()
-    await openMenu(within(editor).getByRole('button', { name: 'Profile setup' }))
+    // The line is a row: what it sets, then its pick, which says its value and opens its list.
+    const pick = within(editor).getByRole('button', { name: 'Plugins' })
+    expect(pick.textContent).toBe('Without logs')
+    expect(pick.closest('div')!.textContent).toBe('PluginsWithout logs')
+    await openMenu(pick)
     const tick = await screen.findByRole('menuitemcheckbox', { name: 'Plugin logs' })
     expect(tick.getAttribute('aria-checked')).toBe('false')
     fireEvent.click(tick)

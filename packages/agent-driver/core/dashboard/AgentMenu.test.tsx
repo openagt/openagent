@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { RunOptions } from '@openagt/hooks'
-import { effortLabel, forgetRemembered, type ModuleCallResult, type UiComposerIn } from '@openagt/ui/module'
-import { fakeHost, renderWithHost } from '@openagt/ui/module/testing'
+import { SetupRows, effortLabel, forgetRemembered, type ModuleCallResult, type UiComposerIn } from '@openagt/ui/module'
+import { fakeHost, openMenu, renderWithHost } from '@openagt/ui/module/testing'
 import { AgentControl, AgentMenu, ModelWords, type MenuAgent } from './AgentMenu.js'
 
 afterEach(() => {
@@ -168,7 +168,7 @@ function hostFor(over: Record<string, unknown> = {}) {
 /** The control in a box, holding the options it changes, as the shell does. */
 function Box({ box, start = {}, seen }: { box: UiComposerIn; start?: RunOptions; seen?: (options: RunOptions) => void }) {
   const [options, setOptions] = useState<RunOptions>(start)
-  return (
+  const control = (
     <AgentControl
       in={box}
       options={options}
@@ -180,6 +180,8 @@ function Box({ box, start = {}, seen }: { box: UiComposerIn; start?: RunOptions;
       say={() => {}}
     />
   )
+  // A profile's editor draws the controls as rows of its form.
+  return box === 'profile' ? <SetupRows>{control}</SetupRows> : control
 }
 
 const trigger = () => screen.findByRole('button', { name: /^Coding agent: / })
@@ -242,12 +244,18 @@ describe('the control under the message box', () => {
     const { host } = hostFor()
     const seen = vi.fn()
     renderWithHost(<Box box="profile" start={{ 'agent-driver': { claude: ['Dani'] } }} seen={seen} />, host)
-    const checked = (name: string) => screen.getByLabelText(name).getAttribute('aria-checked')
+    // A row of the profile's form: its pick says the accounts, and its list ticks them.
+    const accounts = await screen.findByRole('button', { name: 'Claude Code accounts' })
+    expect(accounts.textContent).toBe('Dani')
+    await openMenu(accounts)
+    const checked = (name: string) => screen.getByRole('menuitemcheckbox', { name }).getAttribute('aria-checked')
     await waitFor(() => expect([checked('Every Claude Code account, also new ones'), checked('Claude Code account Dani')]).toEqual(['false', 'true']))
-    fireEvent.click(screen.getByLabelText('Every Claude Code account, also new ones'))
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Every Claude Code account, also new ones' }))
     expect(seen).toHaveBeenLastCalledWith({})
-    fireEvent.click(screen.getByLabelText('Claude Code account Ada'))
+    await waitFor(() => expect(accounts.textContent).toBe('Every account'))
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Claude Code account Ada' }))
     expect(seen).toHaveBeenLastCalledWith({ 'agent-driver': { claude: ['This computer'] } })
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
     // The profile's agent and model are its own, never every next run's.
     fireEvent.click(await trigger())
     fireEvent.click(screen.getByRole('menuitem', { name: /Codex/ }))
@@ -259,11 +267,15 @@ describe('the control under the message box', () => {
   test("this computer's own login, logged out, is offered to a profile only while it is picked, and says so", async () => {
     const { host } = hostFor({ list: { claude: [{ name: 'This computer', own: true, signedOut: true }, { name: 'Dani', own: false }], codex: [], notInstalled: [] } })
     renderWithHost(<Box box="profile" />, host)
-    expect(await screen.findByLabelText('Claude Code account Dani')).toBeTruthy()
-    expect(screen.queryByLabelText(/This computer/)).toBeNull()
+    await openMenu(await screen.findByRole('button', { name: 'Claude Code accounts' }))
+    expect(await screen.findByRole('menuitemcheckbox', { name: 'Claude Code account Dani' })).toBeTruthy()
+    expect(screen.queryByRole('menuitemcheckbox', { name: /This computer/ })).toBeNull()
     cleanup()
     renderWithHost(<Box box="profile" start={{ 'agent-driver': { claude: ['This computer'] } }} />, host)
-    expect((await screen.findByLabelText('Claude Code account This computer, not logged in')).getAttribute('aria-checked')).toBe('true')
-    expect(within(document.body).getByLabelText('Claude Code account Dani')).toBeTruthy()
+    const accounts = await screen.findByRole('button', { name: 'Claude Code accounts' })
+    expect(accounts.textContent).toBe('This computer, not logged in')
+    await openMenu(accounts)
+    expect((await screen.findByRole('menuitemcheckbox', { name: 'Claude Code account This computer, not logged in' })).getAttribute('aria-checked')).toBe('true')
+    expect(within(document.body).getByRole('menuitemcheckbox', { name: 'Claude Code account Dani' })).toBeTruthy()
   })
 })
