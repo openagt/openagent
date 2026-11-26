@@ -283,8 +283,8 @@ export class StreamJsonParser {
     this.io?.write(JSON.stringify({ type: 'control_request', request_id: id, request }))
   }
 
-  /** The tasks in the background, as the CLI's list says them: one it names for the first time began now. The ids of those gone from it. */
-  private backgroundTasks(listed: unknown[]): string[] {
+  /** The tasks in the background, as the CLI's list says them: one it names for the first time began now. Those gone from it. */
+  private backgroundTasks(listed: unknown[]): BackgroundTask[] {
     const now = new Date().toISOString()
     const ids = new Set<string>()
     for (const item of listed) {
@@ -298,8 +298,8 @@ export class StreamJsonParser {
       const command = this.taskCommands.get(id)
       this.background.set(id, { ...(known ?? { id, since: now }), ...(description !== undefined ? { description } : {}), ...(command !== undefined ? { command } : {}) })
     }
-    const gone = [...this.background.keys()].filter(id => !ids.has(id))
-    for (const id of gone) this.background.delete(id)
+    const gone = [...this.background.values()].filter(task => !ids.has(task.id))
+    for (const task of gone) this.background.delete(task.id)
     return gone
   }
 
@@ -461,9 +461,12 @@ export class StreamJsonParser {
     // The work the CLI runs in the background, as a level: every change says the whole set.
     if (type === 'system' && obj['subtype'] === 'background_tasks_changed' && Array.isArray(obj['tasks'])) {
       const gone = this.backgroundTasks(obj['tasks'])
+      // What the person's ■ stopped is said where the agent's words are: it may never say so itself.
+      const stopped = gone.filter(task => this.stoppedTasks.has(task.id))
+      if (stopped.length > 0) announced.push({ type: 'notice', message: `Stopped ${stopped.map(task => `\`${task.command ?? task.description ?? task.id}\``).join(', ')}.` })
       // Idle, the agent is woken by no task the person stopped: what it waits on is said as it goes.
       if (this.idle) {
-        if (this.background.size === 0 && gone.some(id => this.stoppedTasks.has(id))) this.stoppedAll()
+        if (this.background.size === 0 && stopped.length > 0) this.stoppedAll()
         return [...announced, { type: 'background', tasks: [...this.background.values()] }]
       }
     }
