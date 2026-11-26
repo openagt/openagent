@@ -59,20 +59,30 @@ describe('ChatPane', () => {
   test('the top bar lies over the chat\'s start, as Claude Code\'s: see-through and blurred, short of the scroll bar, which is drawn over the page\'s whole height', () => {
     render(<ChatPane top={<b>top bar</b>} bottom={<b>message box</b>}><p>chat</p></ChatPane>)
     const top = screen.getByTestId('chat-top')
-    // The chat, the top bar and the message box share one room, the chat under both bars.
-    const chatRoom = screen.getByText('chat').parentElement!
-    expect(chatRoom.parentElement).toBe(pane())
-    expect(top.parentElement).toBe(chatRoom)
+    // The chat and the message box share one room, the chat under the bar; the top bar lies over that room.
+    const chat = screen.getByText('chat').parentElement!
+    const layer = chat.parentElement!
+    expect(layer.parentElement).toBe(pane())
+    expect(top.parentElement).toBe(layer)
     expect(top.className.split(' ')).toEqual(expect.arrayContaining(['absolute', 'top-0', 'left-0', 'right-(--chat-edge)', 'z-20', 'bg-background/80', 'backdrop-blur-md']))
     // Over the scroll bar's strip only the bar's line goes on, level with it, to the panes' edge.
     expect(screen.getByTestId('chat-top-line').className.split(' ')).toEqual(expect.arrayContaining(['absolute', 'right-0', 'w-(--chat-edge)', 'top-[calc(2.75rem-1px)]', 'h-px', 'bg-border']))
     // The room is a layer of its own: a popup the dashboard opens over the page stays over the message box's bar.
-    expect(chatRoom.className.split(' ')).toEqual(expect.arrayContaining(['relative', 'isolate', 'min-h-0', 'flex-1', 'overflow-hidden']))
-    expect(screen.getByTestId('chat-bottom').parentElement).toBe(chatRoom)
+    expect(layer.className.split(' ')).toEqual(expect.arrayContaining(['relative', 'isolate', 'min-h-0', 'flex-1', 'overflow-hidden']))
+    expect(screen.getByTestId('chat-bottom').parentElement).toBe(chat)
     // The room the top bar takes is written for the chat to start under it.
     expect(room('--chat-top')).toBe('0px')
     // In the page's order: the top bar, the chat, the message box.
     expect(document.body.textContent).toBe('top barchatmessage box')
+  })
+
+  test('a column beside the chat stands under the top bar, which then runs over both, as Claude Code\'s over its details', () => {
+    render(<ChatPane top={<b>top bar</b>} bottom={<b>message box</b>} side={<p>activity</p>}><p>chat</p></ChatPane>)
+    const column = screen.getByRole('complementary', { name: 'Activity panel' })
+    expect(column.className.split(' ')).toEqual(expect.arrayContaining(['mt-11', 'w-80', 'border-l']))
+    expect(screen.getByTestId('chat-top').className.split(' ')).toEqual(expect.arrayContaining(['right-0']))
+    expect(screen.queryByTestId('chat-top-line')).toBeNull()
+    expect(document.body.textContent).toBe('top barchatmessage boxactivity')
   })
 
   test('the message box\'s bar lies over the chat and stops short of its scroll bar; a scroll bar that lies over the content takes no room, and the bar still leaves it a strip', () => {

@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { BoxNotes, ComposerShape } from './Composer.js'
 import { TopBar } from './Panes.js'
+import { cn } from '../lib/utils.js'
 
 // An agent's page, laid out as Claude Code on the web lays out a session: the chat fills the
 // page, its scroll bar at the page's edge from the page's top to its end. The top bar and the
@@ -25,7 +26,7 @@ import { TopBar } from './Panes.js'
 // file's preview, from the Files pane) stays over the message box's bar. And what lies over the
 // chat is cut at the room's edges: over a bar as tall as the room (a tall question on a short
 // window), the bar's fade stays off the top bar.
-export function ChatPane({ top, bottom, children }: { top: ReactNode; bottom: ReactNode; children?: ReactNode }) {
+export function ChatPane({ top, bottom, side, children }: { top: ReactNode; bottom: ReactNode; /** A column beside the chat, under the top bar, which runs over it too: the session's Activity panel. */ side?: ReactNode; children?: ReactNode }) {
   const pane = useRef<HTMLDivElement>(null)
   const topBar = useRef<HTMLDivElement>(null)
   const bottomBar = useRef<HTMLDivElement>(null)
@@ -52,14 +53,16 @@ export function ChatPane({ top, bottom, children }: { top: ReactNode; bottom: Re
   }, [])
   return (
     <div ref={pane} data-testid="chat-pane" className="@container flex min-h-0 flex-1 flex-col">
-      <div className="relative isolate flex min-h-0 flex-1 flex-col overflow-hidden pointer-coarse:pb-(--chat-bar)">
+      <div className="relative isolate flex min-h-0 flex-1 overflow-hidden">
         {/* Over the chat's start, as Claude Code's: what scrolls under it shows through, blurred. It
             stops short of the scroll bar, which is drawn over the whole page's height, the bar's top
             too; only the bar's line crosses it, to the panes' edge. */}
-        <div ref={topBar} data-testid="chat-top" className="absolute top-0 right-(--chat-edge) left-0 z-20 bg-background/80 backdrop-blur-md pointer-coarse:right-(--chat-scroll-bar)">
+        {/* With a column beside the chat the bar runs over both, as Claude Code's over its details. */}
+        <div ref={topBar} data-testid="chat-top" className={cn('absolute top-0 left-0 z-20 bg-background/80 backdrop-blur-md', side ? 'right-0' : 'right-(--chat-edge) pointer-coarse:right-(--chat-scroll-bar)')}>
           {top}
         </div>
-        <div aria-hidden data-testid="chat-top-line" className="pointer-events-none absolute right-0 top-[calc(2.75rem-1px)] z-20 h-px w-(--chat-edge) bg-border pointer-coarse:w-(--chat-scroll-bar)" />
+        {!side && <div aria-hidden data-testid="chat-top-line" className="pointer-events-none absolute right-0 top-[calc(2.75rem-1px)] z-20 h-px w-(--chat-edge) bg-border pointer-coarse:w-(--chat-scroll-bar)" />}
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col pointer-coarse:pb-(--chat-bar)">
         {/* Styled as the chat's scroller is (MessageScrollerViewport): a gutter kept, a thin bar. */}
         <div ref={probe} className="scrollbar-thin scrollbar-gutter-stable invisible absolute h-0 w-8 overflow-y-auto" aria-hidden />
         {children}
@@ -77,6 +80,12 @@ export function ChatPane({ top, bottom, children }: { top: ReactNode; bottom: Re
         <div className="pointer-events-none absolute right-(--chat-edge) bottom-(--chat-bar) left-0 z-10 pl-[calc(var(--chat-edge)_-_var(--chat-scroll-bar))] pointer-coarse:right-(--chat-scroll-bar) pointer-coarse:pl-0">
           <div ref={setNotes} data-testid="box-notes" className="pointer-events-auto mx-auto w-full max-w-3xl px-4" />
         </div>
+        </div>
+        {side && (
+          <aside aria-label="Activity panel" className="mt-11 flex w-80 shrink-0 flex-col overflow-y-auto border-l border-border px-4 pt-3.5 pb-4">
+            {side}
+          </aside>
+        )}
       </div>
     </div>
   )

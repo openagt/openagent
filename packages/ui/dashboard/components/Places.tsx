@@ -272,8 +272,8 @@ export function useMenuActions<P extends 'chat.menu' | 'project.menu' | 'person.
   return { items, overlay, offered: items.length }
 }
 
-/** The bar's press: a quiet one on the bar's own fill, as its other presses are. Busy, it stays focusable. */
-const NEXT_STEP_CLASS = 'bg-background/60 hover:bg-background aria-disabled:pointer-events-none aria-disabled:opacity-50'
+/** The row's press, as Claude Code's Create PR: grey, 24 high, its words at 13px. Busy, it stays focusable. */
+const NEXT_STEP_CLASS = 'h-6 rounded-md bg-foreground/10 text-[13px] font-normal hover:bg-foreground/15 aria-disabled:pointer-events-none aria-disabled:opacity-50'
 
 /**
  * The next step of an ended run's work, in the bar above its message box (`chat.handoff`): what
@@ -311,7 +311,7 @@ export function HandoffOffers({ projectId, agentId, repo, again }: { projectId: 
         ))}
       {first && (
         <ButtonGroup>
-          <Button size="sm" variant="ghost" className={cn(NEXT_STEP_CLASS, more.length > 0 && 'pr-1.5!', first.offer.danger && 'text-danger')} data-next-step {...step} {...(first.offer.title !== undefined ? { title: first.offer.title } : {})} onClick={() => press(first)}>
+          <Button size="sm" variant="ghost" className={cn(NEXT_STEP_CLASS, 'min-w-18 justify-center px-2.5', first.offer.danger && 'text-danger')} data-next-step {...step} {...(first.offer.title !== undefined ? { title: first.offer.title } : {})} onClick={() => press(first)}>
             {pending === first.key && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
             {labelOf(first)}
           </Button>
@@ -319,7 +319,7 @@ export function HandoffOffers({ projectId, agentId, repo, again }: { projectId: 
             <>
               <ButtonGroupSeparator className="bg-border opacity-100" />
               <DropdownMenu>
-                <DropdownMenuTrigger type="button" aria-label="Other choices" {...step} className={cn(buttonVariants({ size: 'sm', variant: 'ghost' }), NEXT_STEP_CLASS, 'px-1 data-[popup-open]:bg-background')}>
+                <DropdownMenuTrigger type="button" aria-label="Other choices" {...step} className={cn(buttonVariants({ size: 'sm', variant: 'ghost' }), NEXT_STEP_CLASS, 'px-1 data-[popup-open]:bg-foreground/15')}>
                   <ChevronDown className="h-3.5 w-3.5" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="min-w-[10rem]">

@@ -311,6 +311,12 @@ export interface ViewPlaces {
    * nothing, and a panel with no row is not drawn.
    */
   'chat.work': { entry: { id: string; order?: number }; props: UiWorkProps }
+  /**
+   * Rows of the Environment of a session's Activity panel, after where it runs and its project, by
+   * `order`: git-branches' copies of repos, each by the repository it is a copy of. Drawn with the
+   * shell's `EnvironmentRow`.
+   */
+  'chat.environment': { entry: { id: string; order?: number }; props: UiRunProps }
   /** A strip above a run's chat, with a word on the run: a host's, on a run it runs, say where the run is and when its news comes. */
   'chat.notice': { entry: { id: string }; props: UiRunNoticeProps }
   /** Words at the end of the row above a session's message box: github's pull request labels. */

@@ -3,7 +3,8 @@
 // checkout holds changes and "Committing…" while the agent does what its Commit press asked, once
 // it has ended what its branch holds, and its next steps there (`chat.handoff`): Commit, Publish
 // branch, Merge on this machine, a copy's work brought back to its folder, and uncommitted work
-// discarded; a row per copy of a repo the session holds work in after it (`chat.work`);
+// discarded; a row per copy of a repo the session holds work in after it (`chat.work`), and each
+// copy by the repository it is a copy of in the Activity panel's Environment (`chat.environment`);
 // Remove worktree in the session's menu (`chat.menu`); under the box (`composer.control` at
 // `context`), after the project, the repos a session works with, each copied into its folder, and
 // the branch a run starts from, as Claude Code on the web has them; the Auto menu's Commit and Publish branch
@@ -13,6 +14,7 @@
 import { defineUiModule, formatBytes, type UiActionAt } from '@openagt/ui/module'
 import { FolderX } from 'lucide-react'
 import { server } from './calls.js'
+import { CopyRepos } from './CopyRepos.js'
 import { CopyRows } from './CopyRows.js'
 import { handoffActions } from './handoff.js'
 import { ProjectRow } from './ProjectRow.js'
@@ -57,6 +59,7 @@ export default defineUiModule({
     'ui.view': [
       { place: 'chat.work', id: 'project', order: 10, View: ProjectRow },
       { place: 'chat.work', id: 'copies', order: 20, View: CopyRows },
+      { place: 'chat.environment', id: 'copies', order: 20, View: CopyRepos },
       { place: 'composer.control', id: 'repos', at: 'context', order: 20, View: ReposControl },
       { place: 'composer.control', id: 'start-from', at: 'context', order: 30, View: StartControl },
     ],

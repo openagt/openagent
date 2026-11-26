@@ -9,7 +9,7 @@ import { checkoutDir, reclaimAgent, refusalLine } from './agent-checkout.js'
 import { bringRefusalLine, mergeRefusalLine, pushRefusalLine } from './cli.js'
 import { readFolderBehind, updateFolder } from './folder-behind.js'
 import { readGitStatus } from './git-status.js'
-import { readHandoff, sessionCopies, workAt, type Handoff } from './handoff.js'
+import { readHandoff, sessionCopies, sessionRepos, workAt, type Handoff, type SessionRepo } from './handoff.js'
 import { mergeBranch } from './merge.js'
 import { branchesOnOrigin } from './origin-branches.js'
 import { originGit } from './origin-git.js'
@@ -89,6 +89,9 @@ export const worktree = read(async (host: RpcHost, { agentId }: { agentId: strin
 
 /** The names of the session's copies of repos, in its folder: each has a row of its own in the panel above the box. */
 export const copies = read(async (_host: RpcHost, { agentId }: { agentId: string }): Promise<string[]> => (isRunId(agentId) ? sessionCopies(agentId) : []))
+
+/** The session's copies of repos with the address each is a copy of: the Activity panel's Environment lists them. */
+export const repos = read(async (_host: RpcHost, { agentId }: { agentId: string }): Promise<SessionRepo[]> => (isRunId(agentId) ? sessionRepos(agentId) : []))
 
 /** What the Commit press says to the run: it commits its own work, in its own words. */
 export const COMMIT_ASK = 'Commit your work.'

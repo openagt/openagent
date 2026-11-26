@@ -25,7 +25,7 @@ function rows(place: string): string[] {
 test('every shortcut is listed under where it works, with its keys as the keyboard writes them', async () => {
   await listOn('Linux x86_64')
   expect(screen.getAllByRole('heading').map(h => h.textContent)).toEqual(['Anywhere', 'Jump', 'The message box', 'A working agent', 'A question', 'Saved prompts', 'Customizing the Overview'])
-  expect(rows('Anywhere')).toEqual(['Jump to a run, a project or a page = Ctrl K', 'Show the keyboard shortcuts = ?', 'Hide or show the sidebar = Ctrl B'])
+  expect(rows('Anywhere')).toEqual(['Jump to a run, a project or a page = Ctrl K', 'Show the keyboard shortcuts = ?', 'Hide or show the sidebar = Ctrl B', 'Open Changes in the side panel = Ctrl Shift D', 'Open Files in the side panel = Ctrl Shift F'])
   expect(rows('Jump')).toEqual(['Open the marked place in a new tab = Ctrl Enter'])
   expect(rows('The message box')).toEqual(['Send = Enter', 'Start a new line = Shift Enter', 'Send, read by a working agent after its turn = Ctrl Enter'])
   expect(rows('A question')).toEqual(['Pick that answer = 1–9', 'Send the answer = Ctrl Enter'])

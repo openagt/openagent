@@ -11,8 +11,7 @@ import type { ContextSet } from '../lib/use-context-set.js'
 import { AgentComposer, type QueuedMessage } from './AgentComposer.js'
 import { sendNow, withdrawMessage } from '../rpc/control.js'
 import { onRunCheckout } from '../rpc/reads.js'
-import type { WaitingMessage } from './EventList.js'
-import { AgentWorkPanel } from './AgentWorkPanel.js'
+import { backgroundWait, type WaitingMessage } from './EventList.js'
 import { ViewsAt, useOptionsAt } from './Places.js'
 import { useAction } from '../lib/use-action.js'
 import { keepSending, keepWaiting, keptSending, keptWaiting, onKeptWaiting } from '../lib/draft-handoff.js'
@@ -29,7 +28,10 @@ import { usePaneOpeners } from '../lib/reveal-change.js'
 import { agentOf, modelContextWindow, useAgents } from '../lib/agents.js'
 import { ContextCircle } from './ContextCircle.js'
 import { hostOf, useRunHosts } from '../lib/run-hosts.js'
-import { THIS_MACHINE } from './RunOnMenu.js'
+import { HOST_ICON, THIS_MACHINE } from './RunOnMenu.js'
+import { ActivityButton, ActivityPanel, useActivityPlace } from './ActivityPanel.js'
+import { callSubagents } from '../lib/subagents.js'
+import { Laptop } from 'lucide-react'
 
 // One session's view, whether it is running or finished (#1026).
 //
@@ -226,6 +228,31 @@ export function AgentView({
     () => ({ projectId, agentId, working: going, ended: live === false && !going, saving: card?.saving === true, ...(projectName ? { projectName } : {}), ...(pr ? { pr } : {}) }),
     [projectId, agentId, live, going, card?.saving, projectName, pr],
   )
+  // The session's Activity panel: where it runs and with what, its context, what it does in the
+  // background, and its changes, a row per repo with its next step.
+  const listedProject = useProjects().find(one => one.id === projectId)
+  const background = useMemo(() => (feedLive ? (backgroundWait(shown) ?? []) : []), [feedLive, shown])
+  const subagents = useMemo(
+    () =>
+      callSubagents(shown)
+        .filter(one => one.status === 'working')
+        .map(one => ({ key: `call:${one.id}`, name: one.name ?? one.role ?? 'Subagent', ...(one.startedAt !== undefined ? { since: one.startedAt } : {}) })),
+    [shown],
+  )
+  const activity = (
+    <ActivityPanel
+      runsOn={runsOn}
+      runsOnIcon={host !== undefined ? HOST_ICON : Laptop}
+      project={projectName ? { name: projectName, address: listedProject?.remote } : undefined}
+      branch={branch}
+      context={contextWindow !== undefined ? { used: card?.contextTokens ?? 0, size: contextWindow } : undefined}
+      background={background}
+      subagents={subagents}
+      onOpenSubagent={onOpenSubagent}
+      work={work}
+    />
+  )
+  const { column } = useActivityPlace()
   // Where the session runs, right above the message box. It is there whatever stands in the box's place.
   const row = (
     <SessionRow
@@ -238,6 +265,7 @@ export function AgentView({
 
   return (
     <ChatPane
+      {...(column ? { side: activity } : {})}
       top={
         <>
           <AgentActionBar
@@ -255,6 +283,7 @@ export function AgentView({
             ready={ready}
             status={status}
             resumeCommand={card?.resumeCommand}
+            activity={<ActivityButton>{activity}</ActivityButton>}
           />
           {/* The always-available session-details strip: agent + spend (#322). What the run changed is
               in the Changes pane, not here. */}
@@ -269,10 +298,6 @@ export function AgentView({
       }
       bottom={
         <>
-          {/* Where the work is and the next step, above the message box and its row: a row per repo, the modules'. */}
-          <AgentWorkPanel>
-            <ViewsAt place="chat.work" projectId={projectId} props={work} label="session's work" />
-          </AgentWorkPanel>
           {/* Until the run's record or its feed says whether it works, no box: it would say an ended run's words. */}
           {live === null && !feedLive ? null : card?.otherHost && card.host ? (
             // A run another computer started is only read here: a
