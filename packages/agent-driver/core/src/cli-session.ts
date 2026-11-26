@@ -73,6 +73,8 @@ export interface AgentCliParser {
   withdraw?(id: string): void
   /** Let the messages handed over reach the agent now: what it is running goes on in the background. */
   hurry?(): void
+  /** Stop one task the agent runs (a command in the background, a subagent), by the id the parser said it by; the agent goes on. */
+  stopTask?(task: string): void
   /**
    * Ask the agent to end its turn where it is; its turn's result then says `stopped`. False when
    * it cannot be asked, and its process is ended instead. `'idle'` when asking would not reach it
@@ -328,8 +330,8 @@ export function runCliSession(opts: RunCliSessionOptions): Promise<DriverTurn> {
 
 /**
  * The inbox read while a turn runs: every few hundred milliseconds what waits there is taken, and
- * each message handed to the agent unless it is for later; a line that takes one back, or hurries
- * the ones handed over, goes to the agent too. What was taken and never reached the agent is held,
+ * each message handed to the agent unless it is for later; a line that takes one back, hurries
+ * the ones handed over, or stops a task, goes to the agent too. What was taken and never reached the agent is held,
  * in the order it came, for the prompts after the turn.
  */
 function readInbox(path: string, parser: AgentCliParser, steered: RunCliSessionOptions['steered']) {
@@ -347,6 +349,10 @@ function readInbox(path: string, parser: AgentCliParser, steered: RunCliSessionO
       }
       if (line.kind === 'now') {
         parser.hurry?.()
+        continue
+      }
+      if (line.kind === 'stop-task') {
+        parser.stopTask?.(line.task)
         continue
       }
       // Named, so the agent's reading it can be told apart from its other messages.

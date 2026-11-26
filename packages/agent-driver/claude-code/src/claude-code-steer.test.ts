@@ -226,3 +226,30 @@ test('the wait holds the process until it ends the turn: with nothing else alive
   assert.equal(run.status, 0, run.stderr)
   assert.equal(run.stdout.trim(), 'ended')
 })
+
+test("a task's ■ goes as stop_task with its id; a subagent is said again with the task it runs as, and its end on the ■ is a stop", () => {
+  // As Claude Code 2.1.332 said them: a backgrounded subagent's task, a command's, the ■ on each.
+  const parser = new StreamJsonParser()
+  const io = recordingIo()
+  parser.talk(io)
+  push(parser, { type: 'assistant', message: { id: 'msg1', content: [{ type: 'tool_use', id: 'toolu_a', name: 'Agent', input: { description: 'Run sleep 80 and report output', subagent_type: 'general-purpose', prompt: 'Sleep.' } }] }, session_id: 's1' })
+  const named = push(parser, { type: 'system', subtype: 'task_started', task_id: 'aac4ad94a317d341f', tool_use_id: 'toolu_a', is_backgrounded: true, task_type: 'local_agent', session_id: 's1' })
+  assert.deepEqual(named.map(e => (e.type === 'subagent' ? [e.id, e.status, e.task] : e.type)), [['toolu_a', 'working', 'aac4ad94a317d341f']])
+  // A command's task names no subagent: nothing is said again.
+  assert.deepEqual(push(parser, { type: 'system', subtype: 'task_started', task_id: 'b6pgvzpj0', tool_use_id: 'toolu_b', is_backgrounded: true, task_type: 'local_bash', session_id: 's1' }), [])
+  parser.stopTask('aac4ad94a317d341f')
+  parser.stopTask('b6pgvzpj0')
+  assert.deepEqual(io.lines.map(line => line['request']), [{ subtype: 'stop_task', task_id: 'aac4ad94a317d341f' }, { subtype: 'stop_task', task_id: 'b6pgvzpj0' }])
+  const ended = push(parser, { type: 'system', subtype: 'task_notification', task_id: 'aac4ad94a317d341f', tool_use_id: 'toolu_a', status: 'stopped', session_id: 's1' })
+  assert.deepEqual(ended.flatMap(e => (e.type === 'subagent' ? [e.status] : [])), ['stopped'])
+})
+
+test("a task's ■ after the turn is over asks nothing", () => {
+  const parser = new StreamJsonParser()
+  const io = recordingIo()
+  parser.stopTask('t1')
+  parser.talk(io)
+  push(parser, { type: 'result', subtype: 'success', is_error: false, result: 'Done.', session_id: 's1' })
+  parser.stopTask('t1')
+  assert.deepEqual(io.lines, [])
+})

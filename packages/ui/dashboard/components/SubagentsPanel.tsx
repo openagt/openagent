@@ -20,6 +20,7 @@ import { EventList } from './EventList.js'
 import { PaneTitle } from './PaneHeader.js'
 import { RunMark } from './RunMark.js'
 import { Seconds } from './ToolCalls.js'
+import { StopTask } from './StopTask.js'
 import { tokenWords } from './ContextCircle.js'
 
 // The pane of a run's subagents, beside its chat: a calm list of them, one line each (its state's
@@ -81,6 +82,7 @@ export function SubagentsPanel({
         ref={list}
         fold={fold}
         page={page}
+        run={{ projectId, agentId }}
         rows={rows}
         shown={shown?.key}
         onPick={key => revealSubagent(page, key === shown?.key ? undefined : key)}
@@ -109,12 +111,14 @@ const foldsOpened = new Map<string, boolean>()
  * that ends keeps its place, so the row under the pointer stays the one it was, and the fold neither
  * closes nor opens under the hand; the person's own press on it applies at once.
  */
-function SubagentList({ ref, fold, page, rows, shown, onPick, className }: {
+function SubagentList({ ref, fold, page, run, rows, shown, onPick, className }: {
   ref: RefObject<HTMLDivElement | null>
   /** The fold's line, while it is drawn. */
   fold: Ref<HTMLButtonElement>
   /** The run's page, which keeps the person's fold. */
   page: string
+  /** The run, which a working row's ■ stops one subagent of. */
+  run: Run
   rows: readonly SubagentRow[]
   shown: string | undefined
   onPick: (key: string) => void
@@ -128,7 +132,7 @@ function SubagentList({ ref, fold, page, rows, shown, onPick, className }: {
   // Which rows stand in which part, held while the person is in the list; each row drawn from its newest state.
   const held = useHold(ref, useMemo(() => arrange(rows), [rows]))
   const byKey = new Map(rows.map(row => [row.key, row]))
-  const item = (row: SubagentRow) => <SubagentItem key={row.key} row={row} open={row.key === shown} onPick={onPick} />
+  const item = (row: SubagentRow) => <SubagentItem key={row.key} row={row} run={run} open={row.key === shown} onPick={onPick} />
   return (
     <div ref={ref} className={cn('min-h-0 overflow-y-auto px-2 pt-2', className)}>
       {held.parts.map(({ name, keys }) => {
@@ -189,11 +193,15 @@ function Span({ row }: { row: SubagentRow }): ReactNode {
 
 const capital = (words: string): string => words.charAt(0).toUpperCase() + words.slice(1)
 
+/** A run, by its project and its id. */
+type Run = { projectId: string; agentId: string }
+
 /**
  * One subagent, one line: its state's mark, its name and how long it worked, the compact row of the
- * pane's lists (ui/look/spacing.md 3). One that failed is one line too: nothing says why.
+ * pane's lists (ui/look/spacing.md 3), and while it works its ■ where its coding agent can stop it
+ * alone. One that failed is one line too: nothing says why.
  */
-function SubagentItem({ row, open, onPick }: { row: SubagentRow; open: boolean; onPick: (key: string) => void }) {
+function SubagentItem({ row, run, open, onPick }: { row: SubagentRow; run: Run; open: boolean; onPick: (key: string) => void }) {
   const models = useAgents()
   const timed = row.working || row.endedAt !== undefined
   const time = useId()
@@ -202,7 +210,7 @@ function SubagentItem({ row, open, onPick }: { row: SubagentRow; open: boolean; 
   // The card says what the row does not: the whole name where the row cuts it, or what it runs on.
   const tells = useCut(name, row.name) || model !== undefined
   return (
-    <li className="group/row relative">
+    <li className="group/row relative flex items-center gap-1">
       <Tooltip disabled={!tells}>
         <TooltipTrigger
           render={
@@ -214,7 +222,7 @@ function SubagentItem({ row, open, onPick }: { row: SubagentRow; open: boolean; 
               aria-label={[row.name, runWord(row.status)].join(' · ')}
               aria-describedby={timed ? time : undefined}
               onClick={() => onPick(row.key)}
-              className={navRowClass(open)}
+              className={cn(navRowClass(open), 'min-w-0 flex-1')}
             />
           }
         >
@@ -249,6 +257,7 @@ function SubagentItem({ row, open, onPick }: { row: SubagentRow; open: boolean; 
           </span>
         </TooltipContent>
       </Tooltip>
+      {row.working && row.call.task !== undefined && <StopTask projectId={run.projectId} agentId={run.agentId} task={row.call.task} name={row.name} />}
     </li>
   )
 }

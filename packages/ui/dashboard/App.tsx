@@ -751,6 +751,8 @@ export function App() {
           background={
             projectId && agentId && (hasSubagents || background.length > 0) ? (
               <BackgroundTasksPane
+                projectId={projectId}
+                agentId={agentId}
                 background={background}
                 subagents={
                   hasSubagents ? (

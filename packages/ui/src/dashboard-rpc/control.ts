@@ -92,6 +92,17 @@ export async function sendNow(projectId: string, agentId: string): Promise<Steer
 }
 
 /**
+ * Stop one task of a working run (its ■): a command its agent left in the background, or a
+ * subagent, by the id its driver said it by. The agent is told, and goes on.
+ */
+export async function stopTask(projectId: string, agentId: string, task: string): Promise<SteerResult> {
+  if (typeof task !== 'string' || task === '') return { ok: false, error: 'unknown task' }
+  const cwd = await resolveProjectPath(projectId)
+  if (!cwd || !isRunId(agentId)) return { ok: false, error: 'unknown session' }
+  return sayToRun(projectId, cwd, agentId, { kind: 'stop-task', task })
+}
+
+/**
  * The body of the worktree-removing write (#1032): resolve the project and refuse when it has no
  * local path, then remove under the run's lock.
  */

@@ -322,6 +322,7 @@ test('the inbox is read while the turn runs: a message goes to the agent at once
   const steered: { id: string; text: string; words: string }[] = []
   const withdrawn: string[] = []
   let hurried = 0
+  const stoppedTasks: string[] = []
   const parser: AgentCliParser = {
     // The agent reads a message when the CLI repeats its id.
     push: line => (line.startsWith('read ') ? [{ type: 'steered', text: 'Now.', id: line.slice(5) }] : []),
@@ -332,6 +333,7 @@ test('the inbox is read while the turn runs: a message goes to the agent at once
     },
     withdraw: id => withdrawn.push(id),
     hurry: () => hurried++,
+    stopTask: task => stoppedTasks.push(task),
   }
   const events: DriverEvent[] = []
   const turn = runCliSession({
@@ -354,11 +356,13 @@ test('the inbox is read while the turn runs: a message goes to the agent at once
   await appendInbox(inbox, { kind: 'message', text: 'Unread.', id: 'd' })
   await appendInbox(inbox, { kind: 'cancel', id: 'c' })
   await appendInbox(inbox, { kind: 'now' })
+  await appendInbox(inbox, { kind: 'stop-task', task: 'b6pgvzpj0' })
   await tick(400)
   assert.deepEqual(steered.map(m => m.id), ['a', 'c', 'd'], 'every message not for later went to the agent')
   assert.deepEqual(steered[0], { id: 'a', text: 'Now.', words: 'Now.\n\nCommit your work.' })
   assert.deepEqual(withdrawn, ['c'])
   assert.equal(hurried, 1)
+  assert.deepEqual(stoppedTasks, ['b6pgvzpj0'], 'a task\'s ■ goes to the agent, and is no prompt of its own')
   agent.say('read a')
   await tick()
   agent.exit(0)

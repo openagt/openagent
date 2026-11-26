@@ -239,7 +239,7 @@ export function AgentView({
     () =>
       callSubagents(shown)
         .filter(one => one.status === 'working')
-        .map(one => ({ key: `call:${one.id}`, name: one.name ?? one.role ?? 'Subagent', ...(one.startedAt !== undefined ? { since: one.startedAt } : {}) })),
+        .map(one => ({ key: `call:${one.id}`, name: one.name ?? one.role ?? 'Subagent', ...(one.startedAt !== undefined ? { since: one.startedAt } : {}), ...(one.task !== undefined ? { task: one.task } : {}) })),
     [shown],
   )
   const openChanges = useOpenChanges()

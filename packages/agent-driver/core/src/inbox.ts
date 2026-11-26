@@ -55,12 +55,13 @@ function isInboxLine(value: unknown): value is InboxLine {
   if (v['kind'] === 'message') return typeof v['text'] === 'string' && v['text'].trim().length > 0 && (v['publish'] === undefined || typeof v['publish'] === 'string') && (v['id'] === undefined || typeof v['id'] === 'string') && (v['images'] === undefined || (Array.isArray(v['images']) && v['images'].every(isImageName))) && (v['options'] === undefined || (typeof v['options'] === 'object' && v['options'] !== null && !Array.isArray(v['options'])))
   if (v['kind'] === 'answer') return typeof v['question'] === 'string' && typeof v['answer'] === 'string'
   if (v['kind'] === 'cancel') return typeof v['id'] === 'string'
+  if (v['kind'] === 'stop-task') return typeof v['task'] === 'string' && v['task'] !== ''
   return v['kind'] === 'now'
 }
 
 /**
  * The prompts lines make once no turn runs: messages and answers, in order, less every message a
- * later line took back. Taking back and hurrying act on a turn that runs; with none, they are done.
+ * later line took back. Taking back, hurrying and stopping a task act on a turn that runs; with none, they are done.
  */
 export function promptLines(lines: readonly InboxLine[]): PromptLine[] {
   const cancelled = new Set(lines.flatMap(line => (line.kind === 'cancel' ? [line.id] : [])))

@@ -244,6 +244,16 @@ export class StreamJsonParser {
     return true
   }
 
+  /**
+   * The person's ■ on one task: a command in the background or a subagent, by its task id. The CLI
+   * ends it (a subagent with the commands it started), says so in its \`task_notification\`, and the
+   * agent goes on, woken by it when it was idle on that work.
+   */
+  stopTask(task: string): void {
+    if (!this.io || this.answered) return
+    this.control(`stop-task-${task}`, { subtype: 'stop_task', task_id: task })
+  }
+
   private foregroundTask(subtype: unknown, task: string, obj: Record<string, unknown>): void {
     const patch = typeof obj['patch'] === 'object' && obj['patch'] !== null ? (obj['patch'] as Record<string, unknown>) : {}
     if (subtype === 'task_started' && obj['is_backgrounded'] !== true) {
@@ -373,7 +383,11 @@ export class StreamJsonParser {
     // is over when its task is or when it goes on in the background.
     if (type === 'system' && typeof obj['task_id'] === 'string') this.foregroundTask(obj['subtype'], obj['task_id'], obj)
     // The call a task runs, which may go in the background now or later (Send now).
-    if (type === 'system' && obj['subtype'] === 'task_started' && typeof obj['task_id'] === 'string' && typeof obj['tool_use_id'] === 'string') this.taskCommand(obj['task_id'], obj['tool_use_id'])
+    if (type === 'system' && obj['subtype'] === 'task_started' && typeof obj['task_id'] === 'string' && typeof obj['tool_use_id'] === 'string') {
+      this.taskCommand(obj['task_id'], obj['tool_use_id'])
+      // A subagent's task: what its row's ■ stops it by.
+      announced.push(...this.subagentTask(obj['tool_use_id'], obj['task_id']))
+    }
     if (type === 'system' && obj['subtype'] === 'task_started' && obj['is_backgrounded'] === true && typeof obj['tool_use_id'] === 'string') {
       this.backgrounded.add(obj['tool_use_id'])
       return announced
@@ -384,7 +398,8 @@ export class StreamJsonParser {
     if (type === 'system' && obj['subtype'] === 'task_notification' && typeof obj['tool_use_id'] === 'string') {
       const report = obj['handback_report']
       this.subagentUsage(obj['tool_use_id'], obj['usage'])
-      return [...announced, ...this.reported(obj['tool_use_id'], typeof report === 'object' && report !== null ? (report as Record<string, unknown>)['text'] : undefined), ...this.endSubagent(obj['tool_use_id'], obj['status'] !== 'completed')]
+      const ended = obj['status'] === 'completed' ? 'ended' : obj['status'] === 'stopped' ? 'stopped' : 'failed'
+      return [...announced, ...this.reported(obj['tool_use_id'], typeof report === 'object' && report !== null ? (report as Record<string, unknown>)['text'] : undefined), ...this.endSubagent(obj['tool_use_id'], ended)]
     }
 
     if (type === 'control_request') return [...announced, ...this.handleRequest(obj)]
@@ -547,13 +562,22 @@ export class StreamJsonParser {
     return [named]
   }
 
+  /** The task the CLI runs a subagent as, said on its row again whole: what its ■ stops it by. */
+  private subagentTask(id: string, task: string): DriverEvent[] {
+    const subagent = this.subagents.get(id)
+    if (subagent === undefined || subagent.task === task) return []
+    const named = { ...subagent, task }
+    this.subagents.set(id, named)
+    return [named]
+  }
+
   /** A subagent's row over, said again whole, so a reader replaces the row by its id without having to remember what the first one carried. */
-  private endSubagent(id: string, failed: boolean): DriverEvent[] {
+  private endSubagent(id: string, status: 'ended' | 'failed' | 'stopped'): DriverEvent[] {
     const subagent = this.subagents.get(id)
     if (subagent === undefined) return []
     this.subagents.delete(id)
     this.backgrounded.delete(id)
-    return [{ ...subagent, status: failed ? 'failed' : 'ended' }]
+    return [{ ...subagent, status }]
   }
 
   /**
@@ -586,7 +610,7 @@ export class StreamJsonParser {
       // answers that it began and the row ends with its task. One that failed to begin is over.
       // A report in the call's answer, which may come after its task said it was over.
       events.push(...this.reported(block['tool_use_id'], handBack(resultText(block['content']))))
-      if (!this.backgrounded.has(block['tool_use_id']) || failed) events.push(...this.endSubagent(block['tool_use_id'], failed))
+      if (!this.backgrounded.has(block['tool_use_id']) || failed) events.push(...this.endSubagent(block['tool_use_id'], failed ? 'failed' : 'ended'))
     }
     return events
   }

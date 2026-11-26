@@ -4,6 +4,9 @@ import { Laptop } from 'lucide-react'
 import { ModulesContext, mountedOf } from '../lib/use-modules.js'
 import type { UiWorkProps } from '../module/index.js'
 
+const stopTask = vi.fn(async (..._args: unknown[]) => ({ ok: true }))
+vi.mock('../rpc/control.js', () => ({ stopTask }))
+
 const { ActivityPanel } = await import('./ActivityPanel.js')
 
 afterEach(cleanup)
@@ -11,7 +14,7 @@ afterEach(cleanup)
 const work: UiWorkProps = { projectId: 'p1', agentId: 'r1', working: false, ended: true, saving: false }
 const base = { runsOn: 'This machine', runsOnIcon: Laptop, background: [], subagents: [], work }
 const part = (name: string) => screen.getByRole('region', { name })
-const rows = (name: string) => [...part(name).querySelectorAll('.truncate')].map(row => row.textContent)
+const rows = (name: string) => [...part(name).querySelectorAll('.truncate:not(.truncate .truncate)')].map(row => row.textContent)
 
 describe("a session's Activity panel", () => {
   test('its Environment, as Claude Code\'s: where it runs, the project as its repository names it, the copied repos the modules list, then the branch', () => {
@@ -50,6 +53,14 @@ describe("a session's Activity panel", () => {
     cleanup()
     render(<ActivityPanel {...base} />)
     expect(screen.queryByRole('region', { name: 'Background tasks' })).toBeNull()
+  })
+
+  test("each has its ■, which stops that one alone: a subagent by the task its coding agent named, none for one it named none", () => {
+    render(<ActivityPanel {...base} subagents={[{ key: 'call:a', name: 'Count README lines', task: 'aac4' }, { key: 'call:b', name: 'Codex reviewer' }]} background={[{ id: 't1', description: 'pnpm test', since: new Date().toISOString() }]} />)
+    expect(within(part('Background tasks')).getAllByRole('button', { name: /^Stop / }).map(button => button.getAttribute('aria-label'))).toEqual(['Stop Count README lines', 'Stop pnpm test'])
+    fireEvent.click(within(part('Background tasks')).getByRole('button', { name: 'Stop Count README lines' }))
+    fireEvent.click(within(part('Background tasks')).getByRole('button', { name: 'Stop pnpm test' }))
+    expect(stopTask.mock.calls).toEqual([['p1', 'r1', 'aac4'], ['p1', 'r1', 't1']])
   })
 
   test("its Changes hold the modules' rows, told the session's work", () => {

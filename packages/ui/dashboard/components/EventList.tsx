@@ -502,12 +502,17 @@ function Attached({ text }: { text: string }) {
 /**
  * What the agent waits on in the background in the turn going on: the set its driver said as the
  * agent went idle, until it said none, the agent awake again. Nothing once a new prompt begins.
+ * A subagent is in that set too, as a task of its own: its row says it, so it is left out here.
  */
 export function backgroundWait(told: readonly RunEvent[]): BackgroundTask[] | undefined {
   for (let at = told.length - 1; at >= 0; at--) {
     const e = told[at]!
     if (isTurnBoundary(e)) return undefined
-    if (e.kind === 'driver' && e.event.type === 'background') return e.event.tasks.length > 0 ? e.event.tasks : undefined
+    if (e.kind === 'driver' && e.event.type === 'background') {
+      const subagents = new Set(told.flatMap(one => (one.kind === 'driver' && one.event.type === 'subagent' && one.event.task !== undefined ? [one.event.task] : [])))
+      const tasks = e.event.tasks.filter(task => !subagents.has(task.id))
+      return tasks.length > 0 ? tasks : undefined
+    }
   }
   return undefined
 }
