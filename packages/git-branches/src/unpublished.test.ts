@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import type { RunSummary } from '@openagt/hooks'
 import type { BranchAhead } from './branch-ahead.js'
-import { unpublishedItems, unpublishedRuns, type AheadOf } from './unpublished.js'
+import { unpublishedItems, unpublishedRuns, withCopies, type AheadOf, type CopyWork } from './unpublished.js'
 
 // #860: a finished run whose work never left this machine, as what waits on the person says it.
 
@@ -66,4 +66,19 @@ test("the item is titled by the run's own name, else what was asked, else the br
   assert.equal(await titled({ title: 'Add the cart' }), 'Add the cart')
   assert.equal(await titled({}), 'add the cart')
   assert.equal(await titled({ prompt: '' }), 'agent-add-cart')
+})
+
+test("a session's mark counts its copies of other repositories too: their files left uncommitted and their commits never pushed, beside the project's", async () => {
+  const withRepos = run({ options: { 'git-branches': { repos: [{ name: 'site', from: '/repos/site' }, { name: 'api', from: '/repos/api' }] } } })
+  const work = { site: { pendingFiles: ['a.ts', 'b.ts'], commits: [], pushed: false, hasRemote: true, merged: false }, api: { pendingFiles: [], commits: [{}, {}, {}], pushed: false, hasRemote: true, merged: false } } as never as Record<string, CopyWork>
+  const own = new Map([['r1', { branch: 'agent-add-cart', commits: 0, uncommitted: 1 }]])
+  const summed = await withCopies(own, [withRepos], async () => ['site', 'api'], async (_run, repo) => work[repo])
+  assert.deepEqual(summed.get('r1'), { branch: 'agent-add-cart', commits: 3, uncommitted: 3 })
+  assert.deepEqual(unpublishedItems([withRepos], summed).map(item => [item.words, item.detail]), [['Needs commit', '3 files']])
+  // A copy with a pull request waits on it, not on a push; a run with no copies, or still working, is not asked.
+  const requested = { ...withRepos, copyPrs: [{ repo: 'api', number: 7, url: 'u7' }] }
+  assert.deepEqual((await withCopies(new Map(), [requested], async () => ['api'], async (_run, repo) => work[repo])).get('r1'), undefined)
+  let asked = 0
+  await withCopies(new Map(), [run(), { ...withRepos, status: 'working' }], async () => (asked++, ['site']), async () => work.site)
+  assert.equal(asked, 0)
 })

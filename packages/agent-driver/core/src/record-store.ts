@@ -167,9 +167,10 @@ export async function patchRun(root: string, id: string, patch: RunPatch, deps: 
     const files = await locate(checkout, id, r)
     const card = files ? parseRunCard(await r.read(files.card).catch(() => '')) : undefined
     if (!files || !card) return
-    const { landed, ...facts } = patch
+    const { landed, copyPrs, ...facts } = patch
     const { branch: _gone, ...branchless } = card
-    const next = landed ? { ...branchless, ...facts, caller: { baseCommit: landed.from, ...card.caller, landed: landed.commit } } : { ...card, ...facts }
+    const withFacts = landed ? { ...branchless, ...facts, caller: { baseCommit: landed.from, ...card.caller, landed: landed.commit } } : { ...card, ...facts }
+    const next = copyPrs ? { ...withFacts, caller: { ...withFacts.caller, copyPrs } } : withFacts
     await r.write(files.card, formatRunCard(next))
     patched = true
   })

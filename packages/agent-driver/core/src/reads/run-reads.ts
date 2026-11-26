@@ -152,6 +152,13 @@ function pullRequests(value: unknown): PullRequest[] | undefined {
   return prs.length > 0 ? prs : undefined
 }
 
+/** The pull requests of a run's copies, as its card keeps them, by the copy's name; what is no such request is left out. */
+function copyPullRequests(value: unknown): { repo: string; number: number; url: string }[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const prs = value.flatMap(pr => (pr && typeof pr === 'object' && typeof pr.repo === 'string' && typeof pr.number === 'number' && typeof pr.url === 'string' ? [{ repo: pr.repo as string, number: pr.number as number, url: pr.url as string }] : []))
+  return prs.length > 0 ? prs : undefined
+}
+
 /** Where a summary is read: the project it is in, the run's folder while it has one, the coding agents, and the host. */
 export interface SummaryAt {
   project: string | undefined
@@ -204,6 +211,7 @@ export function summaryOf(card: Listed, at: SummaryAt): RunSummary {
   const branches: GitBranchesFacts = { ...(baseCommit !== undefined ? { baseCommit } : {}), ...(landed !== undefined ? { landed } : {}) }
   const account = text(card, 'gitAccount')
   const earlierPrs = pullRequests(card.caller?.['earlierPrs'])
+  const copyPrs = copyPullRequests(card.caller?.['copyPrs'])
   const github: GithubFacts = account !== undefined ? { account } : {}
   // The branch the run was told to start from, as the options it was started with name it.
   const base = isOptions(options) ? options['git-branches']?.base : undefined
@@ -232,6 +240,7 @@ export function summaryOf(card: Listed, at: SummaryAt): RunSummary {
     ...(typeof base === 'string' ? { base } : {}),
     ...(card.pr ? { pr: card.pr } : {}),
     ...(earlierPrs ? { earlierPrs } : {}),
+    ...(copyPrs?.length ? { copyPrs } : {}),
     ...(Object.keys(facts).length > 0 ? { facts } : {}),
     // A computer's name that is no name is none: a record is a file anyone with the project can write.
     ...(computer !== undefined && /^[A-Za-z0-9._-]{1,253}$/.test(computer) ? { computer } : {}),

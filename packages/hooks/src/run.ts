@@ -135,6 +135,11 @@ export interface PullRequestRead {
   branch?: string
 }
 
+/** A pull request of one of a run's copies of other repositories, by the copy's name in the session's folder. */
+export interface CopyPullRequest extends PullRequest {
+  repo: string
+}
+
 /** github's facts: the run's pull request, and the ones it opened before it. */
 export interface GithubFacts {
   /** The login of the GitHub account the run works as, kept on its record: a resume goes on as it. */
@@ -143,6 +148,8 @@ export interface GithubFacts {
   pr?: PullRequest
   /** The requests the run opened before that one, once it has had any. */
   earlierPrs?: PullRequest[]
+  /** The requests of its copies of other repositories, one per copy at most: the newest. */
+  copyPrs?: CopyPullRequest[]
 }
 
 /** How a run ended, as its finishing steps read it: one that waits, waits on the question its last turn asked. */
@@ -308,6 +315,8 @@ export interface RunSummary {
   pr?: PullRequest
   /** The pull requests it opened before that one, oldest first. */
   earlierPrs?: PullRequest[]
+  /** The pull requests of its copies of other repositories, as its record keeps them. */
+  copyPrs?: CopyPullRequest[]
   /** What each module found out about it beside that, as its record keeps it. */
   facts?: RunFacts
   /** The computer it runs or ran on, by its name. */
@@ -357,6 +366,8 @@ export interface RunFound {
     pr?: PullRequest
     /** The pull requests it opened before that one. */
     earlierPrs?: PullRequest[]
+    /** The pull requests of its copies of other repositories. */
+    copyPrs?: CopyPullRequest[]
     /** The branch the run was told to start from, by its name; absent on a run that started from origin's default branch. */
     base?: string
     /** The commit the run's own work begins at, for a run that made its own branch: what its changes are measured from when the default branch cannot tell them. */

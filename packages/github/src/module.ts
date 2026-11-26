@@ -257,6 +257,7 @@ async function branchRequest(dir: string, branch: string): Promise<PullRequest |
  * had any, so a list emptied by the work moving back is said too.
  */
 async function readRequest(ctx: RunContext, requestOfBranch: NonNullable<GithubDeps['requestOfBranch']>): Promise<void> {
+  await readCopyRequests(ctx, requestOfBranch)
   const branch = ctx.facts['git-branches']?.branch
   if (branch === undefined || !ctx.project) return
   const before = ctx.facts.github ?? {}
@@ -270,5 +271,30 @@ async function readRequest(ctx: RunContext, requestOfBranch: NonNullable<GithubD
     ...(before.account !== undefined ? { account: before.account } : {}),
     ...(named ? { pr: named } : {}),
     ...(before.earlierPrs !== undefined || earlier.length > 0 ? { earlierPrs: earlier } : {}),
+    ...(before.copyPrs !== undefined ? { copyPrs: before.copyPrs } : {}),
   }
+}
+
+/**
+ * The pull requests of the run's copies of other repositories, read back off the branch each copy
+ * is on now, whoever opened them (the agent with `gh`, or a press): the newest of each copy's, kept
+ * on the run's record beside the project's, so its row counts them. A copy whose branch has none
+ * keeps the one recorded before.
+ */
+async function readCopyRequests(ctx: RunContext, requestOfBranch: NonNullable<GithubDeps['requestOfBranch']>): Promise<void> {
+  const copies = ctx.facts['git-branches']?.copies
+  if (!copies) return
+  const git = nodeGitRunner()
+  const before = ctx.facts.github?.copyPrs ?? []
+  const read = await Promise.all(
+    copies.made.map(async ({ name }) => {
+      const dir = join(copies.folder, name)
+      const branch = (await git(['branch', '--show-current'], dir).catch(() => '')).trim()
+      const pr = branch ? await requestOfBranch(dir, branch).catch(() => undefined) : undefined
+      return pr ? { repo: name, number: pr.number, url: pr.url } : undefined
+    }),
+  )
+  const found = read.filter((pr): pr is { repo: string; number: number; url: string } => pr !== undefined)
+  const copyPrs = [...before.filter(pr => !found.some(one => one.repo === pr.repo)), ...found]
+  if (copyPrs.length > 0) ctx.facts.github = { ...(ctx.facts.github ?? {}), copyPrs }
 }

@@ -1,5 +1,6 @@
 import { runName, type AttentionItem, type RunSummary } from '@openagt/hooks'
 import type { BranchAhead } from './branch-ahead.js'
+import type { Handoff } from './handoff.js'
 
 /**
  * A finished run's work that never left this machine: the branch it is on, the commits it holds
@@ -75,6 +76,37 @@ export async function unpublishedRuns(runs: readonly RunSummary[], ahead: AheadO
     if (uncommitted > 0 || commits > 0) found.set(run.id, { branch, commits, uncommitted })
   }
   return found
+}
+
+/** What a copy of a repo holds, as its own branch says it (`readHandoff`): the files left uncommitted, and the commits never pushed where it has a remote to push to. */
+export type CopyWork = Pick<Handoff, 'pendingFiles' | 'commits' | 'pushed' | 'hasRemote' | 'merged'>
+
+/**
+ * The work the runs left in their copies of other repositories, added to what they left in the
+ * project (`unpublishedRuns`): a session's mark counts all of its repos. Only a run started with
+ * copies is asked, and not one still working. A copy whose pull request the run's record names
+ * waits on the request, not on a push.
+ */
+export async function withCopies(found: ReadonlyMap<string, Unpublished>, runs: readonly RunSummary[], copies: (runId: string) => Promise<string[]>, work: (runId: string, repo: string) => Promise<CopyWork | undefined>): Promise<Map<string, Unpublished>> {
+  const summed = new Map(found)
+  const asked = runs.filter(run => run.status !== 'working' && (run.options?.['git-branches']?.repos?.length ?? 0) > 0)
+  await Promise.all(
+    asked.map(async run => {
+      let uncommitted = 0
+      let commits = 0
+      for (const repo of await copies(run.id).catch(() => [])) {
+        const held = await work(run.id, repo).catch(() => undefined)
+        if (!held) continue
+        uncommitted += run.status === 'waiting' ? 0 : (held.pendingFiles?.length ?? 0)
+        const requested = run.copyPrs?.some(pr => pr.repo === repo) === true
+        if (!requested && held.hasRemote && !held.pushed && !held.merged) commits += held.commits.length
+      }
+      if (uncommitted === 0 && commits === 0) return
+      const own = summed.get(run.id)
+      summed.set(run.id, { branch: own?.branch ?? run.branch ?? run.id, commits: (own?.commits ?? 0) + commits, uncommitted: (own?.uncommitted ?? 0) + uncommitted })
+    }),
+  )
+  return summed
 }
 
 /**

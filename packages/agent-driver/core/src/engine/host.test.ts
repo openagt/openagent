@@ -326,6 +326,10 @@ test("the runs it lists are the project's records and its runs at work, newest f
     assert.deepEqual(listed[0]!.options?.['agent-driver'], { driver: 'claude-code' })
     assert.deepEqual(done.options?.['agent-driver'], { driver: 'claude-code', model: 'opus' })
 
+    // A copy's pull request a press wrote is kept beside the run's own, and listed with the copy's name.
+    await patchRun(repo, third, { copyPrs: [{ repo: 'blog', number: 3, url: 'https://github.com/o/blog/pull/3' }] })
+    assert.deepEqual((await here.list(project, { ids: [third] }))[0]?.copyPrs, [{ repo: 'blog', number: 3, url: 'https://github.com/o/blog/pull/3' }])
+
     // Resumed in its checkout: its live card says it works, on the branch the checkout has out, its session's command said by its coding agent; the pull request a press wrote on the record stays.
     await patchRun(repo, first, { pr: { number: 7, url: 'https://github.com/o/r/pull/7' } })
     await git(['worktree', 'add', '-q', '-b', 'agent-first', worktreePath(repo, first), 'main'], repo)

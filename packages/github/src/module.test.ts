@@ -182,3 +182,24 @@ test("the project's open requests wait on the person to merge them: a run's goes
   )
   assert.deepEqual(items[2], { kind: 'waiting', scope: 'project', id: 'https://github.com/o/r/pull/3', words: 'Needs merge', title: 'Request 3', detail: '#3', mark: 'pull-request', since: '2026-08-21T10:00:00Z', fix: { label: 'Open PR #3', href: 'https://github.com/o/r/pull/3' } })
 })
+
+test("the requests of the run's copies of other repositories are read back off the branch each is on, and kept beside the project's, one per copy", async () => {
+  const { execFileSync } = await import('node:child_process')
+  const { mkdtemp, mkdir, rm } = await import('node:fs/promises')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const folder = await mkdtemp(join(tmpdir(), 'copy-prs-'))
+  try {
+    for (const name of ['site', 'api']) {
+      await mkdir(join(folder, name))
+      execFileSync('git', ['init', '-q', '-b', `agent-${name}`], { cwd: join(folder, name) })
+    }
+    const asked: string[] = []
+    const ctx = fakeRun({ project: SHOP, facts: { 'git-branches': { branch: 'agent-fix-it', copies: { folder, branch: 'agent-fix-it', made: [{ name: 'site', from: '/repos/site' }, { name: 'api', from: '/repos/api' }] } }, github: { copyPrs: [{ repo: 'api', number: 3, url: 'u3' }] } } })
+    await stepOf('read the pull request back', { requestOfBranch: async (dir, branch) => (asked.push(`${dir.slice(folder.length)} ${branch}`), dir.endsWith('site') ? PR_13 : dir === SHOP.dir ? PR_12 : undefined) }).run(ctx)
+    assert.deepEqual(ctx.facts.github, { pr: PR_12, copyPrs: [{ repo: 'api', number: 3, url: 'u3' }, { repo: 'site', ...PR_13 }] })
+    assert.deepEqual(asked.filter(one => one.startsWith('/')).sort(), ['/api agent-api', '/site agent-site'])
+  } finally {
+    await rm(folder, { recursive: true, force: true })
+  }
+})

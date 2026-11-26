@@ -154,7 +154,9 @@ export const openPr = act(async (host: RpcHost, { agentId, repo, draft }: { agen
   if (!opened.ok) return { ok: false, error: `Could not open the pull request: ${opened.error}` }
   const request = (opened.output as { request?: { number?: unknown; url?: unknown } }).request
   if (typeof request?.number !== 'number' || typeof request.url !== 'string') return { ok: false, error: 'GitHub named no pull request.' }
+  // The run's request is on its record; a copy's is kept beside it, one per copy, the newest.
   if (repo === undefined) await host.record(agentId, { github: { pr: { number: request.number, url: request.url } } })
+  else await host.record(agentId, { github: { copyPrs: [...(ended.run?.record?.copyPrs ?? []).filter(pr => pr.repo !== repo), { repo, number: request.number, url: request.url }] } }).catch(() => {})
   return { ok: true, said: `Opened ${draft ? 'draft ' : ''}PR #${request.number}.`, number: request.number }
 })
 

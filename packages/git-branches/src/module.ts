@@ -11,7 +11,8 @@ import { originGit } from './origin-git.js'
 import { reclaimWorktree } from './reclaim.js'
 import { folderName, isCopyName } from './repo-names.js'
 import { checkedRepos, dropUntouchedCopies, openSessionFolder, SESSION_FOLDER_STAYS } from './session-folder.js'
-import { unpublishedItems, unpublishedRuns } from './unpublished.js'
+import { unpublishedItems, unpublishedRuns, withCopies } from './unpublished.js'
+import { readHandoff, sessionCopies, workAt } from './handoff.js'
 import { currentBranch, worktreeBranch, worktreePath, type AddedWorktree } from './worktree.js'
 import { PROJECTS_ENV, projectsLine, SESSION_ENV, type SessionProject } from './add.js'
 import { linkPackage } from './command-link.js'
@@ -251,7 +252,13 @@ function workLeft(project: ProjectRef, app: AppContext, git: GitRunner): Promise
   if (known && Date.now() - known.at < LEFT_KEPT_MS) return known.items
   const items = (async () => {
     const runs = await app.runs(project)
-    return unpublishedItems(runs, await unpublishedRuns(runs, (branches, from) => readBranchesAhead(project.dir, branches, git, from)))
+    const own = await unpublishedRuns(runs, (branches, from) => readBranchesAhead(project.dir, branches, git, from))
+    // A session's mark counts its copies of other repositories too.
+    const all = await withCopies(own, runs, runId => sessionCopies(runId), async (runId, repo) => {
+      const at = await workAt(project.dir, runId, undefined, repo, { git })
+      return at ? ((await readHandoff(at, git)) ?? undefined) : undefined
+    })
+    return unpublishedItems(runs, all)
   })()
   const read = { at: Date.now(), items }
   left.set(project.dir, read)

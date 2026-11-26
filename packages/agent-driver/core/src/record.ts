@@ -64,6 +64,8 @@ export type RunPatch = Partial<Pick<RunCard, 'branch' | 'pr'>> & {
    * writer's own tools keep them.
    */
   landed?: { commit: string; from: string }
+  /** The pull requests of the run's copies of other repositories, kept under the writer's key as `copyPrs`. */
+  copyPrs?: { repo: string; number: number; url: string }[]
 }
 
 /**

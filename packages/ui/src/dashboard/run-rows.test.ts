@@ -21,4 +21,7 @@ test('each run with a pull request is marked with how it stands and its title, a
   // The requests a run opened before its last one are marked the same way.
   const [moved] = withPrStates([{ ...run('f', 8), earlierPrs: [{ number: 7, url: 'https://example.com/pull/7' }, { number: 99, url: 'https://example.com/pull/99' }] }], states)
   assert.deepEqual(moved!.earlierPrs, [{ number: 7, url: 'https://example.com/pull/7', state: 'merged' }, { number: 99, url: 'https://example.com/pull/99' }])
+  // And the requests of its copies of other repositories.
+  const [copied] = withPrStates([{ ...run('g'), copyPrs: [{ repo: 'site', number: 8, url: 'https://example.com/pull/8' }] }], states)
+  assert.deepEqual(copied!.copyPrs, [{ repo: 'site', number: 8, url: 'https://example.com/pull/8', state: 'draft' }])
 })
