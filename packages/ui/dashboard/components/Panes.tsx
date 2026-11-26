@@ -395,7 +395,7 @@ function EmptyPanel() {
       <ul aria-label="What the panel can show" className="flex w-full max-w-80 flex-col gap-1">
         {panes.map(pane => (
           <li key={pane.id}>
-            <button type="button" className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[15px] outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring" onClick={() => setPaneOpen(page, pane.id, true)}>
+            <button type="button" className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring" onClick={() => setPaneOpen(page, pane.id, true)}>
               <pane.icon className="size-4 shrink-0 text-muted-foreground" />
               <span>{pane.label}</span>
               <PaneEntryEnd pane={pane} />

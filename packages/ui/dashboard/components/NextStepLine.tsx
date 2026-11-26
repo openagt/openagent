@@ -76,7 +76,7 @@ export function NextStepLine({ work }: { work: UiWorkProps }) {
           </WorkRowPlace.Provider>
         </div>
         {more > 0 && (
-          <button type="button" className="flex shrink-0 items-center gap-0.5 rounded-md px-1.5 py-1 text-[13px] whitespace-nowrap text-muted-foreground hover:bg-accent hover:text-foreground" onClick={askActivity}>
+          <button type="button" className="flex shrink-0 items-center gap-0.5 rounded-md px-1.5 py-1 text-xs whitespace-nowrap text-muted-foreground hover:bg-accent hover:text-foreground" onClick={askActivity}>
             {`${more} more`}
             <ChevronRight className="size-3.5" aria-hidden />
           </button>

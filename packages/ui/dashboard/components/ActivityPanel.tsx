@@ -25,8 +25,8 @@ import { useIsMobile } from '../lib/use-mobile.js'
 /** One part of the panel: its name, over its rows. */
 function Part({ name, children }: { name: string; children: ReactNode }) {
   return (
-    <section aria-label={name} className="flex flex-col border-border not-first:border-t not-first:pt-3.5">
-      <h3 className="mb-1.5 flex h-5 items-center text-[13px] font-medium">{name}</h3>
+    <section aria-label={name} className="flex flex-col border-border not-first:border-t not-first:pt-4">
+      <h3 className="mb-1.5 flex h-5 items-center text-xs font-medium">{name}</h3>
       {children}
     </section>
   )
@@ -72,7 +72,7 @@ export function ActivityPanel({
   const now = useNow(background.length > 0 || subagents.length > 0)
   const part = context && context.size > 0 ? Math.min(Math.max(context.used, 0) / context.size, 1) : undefined
   return (
-    <div aria-label="Activity" className={cn('flex flex-col gap-3.5 text-sm', className)}>
+    <div aria-label="Activity" className={cn('flex flex-col gap-4 text-sm', className)}>
       <Part name="Environment">
         <EnvironmentRow icon={RunsOnIcon} title="Where the session runs">
           {runsOn}
@@ -93,25 +93,25 @@ export function ActivityPanel({
         <Part name="Context">
           <div className="flex items-baseline justify-between">
             <span>{`${Math.round(part * 100)}% used`}</span>
-            <span className="text-[13px] text-muted-foreground">{`${tokenWords(context.used)} / ${tokenWords(context.size)}`}</span>
+            <span className="text-xs text-muted-foreground">{`${tokenWords(context.used)} / ${tokenWords(context.size)}`}</span>
           </div>
           <div className="mt-1.5 mb-1 h-1 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${Math.round(part * 100)}% of the context used`}>
             <div className={cn('h-full rounded-full', part >= 0.9 ? 'bg-danger' : part >= 0.75 ? 'bg-warning' : 'bg-primary')} style={{ width: `${part * 100}%` }} />
           </div>
-          <p className="text-[13px] text-muted-foreground">As of the last turn.</p>
+          <p className="text-xs text-muted-foreground">As of the last turn.</p>
         </Part>
       )}
       {(background.length > 0 || subagents.length > 0) && (
         <Part name="Background tasks">
           {subagents.map(one => (
             <button key={one.key} type="button" className="text-left" onClick={() => onOpenSubagent?.(one.key)}>
-              <EnvironmentRow icon={Bot} end={one.since !== undefined ? <span className="shrink-0 text-[13px] text-muted-foreground">{lasted(now - Date.parse(one.since))}</span> : undefined}>
+              <EnvironmentRow icon={Bot} end={one.since !== undefined ? <span className="shrink-0 text-xs text-muted-foreground">{lasted(now - Date.parse(one.since))}</span> : undefined}>
                 {one.name}
               </EnvironmentRow>
             </button>
           ))}
           {background.map(task => (
-            <EnvironmentRow key={task.id} icon={SquareTerminal} title={task.command} end={<span className="shrink-0 text-[13px] text-muted-foreground">{lasted(now - Date.parse(task.since))}</span>}>
+            <EnvironmentRow key={task.id} icon={SquareTerminal} title={task.command} end={<span className="shrink-0 text-xs text-muted-foreground">{lasted(now - Date.parse(task.since))}</span>}>
               {task.description ?? task.command ?? 'A background task'}
             </EnvironmentRow>
           ))}
@@ -120,7 +120,7 @@ export function ActivityPanel({
       <Part name="Changes">
         <ViewsAt place="chat.work" projectId={work.projectId} props={work} label="session's work" />
         {/* No row says anything: the session has no work to hand off. */}
-        <p className="hidden text-[13px] text-muted-foreground [section:not(:has([data-work-row]))>&]:block">No changes yet.</p>
+        <p className="hidden text-xs text-muted-foreground [section:not(:has([data-work-row]))>&]:block">No changes yet.</p>
       </Part>
     </div>
   )

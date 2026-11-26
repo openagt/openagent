@@ -32,17 +32,17 @@ export function BackgroundTasksPane({ background, subagents }: { background: rea
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {background.length > 0 && (
-        <section aria-label="Background commands" className="shrink-0 border-b border-border px-3 py-2.5">
+        <section aria-label="Background commands" className="shrink-0 border-b border-border px-3 py-2">
           <h3 className="px-1 pb-1.5 text-xs font-medium text-muted-foreground">{`Running ${background.length}`}</h3>
           <ul className="flex flex-col gap-1">
             {background.map(task => (
-              <li key={task.id} className="flex items-center gap-2.5 rounded-md border border-border bg-card px-2.5 py-2 text-sm">
+              <li key={task.id} className="flex items-center gap-2 rounded-md border border-border bg-card px-2 py-2 text-sm">
                 <SquareTerminal className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate">{task.description ?? task.command ?? 'A background task'}</span>
                   {task.command && task.description && <span className="block truncate font-mono text-xs text-muted-foreground">{task.command}</span>}
                 </span>
-                <span className="shrink-0 text-[13px] text-muted-foreground">{lasted(now - Date.parse(task.since))}</span>
+                <span className="shrink-0 text-xs text-muted-foreground">{lasted(now - Date.parse(task.since))}</span>
               </li>
             ))}
           </ul>

@@ -128,6 +128,8 @@ export interface UiWorkProps extends UiRunProps {
   projectName?: string
   /** The pull request the run's record names, and how it stands as its git host module last read it. */
   pr?: PullRequest & { state?: PullRequestState; title?: string }
+  /** The pull requests of its copies of other repositories, by the copy's name, as its record keeps them and how each stands. */
+  copyPrs?: (PullRequest & { repo: string; state?: PullRequestState })[]
 }
 
 /** What a strip above a run's chat is given: the run, and the host it runs on. */

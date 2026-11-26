@@ -82,7 +82,7 @@ export function ChatPane({ top, bottom, side, children }: { top: ReactNode; bott
         </div>
         </div>
         {side && (
-          <aside aria-label="Activity panel" className="mt-11 flex w-80 shrink-0 flex-col overflow-y-auto border-l border-border px-4 pt-3.5 pb-4">
+          <aside aria-label="Activity panel" className="mt-11 flex w-80 shrink-0 flex-col overflow-y-auto border-l border-border px-4 pt-4 pb-4">
             {side}
           </aside>
         )}

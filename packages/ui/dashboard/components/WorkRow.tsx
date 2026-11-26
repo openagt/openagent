@@ -56,7 +56,7 @@ export function WorkRow({
   const openChanges = useContext(OpenChanges)
   return (
     <div data-work-row role="group" aria-label={`${name}: its work`} className="flex flex-col">
-      <div className={cn('flex min-h-8 items-center gap-3 rounded-md text-sm', onLine ? 'gap-2.5' : '-mx-1.5 px-1.5 hover:bg-accent')}>
+      <div className={cn('flex min-h-8 items-center gap-3 rounded-md text-sm', onLine ? 'gap-2' : '-mx-1.5 px-1.5 hover:bg-accent')}>
         <Mark className={cn('size-4 shrink-0', pr ? prTone(state as PullRequestState | undefined) : 'text-muted-foreground')} aria-hidden />
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <Tooltip>
@@ -71,11 +71,11 @@ export function WorkRow({
           )}
           {summary &&
             (openChanges ? (
-              <button type="button" aria-label={`${name}: its changes`} className="flex min-w-0 shrink-0 items-center rounded-sm px-1 text-[13px] hover:bg-foreground/10" onClick={() => openChanges(project ? undefined : name)}>
+              <button type="button" aria-label={`${name}: its changes`} className="flex min-w-0 shrink-0 items-center rounded-sm px-1 text-xs hover:bg-foreground/10" onClick={() => openChanges(project ? undefined : name)}>
                 {summary}
               </button>
             ) : (
-              <span className="flex min-w-0 shrink-0 items-center text-[13px]">{summary}</span>
+              <span className="flex min-w-0 shrink-0 items-center text-xs">{summary}</span>
             ))}
         </div>
         {actions && <span className="flex shrink-0 items-center gap-2 empty:hidden">{actions}</span>}

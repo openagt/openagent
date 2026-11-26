@@ -83,7 +83,7 @@ export function AgentView({
   /** Whether the agent is still running; `null` while the daemon's list of agents has not been read, so it is not known yet. */
   live: boolean | null
   /** What the run's card says, off the runs poll: what the feed cannot carry (the details strip's facts, how the agent was set up, whether its record is being saved). Absent until the card is listed. */
-  card?: (AgentDetailsCard & Pick<AgentMeta, 'status' | 'intent' | 'saving' | 'workspace' | 'resumeCommand' | 'branch' | 'base' | 'host' | 'otherHost' | 'publish' | 'earlierPrs' | 'pr' | 'prState' | 'prTitle' | 'options'> & Partial<Pick<AgentMeta, 'endedAt' | 'updatedAt'>>) | undefined
+  card?: (AgentDetailsCard & Pick<AgentMeta, 'status' | 'intent' | 'saving' | 'workspace' | 'resumeCommand' | 'branch' | 'base' | 'host' | 'otherHost' | 'publish' | 'earlierPrs' | 'copyPrs' | 'pr' | 'prState' | 'prTitle' | 'options'> & Partial<Pick<AgentMeta, 'endedAt' | 'updatedAt'>>) | undefined
   /** What the launcher said about this run as it started it: shown until the run's record says it. */
   picks?: StartPicks | undefined
   /** The session's own name — the same label the rail shows (#1030). It leads the action bar as
@@ -228,8 +228,8 @@ export function AgentView({
   // message just sent included: a turn that ends is ended at once, before the list of runs says
   // so), or has ended, and what the shell knows of it beside its work.
   const work = useMemo(
-    () => ({ projectId, agentId, working: going, ended: live === false && !going, saving: card?.saving === true, ...(projectName ? { projectName } : {}), ...(pr ? { pr } : {}) }),
-    [projectId, agentId, live, going, card?.saving, projectName, pr],
+    () => ({ projectId, agentId, working: going, ended: live === false && !going, saving: card?.saving === true, ...(projectName ? { projectName } : {}), ...(pr ? { pr } : {}), ...(card?.copyPrs?.length ? { copyPrs: card.copyPrs } : {}) }),
+    [projectId, agentId, live, going, card?.saving, projectName, pr, card?.copyPrs],
   )
   // The session's Activity panel: where it runs and with what, its context, what it does in the
   // background, and its changes, a row per repo with its next step.

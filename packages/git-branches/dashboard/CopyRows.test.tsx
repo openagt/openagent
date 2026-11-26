@@ -78,3 +78,11 @@ test('a copy with no work has no row, and neither has one of a run still going, 
   expect(call.mock.calls.some(([, name]) => name === 'handoff')).toBe(false)
   expect(screen.queryByRole('group', { name: /: its work$/ })).toBeNull()
 })
+
+test("a copy's row has the pull request the run's record keeps for that copy", async () => {
+  held = { 'oa-newuser': worked, site: worked }
+  renderWithHost(<CopyRows projectId="p1" agentId="run-1" working={false} ended saving={false} copyPrs={[{ repo: 'oa-newuser', number: 9, url: 'https://github.com/me/oa-newuser/pull/9', state: 'open' }]} />, host, modules)
+  const row = await screen.findByRole('group', { name: 'oa-newuser: its work' })
+  expect(within(row).getByRole('link', { name: '#9' }).getAttribute('href')).toBe('https://github.com/me/oa-newuser/pull/9')
+  expect(within(await screen.findByRole('group', { name: 'site: its work' })).queryByRole('link')).toBeNull()
+})
