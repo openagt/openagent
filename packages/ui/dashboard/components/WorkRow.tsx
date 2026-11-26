@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { createContext, useContext, type ReactNode } from 'react'
 import { FileDiff, GitMerge, GitPullRequest, GitPullRequestClosed } from 'lucide-react'
 import type { PullRequestState } from '@openagt/hooks'
 import { cn } from '../lib/utils.js'
@@ -8,6 +8,13 @@ import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 // A repo's row in the Changes of a session's Activity panel, drawn by the module whose work it is
 // (`chat.work`): the project's first, then one per copy of a repo the session holds work in, each
 // read and taken further alike.
+
+/**
+ * Where the rows are drawn: the Activity panel's Changes, or the line above the message box, which
+ * shows the first of them with a step waiting (NextStepLine). On the line the repo's name reads in
+ * full and in the foreground, as the line's subject.
+ */
+export const WorkRowPlace = createContext<'activity' | 'line'>('activity')
 
 /**
  * One repo's row, as Claude Code's Changes rows: a mark (a pull request's, in its state's colour,
@@ -42,13 +49,14 @@ export function WorkRow({
 }) {
   const state = pr?.state?.toLowerCase()
   const Mark = pr ? (state === 'merged' ? GitMerge : state === 'closed' ? GitPullRequestClosed : GitPullRequest) : FileDiff
+  const onLine = useContext(WorkRowPlace) === 'line'
   return (
     <div data-work-row role="group" aria-label={`${name}: its work`} className="flex flex-col">
-      <div className="-mx-1.5 flex min-h-8 items-center gap-3 rounded-md px-1.5 text-sm hover:bg-accent">
+      <div className={cn('flex min-h-8 items-center gap-3 rounded-md text-sm', onLine ? 'gap-2.5' : '-mx-1.5 px-1.5 hover:bg-accent')}>
         <Mark className={cn('size-4 shrink-0', pr ? prTone(state as PullRequestState | undefined) : 'text-muted-foreground')} aria-hidden />
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <Tooltip>
-            <TooltipTrigger render={<span className="min-w-0 truncate text-muted-foreground" />}>{name}</TooltipTrigger>
+            <TooltipTrigger render={<span className={cn('min-w-0 truncate', onLine ? 'font-medium' : 'text-muted-foreground')} />}>{name}</TooltipTrigger>
             <TooltipContent className="whitespace-pre-line">{[project ? `${name} (the project)` : name, branch, path].filter(Boolean).join('\n')}</TooltipContent>
           </Tooltip>
           {pr && (

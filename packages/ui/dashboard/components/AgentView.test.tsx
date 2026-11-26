@@ -110,7 +110,8 @@ const Work = ({ agentId, working, ended, saving, projectName, pr }: UiWorkProps)
 )
 const WORK: MountedView<'chat.work'> = { place: 'chat.work', id: 'project', View: Work, package: '@openagt/git-branches', projects: ['p1'] }
 const withWork = (ui: ReactNode) => <ModulesContext.Provider value={mountedOf({ views: { 'chat.work': [WORK] } })}>{ui}</ModulesContext.Provider>
-const row = () => screen.getByTestId('work-row').dataset
+/** The row the module drew in the Activity panel's Changes (the line above the box draws the same rows). */
+const row = () => within(screen.getByRole('region', { name: 'Changes' })).getByTestId('work-row').dataset
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -224,7 +225,8 @@ describe("AgentView: the rows of the session's work in its Activity panel", () =
     render(withWork(view()))
     const panel = screen.getByRole('complementary', { name: 'Activity panel' })
     expect(within(within(panel).getByRole('region', { name: 'Changes' })).getByTestId('work-row')).toBeTruthy()
-    expect(within(screen.getByTestId('chat-bottom')).queryByTestId('work-row')).toBeNull()
+    // Above the box only the line of the first step waiting: a row with none is no line.
+    expect(within(screen.getByTestId('chat-bottom')).getByRole('group', { name: 'Next step', hidden: true }).parentElement!.hidden).toBe(true)
   })
 
   test('they are told whether the run works or has ended, whether its clean-up is going, the project and the request its record names', () => {

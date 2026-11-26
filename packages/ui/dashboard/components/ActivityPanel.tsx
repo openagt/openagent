@@ -11,7 +11,7 @@ import { Button } from './ui/button.js'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover.js'
 import { Sheet, SheetContent, SheetTitle } from './ui/sheet.js'
 import { usePanesShown } from './Panes.js'
-import { setActivityShown, useActivityShown } from '../lib/panes.js'
+import { setActivityShown, useActivityAsked, useActivityShown } from '../lib/panes.js'
 import { useIsMobile } from '../lib/use-mobile.js'
 
 // A session's Activity panel, as Claude Code on the web has its details: where the session runs
@@ -181,6 +181,13 @@ export function ActivityButton({ children }: { children: ReactNode }) {
   const { column, asColumn } = useActivityPlace()
   const isMobile = useIsMobile()
   const [open, setOpen] = useState(false)
+  // Asked for from elsewhere on the page (the line above the box's "N more"): where it is no column, it opens.
+  const asked = useActivityAsked()
+  const [seen, setSeen] = useState(asked)
+  if (asked !== seen) {
+    setSeen(asked)
+    if (!asColumn) setOpen(true)
+  }
   const label = 'Activity'
   const button = (props: Record<string, unknown>) => (
     <Button variant="ghost" size="icon-bar" className={cn('text-muted-foreground', (asColumn ? column : open) && 'bg-accent text-accent-foreground')} aria-label={label} {...props}>

@@ -30,6 +30,7 @@ import { ContextCircle } from './ContextCircle.js'
 import { hostOf, useRunHosts } from '../lib/run-hosts.js'
 import { HOST_ICON, THIS_MACHINE } from './RunOnMenu.js'
 import { ActivityButton, ActivityPanel, useActivityPlace } from './ActivityPanel.js'
+import { NextStepLine } from './NextStepLine.js'
 import { callSubagents } from '../lib/subagents.js'
 import { Laptop } from 'lucide-react'
 
@@ -298,6 +299,8 @@ export function AgentView({
       }
       bottom={
         <>
+          {/* The first step waiting among the session's repos, above the message box; all of them are in the Activity panel. */}
+          <NextStepLine work={work} />
           {/* Until the run's record or its feed says whether it works, no box: it would say an ended run's words. */}
           {live === null && !feedLive ? null : card?.otherHost && card.host ? (
             // A run another computer started is only read here: a

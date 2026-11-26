@@ -249,3 +249,17 @@ export function forgetPanes(): void {
   }
   for (const listener of listeners) listener()
 }
+
+/** How many times something asked for the Activity panel in this page load: its list icon opens it on each new ask. */
+let activityAsked = 0
+
+/** Ask for the session's Activity panel: beside the chat it is put back there, elsewhere its pop-over or sheet opens. */
+export function askActivity(): void {
+  activityAsked++
+  setActivityShown(true)
+}
+
+/** How many times the Activity panel was asked for, as reactive state. */
+export function useActivityAsked(): number {
+  return useSyncExternalStore(subscribe, () => activityAsked, () => 0)
+}
