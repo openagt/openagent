@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, relative, isAbsolute } from 'node:path'
@@ -170,6 +171,47 @@ export async function ghState(root: string, cwd: string, gh: GhRunner): Promise<
     accounts.push({ login, ok })
   }
   return { installed: true, accounts }
+}
+
+/**
+ * OpenAgent's accounts by their folders, asking GitHub nothing: none while `gh` is not on this
+ * computer. What a command that works as one of them picks it from; whether its token still works
+ * is said by the command's own call ({@link ghState} asks GitHub for each, a call per account).
+ */
+export async function listedAccounts(root: string, cwd: string, gh: GhRunner): Promise<GhAccount[]> {
+  try {
+    await gh(['--version'], cwd)
+  } catch (err) {
+    if (/ENOENT|not found/i.test(errorMessage(err))) return []
+  }
+  return accountLogins(root).map(login => ({ login, ok: true }))
+}
+
+/** How long GitHub's word on whose a token is holds: the same token stays the same account's. */
+export const VERIFIED_MS = 24 * 60 * 60_000
+
+/** The hash a token is known by in its account's folder: the token itself is never written there. */
+function tokenHash(token: string): string {
+  return createHash('sha256').update(token).digest('hex')
+}
+
+/** Whether GitHub said, less than {@link VERIFIED_MS} ago, that `token` is `login`'s. */
+export function verifiedToken(dir: string, token: string, login: string, now: number = Date.now()): boolean {
+  try {
+    const kept = JSON.parse(readFileSync(join(dir, 'verified.json'), 'utf8')) as { hash?: unknown; login?: unknown; at?: unknown }
+    return kept.hash === tokenHash(token) && typeof kept.login === 'string' && kept.login.toLowerCase() === login.toLowerCase() && typeof kept.at === 'number' && now - kept.at < VERIFIED_MS && kept.at <= now
+  } catch {
+    return false
+  }
+}
+
+/** GitHub said `token` is `login`'s: kept, by the token's hash, so the next command need not ask again. */
+export function keepVerified(dir: string, token: string, login: string, now: number = Date.now()): void {
+  try {
+    writeFile600(join(dir, 'verified.json'), `${JSON.stringify({ hash: tokenHash(token), login, at: now })}\n`)
+  } catch {
+    // Not kept: the next command asks GitHub again.
+  }
 }
 
 /** OpenAgent's accounts, as {@link ghState} reads them: none while `gh` is not on this computer. */
