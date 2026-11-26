@@ -6,14 +6,14 @@
 export const projectKey = (projectId: string) => `changes:project:${projectId}`
 
 /** What a run changed. */
-export const runKey = (projectId: string, agentId: string) => `changes:run:${projectId}:${agentId}`
+export const runKey = (projectId: string, agentId: string, repo = '') => `changes:run:${projectId}:${agentId}:${repo}`
 
 /** A run's commits. */
-export const commitsKey = (projectId: string, agentId: string) => `changes:commits:${projectId}:${agentId}`
+export const commitsKey = (projectId: string, agentId: string, repo = '') => `changes:commits:${projectId}:${agentId}:${repo}`
 
 /** What one commit of a run changed. */
-export const commitKey = (projectId: string, agentId: string, commit: string) => `changes:commit:${projectId}:${agentId}:${commit}`
+export const commitKey = (projectId: string, agentId: string, commit: string, repo = '') => `changes:commit:${projectId}:${agentId}:${repo}:${commit}`
 
 /** One file's diff, as last read. */
-export const diffKey = (projectId: string, agentId: string | undefined, path: string, commit: string | undefined, whole: boolean) =>
-  `changes:diff:${projectId}:${agentId ?? ''}:${commit ?? ''}:${whole ? 'whole' : 'near'}:${path}`
+export const diffKey = (projectId: string, agentId: string | undefined, path: string, commit: string | undefined, whole: boolean, repo = '') =>
+  `changes:diff:${projectId}:${agentId ?? ''}:${repo}:${commit ?? ''}:${whole ? 'whole' : 'near'}:${path}`

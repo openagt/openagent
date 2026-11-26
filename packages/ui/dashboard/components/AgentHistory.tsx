@@ -802,7 +802,9 @@ type RunPr = { number: number; state?: PrState | undefined }
 /** A run's pull requests, the earlier ones first and each once: the ones it opened before, then the one it has now. */
 function runPrs(agent: AgentMeta): RunPr[] {
   const now = agent.pr ? [{ number: agent.pr.number, ...(agent.prState ? { state: agent.prState } : {}) }] : []
-  return [...(agent.earlierPrs ?? []).filter(earlier => !now.some(pr => pr.number === earlier.number)).map(({ number, state }) => ({ number, ...(state ? { state } : {}) })), ...now]
+  // A session's copies of other repositories have requests of their own: the row counts them with the project's.
+  const copies = (agent.copyPrs ?? []).map(({ number, state }) => ({ number, ...(state ? { state } : {}) }))
+  return [...(agent.earlierPrs ?? []).filter(earlier => !now.some(pr => pr.number === earlier.number)).map(({ number, state }) => ({ number, ...(state ? { state } : {}) })), ...now, ...copies]
 }
 
 /**

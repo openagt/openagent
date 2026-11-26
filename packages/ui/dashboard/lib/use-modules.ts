@@ -56,7 +56,7 @@ export interface MountedModules {
   loaded: boolean
 }
 
-const VIEW_PLACES: readonly ViewPlace[] = ['app.page', 'app.overlay', 'overview.card', 'overview.line', 'chat.pane', 'chat.summary', 'chat.work', 'chat.notice', 'chat.labels', 'composer.control', 'composer.prompts', 'settings.section', 'permissions.section', 'usage.line', 'overview.notice']
+const VIEW_PLACES: readonly ViewPlace[] = ['app.page', 'app.overlay', 'overview.card', 'overview.line', 'chat.pane', 'chat.summary', 'chat.work', 'chat.environment', 'chat.notice', 'chat.labels', 'composer.control', 'composer.prompts', 'settings.section', 'permissions.section', 'usage.line', 'overview.notice']
 const ACTION_PLACES: readonly ActionPlace[] = ['link.menu', 'chat.handoff', 'chat.menu', 'project.menu', 'person.menu', 'attention.fix']
 const OPTION_PLACES: readonly OptionPlace[] = ['composer.auto', 'composer.where', 'composer.images', 'composer.commands', 'chat.references']
 
@@ -240,7 +240,7 @@ function mount(loadedModules: { module: DashboardModule; definition: UiModuleDef
     for (const render of definition.hooks['ui.render'] ?? []) if (!mounted.renders.some(each => each.kind === render.kind)) mounted.renders.push({ ...render, ...of })
   }
   // Numbers, not a list the shell keeps: a third package sits between two others without the shell knowing it exists.
-  for (const place of ['overview.card', 'overview.line', 'overview.notice', 'settings.section', 'permissions.section', 'chat.labels', 'chat.work', 'composer.control'] as const) views[place].sort(byMountOrder)
+  for (const place of ['overview.card', 'overview.line', 'overview.notice', 'settings.section', 'permissions.section', 'chat.labels', 'chat.work', 'chat.environment', 'composer.control'] as const) views[place].sort(byMountOrder)
   // The pages by their own order alone: at the same order they stay in the order the modules are loaded.
   const pages = views['app.page'] as MountedView<'app.page'>[]
   pages.sort((a, b) => (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER))

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, screen, waitFor, within } from '@testing-library/react'
 import { forgetRemembered, type ModuleCallResult, type UiRunProps, type UiWorkProps } from '@openagt/ui/module'
-import { fakeHost, mountedOf, renderWithHost, type MountedAction, type MountedView } from '@openagt/ui/module/testing'
+import { fakeHost, hoverTooltip, mountedOf, renderWithHost, type MountedAction, type MountedView } from '@openagt/ui/module/testing'
 import type { Handoff, Worktree } from './calls.js'
 import { ProjectRow } from './ProjectRow.js'
 
@@ -48,7 +48,7 @@ let runs = 0
 let id = ''
 const props = (over: Partial<UiWorkProps> = {}): UiWorkProps => ({ projectId: 'p1', agentId: id, ...ENDED, ...over })
 const draw = (over: Partial<UiWorkProps> = {}) => renderWithHost(<ProjectRow {...props(over)} />, host, modules)
-const row = () => screen.queryByRole('listitem')
+const row = () => screen.queryByRole('group', { name: /: its work$/ })
 const settle = () => new Promise(resolve => setTimeout(resolve, 30))
 
 beforeEach(() => {
@@ -74,7 +74,7 @@ describe('while the agent works', () => {
     const { rerender } = draw({ ...WORKING, agentId: `${id}-b`, projectName: 'shop' })
     await waitFor(() => expect(row()).toBeTruthy())
     expect(row()!.getAttribute('aria-label')).toBe('shop: its work')
-    expect(within(row()!).getByText('agent-y')).toBeTruthy()
+    expect((await hoverTooltip(within(row()!).getByText(/^This project|^shop/))).textContent).toContain('agent-y')
     expect(call).toHaveBeenCalledWith('p1', 'worktree', { agentId: `${id}-b` })
     // No branch is read while the run is still writing it.
     expect(reads('handoff')).toHaveLength(0)
@@ -92,7 +92,7 @@ describe('while the agent works', () => {
     rerender(<ProjectRow {...props({ working: false, ended: false })} />)
     await waitFor(() => expect(reads('worktree')).toHaveLength(2))
     await settle()
-    expect(within(row()!).getByText('agent-y')).toBeTruthy()
+    expect((await hoverTooltip(within(row()!).getByText(/^This project|^shop/))).textContent).toContain('agent-y')
   })
 
   test('its checkout is read again the moment its turn ends, not at the next poll', async () => {
@@ -107,7 +107,7 @@ describe('while the agent works', () => {
   test("a run with a pull request has its row, the request in it; the modules' words are said in it, and not the branch's", async () => {
     draw({ ...WORKING, pr: { number: 4, url: 'https://x/pull/4', state: 'open', title: 'T' } })
     await waitFor(() => expect(row()).toBeTruthy())
-    expect(within(row()!).getByRole('link', { name: /PR #4/ }).getAttribute('href')).toBe('https://x/pull/4')
+    expect(within(row()!).getByRole('link', { name: '#4' }).getAttribute('href')).toBe('https://x/pull/4')
     expect(within(row()!).getByText(`summary ${id} true`)).toBeTruthy()
     expect(within(row()!).queryByRole('button', { name: 'Next step' })).toBeNull()
   })
@@ -140,17 +140,16 @@ describe('once the agent has ended', () => {
     expect(call).toHaveBeenCalledWith('p1', 'handoff', { agentId: id })
   })
 
-  test('a run whose pull request is merged has no row from the first frame', async () => {
-    handoff = PUSHED
-    const seen = new Set<boolean>()
-    const watch = new MutationObserver(() => seen.add(row() !== null))
-    watch.observe(document.body, { subtree: true, childList: true })
-    draw({ pr: { number: 3, url: 'https://x/pull/3', state: 'merged' } })
-    await waitFor(() => expect(reads('handoff')).toHaveLength(1))
-    await settle()
-    watch.disconnect()
-    seen.add(row() !== null)
-    expect([...seen]).toEqual([false])
+  test('a run whose pull request is merged or closed keeps its row, as a copy keeps its own', async () => {
+    for (const state of ['merged', 'closed'] as const) {
+      handoff = { ...PUSHED, merged: state === 'merged' }
+      id = `run-${++runs}`
+      draw({ pr: { number: 3, url: 'https://x/pull/3', state } })
+      await waitFor(() => expect(row()).toBeTruthy())
+      cleanup()
+      forgetRemembered()
+      call.mockClear()
+    }
   })
 
   test('as the agent ends, the row stays while its branch is read, then says what the branch holds', async () => {
@@ -206,15 +205,11 @@ describe('once the agent has ended', () => {
     expect(await screen.findByRole('button', { name: 'Next step' })).toBeTruthy()
   })
 
-  test('work that was landed, or a branch merged, or a pull request closed, has no row: there is no step left', async () => {
-    for (const [handoffNow, pr] of [
-      [{ ...PUSHED, hasRemote: false, pushed: false, landed: true }, undefined],
-      [{ ...PUSHED, merged: true }, { number: 9, url: 'https://x/pull/9', state: 'merged' as const }],
-      [PUSHED, { number: 3, url: 'https://x/pull/3', state: 'closed' as const }],
-    ] as const) {
+  test('work landed with no pull request, or a branch merged with none, has no row: there is no step left and no request to name', async () => {
+    for (const handoffNow of [{ ...PUSHED, hasRemote: false, pushed: false, landed: true }, { ...PUSHED, merged: true }]) {
       handoff = handoffNow
       id = `run-${++runs}`
-      draw(pr ? { pr } : {})
+      draw()
       await waitFor(() => expect(reads('handoff')).toHaveLength(1))
       await settle()
       expect(row()).toBeNull()
@@ -235,8 +230,8 @@ describe('once the agent has ended', () => {
     handoff = PUSHED
     draw({ pr: { number: 7, url: 'https://x/pull/7', state: 'open' } })
     await waitFor(() => expect(row()).toBeTruthy())
-    expect(within(row()!).getByText('agent-add-hello2')).toBeTruthy()
-    expect(within(row()!).getByText('PR #7')).toBeTruthy()
+    expect((await hoverTooltip(within(row()!).getByText(/^This project|^shop/))).textContent).toContain('agent-add-hello2')
+    expect(within(row()!).getByRole('link', { name: '#7' })).toBeTruthy()
     expect(row()!.getAttribute('aria-label')).toBe('This project: its work')
   })
 

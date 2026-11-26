@@ -18,14 +18,16 @@ type PrStates = { get(url: string): { state: NonNullable<AgentMeta['prState']>; 
  * that says it (`app.attention`), which the row shows from there.
  */
 export function withPrStates(agents: AgentMeta[], known: PrStates = { get: pullRequestState }): AgentMeta[] {
-  if (!agents.some(agent => agent.pr !== undefined || agent.earlierPrs?.length)) return agents
+  if (!agents.some(agent => agent.pr !== undefined || agent.earlierPrs?.length || agent.copyPrs?.length)) return agents
+  const marked = <T extends { url: string }>(pr: T): T & { state?: NonNullable<AgentMeta['prState']> } => {
+    const state = known.get(pr.url)?.state
+    return state ? { ...pr, state } : pr
+  }
   return agents.map(agent => {
     const listed = agent.pr && known.get(agent.pr.url)
-    const earlierPrs = agent.earlierPrs?.map(pr => {
-      const state = known.get(pr.url)?.state
-      return state ? { ...pr, state } : pr
-    })
-    return listed || earlierPrs ? { ...agent, ...(listed ? { prState: listed.state, ...(listed.title ? { prTitle: listed.title } : {}) } : {}), ...(earlierPrs ? { earlierPrs } : {}) } : agent
+    const earlierPrs = agent.earlierPrs?.map(marked)
+    const copyPrs = agent.copyPrs?.map(marked)
+    return listed || earlierPrs || copyPrs ? { ...agent, ...(listed ? { prState: listed.state, ...(listed.title ? { prTitle: listed.title } : {}) } : {}), ...(earlierPrs ? { earlierPrs } : {}), ...(copyPrs ? { copyPrs } : {}) } : agent
   })
 }
 

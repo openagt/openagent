@@ -55,11 +55,11 @@ afterEach(() => {
 test("a copy's row reads the copy's own branch: its name, its branch, what it holds, and the next steps offered for that copy", async () => {
   held = { 'oa-newuser': worked }
   renderWithHost(<CopyRows projectId="p1" agentId="run-1" working={false} ended saving={false} />, host, modules)
-  const row = await screen.findByRole('listitem')
+  const row = await screen.findByRole('group', { name: /: its work$/ })
   expect(call).toHaveBeenCalledWith('p1', 'copies', { agentId: 'run-1' })
   expect(call).toHaveBeenCalledWith('p1', 'handoff', { agentId: 'run-1', repo: 'oa-newuser' })
   expect(row.getAttribute('aria-label')).toBe('oa-newuser: its work')
-  expect(within(row).getByText('agent-fix-footer')).toBeTruthy()
+  expect(within(row).getByText('oa-newuser')).toBeTruthy()
   expect(await within(row).findByRole('button', { name: 'Take it further' })).toBeTruthy()
   expect(offeredFor).toContain('oa-newuser')
 })
@@ -67,8 +67,8 @@ test("a copy's row reads the copy's own branch: its name, its branch, what it ho
 test('a copy with no work has no row, and neither has one of a run still going, whose branch is not read', async () => {
   held = { empty: { ...worked, commits: [], files: [], insertions: 0, deletions: 0, empty: true }, site: worked }
   renderWithHost(<CopyRows projectId="p1" agentId="run-1" working={false} ended saving={false} />, host, modules)
-  await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(1))
-  expect(screen.getByRole('listitem').getAttribute('aria-label')).toBe('site: its work')
+  await waitFor(() => expect(screen.getAllByRole('group', { name: /: its work$/ })).toHaveLength(1))
+  expect(screen.getByRole('group', { name: /: its work$/ }).getAttribute('aria-label')).toBe('site: its work')
   cleanup()
   forgetRemembered()
   call.mockClear()
@@ -76,5 +76,13 @@ test('a copy with no work has no row, and neither has one of a run still going, 
   await waitFor(() => expect(call).toHaveBeenCalledWith('p1', 'copies', { agentId: 'run-1' }))
   await new Promise(resolve => setTimeout(resolve, 20))
   expect(call.mock.calls.some(([, name]) => name === 'handoff')).toBe(false)
-  expect(screen.queryByRole('listitem')).toBeNull()
+  expect(screen.queryByRole('group', { name: /: its work$/ })).toBeNull()
+})
+
+test("a copy's row has the pull request the run's record keeps for that copy", async () => {
+  held = { 'oa-newuser': worked, site: worked }
+  renderWithHost(<CopyRows projectId="p1" agentId="run-1" working={false} ended saving={false} copyPrs={[{ repo: 'oa-newuser', number: 9, url: 'https://github.com/me/oa-newuser/pull/9', state: 'open' }]} />, host, modules)
+  const row = await screen.findByRole('group', { name: 'oa-newuser: its work' })
+  expect(within(row).getByRole('link', { name: '#9' }).getAttribute('href')).toBe('https://github.com/me/oa-newuser/pull/9')
+  expect(within(await screen.findByRole('group', { name: 'site: its work' })).queryByRole('link')).toBeNull()
 })

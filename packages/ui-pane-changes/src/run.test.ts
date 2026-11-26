@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { after, before, test } from 'node:test'
 import type { RpcHost } from '@openagt/hooks/rpc'
 import { memorySettings, rpcHost } from '@openagt/hooks/testing'
-import { readAgentChanges as readChanges, readAgentCommitChanges as readCommitChanges, readAgentCommitFileDiff, readAgentCommits, readAgentFileDiff, resolveAgentWork, type AgentChanges, type FileMark } from './run.js'
+import { readAgentChanges as readChanges, readAgentCommitChanges as readCommitChanges, readAgentCommitFileDiff, readAgentCommits, readAgentFileDiff, resolveAgentWork, resolveCopyWork, type AgentChanges, type FileMark } from './run.js'
 
 const SETTINGS = memorySettings()
 
@@ -409,4 +409,31 @@ test('each changed file carries its lines added and removed, committed or on dis
   assert.ok('changes' in read)
   assert.deepEqual(read.changes['counted.txt'], { status: 'added', committed: true, added: 2, removed: 0 })
   assert.deepEqual(read.changes['loose.txt'], { status: 'untracked', committed: false, added: 3, removed: 0 })
+})
+
+test("a run's copy of another repository is read in its own folder, measured from the commit it was made at; a name that is no folder's own, or a copy not there, is gone", async () => {
+  const home = await mkdtemp(join(tmpdir(), 'copy-work-'))
+  try {
+    const copy = join(home, '2026-11-26T00-00-00-000Z', 'site')
+    execFileSync('mkdir', ['-p', copy])
+    git(copy, 'init', '-q', '-b', 'main')
+    git(copy, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '--allow-empty', '-m', 'start')
+    const start = git(copy, 'rev-parse', 'HEAD')
+    git(copy, 'config', 'openagent.start', start)
+    git(copy, 'checkout', '-q', '-b', 'agent-x')
+    await writeFile(join(copy, 'a.txt'), 'a\n')
+    git(copy, 'add', '-A')
+    git(copy, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'add a')
+    const at = await resolveCopyWork('2026-11-26T00-00-00-000Z', 'site', undefined, home)
+    assert.deepEqual(at, { source: 'checkout', path: copy, base: start, merged: false })
+    const changes = await readChanges(home, at)
+    assert.deepEqual('changes' in changes ? Object.keys(changes.changes) : [], ['a.txt'])
+    // A copy made before copies named their start is measured from where it left its default branch.
+    git(copy, 'config', '--unset', 'openagent.start')
+    assert.deepEqual(await resolveCopyWork('2026-11-26T00-00-00-000Z', 'site', undefined, home), { source: 'checkout', path: copy, base: start, merged: false })
+    for (const [agentId, repo] of [['2026-11-26T00-00-00-000Z', '../site'], ['2026-11-26T00-00-00-000Z', '.git'], ['../x', 'site'], ['2026-11-26T00-00-00-000Z', 'gone']])
+      assert.deepEqual(await resolveCopyWork(agentId!, repo!, undefined, home), { source: 'gone' }, `${agentId} ${repo}`)
+  } finally {
+    await rm(home, { recursive: true, force: true })
+  }
 })

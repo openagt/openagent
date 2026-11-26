@@ -68,6 +68,7 @@ export {
   type ProfilesOptions,
   type RunFacts,
   type GitBranchesFacts,
+  type CopyPullRequest,
   type GithubFacts,
   type PullRequest,
   type PullRequestRead,

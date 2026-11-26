@@ -95,6 +95,10 @@ export interface UiPaneProps {
   reveal?: { path?: string; at: number }
   /** On a pane that shows a run's files (`files`): the file a click in the chat asked to see, by its path as the agent named it. `at` tells one ask from the next. */
   show?: { path: string; at: number }
+  /** The run's copied repo the pane is opened on, in a tab of its own: its name in the session's folder. Absent: the project. */
+  repo?: string
+  /** The session has no project: only its copies of repositories have files and changes. */
+  copiesOnly?: true
   context: UiContext
 }
 
@@ -124,6 +128,8 @@ export interface UiWorkProps extends UiRunProps {
   projectName?: string
   /** The pull request the run's record names, and how it stands as its git host module last read it. */
   pr?: PullRequest & { state?: PullRequestState; title?: string }
+  /** The pull requests of its copies of other repositories, by the copy's name, as its record keeps them and how each stands. */
+  copyPrs?: (PullRequest & { repo: string; state?: PullRequestState })[]
 }
 
 /** What a strip above a run's chat is given: the run, and the host it runs on. */
@@ -278,12 +284,12 @@ export interface ViewPlaces {
   'overview.line': { entry: { id: string; label: string; order?: number }; props: UiCardProps }
   /** A notice on the Overview, under the card of what needs the person: news of this computer, such as a coding agent's newer version. Nothing drawn when there is none. */
   'overview.notice': { entry: { id: string; order?: number }; props: UiCardProps }
-  /** A pane beside the chat, on every project's page and every run's page: an icon in the page's top bar opens it. */
+  /** A pane beside the chat, on every project's page and every run's page: a tab of the side panel, which the panel's "+" and its list open. */
   'chat.pane': {
     entry: {
       /** Which pane this is among the module's own, for its key and for remembering that it is open. */
       id: string
-      /** Its name: on its card, and what its icon is called. */
+      /** Its name: on its tab, and in the panel's "+" and list. */
       label: string
       icon: UiIcon
       /** It lists what a run changed: the chat's row of a changed file opens it, handing it the file as `reveal`. */
@@ -309,6 +315,12 @@ export interface ViewPlaces {
    * nothing, and a panel with no row is not drawn.
    */
   'chat.work': { entry: { id: string; order?: number }; props: UiWorkProps }
+  /**
+   * Rows of the Environment of a session's Activity panel, after where it runs and its project, by
+   * `order`: git-branches' copies of repos, each by the repository it is a copy of. Drawn with the
+   * shell's `EnvironmentRow`.
+   */
+  'chat.environment': { entry: { id: string; order?: number }; props: UiRunProps }
   /** A strip above a run's chat, with a word on the run: a host's, on a run it runs, say where the run is and when its news comes. */
   'chat.notice': { entry: { id: string }; props: UiRunNoticeProps }
   /** Words at the end of the row above a session's message box: github's pull request labels. */

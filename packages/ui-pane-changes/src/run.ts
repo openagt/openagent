@@ -1,7 +1,8 @@
 import { existsSync } from 'node:fs'
 import { hostname } from 'node:os'
+import { join } from 'node:path'
 import { nodeGitRunner, originDefaultBranch } from '@openagt/git-branches'
-import type { GitRunner } from '@openagt/hooks'
+import { sessionsHome, type GitRunner } from '@openagt/hooks'
 import type { MergeLookup, RpcHost } from '@openagt/hooks/rpc'
 import { readFileStatuses, type FileGitStatus } from './status.js'
 import { CONTEXT_LINES, safeRepoPath } from './confined.js'
@@ -119,6 +120,25 @@ async function inDefaultBranch(ask: (args: string[]) => Promise<string>, tip: st
   const main = await defaultBranch(ask)
   const commit = await commitOf(ask, tip)
   return Boolean(main && commit && (await ask(['merge-base', main, commit])) === commit)
+}
+
+/**
+ * Where the work of the run's copy `repo` of another repository is: the copy's own folder in the
+ * session's folder, a clone on its own branch, measured as a checkout is, from where it left its
+ * default branch, with the commit it was made at as the copy names it (git-branches'
+ * `openagent.start`). Gone for a name that is no folder's own, and for
+ * a copy that is not there any more.
+ */
+export async function resolveCopyWork(agentId: string, repo: string, git: GitRunner = nodeGitRunner(), home: string = sessionsHome()): Promise<AgentWorkAt> {
+  if (!/^[^./\\][^/\\]*$/.test(repo) || !/^[\w.-]+$/.test(agentId)) return { source: 'gone' }
+  const path = join(home, agentId, repo)
+  if (!existsSync(join(path, '.git'))) return { source: 'gone' }
+  // Measured as a checkout is: from where it left its default branch, the commit it was made at
+  // weighed in when it names one (a copy made before copies named it does not).
+  const ask = asker(git, path)
+  const start = (await git(['config', '--get', 'openagent.start'], path).catch(() => '')).trim() || undefined
+  const base = await forkPoint(ask, 'HEAD', start)
+  return { source: 'checkout', path, ...(base ? { base } : {}), merged: await inDefaultBranch(ask, 'HEAD') }
 }
 
 /**

@@ -283,7 +283,8 @@ export { SetupLine, SetupPress, SetupSaid } from '../components/SessionSetup.js'
 export { ComposerControls, HandoffOffers, ViewsAt, useViewsAt, useControlsSaid, useOptionsAt, type ControlBox, type ControlsSaid } from '../components/Places.js'
 export { ModuleSlot } from '../components/ModulePageView.js'
 // A row of the panel of a session's work above its message box (`chat.work`): a repo's name, its branch, what it holds, its next steps.
-export { WorkRow } from '../components/AgentWorkPanel.js'
+export { WorkRow } from '../components/WorkRow.js'
+export { EnvironmentRow, prTone, repoPath } from '../components/EnvironmentRow.js'
 /** For a read of what a pick for every next run decides (the profile picked under the box): read again the moment one is saved, which its control tells. */
 export { nextRunAgain, tellNextRunPicked } from '../lib/next-run-picked.js'
 /** Keep the page's entry while something typed would be lost by leaving it: Back asks first, and so does the browser on a reload. */

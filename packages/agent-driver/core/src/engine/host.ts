@@ -273,6 +273,7 @@ function foundOf(card: Partial<RunCard>, checkout: { path: string; branch: strin
   const branch = checkout?.branch ?? card.branch
   const options = isMap(caller['options']) ? (caller['options'] as RunOptions) : undefined
   const earlierPrs = Array.isArray(caller['earlierPrs']) ? (caller['earlierPrs'] as unknown[]).filter(isPullRequest) : undefined
+  const copyPrs = Array.isArray(caller['copyPrs']) ? (caller['copyPrs'] as unknown[]).filter(isCopyPullRequest) : undefined
   const record = card.status === undefined ? undefined : {
     status: card.status,
     ...(card.startedAt !== undefined ? { startedAt: card.startedAt } : {}),
@@ -283,6 +284,7 @@ function foundOf(card: Partial<RunCard>, checkout: { path: string; branch: strin
     ...(branch !== undefined ? { branch } : {}),
     ...(card.pr ? { pr: { number: card.pr.number, url: card.pr.url } } : {}),
     ...(earlierPrs?.length ? { earlierPrs } : {}),
+    ...(copyPrs?.length ? { copyPrs } : {}),
     ...(base !== undefined ? { base } : {}),
     ...(baseCommit !== undefined ? { baseCommit } : {}),
     ...(landed !== undefined ? { landed } : {}),
@@ -302,6 +304,11 @@ function isMap(value: unknown): value is Record<string, unknown> {
 /** A pull request as a record keeps it: its number and its address. */
 function isPullRequest(value: unknown): value is { number: number; url: string } {
   return isMap(value) && typeof value['number'] === 'number' && typeof value['url'] === 'string'
+}
+
+/** A pull request of one of the run's copies, by the copy's name. */
+function isCopyPullRequest(value: unknown): value is { repo: string; number: number; url: string } {
+  return isPullRequest(value) && typeof (value as Record<string, unknown>)['repo'] === 'string'
 }
 
 /** Where a run of `project` is started and found: the project's folder, or the sessions home for a session with no project. */
@@ -341,10 +348,11 @@ async function dropFolder(dir: string, id: string): Promise<void> {
  */
 function patchOf(facts: RunFacts): RunPatch | undefined {
   const pr = facts.github?.pr
+  const copyPrs = facts.github?.copyPrs?.filter(isCopyPullRequest).map(({ repo, number, url }) => ({ repo, number, url }))
   const branches = facts['git-branches']
   const landed = branches?.landed !== undefined && branches.baseCommit !== undefined ? { commit: branches.landed, from: branches.baseCommit } : undefined
-  if (!pr && !landed) return undefined
-  return { ...(pr ? { pr: { number: pr.number, url: pr.url } } : {}), ...(landed ? { landed } : {}) }
+  if (!pr && !landed && !copyPrs?.length) return undefined
+  return { ...(pr ? { pr: { number: pr.number, url: pr.url } } : {}), ...(landed ? { landed } : {}), ...(copyPrs?.length ? { copyPrs } : {}) }
 }
 
 /** A run's card as it stands: its live one while it has a checkout, its record's once it has none. */

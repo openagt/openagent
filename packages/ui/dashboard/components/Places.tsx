@@ -137,19 +137,30 @@ export interface Offered<P extends ActionPlace> {
   offer: UiOffer
 }
 
+/** What each place last offered for each `on`, for this page's life. */
+const lastOffered = new Map<string, readonly unknown[]>()
+
 /**
  * What the actions at `place` offer now for `on`, in the place's order (`rank`, else the action's
  * `order`): asked again whenever `on` or `again` changes, and after one of them ran. `null` until
  * the first answer. An action that says nothing of itself is offered as it is declared; one whose
- * question fails is not offered.
+ * question fails is not offered. What was last offered for the same `on` stands meanwhile: going
+ * back to a session draws its next step at once rather than after the modules answer again.
  */
 export function useOffers<P extends ActionPlace>(place: P, on: ActionPlaces[P] | null, projectId: string | undefined, again: unknown = 0): { offers: Offered<P>[] | null; reask: () => void } {
   const actions = (useMountedModules().actions[place] as MountedAction<P>[]).filter(action => onIn(action, projectId))
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   const [asked, setAsked] = useState(0)
-  const [offers, setOffers] = useState<Offered<P>[] | null>(null)
   const onKey = JSON.stringify(on)
   const actionsKey = actions.map(action => `${action.package}/${action.id}`).join('\n')
+  const known = `${place}\n${onKey}\n${actionsKey}`
+  const [offers, setOffers] = useState<Offered<P>[] | null>(() => (lastOffered.get(known) as Offered<P>[] | undefined) ?? null)
+  // Another `on`: what was last offered for it, until the modules answer.
+  const [shownFor, setShownFor] = useState(known)
+  if (shownFor !== known) {
+    setShownFor(known)
+    setOffers((lastOffered.get(known) as Offered<P>[] | undefined) ?? null)
+  }
   useEffect(() => {
     if (on === null) return setOffers(null)
     let live = true
@@ -167,6 +178,7 @@ export function useOffers<P extends ActionPlace>(place: P, on: ActionPlaces[P] |
       if (!live) return
       const offered = answers.filter((answer): answer is Offered<P> => answer !== undefined)
       offered.sort((a, b) => (a.offer.rank ?? a.action.order ?? DEFAULT_ORDER) - (b.offer.rank ?? b.action.order ?? DEFAULT_ORDER) || a.action.package.localeCompare(b.action.package))
+      lastOffered.set(known, offered)
       setOffers(offered)
     })
     return () => {
@@ -272,8 +284,8 @@ export function useMenuActions<P extends 'chat.menu' | 'project.menu' | 'person.
   return { items, overlay, offered: items.length }
 }
 
-/** The bar's press: a quiet one on the bar's own fill, as its other presses are. Busy, it stays focusable. */
-const NEXT_STEP_CLASS = 'bg-background/60 hover:bg-background aria-disabled:pointer-events-none aria-disabled:opacity-50'
+/** The row's press, as Claude Code's Create PR: grey, 24 high, its words at 13px. Busy, it stays focusable. */
+const NEXT_STEP_CLASS = 'h-6 rounded-md bg-foreground/10 text-xs font-normal hover:bg-foreground/15 aria-disabled:pointer-events-none aria-disabled:opacity-50'
 
 /**
  * The next step of an ended run's work, in the bar above its message box (`chat.handoff`): what
@@ -311,7 +323,7 @@ export function HandoffOffers({ projectId, agentId, repo, again }: { projectId: 
         ))}
       {first && (
         <ButtonGroup>
-          <Button size="sm" variant="ghost" className={cn(NEXT_STEP_CLASS, more.length > 0 && 'pr-1.5!', first.offer.danger && 'text-danger')} data-next-step {...step} {...(first.offer.title !== undefined ? { title: first.offer.title } : {})} onClick={() => press(first)}>
+          <Button size="sm" variant="ghost" className={cn(NEXT_STEP_CLASS, 'min-w-18 justify-center px-3', first.offer.danger && 'text-danger')} data-next-step {...step} {...(first.offer.title !== undefined ? { title: first.offer.title } : {})} onClick={() => press(first)}>
             {pending === first.key && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
             {labelOf(first)}
           </Button>
@@ -319,7 +331,7 @@ export function HandoffOffers({ projectId, agentId, repo, again }: { projectId: 
             <>
               <ButtonGroupSeparator className="bg-border opacity-100" />
               <DropdownMenu>
-                <DropdownMenuTrigger type="button" aria-label="Other choices" {...step} className={cn(buttonVariants({ size: 'sm', variant: 'ghost' }), NEXT_STEP_CLASS, 'px-1 data-[popup-open]:bg-background')}>
+                <DropdownMenuTrigger type="button" aria-label="Other choices" {...step} className={cn(buttonVariants({ size: 'sm', variant: 'ghost' }), NEXT_STEP_CLASS, 'px-1 data-[popup-open]:bg-foreground/15')}>
                   <ChevronDown className="h-3.5 w-3.5" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="min-w-[10rem]">

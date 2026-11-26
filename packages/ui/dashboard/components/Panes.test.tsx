@@ -16,6 +16,7 @@ vi.mock('./DocsPanel.js', () => ({ DocsPanel: ({ docs }: { docs: { name: string 
 const { PaneLayout, PanesProvider, PaneToggles, TopBar } = await import('./Panes.js')
 const { forgetRemembered } = await import('../lib/use-async.js')
 const { forgetPanes, setPaneOpen } = await import('../lib/panes.js')
+const { shortcutKeys } = await import('../lib/shortcut.js')
 const { forgetRevealedChanges, revealChange, revealFile, revealScreen, revealSubagent } = await import('../lib/reveal-change.js')
 
 const Icon = () => <svg aria-hidden />
@@ -77,167 +78,178 @@ beforeEach(() => {
 })
 afterEach(cleanup)
 
-const icon = (name: string) => within(screen.getByRole('group', { name: 'Panes' })).getByRole('button', { name })
-const icons = () => within(screen.getByRole('group', { name: 'Panes' })).getAllByRole('button').map(button => button.getAttribute('aria-label'))
-/** The open panes, by name, in the order they stand. */
-const cards = () => screen.queryAllByRole('region').map(card => card.getAttribute('aria-label'))
-const card = (name: string) => screen.getByRole('region', { name })
-const keptOpen = (page: string) => (JSON.parse(localStorage.getItem('oa.panes') ?? '{"pages":{}}') as { pages: Record<string, { open: string[] }> }).pages[page]?.open ?? []
+/** The panel icon: in the top bar while the panel is closed, at the end of its tab bar while it is open. */
+const opener = () => screen.getByRole('button', { name: 'Open the side panel' })
+const closer = () => screen.getByRole('button', { name: 'Close the side panel' })
+const panel = () => screen.queryByRole('region', { name: 'Side panel' })
+/** The list of what the panel can show, while no tab is open. */
+const entry = (name: string) => within(screen.getByRole('list', { name: 'What the panel can show' })).getByRole('button', { name: new RegExp(`^${name}`) })
+const tabs = () => screen.queryAllByRole('tab').map(tab => tab.textContent)
+const tab = (name: string) => screen.getByRole('tab', { name })
+/** What the panel shows: the region its shown tab is drawn in. */
+const body = () => screen.getAllByRole('region').find(region => region.getAttribute('aria-label') !== 'Side panel')
+const kept = (page: string) => (JSON.parse(localStorage.getItem('oa.panes') ?? '{"pages":{}}') as { pages: Record<string, { open: string[]; active?: string; shown?: boolean }> }).pages[page]
 
-describe('the panes\' icons', () => {
-  test('one per pane the modules add, in their order, and Docs once the project has a document; none is open until its icon is pressed', async () => {
+/** Open the panel and, from its list, one tab. */
+function openTab(name: string) {
+  if (!panel()) fireEvent.click(opener())
+  if (screen.queryByRole('list', { name: 'What the panel can show' })) fireEvent.click(entry(name))
+  else {
+    openMenu(screen.getByRole('button', { name: 'Open a tab' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: new RegExp(`^${name}`) }))
+  }
+}
+
+describe('the panel icon', () => {
+  test('a page with a panel has the icon in its top bar, the panel closed until it is pressed', async () => {
     render(<Page />)
-    expect(icons()).toEqual(['Changes', 'Files', 'Browser'])
-    await waitFor(() => expect(icons()).toEqual(['Changes', 'Files', 'Browser', 'Docs']))
-    for (const name of icons()) expect(icon(name!).getAttribute('aria-pressed')).toBe('false')
-    expect(cards()).toEqual([])
-    // A closed pane renders nothing, so nothing in it reads anything.
-    expect(shown).not.toHaveBeenCalled()
-    expect(screen.getByText('the chat')).toBeTruthy()
+    expect(opener().getAttribute('aria-pressed')).toBe('false')
+    expect(panel()).toBeNull()
+    expect((await hoverTooltip(opener())).textContent).toBe('Open panel')
   })
 
-  test('a project with no document has no Docs icon, and a project without a module has none of its panes', async () => {
-    onDocs.mockResolvedValue([])
-    const { unmount } = render(<Page />)
-    await waitFor(() => expect(onDocs).toHaveBeenCalled())
-    expect(icons()).toEqual(['Changes', 'Files', 'Browser'])
-    unmount()
-    render(<Page projectId="p2" />)
-    await waitFor(() => expect(onDocs).toHaveBeenCalledWith('p2'))
-    expect(screen.queryByRole('group', { name: 'Panes' })).toBeNull()
-  })
-
-  test("with no room kept for this project, what stands before the icons is drawn with them, once they are known; a later visit holds their room", async () => {
-    let answer = (_docs: unknown[]) => {}
-    onDocs.mockImplementation(() => new Promise(resolve => (answer = resolve)))
-    const first = render(
-      <PanesProvider {...base}>
-        <PaneToggles before={<button type="button">the menu</button>} />
-      </PanesProvider>,
-    )
-    const end = () => screen.getByRole('button', { name: 'the menu' }).parentElement!
-    expect(end().className).toContain('invisible')
-    await act(async () => answer([]))
-    expect(end().className).not.toContain('invisible')
-    expect(icons()).toEqual(['Changes', 'Files', 'Browser'])
-    first.unmount()
-    forgetRemembered()
-    render(
-      <PanesProvider {...base}>
-        <PaneToggles before={<button type="button">the menu</button>} />
-      </PanesProvider>,
-    )
-    expect(end().className).not.toContain('invisible')
-  })
-
-  test("an icon's tooltip is its pane's name only", async () => {
-    render(<Page />)
-    const tip = await hoverTooltip(icon('Files'))
-    expect(tip.textContent).toBe('Files')
-  })
-
-  test('a page with no panes has no icon, reads no documents, and is drawn as it is', () => {
-    const { container, unmount } = render(<Page enabled={false} />)
-    expect(screen.queryByRole('group', { name: 'Panes' })).toBeNull()
-    expect(container.querySelector('[data-group]')).toBeNull()
-    expect(screen.getByText('the chat')).toBeTruthy()
-    unmount()
-    render(<Page projectId={null} />)
-    expect(screen.queryByRole('group', { name: 'Panes' })).toBeNull()
+  test('a page with no panel has no icon, reads no documents, and is drawn as it is', () => {
+    render(<Page enabled={false} />)
+    expect(screen.queryByRole('button', { name: 'Open the side panel' })).toBeNull()
     expect(onDocs).not.toHaveBeenCalled()
+    expect(screen.getByText('the chat')).toBeTruthy()
+  })
+
+  test('it opens the panel, then stands at the end of the panel\'s tab bar and closes it; the browser remembers it for this agent', () => {
+    render(<Page />)
+    fireEvent.click(opener())
+    expect(panel()).not.toBeNull()
+    expect(within(panel()!).getByRole('button', { name: 'Close the side panel' }).getAttribute('aria-pressed')).toBe('true')
+    expect(screen.queryByRole('button', { name: 'Open the side panel' })).toBeNull()
+    expect(kept('p1/r1')!.shown).toBe(true)
+    fireEvent.click(closer())
+    expect(panel()).toBeNull()
+    expect(opener()).toBeTruthy()
   })
 })
 
-describe('opening and closing a pane', () => {
-  test('an icon opens its pane and closes it again; an open pane\'s icon is lit, and the browser remembers it for this agent', () => {
+describe('the panel with no tab open', () => {
+  test('lists what it can show, the modules\' panes then Docs once the project has a document, each with its shortcut', async () => {
     render(<Page />)
-    fireEvent.click(icon('Files'))
-    expect(cards()).toEqual(['Files'])
-    expect(within(card('Files')).getByText('the files')).toBeTruthy()
-    expect(icon('Files').getAttribute('aria-pressed')).toBe('true')
-    expect(icon('Files').className.split(' ')).toContain('bg-accent')
-    expect(icon('Changes').getAttribute('aria-pressed')).toBe('false')
-    expect(keptOpen('p1/r1')).toEqual(['@openagt/ui-pane-files/files'])
-    fireEvent.click(icon('Files'))
-    expect(cards()).toEqual([])
-    expect(icon('Files').getAttribute('aria-pressed')).toBe('false')
+    fireEvent.click(opener())
+    await waitFor(() => expect(entry('Docs')).toBeTruthy())
+    const list = screen.getByRole('list', { name: 'What the panel can show' })
+    expect(within(list).getAllByRole('button').map(button => button.textContent)).toEqual([`Changes${shortcutKeys('changesTab').join('')}`, `Files${shortcutKeys('filesTab').join('')}`, 'Browser', 'Docs'])
   })
 
-  test('the open panes stand in the order they were opened, whatever the order of their icons', async () => {
-    render(<Page />)
-    await waitFor(() => expect(icons()).toContain('Docs'))
-    for (const name of ['Files', 'Docs', 'Changes']) fireEvent.click(icon(name))
-    expect(cards()).toEqual(['Files', 'Docs', 'Changes'])
-    expect(within(card('Docs')).getByText('docs: PLAN.md')).toBeTruthy()
-    // Closed and opened again, a pane is the last.
-    fireEvent.click(icon('Files'))
-    fireEvent.click(icon('Files'))
-    expect(cards()).toEqual(['Docs', 'Changes', 'Files'])
+  test('a project with no document has no Docs, and a project without a module has none of its panes', async () => {
+    onDocs.mockResolvedValue([])
+    render(<Page />, [FILES])
+    fireEvent.click(opener())
+    await waitFor(() => expect(onDocs).toHaveBeenCalled())
+    expect(within(screen.getByRole('list', { name: 'What the panel can show' })).getAllByRole('button').map(button => button.textContent)).toEqual([`Files${shortcutKeys('filesTab').join('')}`])
   })
 
-  test('the page\'s top bar is over the chat alone, as Claude Code\'s, so the panes beside it reach the top: an icon that opened a pane stays where it was pressed, and the same press closes it', () => {
-    render(<PageWithItsBar />)
-    const files = icon('Files')
-    const chat = document.getElementById('chat')!
-    // In the chat's column, first in it.
-    expect(chat.contains(files)).toBe(true)
-    expect(chat.firstElementChild!.contains(files)).toBe(true)
-    fireEvent.click(files)
-    expect(cards()).toEqual(['Files'])
-    expect(icon('Files')).toBe(files)
-    expect(card('Files').contains(files)).toBe(false)
-    // The pane's column holds no bar over it: its own header is at its top.
-    expect(card('Files').closest('[data-panel]')!.contains(files)).toBe(false)
-    fireEvent.click(files)
-    expect(cards()).toEqual([])
+  test('says what a pane holds beside its name, as the shell counts it', () => {
+    render(<Page counts={{ '@openagt/ui-pane-changes/changes': <span>+5 −1</span> }} />)
+    fireEvent.click(opener())
+    expect(entry('Changes').textContent).toContain('+5 −1')
+  })
+})
+
+describe('tabs', () => {
+  test('an entry opens its pane in a tab; tabs stand in the order they were opened, the last opened shown', () => {
+    render(<Page />)
+    openTab('Files')
+    expect(tabs()).toEqual(['Files'])
+    expect(within(body()!).getByText('the files')).toBeTruthy()
+    openTab('Changes')
+    expect(tabs()).toEqual(['Files', 'Changes'])
+    expect(tab('Changes').getAttribute('aria-selected')).toBe('true')
+    expect(screen.queryByText('the files')).toBeNull()
+    fireEvent.click(tab('Files'))
+    expect(within(body()!).getByText('the files')).toBeTruthy()
+    expect(kept('p1/r1')).toMatchObject({ open: ['@openagt/ui-pane-files/files', '@openagt/ui-pane-changes/changes'], active: '@openagt/ui-pane-files/files' })
   })
 
-  test('a pane\'s card names it and closes it', () => {
+  test('a tab\'s ✕ closes it, handing its place to the tab before it; the last closed leaves the list', () => {
     render(<Page />)
-    fireEvent.click(icon('Files'))
-    fireEvent.click(icon('Browser'))
-    expect(within(card('Browser')).getByRole('heading').textContent).toBe('Browser')
+    openTab('Files')
+    openTab('Changes')
+    fireEvent.click(screen.getByRole('button', { name: 'Close Changes' }))
+    expect(tabs()).toEqual(['Files'])
+    expect(within(body()!).getByText('the files')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Close Files' }))
-    expect(cards()).toEqual(['Browser'])
-    expect(icon('Files').getAttribute('aria-pressed')).toBe('false')
+    expect(tabs()).toEqual([])
+    expect(screen.getByRole('list', { name: 'What the panel can show' })).toBeTruthy()
+  })
+
+  test('the "+" opens any pane in a tab', () => {
+    render(<Page />)
+    openTab('Files')
+    openTab('Browser')
+    expect(tabs()).toEqual(['Files', 'Browser'])
+    expect(within(body()!).getByText('the browser')).toBeTruthy()
+  })
+
+  test('closed and opened again, the panel has the tabs it had', () => {
+    render(<Page />)
+    openTab('Files')
+    fireEvent.click(closer())
+    fireEvent.click(opener())
+    expect(tabs()).toEqual(['Files'])
   })
 
   test('each page has its own: what is open on one agent\'s page is not on the next one\'s, nor on the "New agent session" page', () => {
     const { rerender } = render(<Page />)
-    fireEvent.click(icon('Files'))
+    openTab('Files')
     rerender(<Page agentId="r2" />)
-    expect(cards()).toEqual([])
+    expect(panel()).toBeNull()
     rerender(<Page agentId={null} />)
-    expect(cards()).toEqual([])
-    fireEvent.click(icon('Changes'))
-    expect(keptOpen('new')).toEqual(['@openagt/ui-pane-changes/changes'])
+    expect(panel()).toBeNull()
     rerender(<Page />)
-    expect(cards()).toEqual(['Files'])
+    expect(tabs()).toEqual(['Files'])
   })
 
-  test('a pane left open whose module is gone is not drawn, and takes no column', () => {
-    setPaneOpen('p1/r1', '@openagt/gone/pane', true)
-    const { container } = render(<Page />)
-    expect(cards()).toEqual([])
-    expect(container.querySelectorAll('[data-panel]')).toHaveLength(1)
+  test('a tab left open whose module is gone is not drawn', () => {
+    setPaneOpen('p1/r1', '@openagt/ui-pane-files/files', true)
+    render(<Page />, [CHANGES])
+    expect(tabs()).toEqual([])
+    expect(screen.getByRole('list', { name: 'What the panel can show' })).toBeTruthy()
+  })
+
+  test('a module\'s pane on one of the run\'s copied repos is a tab of its own, named for the repo, and is given the repo', () => {
+    render(<Page />)
+    act(() => setPaneOpen('p1/r1', `@openagt/ui-pane-files/files#${'oa-newuser'}`, true))
+    expect(tabs()).toEqual(['Files · oa-newuser'])
+    expect((shown.mock.lastCall![0] as UiPaneProps).repo).toBe('oa-newuser')
+  })
+
+  test('the shortcuts open their pane\'s tab: ⌘ or Ctrl with Shift, D for Changes, F for Files', () => {
+    render(<Page />)
+    // A Mac's browser says the letter small with ⌘ held; elsewhere Shift makes it a capital.
+    fireEvent.keyDown(window, { key: 'd', metaKey: true, shiftKey: true })
+    expect(tabs()).toEqual(['Changes'])
+    fireEvent.keyDown(window, { key: 'F', ctrlKey: true, shiftKey: true })
+    expect(tabs()).toEqual(['Changes', 'Files'])
+    fireEvent.click(screen.getByRole('button', { name: 'Close Changes' }))
+    // Without Shift it is the browser's own ⌘D: nothing.
+    fireEvent.keyDown(window, { key: 'd', metaKey: true })
+    expect(tabs()).toEqual(['Files'])
   })
 })
 
 describe('what a module\'s pane is given', () => {
   test('the project, the run, how far its feed is, and the Context\'s files alone', () => {
     render(<Page files={['a.ts', 'b.ts']} context={new Set(['a.ts', '/some/project'])} activity={7} />)
-    fireEvent.click(icon('Files'))
+    openTab('Files')
     const props = shown.mock.lastCall![0] as UiPaneProps
     expect(props.projectId).toBe('p1')
     expect(props.agentId).toBe('r1')
     expect(props.activity).toBe(7)
+    expect(props.repo).toBeUndefined()
     // A project path the launcher put in the Context is no file.
     expect([...props.context.files]).toEqual(['a.ts'])
   })
 
   test('on the "New agent session" page it is given no run', () => {
     render(<Page agentId={null} activity={7} />)
-    fireEvent.click(icon('Files'))
+    openTab('Files')
     const props = shown.mock.lastCall![0] as UiPaneProps
     expect(props.agentId).toBeUndefined()
     expect(props.activity).toBeUndefined()
@@ -247,367 +259,166 @@ describe('what a module\'s pane is given', () => {
     const broken: MountedPanel = { ...FILES, View: () => { throw new Error('boom') } }
     vi.spyOn(console, 'error').mockImplementation(() => {})
     render(<Page />, [broken, BROWSER])
-    fireEvent.click(icon('Files'))
-    fireEvent.click(icon('Browser'))
-    expect(within(card('Files')).getByRole('alert').textContent).toContain('boom')
-    expect(within(card('Browser')).getByText('the browser')).toBeTruthy()
+    openTab('Files')
+    expect(within(body()!).getByRole('alert').textContent).toContain('boom')
+    openTab('Browser')
+    expect(within(body()!).getByText('the browser')).toBeTruthy()
     expect(screen.getByText('the chat')).toBeTruthy()
   })
 })
 
-describe('a pane that fills the page', () => {
-  const wrapper = (name: string) => card(name).parentElement!
+describe('a panel that fills the page', () => {
+  const wrapper = () => panel()!.parentElement!
 
-  test('its card\'s button lays it over the whole page where it is, and the same button brings it back', () => {
-    const { container } = render(<Page />)
-    fireEvent.click(icon('Files'))
-    fireEvent.click(icon('Browser'))
-    expect(wrapper('Files').className.split(' ')).not.toContain('absolute')
-    fireEvent.click(screen.getByRole('button', { name: 'Let Files fill the page' }))
-    for (const cls of ['absolute', 'inset-0', 'z-30', 'bg-background']) expect(wrapper('Files').className.split(' ')).toContain(cls)
-    // Over all the page and its panes, which are still there under it: nothing is drawn anew.
-    expect(container.querySelector('[data-group]')!.parentElement!.className.split(' ')).toContain('relative')
-    expect(cards()).toEqual(['Files', 'Browser'])
+  test('its button lays it over the whole page where it is, and the same button brings it back; closed, it fills it no more', () => {
+    render(<Page />)
+    openTab('Files')
+    expect(wrapper().className.split(' ')).not.toContain('absolute')
+    fireEvent.click(screen.getByRole('button', { name: 'Let the panel fill the page' }))
+    for (const cls of ['absolute', 'inset-0', 'z-30', 'bg-background']) expect(wrapper().className.split(' ')).toContain(cls)
     expect(screen.getByText('the chat')).toBeTruthy()
-    expect(wrapper('Browser').className.split(' ')).not.toContain('absolute')
-    const back = screen.getByRole('button', { name: 'Bring Files back to its place' })
-    expect(back.getAttribute('aria-pressed')).toBe('true')
-    fireEvent.click(back)
-    expect(wrapper('Files').className.split(' ')).not.toContain('absolute')
+    fireEvent.click(screen.getByRole('button', { name: 'Bring the panel back to its place' }))
+    expect(wrapper().className.split(' ')).not.toContain('absolute')
+    fireEvent.click(screen.getByRole('button', { name: 'Let the panel fill the page' }))
+    fireEvent.click(closer())
+    fireEvent.click(opener())
+    expect(wrapper().className.split(' ')).not.toContain('absolute')
   })
 
-  test('closed while it fills the page, it leaves the page as it was; opened again it is in its place', () => {
+  test('with no tab open there is nothing to fill the page with', () => {
     render(<Page />)
-    fireEvent.click(icon('Files'))
-    fireEvent.click(screen.getByRole('button', { name: 'Let Files fill the page' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Close Files' }))
-    expect(cards()).toEqual([])
-    fireEvent.click(icon('Files'))
-    expect(wrapper('Files').className.split(' ')).not.toContain('absolute')
+    fireEvent.click(opener())
+    expect(screen.queryByRole('button', { name: 'Let the panel fill the page' })).toBeNull()
   })
 })
 
 describe('how the room is shared', () => {
   type Dragged = HTMLElement & { layoutChanged(layout: Record<string, number>, meta: { isUserInteraction: boolean }): void }
   const groups = (container: HTMLElement) => [...container.querySelectorAll<Dragged>('[data-group]')]
-  // A panel is named for what it holds and, after an `@`, for whose shares it has.
-  const holds = (panel: Element) => (panel.id.includes('@', 1) ? panel.id.slice(0, panel.id.lastIndexOf('@')) : panel.id)
-  const panel = (id: string) => [...document.querySelectorAll('[data-panel]')].find(el => holds(el) === id)!
-  const share = (id: string) => panel(id).getAttribute('data-default-size')
-  const owner = (id: string) => panel(id).id.slice(id.length + 1)
-  /** The group says a layout changed, as after a drag: the shares by what each panel holds. */
+  const holds = (el: Element) => (el.id.includes('@', 1) ? el.id.slice(0, el.id.lastIndexOf('@')) : el.id)
+  const part = (id: string) => [...document.querySelectorAll('[data-panel]')].find(el => holds(el) === id)!
+  const share = (id: string) => part(id).getAttribute('data-default-size')
   const laidOut = (group: Dragged, shares: Record<string, number>, isUserInteraction = true) =>
-    act(() => group.layoutChanged(Object.fromEntries(Object.entries(shares).map(([id, value]) => [panel(id).id, value])), { isUserInteraction }))
+    act(() => group.layoutChanged(Object.fromEntries(Object.entries(shares).map(([id, value]) => [part(id).id, value])), { isUserInteraction }))
 
-  test('with no pane open the page has all the room: no column and no line', () => {
+  test('with the panel closed the page has all the room: no column and no line', () => {
     const { container } = render(<Page />)
-    expect(groups(container)).toHaveLength(1)
-    expect(groups(container)[0]!.getAttribute('data-orientation')).toBe('horizontal')
     expect(container.querySelectorAll('[data-panel]')).toHaveLength(1)
     expect(screen.queryByRole('separator')).toBeNull()
-    // The page is the first panel whatever is open, so it is never drawn anew.
     expect(document.getElementById('chat')!.textContent).toBe('the chat')
-    expect(groups(container)[0]!.hasAttribute('data-disabled')).toBe(false)
   })
 
-  test('a room too narrow for the chat and a pane at their least lays the pane over the chat, as on a phone', () => {
-    const narrow = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ width: 512 } as DOMRect)
+  test('the open panel is a column beside the page, a line between the two, half the room until a person sets it', () => {
     const { container } = render(<Page />)
-    fireEvent.click(icon('Files'))
-    narrow.mockRestore()
-    expect(container.querySelectorAll('[data-panel]')).toHaveLength(1)
-    expect(within(card('Files')).getByRole('button', { name: 'Back to the chat' })).toBeTruthy()
-  })
-
-  test('the open panes are a column beside the page, a line between the two and one between each two panes', () => {
-    const { container } = render(<Page />)
-    fireEvent.click(icon('Files'))
-    expect(screen.getAllByRole('separator')).toHaveLength(1)
+    fireEvent.click(opener())
+    expect(screen.getAllByRole('separator').map(line => line.getAttribute('aria-label'))).toEqual(['The width of the chat and the side panel'])
     expect(share('panes')).toBe('50%')
-    fireEvent.click(icon('Changes'))
-    const [row, column] = groups(container)
-    expect(column!.getAttribute('data-orientation')).toBe('vertical')
-    expect(row!.contains(column!)).toBe(true)
-    expect(screen.getAllByRole('separator')).toHaveLength(2)
-    // In the column: a pane, a line, a pane.
-    expect([...column!.children].map(child => (child.getAttribute('role') === 'separator' ? 'line' : holds(child)))).toEqual(['@openagt/ui-pane-files/files', 'line', '@openagt/ui-pane-changes/changes'])
-    // Each line says what it shares.
-    expect(screen.getAllByRole('separator').map(line => line.getAttribute('aria-label'))).toEqual(['The width of the chat and the panes', 'The height of Files and Changes'])
-    // An even share until a person sets one.
-    expect(share('@openagt/ui-pane-files/files')).toBe('50%')
-    expect(share('@openagt/ui-pane-changes/changes')).toBe('50%')
-  })
-
-  test('a share a person dragged is kept for that agent; an agent never sized starts with the last share set on any', () => {
-    const { container, rerender } = render(<Page />)
-    fireEvent.click(icon('Files'))
     laidOut(groups(container)[0]!, { chat: 40, panes: 60 })
+    cleanup()
+    render(<Page agentId="r2" />)
+    fireEvent.click(opener())
+    // An agent never sized starts with the last share set on any.
     expect(share('panes')).toBe('60%')
-    // Another agent, never sized: the last share set anywhere.
-    rerender(<Page agentId="r2" />)
-    fireEvent.click(icon('Files'))
-    expect(share('panes')).toBe('60%')
-    laidOut(groups(container)[0]!, { chat: 70, panes: 30 })
-    expect(share('panes')).toBe('30%')
-    // The first agent kept its own, and the "New agent session" page starts with the last.
-    rerender(<Page />)
-    expect(share('panes')).toBe('60%')
-    rerender(<Page agentId={null} />)
-    fireEvent.click(icon('Files'))
-    expect(share('panes')).toBe('30%')
   })
 
   test('a layout the group came to by itself is not a person\'s: it is not kept', () => {
     const { container } = render(<Page />)
-    fireEvent.click(icon('Files'))
-    laidOut(groups(container)[0]!, { chat: 20, panes: 80 }, false)
-    expect(share('panes')).toBe('50%')
+    fireEvent.click(opener())
+    laidOut(groups(container)[0]!, { chat: 40, panes: 60 }, false)
+    expect(localStorage.getItem('oa.panes')).not.toContain('workspace')
   })
 
-  // The library remembers a layout by its panels' names, and would show one page's on the next.
-  test('a panel is named for whose shares it has: a sized page\'s own, and for a page never sized the last set anywhere, which is another name once shares are set anew', () => {
-    const { container, rerender } = render(<Page />)
-    fireEvent.click(icon('Files'))
-    const unsized = owner('panes')
-    rerender(<Page agentId="r2" />)
-    fireEvent.click(icon('Files'))
-    // Two pages never sized share the last shares, and the name.
-    expect(owner('panes')).toBe(unsized)
-    laidOut(groups(container)[0]!, { chat: 40, panes: 60 })
-    expect(owner('panes')).toBe('p1/r2')
-    // The first page, still never sized, has the new last shares under a new name.
-    rerender(<Page />)
-    expect(share('panes')).toBe('60%')
-    expect(owner('panes')).not.toBe(unsized)
-    expect(owner('panes')).not.toBe('p1/r2')
-    laidOut(groups(container)[0]!, { chat: 70, panes: 30 })
-    expect(owner('panes')).toBe('p1/r1')
-    // The page itself is one panel everywhere: it is never another.
-    expect(document.getElementById('chat')!.textContent).toBe('the chat')
-  })
-
-  test('no line is dragged under a pane that fills the page', () => {
+  test('a room too narrow for the chat and the panel at their least lays the panel over the chat, as on a phone', () => {
+    const narrow = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ width: 512 } as DOMRect)
     const { container } = render(<Page />)
-    fireEvent.click(icon('Files'))
-    fireEvent.click(icon('Changes'))
-    for (const group of groups(container)) expect(group.hasAttribute('data-disabled')).toBe(false)
-    fireEvent.click(screen.getByRole('button', { name: 'Let Files fill the page' }))
-    for (const group of groups(container)) expect(group.hasAttribute('data-disabled')).toBe(true)
-    fireEvent.click(screen.getByRole('button', { name: 'Bring Files back to its place' }))
-    for (const group of groups(container)) expect(group.hasAttribute('data-disabled')).toBe(false)
-  })
-
-  test('the height two panes share is kept for those two, in that order', () => {
-    const { container } = render(<Page />)
-    fireEvent.click(icon('Files'))
-    fireEvent.click(icon('Changes'))
-    laidOut(groups(container)[1]!, { '@openagt/ui-pane-files/files': 70, '@openagt/ui-pane-changes/changes': 30 })
-    expect(share('@openagt/ui-pane-files/files')).toBe('70%')
-    expect(share('@openagt/ui-pane-changes/changes')).toBe('30%')
-    expect(owner('@openagt/ui-pane-files/files')).toBe('p1/r1')
-    // A third pane: three other panes share the height, evenly until a person sets it.
-    fireEvent.click(icon('Browser'))
-    for (const id of ['@openagt/ui-pane-files/files', '@openagt/ui-pane-changes/changes', '@openagt/browser/browser']) expect(Number.parseFloat(share(id)!)).toBeCloseTo(100 / 3)
-    // The two again: as they were left.
-    fireEvent.click(icon('Browser'))
-    expect(share('@openagt/ui-pane-files/files')).toBe('70%')
+    fireEvent.click(opener())
+    narrow.mockRestore()
+    expect(container.querySelectorAll('[data-panel]')).toHaveLength(1)
+    expect(within(panel()!).getByRole('button', { name: 'Back to the chat' })).toBeTruthy()
   })
 })
 
-// The row of a changed file in the chat asks for the file (`lib/reveal-change.ts`).
-describe('a changed file asked for from the chat', () => {
-  test('opens the pane that lists changes, under the panes already open, and hands it the file', () => {
+describe('asked for from the chat', () => {
+  test('a changed file opens the Changes tab and hands it the file; another page\'s ask opens nothing here', () => {
     render(<Page />)
-    fireEvent.click(icon('Files'))
-    act(() => revealChange('p1/r1', 'src/app.ts'))
-    expect(cards()).toEqual(['Files', 'Changes'])
-    expect(within(card('Changes')).getByText('changes: src/app.ts')).toBeTruthy()
-    expect(icon('Changes').getAttribute('aria-pressed')).toBe('true')
+    act(() => revealChange('p1/r2', 'x.ts'))
+    expect(panel()).toBeNull()
+    act(() => revealChange('p1/r1', 'src/a.ts'))
+    expect(tabs()).toEqual(['Changes'])
+    expect(within(body()!).getByText('changes: src/a.ts')).toBeTruthy()
   })
 
-  test('an open one is handed the file where it stands; opened by hand, it is asked nothing', () => {
-    render(<Page />)
-    fireEvent.click(icon('Changes'))
-    expect(within(card('Changes')).getByText('changes: none asked')).toBeTruthy()
-    fireEvent.click(icon('Files'))
-    act(() => revealChange('p1/r1', 'src/app.ts'))
-    expect(cards()).toEqual(['Changes', 'Files'])
-    expect(within(card('Changes')).getByText('changes: src/app.ts')).toBeTruthy()
-  })
-
-  test('another page\'s ask opens nothing here', () => {
-    render(<Page />)
-    act(() => revealChange('p1/other', 'src/app.ts'))
-    expect(cards()).toEqual([])
-  })
-
-  test('each ask opens the pane once: closed since, it stays closed on coming back to the page', () => {
+  test('each ask opens the tab once: closed since, it stays closed on coming back to the page', () => {
     const { rerender } = render(<Page />)
-    act(() => revealChange('p1/r1', 'src/app.ts'))
+    act(() => revealChange('p1/r1', 'src/a.ts'))
     fireEvent.click(screen.getByRole('button', { name: 'Close Changes' }))
     rerender(<Page agentId="r2" />)
     rerender(<Page />)
-    expect(cards()).toEqual([])
-    // A new ask for the same file opens it again.
-    act(() => revealChange('p1/r1', 'src/app.ts'))
-    expect(cards()).toEqual(['Changes'])
+    expect(tabs()).toEqual([])
   })
 
-  test('with no pane that lists changes, nothing opens', () => {
+  test('a file opens the Files tab and hands it the file as the agent named it', () => {
+    render(<Page />)
+    act(() => revealFile('p1/r1', './src/a.ts'))
+    expect(tabs()).toEqual(['Files'])
+    expect((shown.mock.lastCall![0] as UiPaneProps).show?.path).toBe('./src/a.ts')
+  })
+
+  test('a live screen opens the Browser tab', () => {
+    render(<Page />)
+    act(() => revealScreen('p1/r1'))
+    expect(tabs()).toEqual(['Browser'])
+  })
+
+  test('with no pane that takes it, nothing opens', () => {
     render(<Page />, [FILES])
-    act(() => revealChange('p1/r1', 'src/app.ts'))
-    expect(cards()).toEqual([])
+    act(() => revealChange('p1/r1', 'src/a.ts'))
+    expect(panel()).toBeNull()
   })
 })
 
-// A file a step names in the chat asks for the file (`lib/reveal-change.ts`).
-describe('a file asked for from the chat', () => {
-  test('opens the pane that shows files and hands it the file as the agent named it; the other panes are handed nothing', () => {
-    render(<Page />)
-    fireEvent.click(icon('Changes'))
-    act(() => revealFile('p1/r1', '/home/user/project/index.html'))
-    expect(cards()).toEqual(['Changes', 'Files'])
-    expect((shown.mock.lastCall![0] as UiPaneProps).show).toMatchObject({ path: '/home/user/project/index.html' })
-    expect(within(card('Changes')).getByText('changes: none asked')).toBeTruthy()
+describe("a run's background tasks", () => {
+  test('a run that left something running or started subagents has a Background tasks tab in the panel\'s list, after the modules\' and Docs, saying how many run', async () => {
+    render(<Page background={<div>the background</div>} counts={{ background: <span>2 running</span> }} />)
+    fireEvent.click(opener())
+    await waitFor(() => expect(entry('Docs')).toBeTruthy())
+    expect(entry('Background tasks').textContent).toBe('Background tasks2 running')
+    fireEvent.click(entry('Background tasks'))
+    expect(within(body()!).getByText('the background')).toBeTruthy()
   })
 
-  test("another page's ask opens nothing here, and with no pane that shows files nothing opens", () => {
-    render(<Page />)
-    act(() => revealFile('p1/other', 'index.html'))
-    expect(cards()).toEqual([])
-    cleanup()
-    render(<Page />, [CHANGES])
-    act(() => revealFile('p1/r1', 'index.html'))
-    expect(cards()).toEqual([])
-  })
-})
-
-// The row of a live screen in the chat asks for the screen (`lib/reveal-change.ts`).
-describe('a live screen asked for from the chat', () => {
-  test('opens the pane that shows it; another page\'s ask opens nothing, and a second ask opens it again once closed', () => {
-    render(<Page />)
-    act(() => revealScreen('p1/other'))
-    expect(cards()).toEqual([])
-    act(() => revealScreen('p1/r1'))
-    expect(cards()).toEqual(['Browser'])
-    fireEvent.click(screen.getByRole('button', { name: 'Close Browser' }))
-    act(() => revealScreen('p1/r1'))
-    expect(cards()).toEqual(['Browser'])
-  })
-})
-
-describe("a run's subagents", () => {
-  test('a run that started some has their pane, with an icon after the modules\' and Docs; it opens and closes as the others do', async () => {
-    render(<Page subagents={<div>the subagents</div>} />)
-    await waitFor(() => expect(icons()).toEqual(['Changes', 'Files', 'Browser', 'Docs', 'Subagents']))
-    fireEvent.click(icon('Subagents'))
-    expect(cards()).toEqual(['Subagents'])
-    expect(within(card('Subagents')).getByText('the subagents')).toBeTruthy()
-    fireEvent.click(within(card('Subagents')).getByRole('button', { name: 'Close Subagents' }))
-    expect(cards()).toEqual([])
-  })
-
-  test('a subagent asked for from the chat opens their pane; closed, it opens again on the next ask, and an ask for none opens nothing', () => {
-    render(<Page subagents={<div>the subagents</div>} />)
-    act(() => revealSubagent('p1/other', 'run:x'))
-    expect(cards()).toEqual([])
-    act(() => revealSubagent('p1/r1', 'run:x'))
-    expect(cards()).toEqual(['Subagents'])
-    expect(icon('Subagents').getAttribute('aria-pressed')).toBe('true')
-    fireEvent.click(within(card('Subagents')).getByRole('button', { name: 'Close Subagents' }))
-    expect(cards()).toEqual([])
-    act(() => revealSubagent('p1/r1'))
-    expect(cards()).toEqual([])
-    act(() => revealSubagent('p1/r1', 'call:y'))
-    expect(cards()).toEqual(['Subagents'])
-  })
-
-  test('a run with no subagents has no such pane, and an ask from the chat opens nothing', async () => {
-    render(<Page />)
-    await waitFor(() => expect(icons()).toEqual(['Changes', 'Files', 'Browser', 'Docs']))
-    act(() => revealSubagent('p1/r1', 'run:x'))
-    expect(cards()).toEqual([])
+  test('a subagent asked for from the chat opens the tab; an ask on a run with none opens nothing', () => {
+    const { rerender } = render(<Page />)
+    act(() => revealSubagent('p1/r1', 'call-1'))
+    expect(panel()).toBeNull()
+    rerender(<Page background={<div>the background</div>} />)
+    act(() => revealSubagent('p1/r1', 'call-2'))
+    expect(tabs()).toEqual(['Background tasks'])
   })
 })
 
 describe('on a phone', () => {
-  let wide = () => {}
+  let wide: () => void
   beforeEach(() => {
     wide = phoneScreen()
   })
   afterEach(() => wide())
 
-  test('the page\'s top bar stays in the page, under the column of panes', () => {
+  test('the open panel lies over the whole page under its top bar, its way out an arrow back to the chat; the icon stays in the top bar', () => {
     render(<PageWithItsBar />)
-    expect(document.getElementById('chat')!.contains(icon('Files'))).toBe(true)
-  })
-
-  test('with no pane open the icons are in the top bar, as on a wide screen', () => {
-    render(<Page />)
-    expect(icons()).toEqual(['Changes', 'Files', 'Browser'])
-    expect(screen.queryByRole('button', { name: 'Panes' })).toBeNull()
-  })
-
-  test('an open pane lies over the whole page under its top bar, with no line to drag; the page keeps all the room under it', () => {
-    const { container } = render(<Page />)
-    fireEvent.click(icon('Files'))
-    const over = card('Files').closest('.absolute')!
-    for (const cls of ['absolute', 'inset-x-0', 'top-11', 'bottom-0', 'z-20']) expect(over.className.split(' ')).toContain(cls)
-    expect(container.querySelectorAll('[data-panel]')).toHaveLength(1)
+    fireEvent.click(opener())
+    expect(within(panel()!).getByRole('button', { name: 'Back to the chat' })).toBeTruthy()
     expect(screen.queryByRole('separator')).toBeNull()
     expect(screen.getByText('the chat')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Back to the chat' }))
+    expect(panel()).toBeNull()
   })
 
-  test('the icons stay in the top bar over the pane, the open one lit, and open another', () => {
-    render(<Page />)
-    fireEvent.click(icon('Files'))
-    expect(icons()).toEqual(['Changes', 'Files', 'Browser'])
-    expect(icon('Files').getAttribute('aria-pressed')).toBe('true')
-    fireEvent.click(icon('Changes'))
-    expect(cards()).toContain('Changes')
-  })
-
-  test("the pane's way out is an arrow back to the chat at its header's start: no button lets it fill the page or closes it", () => {
-    render(<Page />)
-    fireEvent.click(icon('Files'))
-    expect(screen.queryByRole('button', { name: 'Let Files fill the page' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Close Files' })).toBeNull()
-    fireEvent.click(within(card('Files')).getByRole('button', { name: 'Back to the chat' }))
-    expect(cards()).toEqual([])
-    expect(icon('Files').getAttribute('aria-pressed')).toBe('false')
-  })
-
-  test('leaving the page closes its panes: no page is found covered on coming back', () => {
+  test('leaving the page closes its panel: no page is found covered on coming back', () => {
     const { rerender } = render(<Page />)
-    fireEvent.click(icon('Files'))
+    fireEvent.click(opener())
     rerender(<Page agentId="r2" />)
     rerender(<Page />)
-    expect(cards()).toEqual([])
-    expect(keptOpen('p1/r1')).toEqual([])
-  })
-
-  test('going to a page with no panes closes them too', () => {
-    const { unmount } = render(<Page />)
-    fireEvent.click(icon('Files'))
-    unmount()
-    expect(keptOpen('p1/r1')).toEqual([])
-  })
-
-  test('a phone turned on its side, wide now, keeps its panes open, beside the page', () => {
-    const { container } = render(<Page />)
-    fireEvent.click(icon('Files'))
-    act(() => wide())
-    expect(cards()).toEqual(['Files'])
-    expect(container.querySelectorAll('[data-panel]')).toHaveLength(3)
-    expect(icons()).toEqual(['Changes', 'Files', 'Browser'])
-  })
-
-  test('on a wide screen leaving the page keeps them open, as the person left them', () => {
-    wide()
-    const { rerender } = render(<Page />)
-    fireEvent.click(icon('Files'))
-    rerender(<Page agentId="r2" />)
-    rerender(<Page />)
-    expect(cards()).toEqual(['Files'])
+    expect(panel()).toBeNull()
   })
 })

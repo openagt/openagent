@@ -1,11 +1,10 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
-import { phoneScreen } from '../test-utils.js'
-import { closePanes, forgetPanes, paneSizes, paneSizesOwner, panesPage, setExpandedPane, setPaneOpen, setPaneSizes, useExpandedPane, useOpenPanes } from './panes.js'
+import { closePanes, forgetPanes, paneSizes, paneSizesOwner, panesPage, setActivePane, setActivityShown, setPaneOpen, setPaneSizes, setPanelExpanded, setPanelShown, useActivePane, useActivityShown, useOpenPanes, usePanelExpanded, usePanelShown } from './panes.js'
 
 beforeEach(() => forgetPanes())
 
-const kept = () => JSON.parse(localStorage.getItem('oa.panes')!) as { pages: Record<string, { open: string[]; sizes: Record<string, Record<string, number>> }>; last: Record<string, Record<string, number>> }
+const kept = () => JSON.parse(localStorage.getItem('oa.panes')!) as { pages: Record<string, { open: string[]; active?: string; shown?: boolean; sizes: Record<string, Record<string, number>> }>; last: Record<string, Record<string, number>> }
 
 test('an agent\'s page has its own panes, and the "New agent session" page one set for every project', () => {
   expect(panesPage('p1', 'r1')).toBe('p1/r1')
@@ -13,40 +12,55 @@ test('an agent\'s page has its own panes, and the "New agent session" page one s
   expect(panesPage('p2', undefined)).toBe('new')
 })
 
-describe('the open panes of a page', () => {
-  test('stand in the order they were opened; one closed and opened again is the last', () => {
-    const { result } = renderHook(() => useOpenPanes('p1/r1'))
-    expect(result.current).toEqual([])
+describe('the tabs of a page', () => {
+  test('stand in the order they were opened; one opened again stays where it is, and is the one shown', () => {
+    const { result } = renderHook(() => ({ open: useOpenPanes('p1/r1'), active: useActivePane('p1/r1'), shown: usePanelShown('p1/r1') }))
+    expect(result.current).toEqual({ open: [], active: undefined, shown: false })
     act(() => setPaneOpen('p1/r1', 'files', true))
     act(() => setPaneOpen('p1/r1', 'changes', true))
-    expect(result.current).toEqual(['files', 'changes'])
-    // Opened again while open: it stays where it is.
+    expect(result.current).toEqual({ open: ['files', 'changes'], active: 'changes', shown: true })
     act(() => setPaneOpen('p1/r1', 'files', true))
-    expect(result.current).toEqual(['files', 'changes'])
+    expect(result.current).toEqual({ open: ['files', 'changes'], active: 'files', shown: true })
+    act(() => setActivePane('p1/r1', 'changes'))
+    expect(result.current.active).toBe('changes')
+    // A tab that is not open is not shown.
+    act(() => setActivePane('p1/r1', 'browser'))
+    expect(result.current.active).toBe('changes')
+  })
+
+  test('a tab closed that was shown hands its place to the one before it, else after it; the last one closed leaves the panel open on its list', () => {
+    const { result } = renderHook(() => ({ open: useOpenPanes('p1/r1'), active: useActivePane('p1/r1'), shown: usePanelShown('p1/r1') }))
+    for (const id of ['files', 'changes', 'browser']) act(() => setPaneOpen('p1/r1', id, true))
+    act(() => setActivePane('p1/r1', 'changes'))
+    act(() => setPaneOpen('p1/r1', 'changes', false))
+    expect(result.current).toEqual({ open: ['files', 'browser'], active: 'files', shown: true })
     act(() => setPaneOpen('p1/r1', 'files', false))
+    expect(result.current.active).toBe('browser')
+    // One not shown closes alone.
     act(() => setPaneOpen('p1/r1', 'files', true))
-    expect(result.current).toEqual(['changes', 'files'])
+    act(() => setPaneOpen('p1/r1', 'browser', false))
+    expect(result.current).toEqual({ open: ['files'], active: 'files', shown: true })
+    act(() => setPaneOpen('p1/r1', 'files', false))
+    expect(result.current).toEqual({ open: [], active: undefined, shown: true })
   })
 
-  test('on a screen narrower than 1024px, a pane opened takes the place of the one open: two would leave the chat too narrow to read', () => {
-    const wide = phoneScreen()
-    const { result } = renderHook(() => useOpenPanes('p1/r1'))
+  test('the panel closes and opens again on the tabs it had', () => {
+    const { result } = renderHook(() => ({ open: useOpenPanes('p1/r1'), shown: usePanelShown('p1/r1') }))
     act(() => setPaneOpen('p1/r1', 'files', true))
-    act(() => setPaneOpen('p1/r1', 'changes', true))
-    expect(result.current).toEqual(['changes'])
-    wide()
-    act(() => setPaneOpen('p1/r1', 'files', true))
-    expect(result.current).toEqual(['changes', 'files'])
+    act(() => setPanelShown('p1/r1', false))
+    expect(result.current).toEqual({ open: ['files'], shown: false })
+    act(() => setPanelShown('p1/r1', true))
+    expect(result.current).toEqual({ open: ['files'], shown: true })
   })
 
-  test('are that page\'s alone, are remembered in the browser, and all close at once', () => {
+  test('are that page\'s alone, and are remembered in the browser; a page with the panel closed and no tab is not kept', () => {
     const { result } = renderHook(() => ({ here: useOpenPanes('p1/r1'), there: useOpenPanes('p1/r2') }))
     act(() => setPaneOpen('p1/r1', 'files', true))
     expect(result.current).toEqual({ here: ['files'], there: [] })
-    expect(kept().pages['p1/r1']!.open).toEqual(['files'])
+    expect(kept().pages['p1/r1']).toEqual({ open: ['files'], active: 'files', shown: true, sizes: {} })
     act(() => closePanes('p1/r1'))
-    expect(result.current.here).toEqual([])
-    // A page with nothing open and nothing sized is not kept.
+    expect(kept().pages['p1/r1']!.shown).toBe(false)
+    act(() => setPaneOpen('p1/r1', 'files', false))
     expect(kept().pages).toEqual({})
   })
 
@@ -54,7 +68,7 @@ describe('the open panes of a page', () => {
     const { result } = renderHook(() => useOpenPanes('p1/r1'))
     act(() => setPaneOpen('p1/r1', 'files', true))
     const first = result.current
-    act(() => setExpandedPane('p1/r1', 'files'))
+    act(() => setPanelExpanded('p1/r1', true))
     expect(result.current).toBe(first)
   })
 
@@ -126,27 +140,38 @@ describe('how a page\'s room is shared', () => {
     expect(paneSizesOwner('p1/r2', 'workspace')).not.toBe(last)
   })
 
-  test('each group has its own shares, and a page sized keeps them with every pane closed', () => {
-    setPaneSizes('p1/r1', 'files+changes', { files: 67, changes: 33 })
-    expect(paneSizes('p1/r1', 'workspace')).toBeUndefined()
+  test('a page sized keeps its shares with the panel closed and no tab', () => {
+    setPaneSizes('p1/r1', 'workspace', { chat: 40, panes: 60 })
     setPaneOpen('p1/r1', 'files', true)
+    setPaneOpen('p1/r1', 'files', false)
     closePanes('p1/r1')
-    expect(paneSizes('p1/r1', 'files+changes')).toEqual({ files: 67, changes: 33 })
-    expect(kept().pages['p1/r1']).toEqual({ open: [], sizes: { 'files+changes': { files: 67, changes: 33 } } })
+    expect(kept().pages['p1/r1']).toEqual({ open: [], shown: false, sizes: { workspace: { chat: 40, panes: 60 } } })
   })
 })
 
-describe('the pane that fills a page', () => {
-  test('is that page\'s, for the page\'s life, and none once it is closed', () => {
-    const { result } = renderHook(() => ({ here: useExpandedPane('p1/r1'), there: useExpandedPane('p1/r2') }))
+describe('the panel that fills a page', () => {
+  test('is that page\'s, for the page\'s life, and fills it no more once the panel closes', () => {
+    const { result } = renderHook(() => ({ here: usePanelExpanded('p1/r1'), there: usePanelExpanded('p1/r2') }))
     act(() => setPaneOpen('p1/r1', 'files', true))
-    act(() => setExpandedPane('p1/r1', 'files'))
-    expect(result.current).toEqual({ here: 'files', there: undefined })
+    act(() => setPanelExpanded('p1/r1', true))
+    expect(result.current).toEqual({ here: true, there: false })
     expect(localStorage.getItem('oa.panes')).not.toContain('expanded')
-    act(() => setExpandedPane('p1/r1', undefined))
-    expect(result.current.here).toBeUndefined()
-    act(() => setExpandedPane('p1/r1', 'files'))
-    act(() => setPaneOpen('p1/r1', 'files', false))
-    expect(result.current.here).toBeUndefined()
+    act(() => setPanelExpanded('p1/r1', false))
+    expect(result.current.here).toBe(false)
+    act(() => setPanelExpanded('p1/r1', true))
+    act(() => setPanelShown('p1/r1', false))
+    expect(result.current.here).toBe(false)
+  })
+})
+
+describe('the Activity panel', () => {
+  test('stands beside the chat until it is put away, on every page, and the browser remembers it', () => {
+    const { result } = renderHook(() => useActivityShown())
+    expect(result.current).toBe(true)
+    act(() => setActivityShown(false))
+    expect(result.current).toBe(false)
+    expect(localStorage.getItem('oa.activity')).toBe('0')
+    act(() => setActivityShown(true))
+    expect(result.current).toBe(true)
   })
 })

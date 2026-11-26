@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { forgetRemembered } from '@openagt/ui/module'
-import { fakeHost, renderWithHost } from '@openagt/ui/module/testing'
+import { fakeHost, openMenu, renderWithHost } from '@openagt/ui/module/testing'
 
 /** Render `ui` as the dashboard draws the module, in a host whose every service is a spy; the module's own reads are mocked, so the host's `read` never answers. */
 const render = (ui: Parameters<typeof renderWithHost>[0]) => renderWithHost(ui, fakeHost('@openagt/ui-pane-changes'))
@@ -11,7 +11,8 @@ const readRun = vi.fn(async () => ({ source: 'checkout', changes: {}, merged: fa
 const readDiff = vi.fn(async () => null as unknown)
 const readCommits = vi.fn(async () => [] as unknown)
 const readCommit = vi.fn(async () => null as unknown)
-vi.mock('./reads.js', () => ({ readProject, readRun, readDiff, readCommits, readCommit }))
+const readRepos = vi.fn(async () => [] as unknown)
+vi.mock('./reads.js', () => ({ readProject, readRun, readDiff, readCommits, readCommit, readRepos }))
 
 const { ChangesPanel } = await import('./ChangesPanel.js')
 const { forgetChangesState } = await import('./settings.js')
@@ -344,13 +345,13 @@ describe('ChangesPanel, a file asked for from the chat', () => {
 })
 
 describe('ChangesPanel, as Claude Code on the web draws it', () => {
-  test('each file shows its lines added and removed, a count of none too, once: in the list, not again over its diff', async () => {
+  test('each file shows its lines added and removed, a count of none too: in the list, and at the end of its diff\'s bar', async () => {
     readRun.mockResolvedValue({ source: 'checkout', changes: { 'src/app.ts': { status: 'modified', committed: true, added: 3, removed: 0 } }, merged: false, from: 'main', to: 'agent-x' })
     render(<ChangesPanel projectId="p1" agentId="run-1" context={context} />)
     await waitFor(() => expect(row(/app\.ts/).textContent).toContain('app.ts+3 −0'))
     // Said in words, not as the signs a screen reader would spell out.
     expect(row(/app\.ts.*3 lines added, none removed/)).toBe(row(/app\.ts/))
-    expect(within(screen.getByRole('region', { name: 'src/app.ts' })).queryAllByText('+3')).toHaveLength(0)
+    expect(within(screen.getByRole('region', { name: 'src/app.ts' })).getByRole('button', { expanded: true }).textContent).toBe('src/app.ts+3 −03 lines added, none removed')
   })
 
   test('each file says what git did to it in a letter, and the header the sum of every file\'s lines', async () => {
@@ -536,5 +537,42 @@ describe('ChangesPanel, diffs kept up to date', () => {
     await waitFor(() => expect(readDiff).toHaveBeenCalledTimes(3))
     rerender(<ChangesPanel projectId="p1" agentId="run-1" context={context} activity={2} />)
     await waitFor(() => expect(readDiff).toHaveBeenCalledTimes(6), { timeout: 2_000 })
+  })
+})
+
+describe("a run's copies of other repositories", () => {
+  test('with copies the pane\'s name is a menu of the repos, the project first; a copy picked is read in its own folder', async () => {
+    readRepos.mockResolvedValue(['oa-newuser', 'recipe-box'])
+    render(<ChangesPanel projectId="p1" agentId="run-1" context={context} />)
+    const menu = await screen.findByRole('button', { name: 'Repository' })
+    expect(menu.textContent).toBe('This project')
+    expect(readRun).toHaveBeenCalledWith(expect.anything(), 'p1', 'run-1')
+    await openMenu(menu)
+    expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual(['This project', 'oa-newuser', 'recipe-box'])
+    fireEvent.click(screen.getByRole('menuitem', { name: 'recipe-box' }))
+    await waitFor(() => expect(readRun).toHaveBeenCalledWith(expect.anything(), 'p1', 'run-1', 'recipe-box'))
+    expect(readCommits).toHaveBeenCalledWith(expect.anything(), 'p1', 'run-1', 'recipe-box')
+    expect(screen.getByRole('button', { name: 'Repository' }).textContent).toBe('recipe-box')
+  })
+
+  test('a tab opened on a copy shows that copy; with no copy the pane is named Changes', async () => {
+    readRepos.mockResolvedValue(['oa-newuser'])
+    render(<ChangesPanel projectId="p1" agentId="run-1" repo="oa-newuser" context={context} />)
+    await waitFor(() => expect(readRun).toHaveBeenCalledWith(expect.anything(), 'p1', 'run-1', 'oa-newuser'))
+    cleanup()
+    forgetRemembered()
+    readRepos.mockResolvedValue([])
+    render(<ChangesPanel projectId="p1" agentId="run-1" context={context} />)
+    await waitFor(() => expect(readRepos).toHaveBeenCalled())
+    expect(screen.queryByRole('button', { name: 'Repository' })).toBeNull()
+    expect(screen.getByRole('heading', { name: 'Changes' })).toBeTruthy()
+  })
+
+  test('a session with no project shows its first copy, and its menu lists its copies alone', async () => {
+    readRepos.mockResolvedValue(['oa-newuser', 'recipe-box'])
+    render(<ChangesPanel projectId="session" agentId="run-1" copiesOnly context={context} />)
+    await waitFor(() => expect(readRun).toHaveBeenCalledWith(expect.anything(), 'session', 'run-1', 'oa-newuser'))
+    await openMenu(screen.getByRole('button', { name: 'Repository' }))
+    expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual(['oa-newuser', 'recipe-box'])
   })
 })

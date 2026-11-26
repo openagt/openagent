@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { ChevronRight, ListTree, MoreVertical, Search } from 'lucide-react'
+import { BookMarked, Check, ChevronDown, ChevronRight, Folder, ListTree, MoreVertical, Search } from 'lucide-react'
 import {
   Button,
   buttonVariants,
@@ -7,7 +7,9 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   FileIcon,
@@ -39,7 +41,7 @@ import type { AgentCommit, FileMark } from '../src/run.js'
 import type { RunChanges } from '../src/server.js'
 import type { FileDiff } from '../src/diff.js'
 import { commitKey, commitsKey, diffKey, projectKey, runKey } from './keys.js'
-import { readCommit, readCommits, readDiff, readProject, readRun } from './reads.js'
+import { readCommit, readCommits, readDiff, readProject, readRepos, readRun } from './reads.js'
 import { DiffShape, DiffView, isNewFile } from './DiffView.js'
 import { CONTEXT_LINES, MAX_PREVIEW_LINES } from '../src/confined.js'
 import { foldAll, foldDiff, setChangesSetting, showWhole, useChangesSettings, usePageDiffs, wholeKey } from './settings.js'
@@ -61,6 +63,9 @@ import { foldAll, foldDiff, setChangesSetting, showWhole, useChangesSettings, us
 
 const NO_COMMITS: AgentCommit[] = []
 const NO_CHANGES: Record<string, FileMark> = {}
+const NO_REPOS: string[] = []
+/** The repo a read names, when it is a copy's: no argument at all for the run's own work. */
+const repoArg = (repo: string | undefined): [] | [string] => (repo !== undefined ? [repo] : [])
 
 /** The pane while its list is read: rows in a row's shape. */
 /** Rows in their own shape while the pane is read; `className` sets them on the 16 inset of where they stand. */
@@ -147,6 +152,8 @@ function CommitRow({ label, detail, title, picked, onPick }: { label: string; de
 interface DiffProps {
   projectId: string
   agentId: string | undefined
+  /** The run's copy the diff is of; none for the run's own work. */
+  repo: string | undefined
   path: string
   commit: string | undefined
   whole: boolean
@@ -198,10 +205,10 @@ function LazyDiff({ root, rows, ...props }: DiffProps & { root: HTMLElement | nu
 /** A diff that is never read again on its own: what the list says of the file, or "Refresh", reads it again. */
 const NO_POLL = 3_600_000
 
-function DiffBody({ projectId, agentId, path, commit, whole, wrap, version, poll, onWhole, rows }: DiffProps & { rows: number }) {
+function DiffBody({ projectId, agentId, repo, path, commit, whole, wrap, version, poll, onWhole, rows }: DiffProps & { rows: number }) {
   const host = useModuleHost()
-  const read = usePolled<FileDiff | null>(() => readDiff(host, projectId, path, agentId, commit, whole), null, poll ? 8_000 : NO_POLL, [projectId, agentId, path, commit, whole, version], {
-    remember: diffKey(projectId, agentId, path, commit, whole),
+  const read = usePolled<FileDiff | null>(() => readDiff(host, projectId, path, agentId, commit, whole, ...repoArg(repo)), null, poll ? 8_000 : NO_POLL, [projectId, agentId, repo, path, commit, whole, version], {
+    remember: diffKey(projectId, agentId, path, commit, whole, repo),
   })
   return (
     // Asked for whole, the diff shown so far stays until the whole file answers: the place clicked is not lost.
@@ -286,13 +293,48 @@ function useHeld<T>(agentId: string | undefined, value: T, keep: boolean, moving
 }
 
 /**
+ * The pane's name as a menu of the repos whose changes it shows, as Claude Code's Changes header:
+ * the project, then each of the run's copies of other repositories, one at a time.
+ */
+function RepoMenu({ repo, repos, copiesOnly, onRepo }: { repo: string | undefined; repos: readonly string[]; copiesOnly: boolean; onRepo: (repo: string | undefined) => void }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger type="button" aria-label="Repository" className="flex min-w-0 items-center gap-1.5 rounded-md py-1 pr-1.5 pl-2 text-sm font-medium hover:bg-accent data-[popup-open]:bg-accent">
+        {repo === undefined ? <Folder className="size-3.5 shrink-0 text-muted-foreground" aria-hidden /> : <BookMarked className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />}
+        <span className="truncate">{repo ?? 'This project'}</span>
+        <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="min-w-52">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="font-normal">Repository</DropdownMenuLabel>
+          {[...(copiesOnly ? [] : [undefined]), ...repos].map(each => (
+            <DropdownMenuItem key={each ?? ''} onClick={() => onRepo(each)}>
+              {each === undefined ? <Folder className="h-3.5 w-3.5" aria-hidden /> : <BookMarked className="h-3.5 w-3.5" aria-hidden />}
+              <span className="flex-1">{each ?? 'This project'}</span>
+              {each === repo && <Check className="h-3.5 w-3.5" aria-hidden />}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+/**
  * The pane's header: its name and the files' total; then, when there are files, search and the
  * button that hides the list; then the ⋮ menu. The branches the changes are between have a line of
  * their own under it.
  */
-function ChangesHeader({ files, page, paths, changes, listShown, onPick, onToggleList, onRefresh }: {
+function ChangesHeader({ files, page, repo, repos, copiesOnly, onRepo, paths, changes, listShown, onPick, onToggleList, onRefresh }: {
   files: boolean
   page: string
+  /** The repo shown: none for the project. */
+  repo: string | undefined
+  /** The run's copies of other repositories: with any, the pane's name is a menu of the repos. */
+  repos: readonly string[]
+  /** The session has no project: the menu lists its copies alone. */
+  copiesOnly: boolean
+  onRepo: (repo: string | undefined) => void
   paths: string[]
   changes: Record<string, FileMark>
   listShown: boolean
@@ -307,7 +349,7 @@ function ChangesHeader({ files, page, paths, changes, listShown, onPick, onToggl
   return (
     <>
       <PaneTitle>
-        <h2 className="truncate pl-2 text-sm font-medium">Changes</h2>
+        {repos.length > 0 ? <RepoMenu repo={repo} repos={repos} copiesOnly={copiesOnly} onRepo={onRepo} /> : <h2 className="truncate pl-2 text-sm font-medium">Changes</h2>}
         {total && <DiffStat added={total.added} removed={total.removed} zeros className="ml-auto pl-2" />}
       </PaneTitle>
       <PaneActions>
@@ -408,8 +450,14 @@ function CommitList({ commits, picked, open, onOpen, onPick }: { commits: AgentC
   )
 }
 
-export function ChangesPanel({ projectId, agentId, activity, reveal }: UiPaneProps) {
+export function ChangesPanel({ projectId, agentId, activity, reveal, repo: openedOn, copiesOnly }: UiPaneProps) {
   const host = useModuleHost()
+  // The run's copies of other repositories: the title's menu offers them after the project.
+  const { value: repos } = usePolled<string[]>(agentId ? () => readRepos(host, projectId, agentId) : null, NO_REPOS, 30_000, [projectId, agentId], agentId ? { remember: `changes:repos:${projectId}:${agentId}` } : undefined)
+  // The repo shown: the project, or one of the run's copies of other repositories, picked in the
+  // title's menu; a tab opened on a copy starts on it, and a session with no project on its first.
+  const [repoPicked, setRepo] = useState(openedOn)
+  const repo = repoPicked ?? (copiesOnly ? repos[0] : undefined)
   const page = `${projectId}/${agentId ?? ''}`
   const settings = useChangesSettings()
   const { folded, whole } = usePageDiffs(page)
@@ -421,18 +469,19 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: UiPanePro
   const listShown = narrow ? peek : settings.list
   const [commitsOpen, setCommitsOpen] = useState(true)
   const { value: projectChanges, state: projectState, reload: reloadProject } = usePolled<Record<string, FileMark>>(agentId ? null : () => readProject(host, projectId), NO_CHANGES, 8_000, [projectId, agentId], { remember: projectKey(projectId) })
-  const { value: answer, state: runState, reload } = usePolled<RunChanges | null>(agentId ? () => readRun(host, projectId, agentId) : null, null, 8_000, [projectId, agentId], agentId ? { remember: runKey(projectId, agentId) } : undefined)
+  const { value: answer, state: runState, reload } = usePolled<RunChanges | null>(agentId ? () => readRun(host, projectId, agentId, ...repoArg(repo)) : null, null, 8_000, [projectId, agentId, repo], agentId ? { remember: runKey(projectId, agentId, repo) } : undefined)
+  // The run's copies of other repositories: the title's menu offers them after the project.
   // A run whose files move as it ends answers pending for a moment: the list it last showed stays.
   const moving = answer?.source === 'pending'
   const run = useHeld(agentId, answer, answer !== null && 'changes' in answer, moving)
-  const { value: commitsRead, state: commitsState, reload: reloadCommits } = usePolled<AgentCommit[]>(agentId ? () => readCommits(host, projectId, agentId) : null, NO_COMMITS, 8_000, [projectId, agentId], agentId ? { remember: commitsKey(projectId, agentId) } : undefined)
+  const { value: commitsRead, state: commitsState, reload: reloadCommits } = usePolled<AgentCommit[]>(agentId ? () => readCommits(host, projectId, agentId, ...repoArg(repo)) : null, NO_COMMITS, 8_000, [projectId, agentId, repo], agentId ? { remember: commitsKey(projectId, agentId, repo) } : undefined)
   // As with the list of files: while the run's files move as it ends, the commits last read stay.
   const commits = useHeld(agentId, commitsRead, commitsState !== 'unknown' && !moving, moving)
   // The commit picked on this page, while it is still one of the run's; none picked is "All changes".
   const [commitClick, setCommitClick] = useState<{ agentId: string; sha: string } | null>(null)
   const commit = commitClick !== null && commitClick.agentId === agentId ? commits.find(c => c.sha === commitClick.sha) : undefined
   const sha = commit?.sha
-  const { value: commitChanges, state: commitState } = usePolled<Record<string, FileMark> | null>(agentId && sha ? () => readCommit(host, projectId, agentId, sha) : null, null, 60_000, [projectId, agentId, sha], agentId && sha ? { remember: commitKey(projectId, agentId, sha) } : undefined)
+  const { value: commitChanges, state: commitState } = usePolled<Record<string, FileMark> | null>(agentId && sha ? () => readCommit(host, projectId, agentId, sha, ...repoArg(repo)) : null, null, 60_000, [projectId, agentId, repo, sha], agentId && sha ? { remember: commitKey(projectId, agentId, sha, repo) } : undefined)
   // "Refresh" in the ⋮ menu: every read again now, the diffs too.
   const [refresh, setRefresh] = useState(0)
   // The agent did something: read again now rather than on the next poll, once per burst, and the
@@ -503,6 +552,14 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: UiPanePro
     <ChangesHeader
       files={files}
       page={page}
+      repo={repo}
+      repos={agentId ? repos : NO_REPOS}
+      copiesOnly={copiesOnly === true}
+      onRepo={next => {
+        setRepo(next)
+        setCommitClick(null)
+        setClick(null)
+      }}
       paths={paths}
       changes={changes}
       listShown={listShown}
@@ -560,13 +617,13 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: UiPanePro
           </div>
         )}
         {!(narrow && listShown) && (
-          <div ref={setDiffsElement} aria-label="Diffs" className="flex min-h-0 min-w-0 flex-auto flex-col gap-2 overflow-y-auto p-2">
+          <div ref={setDiffsElement} aria-label="Diffs" className="flex min-h-0 min-w-0 flex-auto flex-col overflow-y-auto">
             {caption && (
-              <p className="shrink-0 truncate px-2 text-xs text-muted-foreground" title={caption}>
+              <p className="shrink-0 truncate px-3 py-2 text-xs text-muted-foreground" title={caption}>
                 {caption}
               </p>
             )}
-            {paths.length === 0 && (nothing === undefined ? <Reading className="px-2" /> : <PaneNote>{nothing}</PaneNote>)}
+            {paths.length === 0 && (nothing === undefined ? <Reading className="px-3 py-2" /> : <PaneNote>{nothing}</PaneNote>)}
             {paths.map(path => {
               const mark = changes[path]!
               const isFolded = folded.has(path)
@@ -585,14 +642,16 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: UiPanePro
                     type="button"
                     aria-expanded={!isFolded}
                     onClick={() => foldDiff(page, path, !isFolded)}
-                    className={cn('sticky top-0 z-10 flex h-8 w-full items-center gap-2 rounded-md bg-muted px-2 text-start text-sm text-muted-foreground hover:bg-accent focus-ring-inset', path === picked && 'text-foreground')}
+                    className={cn('sticky top-0 z-10 flex h-8 w-full items-center gap-1 border-b border-border bg-card px-3 text-start text-sm hover:bg-accent focus-ring-inset', path === picked && 'bg-accent')}
                   >
-                    <ChevronRight aria-hidden className={cn('size-4 shrink-0', !isFolded && 'rotate-90')} />
-                    <FileIcon path={path} />
-                    <span className={cn('flex min-w-0', mark.status === 'deleted' && 'line-through')}>
+                    <ChevronRight aria-hidden className={cn('size-4 shrink-0 text-muted-foreground', !isFolded && 'rotate-90')} />
+                    <FileIcon path={path} className="size-3.5" />
+                    <span className={cn('ml-1 flex min-w-0', mark.status === 'deleted' && 'line-through')}>
                       <PathCut path={path} />
                     </span>
-                    {isNewFile(mark.status) && mark.added !== undefined && <span className="shrink-0 text-xs">{`new file, ${mark.added} ${mark.added === 1 ? 'line' : 'lines'}`}</span>}
+                    {isNewFile(mark.status) && mark.added !== undefined && <span className="shrink-0 pl-1 text-xs text-muted-foreground">{`new file, ${mark.added} ${mark.added === 1 ? 'line' : 'lines'}`}</span>}
+                    {/* What the file holds, at the bar's end, as each file's bar says it. */}
+                    <Counts mark={mark} className="ml-auto pl-2 text-sm" />
                   </button>
                   {!isFolded && (
                     <LazyDiff
@@ -600,6 +659,7 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: UiPanePro
                       rows={rowsExpected(mark)}
                       projectId={projectId}
                       agentId={agentId}
+                      repo={repo}
                       path={path}
                       commit={sha}
                       whole={whole.has(wholeKey(path, sha))}

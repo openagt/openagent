@@ -13,4 +13,8 @@ export const readProject = (host: ModuleHost, projectId: string) => server(host)
 export const readTree = (host: ModuleHost, projectId: string, agentId: string) => server(host).tree(projectId, { agentId })
 
 /** One file's contents: the run's copy, or the project folder's. */
-export const readContent = (host: ModuleHost, projectId: string, path: string, agentId?: string) => server(host).content(projectId, agentId !== undefined ? { path, agentId } : { path })
+export const readContent = (host: ModuleHost, projectId: string, path: string, agentId?: string, repo?: string) =>
+  server(host).content(projectId, agentId !== undefined ? { path, agentId, ...(repo !== undefined ? { repo } : {}) } : { path })
+
+/** The run's copies of other repositories with their files, and the project's own folder's name. */
+export const readCopies = (host: ModuleHost, projectId: string, agentId: string) => server(host).copies(projectId, { agentId })

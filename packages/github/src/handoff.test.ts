@@ -109,6 +109,14 @@ test("the requests read before the run ended are read again: they cannot know of
   assert.equal(reads(), 2)
 })
 
+test('a GitHub slower than the cache waits for is asked once: its answer is kept for the next read', async () => {
+  let reads = 0
+  const slow: GitHostFor = async () => ({ requests: async () => (reads++, await new Promise(resolve => setTimeout(resolve, 300)), { ok: true, requests: [REQUEST] }) })
+  assert.equal((await readRunPr('/repo-slow', 'r1', run({}), undefined, deps(slow)))?.pr?.number, 7)
+  assert.equal((await readRunPr('/repo-slow', 'r1', run({}), undefined, deps(slow)))?.pr?.number, 7)
+  assert.equal(reads, 1)
+})
+
 test('a request a press opens is read from GitHub there and then, and one it cannot read is a refusal, never "none"', async () => {
   const refusing: GitHostFor = async () => ({ requests: async () => ({ ok: false, error: 'gh: not authenticated' }) })
   await assert.rejects(readRunPr('/repo-fresh', 'r1', run({}), undefined, { ...deps(refusing), fresh: true }), /not authenticated/)

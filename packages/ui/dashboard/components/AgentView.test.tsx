@@ -59,10 +59,6 @@ vi.mock('./AgentActionBar.js', () => ({
     </>
   ),
 }))
-// The panel has its own tests: here it holds the rows the modules draw in it.
-vi.mock('./AgentWorkPanel.js', () => ({
-  AgentWorkPanel: ({ children }: { children: ReactNode }) => <div data-testid="work-bar">{children}</div>,
-}))
 // The row above the box has its own tests: here it says what the view told it.
 vi.mock('./SessionRow.js', async () => {
   return {
@@ -114,7 +110,8 @@ const Work = ({ agentId, working, ended, saving, projectName, pr }: UiWorkProps)
 )
 const WORK: MountedView<'chat.work'> = { place: 'chat.work', id: 'project', View: Work, package: '@openagt/git-branches', projects: ['p1'] }
 const withWork = (ui: ReactNode) => <ModulesContext.Provider value={mountedOf({ views: { 'chat.work': [WORK] } })}>{ui}</ModulesContext.Provider>
-const row = () => screen.getByTestId('work-row').dataset
+/** The row the module drew in the Activity panel's Changes (the line above the box draws the same rows). */
+const row = () => within(screen.getByRole('region', { name: 'Changes' })).getByTestId('work-row').dataset
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -223,13 +220,13 @@ describe('AgentView: a continued run reads as going', () => {
   })
 })
 
-describe("AgentView: the rows of the session's work above the message box", () => {
-  test("the modules' rows sit in the panel under the feed, after the top bar and before the message box", () => {
+describe("AgentView: the rows of the session's work in its Activity panel", () => {
+  test("the modules' rows sit in the Changes of the Activity panel, beside the chat", () => {
     render(withWork(view()))
-    expect(screen.getByTestId('work-bar').contains(screen.getByTestId('work-row'))).toBe(true)
-    const order = (a: Element, b: Element) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)
-    expect(order(screen.getByTestId('bar-ready'), screen.getByTestId('work-row'))).toBe(true)
-    expect(order(screen.getByTestId('work-row'), screen.getByTestId('composer-live'))).toBe(true)
+    const panel = screen.getByRole('complementary', { name: 'Activity panel' })
+    expect(within(within(panel).getByRole('region', { name: 'Changes' })).getByTestId('work-row')).toBeTruthy()
+    // Above the box only the line of the first step waiting: a row with none is no line.
+    expect(within(screen.getByTestId('chat-bottom')).getByRole('group', { name: 'Next step', hidden: true }).parentElement!.hidden).toBe(true)
   })
 
   test('they are told whether the run works or has ended, whether its clean-up is going, the project and the request its record names', () => {
@@ -796,7 +793,7 @@ describe('the page\'s two bars', () => {
   test('the top bar and its notices are the page\'s first row; the message box and what sits on it lie over the chat\'s end', () => {
     render(view({ live: true }))
     expect(within(screen.getByTestId('chat-top')).getByTestId('bar-frame')).toBeTruthy()
-    for (const part of ['work-bar', 'row', 'composer-live']) expect(within(screen.getByTestId('chat-bottom')).getByTestId(part)).toBeTruthy()
+    for (const part of ['row', 'composer-live']) expect(within(screen.getByTestId('chat-bottom')).getByTestId(part)).toBeTruthy()
     expect(screen.getByTestId('chat-top').contains(screen.getByText(/the channel delivered this line/))).toBe(false)
   })
 
@@ -936,7 +933,9 @@ describe('a run just started', () => {
     rerender(view({ live: true, events, card: { status: 'done', workspace: '/repo/.branches/agent-1', branch: 'agent-1', driver: 'codex' } }))
     fireEvent.click(screen.getByRole('button', { name: 'Initialized session' }))
     expect(screen.getByText('/repo/.branches/agent-1')).toBeTruthy()
-    expect(screen.getByText('agent-1')).toBeTruthy()
+    // The branch is in the chat's line, and in the Activity panel's Environment beside it.
+    expect(screen.getAllByText('agent-1')).toHaveLength(2)
+    expect(within(screen.getByRole('region', { name: 'Environment' })).getByText('agent-1')).toBeTruthy()
     expect(screen.queryByText(/Started from the branch/)).toBeNull()
     rerender(view({ live: true, events, card: { status: 'done', workspace: '/repo/.branches/agent-1', branch: 'agent-1', base: 'my/work', driver: 'codex' } }))
     expect(screen.getByText(/Started from the branch/).textContent).toBe('Started from the branch my/work, not from the main branch.')

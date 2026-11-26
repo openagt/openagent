@@ -28,6 +28,7 @@ const OFF_SCALE: { off: RegExp; use: string }[] = [
 const ALLOWED: Record<string, string> = {
   'rounded-box': "the message box's corner (Composer.tsx), a step rounder than a card's: DECISIONS.md picks \"a filled box with rounder corners\"",
   'rounded-t-box': "the work bar's top (AgentWorkBar.tsx), joined to the message box: the box's corner",
+  '-mr-2.5': "the project page's top bar row (ProjectHome.tsx) runs on over the list's scroll bar, 10 wide (ui/scroll-area), which the bar's blur stops short of (`right-2.5`): its icons stand where a session's page has them",
   'text-[17px]': "BrandLink's wordmark: the website draws the same mark at the same size in the same place, and the switch between the two (the `oa-brand` view transition) keeps it still",
 }
 

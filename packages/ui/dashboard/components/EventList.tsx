@@ -503,7 +503,7 @@ function Attached({ text }: { text: string }) {
  * What the agent waits on in the background in the turn going on: the set its driver said as the
  * agent went idle, until it said none, the agent awake again. Nothing once a new prompt begins.
  */
-function backgroundWait(told: readonly RunEvent[]): BackgroundTask[] | undefined {
+export function backgroundWait(told: readonly RunEvent[]): BackgroundTask[] | undefined {
   for (let at = told.length - 1; at >= 0; at--) {
     const e = told[at]!
     if (isTurnBoundary(e)) return undefined

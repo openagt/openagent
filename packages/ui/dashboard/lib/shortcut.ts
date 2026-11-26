@@ -17,9 +17,9 @@ export const SHORTCUT_PLACES = ['Anywhere', 'Jump', 'The message box', 'A workin
 interface Shortcut {
   /** The keys that take it, exactly as `KeyboardEvent.key` names them (`k`, not `K`); `1-9` is any of those digits. The first is the one the list shows. */
   keys: readonly string[]
-  /** Held with ⌘ or Ctrl, either on any keyboard; Shift and Alt held with it change nothing. */
+  /** Held with ⌘ or Ctrl, either on any keyboard; Shift and Alt held with it change nothing, but a shortcut held with Shift too (`shift`). */
   mod?: true
-  /** Held with Shift. */
+  /** Held with Shift. With ⌘ or Ctrl, the letter is taken in either case: a Mac's browser says `d` for ⌘⇧D, elsewhere `D`. */
   shift?: true
   /** Only where nothing is typed into: a key typed into a text field is that field's. */
   outsideFields?: true
@@ -32,6 +32,8 @@ export const SHORTCUTS = {
   jump: { keys: ['k'], mod: true, where: 'Anywhere', does: 'Jump to a run, a project or a page' },
   shortcuts: { keys: ['?'], outsideFields: true, where: 'Anywhere', does: 'Show the keyboard shortcuts' },
   sidebar: { keys: ['b'], mod: true, where: 'Anywhere', does: 'Hide or show the sidebar' },
+  changesTab: { keys: ['d'], mod: true, shift: true, where: 'Anywhere', does: 'Open Changes in the side panel' },
+  filesTab: { keys: ['f'], mod: true, shift: true, where: 'Anywhere', does: 'Open Files in the side panel' },
   newTab: { keys: ['Enter'], mod: true, where: 'Jump', does: 'Open the marked place in a new tab' },
   send: { keys: ['Enter'], where: 'The message box', does: 'Send' },
   newLine: { keys: ['Enter'], shift: true, where: 'The message box', does: 'Start a new line' },
@@ -58,9 +60,10 @@ export function typedInto(target: EventTarget | null): boolean {
 export function pressed(event: KeyPress, id: ShortcutId): boolean {
   const shortcut: Shortcut = SHORTCUTS[id]
   if ('nativeEvent' in event ? event.nativeEvent.isComposing : event.isComposing) return false
-  const key = shortcut.keys.some(k => (k === '1-9' ? /^[1-9]$/.test(event.key) : k === event.key))
+  const letter = shortcut.mod && shortcut.shift ? event.key.toLowerCase() : event.key
+  const key = shortcut.keys.some(k => (k === '1-9' ? /^[1-9]$/.test(event.key) : k === letter))
   if (!key || (shortcut.outsideFields && typedInto(event.target))) return false
-  if (shortcut.mod) return event.metaKey || event.ctrlKey
+  if (shortcut.mod) return (event.metaKey || event.ctrlKey) && (!shortcut.shift || event.shiftKey)
   // A named key says Shift apart; a character's Shift is how it is typed.
   if (event.key.length > 1 && event.shiftKey !== (shortcut.shift ?? false)) return false
   return !event.metaKey && !event.ctrlKey && !event.altKey

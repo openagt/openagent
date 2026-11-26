@@ -77,14 +77,16 @@ export function ProjectHome({
     <div ref={room} data-testid="home-room" className="relative isolate flex min-h-0 flex-1 flex-col">
       {/* Over the page's top, as an agent's page has it: what scrolls under it shows through, blurred.
           It stops short of the list's scroll bar (ui/scroll-area, 10 wide), which is drawn over the
-          page's whole height; only the bar's line crosses it, to the page's edge. */}
+          page's whole height; only the bar's row, its icons and its line, crosses it, to the page's
+          edge: its icons stand where a session's page has them. */}
       <div ref={top} data-testid="home-top" className="absolute top-0 right-2.5 left-0 z-20 bg-background/80 backdrop-blur-md">
-        <ProjectActions projectId={projectId} />
+        <div data-testid="home-top-row" className="-mr-2.5">
+          <ProjectActions projectId={projectId} />
+        </div>
         {/* Above everything, because an agent started on a project whose agent-data branch cannot
             reach origin (#1599) works from stale tickets and a queue nobody else will see. */}
         <ProjectErrorBanner errors={errors} />
       </div>
-      <div aria-hidden className="pointer-events-none absolute top-[calc(2.75rem-1px)] right-0 z-20 h-px w-2.5 bg-border" />
       {/* What waits for the person comes first, and the box under it, at the bottom, as an agent's
           page has its chat (his pick); so on a phone, where the box is in the thumb's reach. With
           nothing waiting, from 768px up the box stands where the eye lands. No question stands over the
@@ -159,7 +161,6 @@ export function ProjectHomeShape() {
           <div className="h-11" />
         </TopBar>
       </div>
-      <div aria-hidden className="pointer-events-none absolute top-[calc(2.75rem-1px)] right-0 z-20 h-px w-2.5 bg-border" />
       <div className="scrollbar-thin scrollbar-gutter-stable flex min-h-0 flex-1 flex-col overflow-y-auto">
         {!isMobile && <Lift />}
         <div className={cn('mx-auto w-full max-w-3xl shrink-0 px-4 pt-2 pb-4', isMobile && 'order-last')}>

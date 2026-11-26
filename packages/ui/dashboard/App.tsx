@@ -18,6 +18,8 @@ import { agentLabel, awaitingName } from './lib/agent-label.js'
 import { callSubagents } from './lib/subagents.js'
 import { PaneLayout, PanesProvider } from './components/Panes.js'
 import { SubagentsPanel } from './components/SubagentsPanel.js'
+import { BackgroundTasksPane } from './components/BackgroundTasksPane.js'
+import { backgroundWait } from './components/EventList.js'
 import { RunCalls } from './components/ToolCalls.js'
 import { PagesBar, PhoneBar, PhoneBarCount } from './components/PhoneBar.js'
 import { cn } from './lib/utils.js'
@@ -457,8 +459,13 @@ export function App() {
   // A session with no record in a list that was read: it was deleted, or never was here. The run
   // just started is exempt only until a list has had it, the beat before its card lands.
   const sessionGone = agentId !== null && !selectedAgent && agentsState === 'fresh' && agentsOf === projectId && (agentId !== agentStart.id || agentStart.listed === true)
-  // Whether the selected run's coding agent started subagents: they get a pane beside the chat.
-  const hasSubagents = useMemo(() => callSubagents(events).length > 0, [events])
+  // Whether the selected run's coding agent started subagents, and what it leaves running in the
+  // background now: they have the side panel's Background tasks tab, which says how many run.
+  const subagentsOf = useMemo(() => callSubagents(events), [events])
+  const hasSubagents = subagentsOf.length > 0
+  const background = useMemo(() => (selectedAgent?.status === 'running' ? (backgroundWait(events) ?? []) : []), [events, selectedAgent?.status])
+  const tasksRunning = subagentsOf.filter(one => one.status === 'working').length + background.length
+  const paneCounts = useMemo(() => (tasksRunning > 0 ? { background: <span className="text-warning">{`${tasksRunning} running`}</span> } : undefined), [tasksRunning])
   // How the calls of its coding agent read, in that pane's transcripts as in its chat.
   const runCalls = useRunCalls(selectedAgent?.driver)
   const justStarted = agentId === agentStart.id
@@ -732,21 +739,30 @@ export function App() {
         <PanesProvider
           projectId={projectId}
           agentId={agentId}
-          // A session with no project has no files or changes of a project's to show beside it, and
-          // one that is gone, or a project that is not registered, has none at all.
-          enabled={!pageSegment && !noProject && !sessionGone && !unknownProject}
+          // A session with no project has the files and changes of its copies of repositories beside
+          // it, and the "New agent session" page with no project none; a session that is gone, or a
+          // project that is not registered, has none at all.
+          enabled={!pageSegment && !(noProject && agentId === null) && !sessionGone && !unknownProject}
           files={files}
           context={context}
           toggleContext={toggleContext}
           activity={events.length}
-          // The run's subagents, when its coding agent started any, beside the chat.
-          subagents={
-            projectId && agentId && hasSubagents ? (
-              <RunCalls.Provider value={runCalls}>
-                <SubagentsPanel projectId={projectId} agentId={agentId} events={events} live={selectedAgent?.status === 'running'} />
-              </RunCalls.Provider>
+          // What the run leaves running in the background and its subagents, when it has any.
+          background={
+            projectId && agentId && (hasSubagents || background.length > 0) ? (
+              <BackgroundTasksPane
+                background={background}
+                subagents={
+                  hasSubagents ? (
+                    <RunCalls.Provider value={runCalls}>
+                      <SubagentsPanel projectId={projectId} agentId={agentId} events={events} live={selectedAgent?.status === 'running'} />
+                    </RunCalls.Provider>
+                  ) : undefined
+                }
+              />
             ) : undefined
           }
+          {...(paneCounts ? { counts: paneCounts } : {})}
         >
           <PaneLayout>
             <FocusHome as="main" className="flex min-h-0 min-w-0 flex-1 flex-col">

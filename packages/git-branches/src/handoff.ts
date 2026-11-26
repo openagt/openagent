@@ -1,7 +1,7 @@
 import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { nodeGitRunner } from './git.js'
-import { type GitRunner, type RunFound, sessionsHome } from '@openagt/hooks'
+import { type GitRunner, type RunFound, sessionsHome, spellingOfRemote } from '@openagt/hooks'
 import { sessionFolder } from './sessions.js'
 import { parsePorcelain, readBranchStates } from './branch-state.js'
 import { copyStart } from './session-folder.js'
@@ -103,6 +103,25 @@ export async function sessionCopies(agentId: string, home: string = sessionsHome
   const names = entries.filter(entry => entry.isDirectory() && isCopyName(entry.name)).map(entry => entry.name)
   const repos = await Promise.all(names.map(async name => ((await isRepository(join(folder, name))) ? name : undefined)))
   return repos.filter((name): name is string => name !== undefined).sort()
+}
+
+/** A session's copy of a repo, by its name in the session's folder, and the address of the repository it is a copy of (`github.com/me/shop`): none for a copy of a folder with no remote. */
+export interface CopyRepo {
+  name: string
+  address?: string
+}
+
+/** The session's copies of repos, with where each is a copy of, as its `origin` says. */
+export async function copyRepos(agentId: string, deps: { home?: string; git?: GitRunner } = {}): Promise<CopyRepo[]> {
+  const folder = sessionFolder(deps.home ?? sessionsHome(), agentId)
+  const git = deps.git ?? nodeGitRunner()
+  return Promise.all(
+    (await sessionCopies(agentId, deps.home)).map(async name => {
+      const origin = (await git(['remote', 'get-url', 'origin'], join(folder, name)).catch(() => '')).trim()
+      const address = origin ? spellingOfRemote(origin) : undefined
+      return { name, ...(address !== undefined ? { address } : {}) }
+    }),
+  )
 }
 
 async function isRepository(dir: string): Promise<boolean> {

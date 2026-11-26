@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { isCopyName, readHandoff, sessionCopies, workAt } from './handoff.js'
+import { isCopyName, readHandoff, sessionCopies, copyRepos, workAt } from './handoff.js'
 
 // A session's copies of repos, read off its folder in a sessions home of the test's own, with real git.
 
@@ -31,6 +31,21 @@ test("the session's copies are the repositories in its folder, by name; a sessio
     await mkdir(join(folder, '.openagent'))
     assert.deepEqual(await sessionCopies(ID, home), ['api', 'site'], 'the plain folder and the live record are no copies')
     assert.deepEqual(await sessionCopies('2026-01-01T00-00-00-000Z', home), [])
+  } finally {
+    await rm(home, { recursive: true, force: true })
+  }
+})
+
+test("each copy names the repository it is a copy of, as its origin says it; a copy of a folder with no remote names none", async () => {
+  const home = await realpath(await mkdtemp(join(tmpdir(), 'session-copies-')))
+  const folder = join(home, ID)
+  try {
+    for (const name of ['site', 'notes']) {
+      await mkdir(join(folder, name), { recursive: true })
+      git(join(folder, name), 'init', '-q', '-b', 'main')
+    }
+    git(join(folder, 'site'), 'remote', 'add', 'origin', 'git@github.com:Me/Site.git')
+    assert.deepEqual(await copyRepos(ID, { home }), [{ name: 'notes' }, { name: 'site', address: 'github.com/Me/Site' }])
   } finally {
     await rm(home, { recursive: true, force: true })
   }

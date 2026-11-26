@@ -12,7 +12,8 @@ const render = (ui: Parameters<typeof renderWithHost>[0]) => renderWithHost(ui, 
 const readProject = vi.fn(async () => [] as unknown)
 const readTree = vi.fn(async () => ({ source: 'checkout', files: [] }) as unknown)
 const readContent = vi.fn(async (_host: unknown, _projectId: string, path: string) => ({ path, text: `the text of ${path}`, truncated: false, binary: false }) as unknown)
-vi.mock('./reads.js', () => ({ readProject, readTree, readContent }))
+const readCopies = vi.fn(async () => ({ project: 'shop', copies: [] }) as unknown)
+vi.mock('./reads.js', () => ({ readProject, readTree, readContent, readCopies }))
 
 const { FilesPane } = await import('./FilesPane.js')
 const { forgetOpenFiles } = await import('./open-files.js')
@@ -451,5 +452,26 @@ describe('opening files, as Claude Code on the web does', () => {
     render(<FilesPane projectId="p1" context={context()} />)
     fireEvent.keyDown(await screen.findByTitle('README.md'), { key: 'F10', shiftKey: true })
     expect(await screen.findByText('Attach as context')).toBeTruthy()
+  })
+})
+
+describe("a run's copies of other repositories", () => {
+  test('one tree, a folder per repo, the project\'s named as its folder is; a copy\'s file is read in the copy', async () => {
+    readTree.mockResolvedValue({ source: 'checkout', files: ['README.md'] })
+    readCopies.mockResolvedValue({ project: 'shop', copies: [{ name: 'site', files: ['index.html'] }] })
+    render(<FilesPane projectId="p1" agentId="run-1" context={context()} />)
+    await waitFor(() => expect(screen.getByText('site')).toBeTruthy())
+    expect(screen.getByText('shop')).toBeTruthy()
+    if (!screen.queryByText('index.html')) fireEvent.click(screen.getByText('site'))
+    fireEvent.click(await screen.findByText('index.html'))
+    await waitFor(() => expect(readContent).toHaveBeenCalledWith(expect.anything(), 'p1', 'index.html', 'run-1', 'site'))
+  })
+
+  test('a session with no project has its copies\' folders alone, and no tree of a project is read', async () => {
+    readCopies.mockResolvedValue({ project: 'openagent-sessions', copies: [{ name: 'site', files: ['index.html'] }] })
+    render(<FilesPane projectId="session" agentId="run-1" copiesOnly context={context()} />)
+    await waitFor(() => expect(screen.getByText('site')).toBeTruthy())
+    expect(screen.queryByText('openagent-sessions')).toBeNull()
+    expect(readTree).not.toHaveBeenCalled()
   })
 })

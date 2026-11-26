@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { ArrowLeft } from 'lucide-react'
 import type { RunEvent } from '@openagt/hooks'
 import { AgentActionsMenu } from './AgentActionsMenu.js'
@@ -15,7 +16,7 @@ import { Button } from './ui/button.js'
 // past, the project's ⋮, and the icons of the page's panes (Panes), the ⋮ and the icons where the "New
 // agent session" page has them. It says nothing of its tree: where it runs and its project are in
 // the row above the message box (SessionRow), and its
-// branch, what the branch holds and the next step in the panel above that (AgentWorkPanel). One bar for
+// branch, what the branch holds and the next step in its Activity panel (ActivityPanel). One bar for
 // the session whether running or finished (AgentView), so the controls stay put when an agent
 // reaches Done.
 export function AgentActionBar({
@@ -33,6 +34,7 @@ export function AgentActionBar({
   status,
   onBack,
   resumeCommand,
+  activity,
 }: {
   projectId: string
   /** Which run Stop addresses (#749). */
@@ -44,6 +46,8 @@ export function AgentActionBar({
   label?: string | undefined
   /** The command that picks the session's agent session back up in a terminal, as its coding agent says it: the session's menu copies it. */
   resumeCommand?: string | undefined
+  /** The press that shows the session's Activity panel, before the side panel's icon. */
+  activity?: ReactNode
   /** The name is still being made: see AgentActionsMenu. */
   naming?: boolean | undefined
   /** True when this finished agent still has a worktree on disk (#737): its menu opens that folder. */
@@ -102,7 +106,14 @@ export function AgentActionBar({
             count is only useful if it is whole. */}
         {ready && <AgentErrorCount events={events} />}
         {/* A session with no project has no project's menu. */}
-        <PaneToggles before={projectId !== SESSIONS_ID && <ProjectMenu projectId={projectId} />} />
+        <PaneToggles
+          before={
+            <>
+              {projectId !== SESSIONS_ID && <ProjectMenu projectId={projectId} />}
+              {activity}
+            </>
+          }
+        />
       </div>
     </TopBar>
   )

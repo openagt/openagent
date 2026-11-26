@@ -208,17 +208,20 @@ async function saveRecord(ctx: RunContext): Promise<void> {
   // A name asked for as the run began is on its card by now, or never will be.
   leg.named?.stop.abort()
   const branch = ctx.facts['git-branches']?.branch
-  const { pr, earlierPrs } = ctx.facts.github ?? {}
+  const { pr, earlierPrs, copyPrs } = ctx.facts.github ?? {}
+  // What is kept under the writer's key beside the card's own facts: the earlier requests, and the copies'.
+  const callerFacts = { ...(earlierPrs ? { earlierPrs } : {}), ...(copyPrs?.length ? { copyPrs: copyPrs.map(({ repo, number, url }) => ({ repo, number, url })) } : {}) }
+  const keeps = Object.keys(callerFacts).length > 0
   const where = { ...(branch !== undefined ? { branch } : {}), ...(pr ? { pr } : {}) }
   let kept: RunCard | undefined
   let diary: AnyDiaryLine[] | undefined
   if (live && ctx.workspace !== undefined) {
-    await live.patch({ ...where, ...(earlierPrs ? { caller: { earlierPrs } } : {}) })
+    await live.patch({ ...where, ...(keeps ? { caller: callerFacts } : {}) })
     await live.settled()
     kept = await readLiveCard(ctx.workspace, leg.id)
     diary = await readLiveDiary(ctx.workspace, leg.id)
   }
-  const card = kept ?? { ...leg.card, status: end.status, endedAt: here.clock(), ...where, ...(earlierPrs ? { caller: { ...leg.card.caller, earlierPrs } } : {}) }
+  const card = kept ?? { ...leg.card, status: end.status, endedAt: here.clock(), ...where, ...(keeps ? { caller: { ...leg.card.caller, ...callerFacts } } : {}) }
   const detail = detailOf(end)
   diary ??= [...(leg.earlier?.diary ?? []), { kind: 'ended', status: end.status, ...(detail !== undefined ? { detail } : {}), at: card.endedAt ?? here.clock() }]
   await leg.marking
