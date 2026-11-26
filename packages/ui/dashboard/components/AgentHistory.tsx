@@ -697,7 +697,8 @@ function WaitingOnYou({
                         </span>
                       </span>
                       {/* Under the name, 16 for the mark and 8 after it: the words start where the name does. */}
-                      <span aria-hidden data-glide-new className={cn('truncate pl-6 text-xs', tone)}>
+                      {/* The mark says it in colour; the words are quiet, as the Log's age. */}
+                      <span aria-hidden data-glide-new className="truncate pl-6 text-xs text-muted-foreground">
                         {need}
                       </span>
                     </span>

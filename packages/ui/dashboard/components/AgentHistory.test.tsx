@@ -82,7 +82,7 @@ const waitingOn = (...work: { run: string; words: string; detail: string; mark: 
 const renderRail = (ui: ReactElement) => render(<SidebarProvider>{ui}</SidebarProvider>)
 
 describe('AgentHistory (#785)', () => {
-  test('what waits on the person is its own part over the Log: a run\'s name and how long it has waited, what it needs under them in the waiting colour; five, then a row that opens the Overview', () => {
+  test('what waits on the person is its own part over the Log: a run\'s name and how long it has waited, what it needs under them, quiet; five, then a row that opens the Overview', () => {
     const asks = (n: number) => ({ projectId: 'p1', projectName: 'p1', kind: 'waiting' as const, module: 'ask', scope: 'run' as const, run: `r${n}`, id: `r${n}:q${n}`, words: 'Needs answer', title: `Run ${n}`, mark: 'question' as const, since: new Date(Date.now() - 3 * 60_000).toISOString() })
     const onSelectRecent = vi.fn()
     const onDashboard = vi.fn()
@@ -94,7 +94,7 @@ describe('AgentHistory (#785)', () => {
     expect(row.getAttribute('href')).toBe('/p1/r1')
     // Two lines: the name and its age, then what it needs, in the waiting colour.
     expect([...row.firstElementChild!.children].map(line => line.textContent)).toEqual(['Run 13m', 'Needs answer'])
-    expect(row.firstElementChild!.lastElementChild!.className).toContain('text-warning')
+    expect(row.firstElementChild!.lastElementChild!.className).toContain('text-muted-foreground')
     // The row is known by its run as it travels between the two lists.
     expect([row.getAttribute('data-glide'), row.getAttribute('data-glide-part')]).toEqual(['p1:r1', 'waiting'])
     fireEvent.click(row)
@@ -116,7 +116,7 @@ describe('AgentHistory (#785)', () => {
     expect(screen.getByRole('link', { name: /Make the cart/ })).toBeTruthy()
   })
 
-  test('what waits is in the colour of what it needs, its mark and its words, as the Overview\'s Human Queue says it: an answer yellow, a merge green', () => {
+  test('what waits has its mark in the colour of what it needs, as the Overview\'s Human Queue says it: an answer yellow, a merge green; its words quiet', () => {
     const base = { projectId: 'p1', projectName: 'p1', kind: 'waiting' as const, module: 'ask', scope: 'run' as const, since: new Date().toISOString() }
     const asked = { ...base, run: 'run-2', id: 'run-2:q1', words: 'Needs answer', title: 'Pick a colour', mark: 'question' as const }
     const merge = { ...base, module: 'github', run: 'run-3', id: 'run-3:pr', words: 'Needs merge', title: 'Fix the cart', mark: 'pull-request' as const }
@@ -125,8 +125,9 @@ describe('AgentHistory (#785)', () => {
     )
     const tones = (name: string) => {
       const row = screen.getByRole('link', { name })
-      return [row.querySelector('svg')!.getAttribute('class')!.includes(name.endsWith('answer') ? 'text-warning' : 'text-success'), screen.getAllByText(name.split(' · ')[1]!).some(word => word.className.includes(name.endsWith('answer') ? 'text-warning' : 'text-success'))]
+      return [row.querySelector('svg')!.getAttribute('class')!.includes(name.endsWith('answer') ? 'text-warning' : 'text-success'), screen.getAllByText(name.split(' · ')[1]!).some(word => word.className.includes('text-muted-foreground'))]
     }
+    // The mark in colour, the words quiet.
     expect(tones('Pick a colour · Needs answer')).toEqual([true, true])
     expect(tones('Fix the cart · Needs merge')).toEqual([true, true])
   })
