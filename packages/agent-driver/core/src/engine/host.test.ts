@@ -317,6 +317,9 @@ test("the runs it lists are the project's records and its runs at work, newest f
       [LOCAL_HOST, 'shop', HERE, 0.5, { id: 'claude-code', model: 'opus' }, 'pr', '2026-09-16T14:02:00.000Z'],
     )
     assert.ok(done.person, 'kept under the person its record is filed under')
+    // Asked no model, the box says the one it ran on; a model asked is said as asked.
+    assert.deepEqual(listed[0]!.options?.['agent-driver'], { driver: 'claude-code' })
+    assert.deepEqual(done.options?.['agent-driver'], { driver: 'claude-code', model: 'opus' })
 
     // Resumed in its checkout: its live card says it works, on the branch the checkout has out, its session's command said by its coding agent; the pull request a press wrote on the record stays.
     await patchRun(repo, first, { pr: { number: 7, url: 'https://github.com/o/r/pull/7' } })

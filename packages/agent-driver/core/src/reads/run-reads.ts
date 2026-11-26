@@ -169,6 +169,19 @@ function isOptions(options: unknown): options is RunOptions {
  * it started from, its pull requests), and what its writer kept under `caller` that a page shows
  * (its options, its facts, the computer it ran on, its agent's session).
  */
+/**
+ * A run's options as its box says them: as it was asked, and where it was asked no agent, model or
+ * effort, the ones it ran on (the coding agent's own default model, by its name): a session's model
+ * button says what ran, never nothing.
+ */
+function withRan(options: RunOptions | undefined, card: Listed): { options?: RunOptions } {
+  const asked = options?.['agent-driver'] ?? {}
+  const ran = { ...(card.driver !== undefined ? { driver: card.driver } : {}), ...(card.model !== undefined ? { model: card.model } : {}), ...(card.effort !== undefined ? { effort: card.effort } : {}) }
+  const agent = { ...ran, ...asked }
+  const merged = { ...options, ...(Object.keys(agent).length > 0 ? { 'agent-driver': agent } : {}) }
+  return Object.keys(merged).length > 0 ? { options: merged } : {}
+}
+
 export function summaryOf(card: Listed, at: SummaryAt): RunSummary {
   const status: RunStatus = card.status === 'running' ? 'working' : card.status
   const computer = text(card, 'host')
@@ -203,7 +216,7 @@ export function summaryOf(card: Listed, at: SummaryAt): RunSummary {
     ...(card.cost !== undefined ? { cost: card.cost } : {}),
     ...(card.contextTokens !== undefined ? { contextTokens: card.contextTokens } : {}),
     ...(card.driver !== undefined ? { agent: { id: card.driver, ...(card.model !== undefined ? { model: card.model } : {}), ...(card.effort !== undefined ? { effort: card.effort } : {}) } } : {}),
-    ...(isOptions(options) ? { options } : {}),
+    ...withRan(isOptions(options) ? options : undefined, card),
     ...(branch !== undefined ? { branch } : {}),
     ...(typeof base === 'string' ? { base } : {}),
     ...(card.pr ? { pr: card.pr } : {}),
