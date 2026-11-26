@@ -56,7 +56,7 @@ export function ChatPane({ top, bottom, side, children }: { top: ReactNode; bott
       <div className="relative isolate flex min-h-0 flex-1 overflow-hidden">
         {/* Over the chat's start, as Claude Code's: what scrolls under it shows through, blurred. It
             stops short of the scroll bar, which is drawn over the whole page's height, the bar's top
-            too; only the bar's line crosses it, to the panes' edge. */}
+            too; only the bar's row, its icons and its line, crosses it, to the panes' edge. */}
         {/* With a column beside the chat the bar runs over both, as Claude Code's over its details.
             What is in it runs to the window's edge either way, over the scroll bar's strip, so its
             icons stand 8 from the edge as Claude Code's, and showing the column moves none. */}
@@ -65,7 +65,6 @@ export function ChatPane({ top, bottom, side, children }: { top: ReactNode; bott
             {top}
           </div>
         </div>
-        {!side && <div aria-hidden data-testid="chat-top-line" className="pointer-events-none absolute right-0 top-[calc(2.75rem-1px)] z-20 h-px w-(--chat-edge) bg-border pointer-coarse:w-(--chat-scroll-bar)" />}
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col pointer-coarse:pb-(--chat-bar)">
         {/* Styled as the chat's scroller is (MessageScrollerViewport): a gutter kept, a thin bar. */}
         <div ref={probe} className="scrollbar-thin scrollbar-gutter-stable invisible absolute h-0 w-8 overflow-y-auto" aria-hidden />
