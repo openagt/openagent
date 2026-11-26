@@ -8,7 +8,9 @@ import { Facts } from './ui/panel.js'
 // that cannot reach origin). This renders exactly what the project list carries — no state of its
 // own, and nothing to dismiss: the way to make it go away is to fix the thing it names.
 
-export function ProjectErrorBanner({ errors }: { errors: ProjectError[] | undefined }) {
+export function ProjectErrorBanner({ errors: all }: { errors: ProjectError[] | undefined }) {
+  // One a press fixes is the page's card, with its press (ProjectItemsLine): said once, there.
+  const errors = all?.filter(error => !error.fixed)
   if (!errors || errors.length === 0) return null
   return (
     // The banners' strip: a tinted fill with no edge, the mark in the danger's colour, the words in the text's.

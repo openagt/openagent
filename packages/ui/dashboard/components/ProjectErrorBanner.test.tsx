@@ -32,4 +32,11 @@ describe('ProjectErrorBanner (#1500)', () => {
     render(<ProjectErrorBanner errors={[{ id: 'store:no-account', title: 'No account to push as' }]} />)
     expect(screen.getByRole('alert').textContent).toBe('No account to push as')
   })
+
+  test('one a press fixes is said by the page\'s card with its press, not here as well', () => {
+    render(<ProjectErrorBanner errors={[{ id: 'git-branches:folder-behind', title: 'This project’s folder is 2 commits behind main.', fixed: true }]} />)
+    expect(screen.queryByRole('alert')).toBeNull()
+    render(<ProjectErrorBanner errors={[{ id: 'git-branches:folder-behind', title: 'Behind', fixed: true }, DATA_SYNC]} />)
+    expect(screen.getAllByRole('alert').map(alert => alert.textContent)).toEqual([expect.stringContaining('Not syncing with the remote')])
+  })
 })

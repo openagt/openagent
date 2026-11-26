@@ -22,6 +22,8 @@ export interface ProjectError {
   message?: string
   /** Since when, where it is said: a week-old failure does not read like a blip that will pass. */
   since?: string
+  /** A press fixes it: the project's page says it with that press (its "New agent session" card), not in its banner. */
+  fixed?: true
 }
 
 /** How the project stands where nothing is wrong with it, in a few words, as a module says it under the project's name. */
@@ -53,7 +55,7 @@ export async function readProjectState(project: { id: string; path: string }, de
     return {
       errors: items.flatMap(item =>
         item.kind === 'setup'
-          ? [{ id: idOf(item), title: item.words, ...(item.detail !== undefined ? { message: item.detail } : {}), ...(item.since !== undefined ? { since: item.since } : {}) }]
+          ? [{ id: idOf(item), title: item.words, ...(item.detail !== undefined ? { message: item.detail } : {}), ...(item.since !== undefined ? { since: item.since } : {}), ...(item.fix !== undefined && item.scope === 'project' ? { fixed: true as const } : {}) }]
           : [],
       ),
       notes: items.flatMap(item => (item.kind === 'note' ? [{ id: idOf(item), words: item.words }] : [])),
