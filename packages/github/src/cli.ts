@@ -4,7 +4,7 @@ import type { GitRunner } from '@openagt/hooks'
 import { hasBrew, installCommand, nodeGhRunner, type GhRunner } from './gh.js'
 import { listRequests } from './requests.js'
 import { openRequest, type OpenOutcome } from './open.js'
-import { mergeRequest, type WatchStarter } from './merge.js'
+import { closeRequest, mergeRequest, type WatchStarter } from './merge.js'
 import { spawnMergeWatch, watchAndMerge } from './merge-watch.js'
 import { GIT_HOST_NAME, homeUrlFor } from './home.js'
 import { MAX_PEOPLE, peopleByEmail } from './people.js'
@@ -38,6 +38,7 @@ ${helpRows([
   ['comment <number> --body <text>', `post a comment on issue or pull request <number>: its id and url. It opens with the coding agent's logo, the model and the effort, as the agent's run record says (found through AGENT_DIARY, which its runner sets), else the line 🤖 automated; a hidden mark after the text, so github-auto-reply never takes it for a person's`],
   ['open [--branch <b>] --title <t> [--body <text>] [--base <b>] [--draft] [--merge]', `open the pull request of branch <b> (default: the current branch; it must be on the remote already), its body opened with the line a comment opens with; an open one is answered as it is; --base names the branch it goes into (default: the repository's default branch); --merge lands it on green. An account that cannot write to the project pushes to its fork: git remote set-url --push origin <fork>; open, and github-auto-reply, then take that fork's pull requests as this machine's`],
   ['merge <number>', 'land pull request <number>: a draft is marked ready, then the merge is armed as --merge arms it'],
+  ['close <number>', 'close pull request <number> without merging it; its branch stays, and it can be reopened on GitHub'],
   ['watch <number>', `wait for pull request <number>'s checks and merge it once they pass; what --merge starts where the repository has no auto-merge`],
   ['home', `the project's page on GitHub, from its origin remote`],
   ['profile <login>', `a GitHub user's public profile, read with no login: { login, name, avatar } (a picture's https address); what a person copies into OpenAgent as their own name and picture`],
@@ -244,6 +245,14 @@ const COMMANDS: Record<string, Command<[Context]>> = {
     const outcome = await mergeRequest(cwd, number, { gh, watch })
     if (outcome.outcome === 'not-open') throw new Refused({ ok: false, reason: 'not-open', number, state: outcome.state }, `pull request ${number} is ${outcome.state.toLowerCase()}, not open`)
     if (outcome.outcome === 'failed') throw new Refused({ ok: false, reason: 'merge-failed', number, detail: outcome.error }, `pull request ${number} could not be landed: ${outcome.error}`)
+    return { ok: true, number, outcome: outcome.outcome }
+  }),
+
+  close: asOpenAgent(async (args, { cwd, gh }) => {
+    const number = numberArg(parseCommandArgs(args, {}, 1).positionals[0]!)
+    const outcome = await closeRequest(cwd, number, gh)
+    if (outcome.outcome === 'not-open') throw new Refused({ ok: false, reason: 'not-open', number, state: outcome.state }, `pull request ${number} is ${outcome.state.toLowerCase()}, not open`)
+    if (outcome.outcome === 'failed') throw new Refused({ ok: false, reason: 'close-failed', number, detail: outcome.error }, `pull request ${number} could not be closed: ${outcome.error}`)
     return { ok: true, number, outcome: outcome.outcome }
   }),
 

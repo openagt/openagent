@@ -117,6 +117,22 @@ test('a GitHub slower than the cache waits for is asked once: its answer is kept
   assert.equal(reads, 1)
 })
 
+test('a GitHub that does not answer is no "none": no request is offered, the read after it asks again, and a good answer is kept over a failed one', async () => {
+  let answer: 'refuse' | 'one' = 'refuse'
+  let reads = 0
+  const flaky: GitHostFor = async () => ({ requests: async () => (reads++, answer === 'refuse' ? { ok: false as const, error: 'gh: connection reset' } : { ok: true as const, requests: [REQUEST] }) })
+  const failed = await readRunPr('/repo-flaky', 'r1', run({}), undefined, deps(flaky))
+  assert.equal(failed?.unread, true)
+  assert.equal(failed?.pr, undefined)
+  // As session 2026-11-26T00-43-44-681Z showed: its copy's open PR #10 read as none, and the bar offered Open PR.
+  assert.deepEqual(await prHandoffOf(failed, noCarries), {})
+  answer = 'one'
+  const next = await readRunPr('/repo-flaky', 'r1', run({}), undefined, deps(flaky))
+  assert.equal(next?.pr?.number, 7)
+  assert.equal(next?.unread, undefined)
+  assert.ok(reads >= 3, 'the failed read was kept for nobody')
+})
+
 test('a request a press opens is read from GitHub there and then, and one it cannot read is a refusal, never "none"', async () => {
   const refusing: GitHostFor = async () => ({ requests: async () => ({ ok: false, error: 'gh: not authenticated' }) })
   await assert.rejects(readRunPr('/repo-fresh', 'r1', run({}), undefined, { ...deps(refusing), fresh: true }), /not authenticated/)

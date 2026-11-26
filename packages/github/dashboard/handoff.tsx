@@ -1,4 +1,4 @@
-import { GitPullRequestDraft } from 'lucide-react'
+import { ExternalLink, GitMerge, GitPullRequestClosed, GitPullRequestDraft } from 'lucide-react'
 import type { UiActionAt, UiActionResult, UiHost, UiOffer } from '@openagt/ui/module'
 import { server, type Carries, type PrHandoff } from './calls.js'
 
@@ -11,10 +11,11 @@ import { server, type Carries, type PrHandoff } from './calls.js'
 //
 // Opening a request puts the run's work on GitHub under the person's account, so it is a
 // deliberate press, and its word says it has not happened yet. Once a request exists it is not
-// offered again: the bar names it. What is offered is what it still needs (`../src/handoff.ts`).
+// offered again: the bar names it. What is offered is what it still needs (`../src/handoff.ts`),
+// and under the arrow of an open one its page on GitHub and its Close, asked first.
 
 /** The presses, by the action that offers each. */
-export type PressId = 'open-pr' | 'draft-pr' | 'update-pr' | 'merge-pr'
+export type PressId = 'open-pr' | 'draft-pr' | 'update-pr' | 'merge-pr' | 'pr-page' | 'close-pr'
 
 /** A run, or one of its copies of repos (`repo`), as the bar names it. */
 type WorkOn = { projectId: string; agentId: string; repo?: string }
@@ -22,14 +23,32 @@ type WorkOn = { projectId: string; agentId: string; repo?: string }
 /** What each press offers now, for what was read of the run's request; a press left out is not offered. */
 export function prPresses(read: PrHandoff): Partial<Record<PressId, UiOffer>> {
   const pr = read.pr
-  if (read.armed && pr) return { 'merge-pr': { noteOnly: true, note: `PR #${pr.number} merges when its checks pass.` } }
-  if (read.update) return { 'update-pr': { note: 'not in the PR yet', rank: 20 } }
-  if (read.merge && pr) return { 'merge-pr': { title: `Merges PR #${pr.number} now, or once its checks pass`, rank: 20 } }
+  const onIt = pr?.state === 'OPEN' ? openPrPresses(pr) : {}
+  if (read.armed && pr) return { 'merge-pr': { noteOnly: true, note: `PR #${pr.number} merges when its checks pass.` }, ...onIt }
+  if (read.update) return { 'update-pr': { note: 'not in the PR yet', rank: 20 }, ...onIt }
+  if (read.merge && pr) return { 'merge-pr': { title: `Merges PR #${pr.number} now, or once its checks pass`, rank: 20 }, ...onIt }
   const open = read.open
   if (!open) return {}
   return {
     'open-pr': { title: `${open.pushed ? 'Opens' : 'Pushes the branch and opens'} a pull request for ${open.branch}`, rank: 30, ...(open.carries ? carriesNote(open.carries) : {}) },
     'draft-pr': { rank: 40 },
+  }
+}
+
+/**
+ * What an open request offers under the arrow, after what it still needs: its page on GitHub, and
+ * its Close, in the danger colour and asked first, since its review and its checks go with it.
+ */
+function openPrPresses(pr: NonNullable<PrHandoff['pr']>): Partial<Record<PressId, UiOffer>> {
+  const repo = /github\.com\/([^/]+\/[^/]+)\/pull\//.exec(pr.url)?.[1]
+  const named = [pr.title !== '' ? `“${pr.title}”` : `PR #${pr.number}`, repo !== undefined ? ` on ${repo}` : ''].join('')
+  return {
+    'pr-page': { href: pr.url, rank: 60 },
+    'close-pr': {
+      danger: true,
+      rank: 70,
+      confirm: { title: `Close PR #${pr.number}?`, description: `${named} is closed without merging. Its branch stays; you can reopen it on GitHub.`, confirmLabel: 'Close PR', danger: true },
+    },
   }
 }
 
@@ -79,5 +98,7 @@ export const handoffActions: UiActionAt<'chat.handoff'>[] = [
   press('open-pr', { label: 'Open PR', busyLabel: 'Opening PR…', run: async (host, on) => pressed(on, await server(host).openPr(on.projectId, { agentId: on.agentId, ...repoOf(on) })) }),
   press('draft-pr', { label: 'Create draft PR', busyLabel: 'Opening PR…', icon: GitPullRequestDraft, run: async (host, on) => pressed(on, await server(host).openPr(on.projectId, { agentId: on.agentId, ...repoOf(on), draft: true })) }),
   press('update-pr', { label: 'Update PR', busyLabel: 'Updating PR…', run: async (host, on) => pressed(on, await server(host).updatePr(on.projectId, { agentId: on.agentId, ...repoOf(on) })) }),
-  press('merge-pr', { label: 'Merge PR', busyLabel: 'Merging…', run: async (host, on) => pressed(on, await server(host).mergePr(on.projectId, { agentId: on.agentId, ...repoOf(on) })) }),
+  press('merge-pr', { label: 'Merge PR', busyLabel: 'Merging…', icon: GitMerge, run: async (host, on) => pressed(on, await server(host).mergePr(on.projectId, { agentId: on.agentId, ...repoOf(on) })) }),
+  press('pr-page', { label: 'Open on GitHub', icon: ExternalLink }),
+  press('close-pr', { label: 'Close PR', busyLabel: 'Closing PR…', icon: GitPullRequestClosed, run: async (host, on) => pressed(on, await server(host).closePr(on.projectId, { agentId: on.agentId, ...repoOf(on) })) }),
 ]

@@ -284,9 +284,13 @@ export async function cachedPrStates(cwd: string, gitHost: GitHostFor = projectG
   }
 }
 
-/** The cached form of {@link prsForBranch}, shared through the same read-through cache (#1028), each request as the newest read of it says. */
+/**
+ * The cached form of {@link prsForBranch}, shared through the same read-through cache (#1028), each
+ * request as the newest read of it says. A read GitHub did not answer is no answer: it is never
+ * kept as "no requests", and the ask that waited for it is answered nothing.
+ */
 export async function cachedPrsForBranch(cwd: string, branch: string, gitHost: GitHostFor = projectGitHost, options: { wait?: true } = {}): Promise<Cached<LinkedPr[]>> {
-  const read = await cachedRead(branchPrsCacheKey(cwd, branch), () => prsForBranch(cwd, branch, gitHost), options)
+  const read = await cachedRead(branchPrsCacheKey(cwd, branch), () => prsForBranchOrThrow(cwd, branch, gitHost), options)
   return read.value ? { ...read, value: read.value.map(newestOf) } : read
 }
 

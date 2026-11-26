@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ChevronDown, Loader2 } from 'lucide-react'
 import type { RunOptions } from '@openagt/hooks'
 import { moduleHost, type ActionPlace, type ActionPlaces, type ModuleHost, type OptionPlace, type UiActionResult, type UiComposerControlProps, type UiComposerIn, type UiControlSaid, type UiOffer, type ViewPlace, type ViewPlaces } from '../module/index.js'
@@ -7,7 +7,7 @@ import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.j
 import { SESSIONS_ID } from '../../src/project-address.js'
 import { ModuleSlot } from './ModulePageView.js'
 import { ConfirmDialog } from './ui/confirm-dialog.js'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu.js'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.js'
 import { Button, buttonVariants } from './ui/button.js'
 import { ButtonGroup, ButtonGroupSeparator } from './ui/button-group.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
@@ -290,7 +290,8 @@ const NEXT_STEP_CLASS = 'h-6 rounded-md bg-foreground/10 text-xs font-normal hov
 /**
  * The next step of an ended run's work, in the bar above its message box (`chat.handoff`): what
  * the modules offer now for the run's checkout, or for one of its copies (`repo`). The words they
- * say beside it first, then the first press, the others under its arrow; what the last press did
+ * say beside it first, then the first press; its arrow lists them all, the first too, as Claude
+ * Code's Create PR does, a line above the first that loses something; what the last press did
  * is said until the work moves on. Asked again when `again` changes (the run's work moved).
  */
 export function HandoffOffers({ projectId, agentId, repo, again }: { projectId: string; agentId: string; repo?: string | undefined; again?: unknown }) {
@@ -335,13 +336,16 @@ export function HandoffOffers({ projectId, agentId, repo, again }: { projectId: 
                   <ChevronDown className="h-3.5 w-3.5" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="min-w-[10rem]">
-                  {more.map(each => {
+                  {[first, ...more].map((each, at, all) => {
                     const Icon = each.action.icon
                     return (
-                      <DropdownMenuItem key={each.key} onClick={() => press(each)} className={each.offer.danger ? 'text-danger' : undefined} {...(each.offer.title !== undefined ? { title: each.offer.title } : {})}>
-                        {Icon && <Icon className="h-3.5 w-3.5" aria-hidden />}
-                        {labelOf(each)}
-                      </DropdownMenuItem>
+                      <Fragment key={each.key}>
+                        {each.offer.danger && at > 0 && !all[at - 1]!.offer.danger && <DropdownMenuSeparator />}
+                        <DropdownMenuItem onClick={() => press(each)} className={each.offer.danger ? 'text-danger' : undefined} {...(each.offer.title !== undefined ? { title: each.offer.title } : {})}>
+                          {Icon && <Icon className="h-3.5 w-3.5" aria-hidden />}
+                          {labelOf(each)}
+                        </DropdownMenuItem>
+                      </Fragment>
                     )
                   })}
                 </DropdownMenuContent>

@@ -193,6 +193,24 @@ export const mergePr = act(async (host: RpcHost, { agentId, repo }: { agentId: s
   return { ok: true, said: outcome === 'merged' ? `Merged PR #${pr.number}.` : `PR #${pr.number} merges when its checks pass.` }
 })
 
+/**
+ * Close the run's open pull request without merging it, or a copy's: its branch stays, and it can
+ * be reopened on GitHub. The bar asks the person first.
+ */
+export const closePr = act(async (host: RpcHost, { agentId, repo }: { agentId: string; repo?: string }): Promise<Pressed> => {
+  const ended = await endedRun(host, agentId)
+  if ('refused' in ended) return ended.refused
+  const read = await readRunPr(host.root, agentId, ended.run, repo)
+  const pr = read?.pr
+  if (!read || !pr) return { ok: false, error: 'This session has no pull request to close.' }
+  if (pr.state !== 'OPEN') return { ok: false, error: `This session's PR is already ${pr.state.toLowerCase()}.` }
+  const closed = await cliAnswer(['close', String(pr.number)], read.at.cwd)
+  forgetRequests(read.at.cwd, read.at.branch)
+  watched.delete(pr.url)
+  if (!closed.ok) return { ok: false, error: `Could not close the pull request: ${closed.error}` }
+  return { ok: true, said: `Closed PR #${pr.number}.` }
+})
+
 /** The project's page on GitHub; none for a project whose origin is not there. */
 export const home = read(async (host: RpcHost): Promise<{ url?: string }> => {
   if (!(await host.project())) return {}

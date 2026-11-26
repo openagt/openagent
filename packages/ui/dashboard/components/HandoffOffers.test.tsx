@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { UiOffer } from '../module/index.js'
 import { ModulesContext, mountedOf, type MountedAction } from '../lib/use-modules.js'
 
@@ -40,5 +40,19 @@ describe('the next step of a session', () => {
     cleanup()
     draw('r2')
     expect(screen.queryByRole('button', { name: 'Open PR' })).toBeNull()
+  })
+
+  test("its arrow lists every choice, the press too, as Claude Code's Create PR does, a line above the first that loses something", async () => {
+    const action = (id: string, label: string, rank: number, offer: UiOffer = {}): MountedAction<'chat.handoff'> => ({ place: 'chat.handoff', id, label, offer: () => ({ rank, ...offer }), package: '@openagt/github', module: 'github', projects: ['p1'] })
+    render(
+      <ModulesContext.Provider value={mountedOf({ actions: { 'chat.handoff': [action('close-pr', 'Close PR', 70, { danger: true }), action('merge-pr', 'Merge PR', 20), action('pr-page', 'Open on GitHub', 60)] } })}>
+        <HandoffOffers projectId="p1" agentId="r3" />
+      </ModulesContext.Provider>,
+    )
+    expect(await screen.findByRole('button', { name: 'Merge PR' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Other choices' }))
+    const menu = await screen.findByRole('menu')
+    expect([...menu.querySelectorAll('[role="menuitem"], [role="separator"]')].map(one => (one.getAttribute('role') === 'separator' ? '—' : one.textContent))).toEqual(['Merge PR', 'Open on GitHub', '—', 'Close PR'])
+    expect(screen.getByRole('menuitem', { name: 'Close PR' }).className).toContain('text-danger')
   })
 })

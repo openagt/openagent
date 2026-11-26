@@ -136,6 +136,27 @@ test('merge: a number, a draft marked ready first, then armed; not-open and merg
   assert.match(stuck.err, /could not be landed: Pull request is not mergeable/)
 })
 
+test('close: a number, closed when open; not-open and close-failed are refusals with their detail', async () => {
+  const calls: string[][] = []
+  const gh = (view: unknown, close: () => Promise<string> = async () => ''): GhRunner => async args => {
+    calls.push(args)
+    if (args[1] === 'view') return JSON.stringify(view)
+    if (args[1] === 'close') return close()
+    return ''
+  }
+  const closed = await run('/r', ['close', '10'], { gh: gh({ state: 'OPEN' }) })
+  assert.equal(closed.code, 0)
+  assert.deepEqual(closed.out, { ok: true, number: 10, outcome: 'closed' })
+  assert.deepEqual(calls.map(c => c.slice(0, 3)), [['pr', 'view', '10'], ['pr', 'close', '10']], 'its branch is left alone')
+
+  const merged = await run('/r', ['close', '10'], { gh: gh({ state: 'MERGED' }) })
+  assert.deepEqual(merged.out, { ok: false, reason: 'not-open', number: 10, state: 'MERGED' })
+  assert.equal(merged.err, 'pull request 10 is merged, not open')
+
+  const refused = await run('/r', ['close', '10'], { gh: gh({ state: 'OPEN' }, async () => Promise.reject(new Error('Resource not accessible'))) })
+  assert.deepEqual(refused.out, { ok: false, reason: 'close-failed', number: 10, detail: 'Resource not accessible' })
+})
+
 test('home: the project page from origin, with the git host named; no origin, or not GitHub, is no-remote', async () => {
   const home = await run('/r', ['home'], { git: async () => 'git@github.com:o/r.git\n' })
   assert.equal(home.code, 0)

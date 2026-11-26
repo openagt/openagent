@@ -79,3 +79,22 @@ export async function mergeRequest(repo: string, number: number, opts: MergeOpti
   }
   return armMerge(repo, number, gh, opts.watch ?? spawnMergeWatch)
 }
+
+/** What closing a request did: closed, or why not. */
+export type CloseOutcome = { outcome: 'closed' } | { outcome: 'not-open'; state: string } | { outcome: 'failed'; error: string }
+
+/**
+ * Close a pull request without merging it: "this one is not going in". Its branch stays, and it
+ * can be reopened on GitHub. A request that is not open is `not-open` with its state, as for a merge.
+ */
+export async function closeRequest(repo: string, number: number, gh: GhRunner = nodeGhRunner()): Promise<CloseOutcome> {
+  try {
+    const view = JSON.parse(await gh(['pr', 'view', String(number), '--json', 'state'], repo)) as { state?: unknown }
+    const state = typeof view.state === 'string' ? view.state : 'OPEN'
+    if (state !== 'OPEN') return { outcome: 'not-open', state }
+    await gh(['pr', 'close', String(number)], repo)
+    return { outcome: 'closed' }
+  } catch (err) {
+    return { outcome: 'failed', error: errorMessage(err) }
+  }
+}
