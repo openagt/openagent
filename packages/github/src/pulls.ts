@@ -285,8 +285,8 @@ export async function cachedPrStates(cwd: string, gitHost: GitHostFor = projectG
 }
 
 /** The cached form of {@link prsForBranch}, shared through the same read-through cache (#1028), each request as the newest read of it says. */
-export async function cachedPrsForBranch(cwd: string, branch: string, gitHost: GitHostFor = projectGitHost): Promise<Cached<LinkedPr[]>> {
-  const read = await cachedRead(branchPrsCacheKey(cwd, branch), () => prsForBranch(cwd, branch, gitHost))
+export async function cachedPrsForBranch(cwd: string, branch: string, gitHost: GitHostFor = projectGitHost, options: { wait?: true } = {}): Promise<Cached<LinkedPr[]>> {
+  const read = await cachedRead(branchPrsCacheKey(cwd, branch), () => prsForBranch(cwd, branch, gitHost), options)
   return read.value ? { ...read, value: read.value.map(newestOf) } : read
 }
 

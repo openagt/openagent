@@ -51,6 +51,8 @@ export interface CacheOptions {
   ttlMs?: number
   /** How long a first, uncached ask waits before reporting `pending`. */
   budgetMs?: number
+  /** A first, uncached ask waits for the read however long it takes, and its answer is kept: for a caller that would otherwise read it again itself. */
+  wait?: true
   now?: Now
 }
 
@@ -73,7 +75,7 @@ export async function cachedRead<T>(key: string, load: () => Promise<T>, options
 
   // Nothing known yet: join the running read, or start one, and wait a moment for it.
   const inflight = entry?.inflight ?? refresh(key, load, now)
-  const settled = await withBudget(inflight, budgetMs)
+  const settled = options.wait ? await inflight.then(value => ({ done: true as const, value }), () => ({ done: false as const })) : await withBudget(inflight, budgetMs)
   if (settled.done) return { value: settled.value, pending: false, at: (entries.get(key) as Entry<T> | undefined)?.at ?? now() }
   return { value: undefined, pending: true }
 }

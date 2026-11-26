@@ -1,7 +1,7 @@
 import { nodeGitRunner, readBranchStates, readHandoff, workAt, type Handoff, type HandoffCommit, type WorkAt } from '@openagt/git-branches'
 import type { GitRunner, RunFound } from '@openagt/hooks'
 import { homeUrlFor } from './home.js'
-import { cachedPrsForBranch, forgetBranchPrs, forgetPr, pickAgentPr, prsForBranch, prsForBranchOrThrow, projectGitHost, type GitHostFor, type LinkedPr } from './pulls.js'
+import { cachedPrsForBranch, forgetBranchPrs, forgetPr, pickAgentPr, prsForBranchOrThrow, projectGitHost, type GitHostFor, type LinkedPr } from './pulls.js'
 
 // The pull request of an ended run's work (#799), in the bar above its message box: which of its
 // branch's requests is the run's, and what the bar offers for it. The branch's own facts are
@@ -100,12 +100,14 @@ export async function readRunPr(root: string, agentId: string, run: RunFound | u
 async function requestsOf(cwd: string, branch: string, endedAt: string | undefined, deps: PrDeps): Promise<LinkedPr[]> {
   const gitHost = deps.gitHost ?? projectGitHost
   if (deps.fresh) return prsForBranchOrThrow(cwd, branch, gitHost)
-  const cached = await cachedPrsForBranch(cwd, branch, gitHost).catch(() => undefined)
+  // Waited for through the cache, so what it reads is kept for the next ask: a read of its own
+  // here would leave the cache empty and every ask paying GitHub's second again.
+  const cached = await cachedPrsForBranch(cwd, branch, gitHost, { wait: true }).catch(() => undefined)
   const ended = endedAt !== undefined ? Date.parse(endedAt) : NaN
   const stale = cached?.at !== undefined && Number.isFinite(ended) && cached.at < ended
   if (cached?.value !== undefined && !stale) return cached.value
   forgetRequests(cwd, branch)
-  return prsForBranch(cwd, branch, gitHost)
+  return (await cachedPrsForBranch(cwd, branch, gitHost, { wait: true }).catch(() => undefined))?.value ?? []
 }
 
 /**
