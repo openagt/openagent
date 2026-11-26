@@ -222,13 +222,15 @@ describe('tabs', () => {
 
   test('the shortcuts open their pane\'s tab: ⌘ or Ctrl with Shift, D for Changes, F for Files', () => {
     render(<Page />)
-    fireEvent.keyDown(window, { key: 'D', metaKey: true, shiftKey: true })
+    // A Mac's browser says the letter small with ⌘ held; elsewhere Shift makes it a capital.
+    fireEvent.keyDown(window, { key: 'd', metaKey: true, shiftKey: true })
     expect(tabs()).toEqual(['Changes'])
     fireEvent.keyDown(window, { key: 'F', ctrlKey: true, shiftKey: true })
     expect(tabs()).toEqual(['Changes', 'Files'])
-    // Without Shift, the key is another: nothing.
-    fireEvent.keyDown(window, { key: 'b', ctrlKey: true })
-    expect(tabs()).toEqual(['Changes', 'Files'])
+    fireEvent.click(screen.getByRole('button', { name: 'Close Changes' }))
+    // Without Shift it is the browser's own ⌘D: nothing.
+    fireEvent.keyDown(window, { key: 'd', metaKey: true })
+    expect(tabs()).toEqual(['Files'])
   })
 })
 
