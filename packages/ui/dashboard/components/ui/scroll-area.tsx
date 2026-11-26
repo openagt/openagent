@@ -23,8 +23,11 @@ export function ScrollArea({
   className,
   children,
   viewportClassName,
+  quiet = false,
   ...props
 }: ScrollAreaPrimitive.Root.Props & {
+  /** Its bar shows only while it scrolls, or under the pointer, as a Mac's own does: the sidebar's. */
+  quiet?: boolean
   /** Extra classes on the viewport — where the height cap belongs when the Root has no definite
    *  height. A `max-h-*` on the Root only caps the box; the viewport's `h-full` cannot resolve
    *  against a parent's max-height, so the content grows instead of scrolling. Put the cap here. */
@@ -52,7 +55,7 @@ export function ScrollArea({
           {children}
         </ScrollAreaPrimitive.Content>
       </ScrollAreaPrimitive.Viewport>
-      <ScrollBar />
+      <ScrollBar className={quiet ? 'opacity-0 transition-opacity duration-180 hover:opacity-100 data-scrolling:opacity-100 data-scrolling:duration-100' : undefined} />
       <ScrollAreaPrimitive.Corner />
     </ScrollAreaPrimitive.Root>
   )

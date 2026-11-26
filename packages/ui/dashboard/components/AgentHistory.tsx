@@ -383,7 +383,7 @@ export function AgentHistory({
             what was left under them. The themed ScrollArea (#913) instead of the sidebar's native
             overflow bar, matching the Overview: SidebarContent's own `overflow-auto` is suppressed. */}
         <SidebarContent className="overflow-hidden">
-          <ScrollArea className="min-h-0 flex-1">
+          <ScrollArea quiet className="min-h-0 flex-1">
             <div ref={list}>
               {/* New/Overview/the modules' pages stack as one nav group, row against row, close under
                   the project select (the select's own section has its room below it), with a little
@@ -509,7 +509,7 @@ export function AgentHistory({
         {/* The person at this dashboard, as one row that opens their menu: the theme and Settings
             (PersonMenu). */}
         {/* At the bottom, under the scroll. */}
-        <SidebarFooter className="mt-auto">
+        <SidebarFooter className="mt-auto border-t border-sidebar-border">
           <PersonMenu onSettings={leave(onSettings)} />
         </SidebarFooter>
         {/* Its right edge, dragged to set its width; a phone's sheet has none. */}
@@ -594,7 +594,7 @@ const WAITING_COUNT = 'flex h-4.5 min-w-4.5 items-center justify-center rounded-
 /** A row of the sidebar's lists, the navigation's row (ui/nav-row): 32 high (44 on a phone), corners 8, the picked one filled, the one under the pointer half filled. Placed, so one that travels is drawn over the rows it passes (`useGlide`). */
 const railRowClass = (active: boolean, lines: 1 | 2 = 1): string =>
   cn(
-    'focus-ring rail-row relative flex w-full items-center gap-3 rounded-lg px-2 text-left text-sm text-foreground transition-colors',
+    'focus-ring rail-row relative flex w-full items-center gap-2 rounded-lg px-2 text-left text-sm text-foreground transition-colors',
     // Two lines: 32 (44 on a phone) at the least, grown by its lines.
     lines === 1 ? 'md:h-8 max-md:h-11' : 'py-1.5 md:min-h-8 max-md:min-h-11',
     active ? 'bg-foreground/8' : 'hover:bg-foreground/4 active:bg-foreground/8',
@@ -744,7 +744,7 @@ function LogViewMenu({ order, show, group, byProject }: { order: RecentsSort; sh
             />
           }
         >
-          <SlidersHorizontal className="size-4 shrink-0" aria-hidden />
+          <SlidersHorizontal className="size-3.5 shrink-0" aria-hidden />
         </TooltipTrigger>
         <TooltipContent>Sort and view</TooltipContent>
       </Tooltip>
@@ -1111,7 +1111,7 @@ function AgentHistoryRow({
 /** One small mark on a row, named for a reader that cannot see it; the row's hover says it in words. */
 function RowMark({ said, children }: { said: string; children: ReactNode }) {
   return (
-    <span role="img" aria-label={said} className="flex shrink-0 items-center">
+    <span role="img" aria-label={said} className="flex shrink-0 items-center gap-1">
       {children}
     </span>
   )
