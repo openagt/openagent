@@ -68,6 +68,9 @@ function withSlice(options: RunOptions, slice: SliceChange): RunOptions {
  * (his pick): the coding agent's mark, the model's name, and how hard it thinks as smaller, quieter
  * words on the line's middle, neither raised nor a badge.
  */
+/** What the model button says where no model is picked: the coding agent's own default. */
+const DEFAULT_MODEL_WORD = 'Default'
+
 export function ModelWords({ logo, name, effort }: { logo?: string | undefined; name?: string | undefined; effort?: string | undefined }) {
   return (
     <>
@@ -143,7 +146,8 @@ export function AgentMenu({
     <DropdownMenu>
       <Tooltip>
         <TooltipTrigger render={<DropdownMenuTrigger type="button" disabled={busy} aria-label={said} className={rowButtonClass} />}>
-          <ModelWords logo={current?.logo} name={current?.logo !== undefined ? currentModelLabel : [current?.label, currentModelLabel].filter(Boolean).join(' ')} effort={level} />
+          {/* The model by its name, "Default" where none is picked: the button never says nothing but a mark. */}
+          <ModelWords logo={current?.logo} name={current?.logo !== undefined ? (currentModelLabel ?? DEFAULT_MODEL_WORD) : [current?.label, currentModelLabel ?? DEFAULT_MODEL_WORD].join(' ')} effort={level} />
           <RowChevron />
         </TooltipTrigger>
         <TooltipContent>{said}</TooltipContent>
@@ -226,10 +230,11 @@ function SessionAgent({ options, say }: UiComposerControlProps) {
   const agents = useAgentsOffered(host)
   const { driver, model, effort } = sliceOf(options)
   const agent = agents?.find(one => one.id === driver)
-  const name = model !== undefined ? modelName(agent, model) : undefined
+  const name = model !== undefined ? modelName(agent, model) : DEFAULT_MODEL_WORD
   const level = effort !== undefined ? effortLabel(effort) : undefined
   useEffect(() => say(undefined), [say])
-  if (name === undefined && level === undefined) return null
+  // The same words as the launcher's button, said and not offered: its model, "Default" where it ran on the agent's own.
+  if (agent === undefined) return null
   return (
     <span className={rowItemClass}>
       <ModelWords logo={agent?.logo} name={name} effort={level} />
