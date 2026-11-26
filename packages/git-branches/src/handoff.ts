@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { nodeGitRunner } from './git.js'
 import { type GitRunner, type RunFound, sessionsHome } from '@openagt/hooks'
 import { sessionFolder } from './sessions.js'
-import { readBranchStates } from './branch-state.js'
+import { parsePorcelain, readBranchStates } from './branch-state.js'
 import { copyStart } from './session-folder.js'
 
 // What a finished session produced (#799), as its branch holds it: the commits, the files, where
@@ -87,6 +87,8 @@ export interface WorkAt {
   landed?: string
   /** The run changed nothing, so a branch it no longer has held nothing. */
   changedNothing: boolean
+  /** A copy of a repo: its folder is its own checkout, on the session's branch, where its uncommitted files are. */
+  copy?: true
 }
 
 /** A copy's name: one folder's own name, never a path, and none of the folder's dot-entries (the run's live record is one). */
@@ -130,7 +132,13 @@ export async function workAt(root: string, agentId: string, run: RunFound | unde
   const git = deps.git ?? nodeGitRunner()
   const [branch, start] = await Promise.all([git(['branch', '--show-current'], cwd).then(out => out.trim(), () => ''), copyStart(cwd, git)])
   if (!branch) return undefined
-  return { cwd, branch, ...(start !== undefined ? { from: start } : {}), changedNothing: false }
+  return { cwd, branch, ...(start !== undefined ? { from: start } : {}), changedNothing: false, copy: true }
+}
+
+/** The files a copy's folder holds uncommitted, by their paths; nothing where git cannot say. */
+async function copyPending(copy: string, git: GitRunner): Promise<{ pendingFiles?: string[] }> {
+  const status = await git(['status', '--porcelain'], copy).catch(() => undefined)
+  return status === undefined ? {} : { pendingFiles: parsePorcelain(status) }
 }
 
 /**
@@ -142,8 +150,10 @@ export async function workAt(root: string, agentId: string, run: RunFound | unde
 export async function readHandoff(at: WorkAt, git: GitRunner = nodeGitRunner()): Promise<Handoff | undefined> {
   const ref = at.branch ?? at.landed
   if (ref === undefined) return undefined
-  const [state] = await readBranchStates(at.cwd, [ref], git, at.from)
-  if (!state) return undefined
+  const [found] = await readBranchStates(at.cwd, [ref], git, at.from)
+  if (!found) return undefined
+  // A copy's checkout is its own folder, which no checkout of a project's is: its uncommitted files are read there.
+  const state = at.copy && found.pendingFiles === undefined ? { ...found, ...(await copyPending(at.cwd, git)) } : found
   const commits = state.commits.map(commit => ({ sha: commit.sha, short: commit.sha.slice(0, 7), subject: commit.subject }))
   const files = state.files.map(file => ({ path: file.path, insertions: file.insertions, deletions: file.deletions, binary: file.binary }))
   const handoff: Handoff = {
