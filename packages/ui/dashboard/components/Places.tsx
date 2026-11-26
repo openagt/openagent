@@ -137,19 +137,30 @@ export interface Offered<P extends ActionPlace> {
   offer: UiOffer
 }
 
+/** What each place last offered for each `on`, for this page's life. */
+const lastOffered = new Map<string, readonly unknown[]>()
+
 /**
  * What the actions at `place` offer now for `on`, in the place's order (`rank`, else the action's
  * `order`): asked again whenever `on` or `again` changes, and after one of them ran. `null` until
  * the first answer. An action that says nothing of itself is offered as it is declared; one whose
- * question fails is not offered.
+ * question fails is not offered. What was last offered for the same `on` stands meanwhile: going
+ * back to a session draws its next step at once rather than after the modules answer again.
  */
 export function useOffers<P extends ActionPlace>(place: P, on: ActionPlaces[P] | null, projectId: string | undefined, again: unknown = 0): { offers: Offered<P>[] | null; reask: () => void } {
   const actions = (useMountedModules().actions[place] as MountedAction<P>[]).filter(action => onIn(action, projectId))
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   const [asked, setAsked] = useState(0)
-  const [offers, setOffers] = useState<Offered<P>[] | null>(null)
   const onKey = JSON.stringify(on)
   const actionsKey = actions.map(action => `${action.package}/${action.id}`).join('\n')
+  const known = `${place}\n${onKey}\n${actionsKey}`
+  const [offers, setOffers] = useState<Offered<P>[] | null>(() => (lastOffered.get(known) as Offered<P>[] | undefined) ?? null)
+  // Another `on`: what was last offered for it, until the modules answer.
+  const [shownFor, setShownFor] = useState(known)
+  if (shownFor !== known) {
+    setShownFor(known)
+    setOffers((lastOffered.get(known) as Offered<P>[] | undefined) ?? null)
+  }
   useEffect(() => {
     if (on === null) return setOffers(null)
     let live = true
@@ -167,6 +178,7 @@ export function useOffers<P extends ActionPlace>(place: P, on: ActionPlaces[P] |
       if (!live) return
       const offered = answers.filter((answer): answer is Offered<P> => answer !== undefined)
       offered.sort((a, b) => (a.offer.rank ?? a.action.order ?? DEFAULT_ORDER) - (b.offer.rank ?? b.action.order ?? DEFAULT_ORDER) || a.action.package.localeCompare(b.action.package))
+      lastOffered.set(known, offered)
       setOffers(offered)
     })
     return () => {
