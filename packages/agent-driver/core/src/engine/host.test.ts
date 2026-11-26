@@ -317,6 +317,11 @@ test("the runs it lists are the project's records and its runs at work, newest f
       [LOCAL_HOST, 'shop', HERE, 0.5, { id: 'claude-code', model: 'opus' }, 'pr', '2026-09-16T14:02:00.000Z'],
     )
     assert.ok(done.person, 'kept under the person its record is filed under')
+    // A repo taken in while it went on (an agent's `add`) is on its mark, not in the options it started with: its box says it.
+    const third = '2026-09-16T13-00-00-000Z'
+    const tookIn = markerCard({ id: third, startedAt: '2026-09-16T13:00:00.000Z', prompt: 'third', driver: 'claude-code', mark: { host: HERE, repos: [{ name: 'blog', from: '/w/blog' }] } })
+    await writeMarker(repo, { ...tookIn, status: 'done', caller: { ...tookIn.caller, options: {} } })
+    assert.deepEqual((await here.list(project, { ids: [third] }))[0]?.options?.['git-branches'], { repos: [{ name: 'blog', from: '/w/blog' }] })
     // Asked no model, the box says the one it ran on; a model asked is said as asked.
     assert.deepEqual(listed[0]!.options?.['agent-driver'], { driver: 'claude-code' })
     assert.deepEqual(done.options?.['agent-driver'], { driver: 'claude-code', model: 'opus' })
