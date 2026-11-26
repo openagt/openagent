@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { Button, Empty, Facts, FilterChips, MiddleCut, NO_PROJECT, Page, PanelGroup, PanelGroups, PanelRow, PanelShape, PersonMark, RunMark, Skeleton, Slot, WordsShape, formatDateTime, formatDay, formatDuration, personSaid, rpcClient, runName, runLineTone, runState, waitingTone, useCodingAgents, usePeople, useIsMobile, runsAgain, runWord, useModuleHost, usePolled, useWaiting, type CodingAgent, type ModuleAgent, type ModuleHostPerson, type UiPageProps, type UiProject, type ReadState, type WaitingItem } from '@openagt/ui/module'
+import { Button, Empty, isUnreachable, Facts, FilterChips, MiddleCut, NO_PROJECT, Page, PanelGroup, PanelGroups, PanelRow, PanelShape, PersonMark, RunMark, Skeleton, Slot, WordsShape, formatDateTime, formatDay, formatDuration, personSaid, rpcClient, runName, runLineTone, runState, waitingTone, useCodingAgents, usePeople, useIsMobile, runsAgain, runWord, useModuleHost, usePolled, useWaiting, type CodingAgent, type ModuleAgent, type ModuleHostPerson, type UiPageProps, type UiProject, type ReadState, type WaitingItem } from '@openagt/ui/module'
 import type { RunCard } from '@openagt/agent-driver'
 
 /** How many runs each project lists: the command's own default page is 20; the page shows more. */
@@ -198,7 +198,11 @@ export function LogsPage({ projects }: UiPageProps) {
         projects.map(project =>
           server.runs(project.id, { limit: LIMIT }).then(
             cards => ({ project, cards }),
-            (err: unknown) => ({ project, error: err instanceof Error ? err.message : String(err) }),
+            (err: unknown) => {
+              // OpenAgent did not answer: the page keeps what it showed and asks again, rather than say it.
+              if (isUnreachable(err)) throw err
+              return { project, error: err instanceof Error ? err.message : String(err) }
+            },
           ),
         ),
       )

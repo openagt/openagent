@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { Check, Copy, Info, MoreHorizontal, Plus } from 'lucide-react'
-import { Button, useAskOn, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, GaugeFace, Input, Panel, PanelGroup, Skeleton, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, useModuleHost, useOpenAgentDown, usePerson, usePolled, type ModuleHost } from '@openagt/ui/module'
+import { Button, isUnreachable, useAskOn, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, GaugeFace, Input, Panel, PanelGroup, Skeleton, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, useModuleHost, useOpenAgentDown, usePerson, usePolled, type ModuleHost } from '@openagt/ui/module'
 import { ClaudeLogo, CodexLogo } from './logos.js'
 import { server, useAgentStates } from './reads.js'
 import { InstallAgent } from './setup.js'
@@ -101,7 +101,11 @@ async function read<T, Beside = object>(host: ModuleHost, word: 'list' | 'usage'
     [word]({})
     .then(
       (output): Read<T, Beside> => ({ ok: true, accounts: output as unknown as Record<AgentId, T[]> & Beside }),
-      (err: unknown): Read<T, Beside> => ({ ok: false, error: err instanceof Error ? err.message : String(err) }),
+      (err: unknown): Read<T, Beside> => {
+        // OpenAgent did not answer: the card keeps what it showed and asks again, rather than say it.
+        if (isUnreachable(err)) throw err
+        return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      },
     )
 }
 

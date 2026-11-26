@@ -354,6 +354,8 @@ export { Waiting } from '../components/Waiting.js'
 export { AskedQuestion } from '../components/AskedQuestion.js'
 export { useHighlighted, useHighlightedIn, languageOfFence, Pieces, ColouredLines, type Piece } from '../lib/highlight.js'
 export { useAction } from '../lib/use-action.js'
+// OpenAgent did not answer, as against a refusal: a read that meets it lets it through, so it keeps what it showed and asks again.
+export { isUnreachable } from '../lib/rpc.js'
 export { useFileNames, pathsIn, type FileNames, type NamedFile } from '../lib/use-file-names.js'
 export { ConfirmDialog } from '../components/ui/confirm-dialog.js'
 // The dashboard's keys, as its keyboard shortcuts list names them: a module's are the same.

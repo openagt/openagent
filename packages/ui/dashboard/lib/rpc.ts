@@ -17,6 +17,24 @@ type RpcResponse = { ret?: unknown; error?: string }
  *
  * `signal` aborts its calls' requests: a caller that gives up on an answer lets its connection go.
  */
+/**
+ * OpenAgent did not answer: the request never reached it (it is restarting, or stopped, or the
+ * network is down), as against an answer that refused. A read that meets it keeps what it showed
+ * and asks again, and the shell says so once it lasts (`use-daemon-health.ts`): a card does not
+ * say it as its own error.
+ */
+export class Unreachable extends Error {
+  constructor() {
+    super('OpenAgent did not answer')
+    this.name = 'Unreachable'
+  }
+}
+
+/** Whether `err` is {@link Unreachable}: by its name, as a module's bundle has the class of its own copy. */
+export function isUnreachable(err: unknown): boolean {
+  return err instanceof Error && err.name === 'Unreachable'
+}
+
 export function rpc<F extends (...args: never[]) => unknown>(
   name: string,
   { signal }: { signal?: AbortSignal } = {},
@@ -31,6 +49,10 @@ export function rpc<F extends (...args: never[]) => unknown>(
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(args.slice(0, sent)),
       signal: signal ?? null,
+    }).catch((err: unknown) => {
+      // Given up on by the caller: theirs to tell. Else the request never reached OpenAgent.
+      if (signal?.aborted) throw err
+      throw new Unreachable()
     })
     // A non-JSON body means something other than the mount answered (a proxy, an error page), and
     // reporting "unexpected token <" from deep in a component is how that used to surface.

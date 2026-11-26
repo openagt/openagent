@@ -27,6 +27,7 @@ import {
   StateCell,
   inPlace,
   pathsIn,
+  isUnreachable,
   rpcClient,
   useFileNames,
   useIsMobile,
@@ -106,7 +107,10 @@ export function QueuePage({ projects }: UiPageProps) {
           const [read, agents] = await Promise.all([
             server.entries(project.id, {}).then(
               entries => ({ entries }),
-              (err: unknown) => ({ error: err instanceof Error ? err.message : String(err) }),
+              (err: unknown) => {
+                if (isUnreachable(err)) throw err
+                return { error: err instanceof Error ? err.message : String(err) }
+              },
             ),
             host.agents(project.id).catch(() => []),
           ])
