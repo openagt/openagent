@@ -421,3 +421,17 @@ test('a session with no project that has a copy of the project is listed with it
   expect(host.openAgent.mock.calls).toEqual([['session', 's1']])
   expect(screen.getByRole('link', { name: 'In the project' }).getAttribute('href')).toBe('/p1/r1')
 })
+
+test('a session with no project recorded in two projects it had copies of, and listed under both, is one row naming both', async () => {
+  const session = { id: 's1', startedAt: at(now - 1000), endedAt: at(now), status: 'done', title: 'Edited both READMEs', noProject: true }
+  const host = hostWith([session], [{ ...session, in: 'session' }])
+  render(
+    <ModuleHostContext.Provider value={host}>
+      <LogsPage projects={[{ id: 'p1', name: 'alpha', remote: 'github.com/me/alpha' }, { id: 'p2', name: 'beta', remote: 'github.com/me/beta' }]} projectId={null} path={[]} />
+    </ModuleHostContext.Provider>,
+  )
+  const links = await screen.findAllByRole('link', { name: 'Edited both READMEs' })
+  expect(links).toHaveLength(1)
+  expect(links[0]!.getAttribute('href')).toBe('/session/s1')
+  expect(screen.getAllByText('No project · alpha, beta')).toHaveLength(1)
+})

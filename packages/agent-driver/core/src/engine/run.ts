@@ -4,7 +4,7 @@ import { projectNameOf, repositoryAddress, sessionsHome, type GitRunner, continu
 import { findRun, readDiary } from '../record-store.js'
 import { type RunCard, type RunStatus } from '../record.js'
 import { runProcess, withLeg, type Leg, type RunDeps } from './leg.js'
-import { earlierPrs, lasting, markOptions, markerCard, runnerMark, type Publish, type RunnerMark } from './records.js'
+import { earlierPrs, lasting, markOptions, markerCard, projectFolders, runnerMark, type Publish, type RunnerMark } from './records.js'
 import type { ProjectSkillsPick } from './profile.js'
 import { withRunLock } from './run-lock.js'
 import { askName, isBareCommand, type AskedName } from './title.js'
@@ -348,6 +348,8 @@ async function runLeg(given: Omit<Leg, 'killed'>, start: LegStart): Promise<RunO
   process.on('SIGTERM', onSignal)
   try {
     const hooks = createHooks(start.modules)
+    // A session with no project is recorded in the projects it has copies of too: the ones on this computer's list.
+    leg.here.logs = { projects: projectFolders(async () => hooks.settings), ...leg.here.logs }
     const project = await projectOf(leg.repo, leg.here.git)
     const options = optionsOf(leg.mark, start.branch, start.profile)
     // The skills the modules on for this run give it, for the agent it is on: the skills module links them where it works.

@@ -9,7 +9,7 @@ import { sessionFolder, sessionsHomeOf, discardWorktree, worktreePath } from '@o
 import { listedRuns, liveCard, ownFolder, runEvents, standing, type RunReadsDeps } from '../reads/run-reads.js'
 import { handedDownSettings, runProfile } from './profile.js'
 import { inboxPath, liveDir } from './live-card.js'
-import { isPublish, NO_PUBLISH } from './records.js'
+import { isPublish, NO_PUBLISH, projectFolders } from './records.js'
 import { takesRequests } from './git-host.js'
 import { isPidAlive } from './run-lock.js'
 import { profileLoginFor, detachResume, detachRun, GIT_ACCOUNT_ENV, readyToRun, spawnResume, spawnRun } from './runner.js'
@@ -63,6 +63,8 @@ export function localHost(deps: LocalHostDeps = {}): RunHost {
   const here = deps.host ?? hostname()
   const startingMs = deps.startingMs ?? STARTING_MS
   const settings = deps.settings ?? (() => handedDownSettings())
+  // A session with no project is recorded in the projects it has copies of too: a delete or a late fact goes to each.
+  const logs = { projects: projectFolders(settings) }
   const naming = (): Pick<ReadyNaming, 'names' | 'name' | 'prepare'> => deps.naming ?? (readyNaming ??= new ReadyNaming())
   const requestsAt = deps.takesRequests ?? (remote => takesRequests(remote))
   const hasOrigin = deps.hasOrigin ?? (async dir => (await originUrl(dir)) !== undefined)
@@ -225,7 +227,7 @@ export function localHost(deps: LocalHostDeps = {}): RunHost {
       // Then the record that put the row in the list. A run with none (its checkout was all there
       // was, or a delete stopped half-way) is done once its folder is.
       if (await findRun(dir, run.id).catch(() => undefined)) {
-        const removed = await deleteRun(dir, run.id)
+        const removed = await deleteRun(dir, run.id, logs)
         if (!removed.ok) throw new Error(removed.error)
       }
     },
@@ -233,7 +235,7 @@ export function localHost(deps: LocalHostDeps = {}): RunHost {
     async record(run, facts) {
       const patch = patchOf(facts)
       if (patch === undefined) throw new Error('Nothing of this is kept on a run\'s record.')
-      if (!(await patchRun(placeOf(run.project), run.id, patch).catch(() => false))) throw new Error('the record was not updated')
+      if (!(await patchRun(placeOf(run.project), run.id, patch, logs).catch(() => false))) throw new Error('the record was not updated')
     },
 
     // A run just started goes by the name asked for it as it started, until its record has one.

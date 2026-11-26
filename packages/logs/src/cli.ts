@@ -1,8 +1,8 @@
 import { GIT_FAILED, nodeGitRunner, runsRootOf } from '@openagt/git-branches'
 import { Refused, UsageError, inRepo, parseCommandArgs, runCommandLine, helpRows, helpText, type Command } from '@openagt/hooks/command'
 import type { GitRunner } from '@openagt/hooks'
-import { agentLines, deleteRun, findEntry, isRunId, patchRun, publicCard, readCard, readRunDiary, runFiles, type ListedRun, type RunPatch } from '@openagt/agent-driver'
-import { newestRuns, peopleAt, records } from './reads.js'
+import { agentLines, deleteRun, isRunId, patchRun, publicCard, readCard, readRunDiary, runFiles, type RunPatch } from '@openagt/agent-driver'
+import { newestRuns, peopleAt, records, runAt, type ListedRunHere } from './reads.js'
 import { skillUseOf } from './skill-use.js'
 
 /**
@@ -32,7 +32,7 @@ export const DEFAULT_LIMIT = 20
 export const USAGE = `usage: logs [command]
 
 ${helpRows([
-  ['(no command) [--branch <name>] [--limit N]', `the runs, newest first (the newest ${DEFAULT_LIMIT} unless --limit says otherwise), each with the person it is kept under; --branch keeps the runs on one branch`],
+  ['(no command) [--branch <name>] [--limit N]', `the runs, newest first (the newest ${DEFAULT_LIMIT} unless --limit says otherwise), each with the person it is kept under; a session with no project that had a copy of this repo is listed too, with "noProject": true; --branch keeps the runs on one branch`],
   ['show <id>', 'one run: its card, and what the agent said, its result, how it ended, what it cost'],
   'For a dashboard that shows the runs, not for an agent:',
   ['--local', `with either read: read this machine's copy, no fetch from origin`],
@@ -62,7 +62,7 @@ const list: Command<[CliIo, GitRunner]> = async (args, io, git) => {
   const { values } = parseCommandArgs(args, { branch: { type: 'string' }, limit: { type: 'string' }, ...READ_FLAGS }, 0)
   const limit = values.limit === undefined ? DEFAULT_LIMIT : wholeAbove0('--limit', values.limit)
   // Each card with the person it is kept under, whichever way it is printed.
-  const shown = ({ person, ...card }: ListedRun) => ({ ...(values.full ? card : publicCard(card)), person })
+  const shown = ({ person, noProject, ...card }: ListedRunHere) => ({ ...(values.full ? card : publicCard(card)), person, ...(noProject ? { noProject } : {}) })
   return (await newestRuns(await records(io.cwd, values.local, git), limit, values.branch)).map(shown)
 }
 
@@ -86,12 +86,13 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
   async show(args, io, git) {
     const { values, positionals } = parseCommandArgs(args, READ_FLAGS, 1)
     const id = runIdArg(positionals[0]!)
-    const { reader, dir } = await records(io.cwd, values.local, git)
-    const run = await findEntry(reader, dir, id)
-    const card = run && (await readCard(reader, dir, run))
-    if (!run || !card) throw noRun(id)
-    const diary = await readRunDiary(reader, dir, run)
-    return values.full ? { ...card, diary } : { ...publicCard(card), diary: agentLines(diary) }
+    const at = await records(io.cwd, values.local, git)
+    const found = await runAt(at, id)
+    const card = found && (await readCard(at.reader, found.at, found.run))
+    if (!found || !card) throw noRun(id)
+    const diary = await readRunDiary(at.reader, found.at, found.run)
+    const where = found.noProject ? { noProject: true } : {}
+    return values.full ? { ...card, ...where, diary } : { ...publicCard(card), ...where, diary: agentLines(diary) }
   },
 
   async delete(args, io, git) {

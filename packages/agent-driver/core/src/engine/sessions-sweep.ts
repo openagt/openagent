@@ -3,6 +3,7 @@ import { errorMessage } from '@openagt/git-branches'
 import { sessionsHome, type AppContext } from '@openagt/hooks'
 import { isPidAlive } from './run-lock.js'
 import { sweep } from './sweep.js'
+import { projectFolders } from './records.js'
 
 // The sessions with no project work in the sessions home, each in a folder of its own
 // (git-branches' session folders). A project's runs are swept by its scheduler; no scheduler runs
@@ -12,11 +13,13 @@ import { sweep } from './sweep.js'
 const SWEEP_EVERY_MS = 60_000
 
 /** Sweep the sessions home now and every minute after, until the app stops (`app.lifecycle`'s `started`). */
-export function sweepSessions(app: Pick<AppContext, 'signal'>, log: (line: string) => void = console.log): void {
+export function sweepSessions(app: Pick<AppContext, 'signal' | 'settings'>, log: (line: string) => void = console.log): void {
   const home = sessionsHome()
+  // A session's record goes to the projects it has copies of too, as its own process writes it.
+  const logs = { projects: projectFolders(async () => app.settings) }
   let sweeping: Promise<unknown> = Promise.resolve()
   const once = (): void => {
-    sweeping = sweeping.then(() => sweep(home, { host: hostname(), isAlive: isPidAlive, log })).catch((err: unknown) => log(`[openagent] the sessions home could not be swept: ${errorMessage(err)}`))
+    sweeping = sweeping.then(() => sweep(home, { host: hostname(), isAlive: isPidAlive, log, logs })).catch((err: unknown) => log(`[openagent] the sessions home could not be swept: ${errorMessage(err)}`))
   }
   once()
   const timer = setInterval(once, SWEEP_EVERY_MS)

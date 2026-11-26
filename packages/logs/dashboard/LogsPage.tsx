@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { Button, Empty, Facts, FilterChips, MiddleCut, Page, PanelGroup, PanelGroups, PanelRow, PanelShape, PersonMark, RunMark, Skeleton, Slot, WordsShape, formatDateTime, formatDay, formatDuration, personSaid, rpcClient, runName, runLineTone, runState, waitingTone, useCodingAgents, usePeople, useIsMobile, runsAgain, runWord, useModuleHost, usePolled, useWaiting, type CodingAgent, type ModuleAgent, type ModuleHostPerson, type UiPageProps, type UiProject, type ReadState, type WaitingItem } from '@openagt/ui/module'
+import { Button, Empty, Facts, FilterChips, MiddleCut, NO_PROJECT, Page, PanelGroup, PanelGroups, PanelRow, PanelShape, PersonMark, RunMark, Skeleton, Slot, WordsShape, formatDateTime, formatDay, formatDuration, personSaid, rpcClient, runName, runLineTone, runState, waitingTone, useCodingAgents, usePeople, useIsMobile, runsAgain, runWord, useModuleHost, usePolled, useWaiting, type CodingAgent, type ModuleAgent, type ModuleHostPerson, type UiPageProps, type UiProject, type ReadState, type WaitingItem } from '@openagt/ui/module'
 import type { RunCard } from '@openagt/agent-driver'
 
 /** How many runs each project lists: the command's own default page is 20; the page shows more. */
@@ -10,9 +10,13 @@ export interface RunRow {
   project: UiProject
   /** The project the run is in, by id, when it is not the row's: a session with no project listed under a project it has a copy of. Opened as that one's. */
   in?: string
+  /** A session with no project: the projects it has copies of, by name, which its row names. One row says it, whichever of them listed it. */
+  copies?: string[]
   card: Omit<RunCard, 'caller'> & {
     /** Whose run it is, by the email its record is kept under; a very old card has none. */
     person?: string
+    /** A session with no project, recorded in the row's project because it had a copy of it. */
+    noProject?: true
     /** Its pull request merged, as the git host last said, read where the sidebar reads it: the run reads as merged there and here. */
     merged?: boolean
   }
@@ -44,6 +48,27 @@ export function withLiveRuns(rows: readonly RunRow[], live: readonly LiveRuns[])
     for (const run of runs) if (!recorded.has(`${project.id}/${run.id}`) && run.startedAt >= from) shown.push({ project, ...(run.in !== undefined ? { in: run.in } : {}), card: { id: run.id, startedAt: run.startedAt, ...cardOf(run) } })
   }
   return shown.sort((a, b) => b.card.startedAt.localeCompare(a.card.startedAt))
+}
+
+/**
+ * One row per run: a session with no project is recorded in each project it has a copy of, and the
+ * dashboard lists it under each of them, so the projects' reads give it once each. It stays once,
+ * the first row of it (the newest word on it), naming every one of them.
+ */
+export function oneRowPerRun(rows: readonly RunRow[]): RunRow[] {
+  const kept = new Map<string, RunRow>()
+  for (const row of rows) {
+    const session = row.in !== undefined || row.card.noProject === true
+    const key = session ? `${NO_PROJECT}/${row.card.id}` : `${row.project.id}/${row.card.id}`
+    const first = kept.get(key)
+    if (!session) {
+      if (!first) kept.set(key, row)
+      continue
+    }
+    const copies = [...(first?.copies ?? []), ...(first?.copies?.includes(row.project.name) ? [] : [row.project.name])]
+    kept.set(key, { ...(first ?? row), in: NO_PROJECT, copies })
+  }
+  return [...kept.values()]
 }
 
 /** What a row takes from the dashboard's word on a run. */
@@ -190,7 +215,7 @@ export function LogsPage({ projects }: UiPageProps) {
     // Kept for the next visit: the page opens with the last list, faded until it is read again.
     { remember: `logs:runs:${key}`, stored: true },
   )
-  const read = { ...recorded, rows: withLiveRuns(recorded.rows, live) }
+  const read = { ...recorded, rows: oneRowPerRun(withLiveRuns(recorded.rows, live)) }
   // The runs the dashboard lists show while the records are read; with none of those, the list waits for the records.
   const state: ReadState = recordedState === 'unknown' ? (read.rows.length > 0 ? liveState : 'unknown') : liveState === 'kept' ? 'kept' : recordedState
   // What waits on the person, every project's, as the shell read it for the sidebar's "Waiting on you": a run there waits here too, in its words.
@@ -263,7 +288,7 @@ export function LogsPage({ projects }: UiPageProps) {
               <PanelGroups className="gap-y-8">
                 {days.map(({ day, rows, cost }) => (
                   <PanelGroup key={day} title={day} {...(cost > 0 ? { count: dollars(cost) } : {})}>
-                    {rows.map(row => ({ ...row, standing: standingOf(row), need: needOf(row) })).map(({ project, in: home, card, standing, need }) => {
+                    {rows.map(row => ({ ...row, standing: standingOf(row), need: needOf(row) })).map(({ project, in: home, copies, card, standing, need }) => {
                       // A run waiting on the person is in the colour of what it needs, as "Waiting on you" and the Overview say it.
                       const tone = standing.state === 'waiting' && need !== undefined ? waitingTone(need) : undefined
                       return (
@@ -281,7 +306,8 @@ export function LogsPage({ projects }: UiPageProps) {
                           phone && <span title={formatDateTime(card.startedAt)}>{clock(card.startedAt)}</span>,
                           // What its work still needs before it leaves this machine, in the sidebar's words.
                           ...leftParts(need),
-                          many && project.name,
+                          // A session with no project is listed once, naming the projects it had copies of.
+                          copies ? `No project · ${copies.join(', ')}` : many && project.name,
                           card.cost !== undefined && dollars(card.cost),
                           // Last, as the part that gives way, and cut in its middle: runs started the same minute differ only at
                           // their branch's end. A phone, where it has no room, leaves it with its dot to a screen reader.

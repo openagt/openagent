@@ -9,7 +9,7 @@ import { personalFolder, writeSharing, SESSIONS_DIR } from '@openagt/store-files
 import { rpcKind } from '@openagt/hooks/rpc'
 import { rpcHost } from '@openagt/hooks/testing'
 import { runCli, DEFAULT_LIMIT } from './cli.js'
-import { RUNS_DIR } from '@openagt/agent-driver'
+import { COPIES_DIR, RUNS_DIR } from '@openagt/agent-driver'
 import { people as peopleRead, runs as runsRead } from './server.js'
 
 const git = nodeGitRunner()
@@ -106,6 +106,28 @@ test('the bare command lists every person\'s runs off origin, newest first, the 
     // Nothing lands locally: the agent's clone holds no copy of the branch.
     await assert.rejects(git(['rev-parse', '--verify', DATA_BRANCH], a!))
     assert.equal((await git(['status', '--porcelain'], a!)).trim(), '')
+  } finally {
+    await cleanup()
+  }
+})
+
+test('a session with no project that had a copy of the repo is listed among its runs, by when it started, marked noProject; show reads it; --branch leaves it out; both off origin and --local', async () => {
+  const R0 = '2026-07-05T12-00-00-000Z'
+  const { agents, cleanup } = await rig(1, {
+    ...RUNS,
+    [`../${COPIES_DIR}/c@c/${R0}.json`]: JSON.stringify(card(R0, { intent: 'with copies', caller: { runner: { repos: [] } } })),
+    [`../${COPIES_DIR}/c@c/${R0}.jsonl`]: '{"kind":"said","text":"Edited the README."}\n',
+  })
+  try {
+    // This machine's copy, made the way a writer makes it: a patch through the funnel.
+    assert.equal((await run(agents[0]!, ['patch', R3, '--branch', 'agent-r3'])).code, 0)
+    for (const [cwd, flags] of [[agents[0]!, []], [agents[0]!, ['--local']]] as const) {
+      const all = await run(cwd, [...flags])
+      assert.deepEqual(all.json.map((c: { id: string }) => c.id), [R3, R0, R2, R1], 'by when each started')
+      assert.deepEqual(all.json[1], { ...card(R0), intent: 'with copies', person: 'c@c', noProject: true })
+      assert.deepEqual((await run(cwd, ['show', R0, ...flags])).json, { ...card(R0), intent: 'with copies', noProject: true, diary: [{ kind: 'said', text: 'Edited the README.' }] })
+      assert.deepEqual((await run(cwd, [...flags, '--branch', 'agent-r3'])).json.map((c: { id: string }) => c.id), [R3])
+    }
   } finally {
     await cleanup()
   }
