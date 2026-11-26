@@ -386,3 +386,29 @@ test('a command with no coding agent handed down to it says so: there is no list
     }
     assert.equal((await run(['--help'], env, { logins: () => Promise.resolve([]) })).code, 0)
   }))
+
+test("an added account whose login is gone is listed signed out; add under its name signs in to it again, in its place, and what the agent kept of the old login goes; runs skip it meanwhile", () =>
+  inDir(async env => {
+    addAccount('Dani', 'old-login', accountsPath('claude', env))
+    addAccount('Rom', 'rom-login', accountsPath('claude', env))
+    const there = new Set(['rom-login'])
+    const forgotten: string[] = []
+    const claude: Partial<AgentLogins> = {
+      addedLoginThere: account => there.has(account.login ?? ''),
+      signIn: accounts => {
+        // Signed in to again, the account is not among the ones it is told apart from.
+        assert.deepEqual(accounts.map(a => a.name), ['This computer', 'Rom'])
+        there.add('new-login')
+        return Promise.resolve({ ok: true, login: 'new-login' })
+      },
+      forget: account => (forgotten.push(account.login ?? ''), Promise.resolve()),
+    }
+    const listed = JSON.parse((await run(['list'], env, agents(claude))).out[0]!) as Record<string, { name: string; signedOut?: true }[]>
+    assert.deepEqual(listed['claude']!.map(a => [a.name, a.signedOut === true]), [['This computer', false], ['Dani', true], ['Rom', false]])
+    const again = await run(['add', 'claude', 'dani'], env, agents(claude))
+    assert.equal(again.code, 0)
+    assert.deepEqual(readAccounts(accountsPath('claude', env)).map(a => [a.name, a.login]), [['This computer', undefined], ['Dani', 'new-login'], ['Rom', 'rom-login']])
+    assert.deepEqual(forgotten, ['old-login'])
+    // A name an account has, signed in, is still refused.
+    assert.equal((await run(['add', 'claude', 'Rom'], env, agents(claude))).code, 1)
+  }))

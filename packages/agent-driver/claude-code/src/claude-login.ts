@@ -123,6 +123,13 @@ export function notMinted(shown: string): string {
   return ['Claude Code ended without a login.', ...lines.slice(-5)].join('\n')
 }
 
+/** Why Claude Code's sign-in ended with no login kept, from what it showed: its last lines. */
+export function notSignedIn(shown: string): string {
+  const lines = [...new Set(words(shown).split('\n').map(line => line.trim().replace(/\s+/g, ' ')).filter(line => line && !STARTED_AS.test(line)))]
+  if (lines.includes(NOT_INSTALLED)) return NOT_INSTALLED
+  return ['Claude Code ended without signing in.', ...lines.slice(-5)].join('\n')
+}
+
 /** Where Claude Code's sign-in page is, as the link it drew says it: the whole address, however the screen wrapped its words. */
 const SIGN_IN_LINK = /\x1b\]8;[^;\x07\x1b]*;(https:\/\/[^\x07\x1b\s]+\/oauth\/authorize\?[^\x07\x1b\s]+)(?:\x07|\x1b\\)/
 
@@ -153,6 +160,13 @@ export interface MintOptions {
   onLink?: (url: string, paste: (code: string) => boolean) => void
   /** Told when Claude Code did not take the code pasted: it is ready for another, at the same page. */
   onRefused?: () => void
+  /** What the command runs with beside this process's own environment: the folder a login is kept in (`CLAUDE_CONFIG_DIR`). */
+  env?: NodeJS.ProcessEnv
+  /**
+   * For a command that keeps the login it makes rather than showing it (`claude auth login`): once
+   * it has ended, the login it kept, as the caller names it; none when it kept none.
+   */
+  kept?: () => Promise<string | undefined>
 }
 
 /** How a Claude login is made: Claude Code's own, or a stand-in for tests. */
@@ -165,6 +179,8 @@ const MINT_TIMEOUT_MS = 10 * 60_000
  * as a key of its own.
  */
 const ENTER_AFTER_MS = 600
+/** What Claude Code says once a sign-in went through. */
+const SIGNED_IN = /Login\s+successful|Logged\s+in\s+as|Successfully\s+logged\s+in/i
 /** What Claude Code says of a code it did not take, then waiting for an Enter to ask again. */
 const REFUSED = /OAuth\s+error/
 /** How much of what Claude Code showed is kept: its end, where the login is. */
@@ -183,12 +199,12 @@ const STARTED_AS = /^started as \d+$/
  * program first says which process it is: at the end both groups are ended, whether or not Claude
  * Code heeds a terminal that went away.
  */
-export const mintClaude: Mint = ({ signal, timeoutMs = MINT_TIMEOUT_MS, command = 'claude setup-token', onLink, onRefused } = {}) =>
+export const mintClaude: Mint = ({ signal, timeoutMs = MINT_TIMEOUT_MS, command = 'claude setup-token', onLink, onRefused, env, kept } = {}) =>
   new Promise(resolve => {
     const inner = `echo "started as $$"; stty cols ${COLUMNS} rows ${ROWS}; command -v ${command.split(' ')[0]} >/dev/null || { echo "${NOT_INSTALLED}"; exit 1; }; exec ${command}`
     const lent = process.platform === 'darwin' ? 'script -q /dev/null sh -c "$0"' : 'script -q -e -c "$0" /dev/null'
     // On Linux `script` starts its program with the person's own shell, and the line above is written for sh.
-    const child = spawn('sh', ['-c', `cat | { ${lent}; kill 0; }`, inner], { stdio: ['pipe', 'pipe', 'pipe'], detached: true, env: { ...process.env, SHELL: '/bin/sh' } })
+    const child = spawn('sh', ['-c', `cat | { ${lent}; kill 0; }`, inner], { stdio: ['pipe', 'pipe', 'pipe'], detached: true, env: { ...process.env, ...env, SHELL: '/bin/sh' } })
     child.stdin.on('error', () => {})
     let shown = ''
     let lentTo: number | undefined
@@ -196,6 +212,8 @@ export const mintClaude: Mint = ({ signal, timeoutMs = MINT_TIMEOUT_MS, command 
     let ended = false
     /** What Claude Code showed since the last code pasted was entered, its reply to the code; none while no code waits for one. */
     let reply: string | undefined
+    /** The login kept is being read, once the screen said the sign-in went through. */
+    let checking = false
     let enter: NodeJS.Timeout | undefined
     const end = (answer: { ok: true; login: string } | Failed): void => {
       if (ended) return
@@ -246,11 +264,26 @@ export const mintClaude: Mint = ({ signal, timeoutMs = MINT_TIMEOUT_MS, command 
           return true
         })
       }
-      const login = mintedIn(shown)
+      const login = kept ? undefined : mintedIn(shown)
       if (login) end({ ok: true, login })
+      // A command that keeps its login may wait on the screen once it says so: the login is read then, not at its end.
+      if (kept && !checking && SIGNED_IN.test(words(shown))) {
+        checking = true
+        void kept().then(
+          signed => (signed !== undefined ? end({ ok: true, login: signed }) : (checking = false)),
+          () => (checking = false),
+        )
+      }
     }
     child.stdout.setEncoding('utf8').on('data', read)
     child.stderr.setEncoding('utf8').on('data', read)
     child.once('error', error => end({ ok: false, error: `Claude Code could not be started: ${error.message}` }))
-    child.once('close', () => end({ ok: false, error: notMinted(shown) }))
+    child.once('close', () => {
+      if (!kept) return end({ ok: false, error: notMinted(shown) })
+      // A login the command kept, read once it ended; why not, from what it showed, when it kept none.
+      void kept().then(
+        login => end(login !== undefined ? { ok: true, login } : { ok: false, error: notSignedIn(shown) }),
+        () => end({ ok: false, error: notSignedIn(shown) }),
+      )
+    })
   })

@@ -95,7 +95,8 @@ export function Page({
             {line !== undefined && <p className="min-w-0 text-sm text-muted-foreground max-md:order-first max-md:flex-1 md:order-last md:basis-full">{line}</p>}
           </div>
           {/* Under the row, so however long it is, the buttons stay at the name's right. On a phone, where the bar names the page, it is said to a screen reader only. */}
-          {description !== undefined && <p className="mt-1 text-sm text-muted-foreground max-md:sr-only">{description}</p>}
+          {/* 8 under the row, so a page's buttons, as tall as the row, never touch it (his report, 2026-11-26). */}
+          {description !== undefined && <p className="mt-2 text-sm text-muted-foreground max-md:sr-only">{description}</p>}
         </div>
         {bar}
       </header>

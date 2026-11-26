@@ -52,6 +52,32 @@ vi.mock('./components/SettingsDialog.js', async () => {
   }
 })
 // A project's launcher, stood in for: its press removes the project as the projects module's Remove project does.
+// The sidebar's project select is a module's (the projects module's, tested there): stood in for by
+// one with the same roles, every project first, then the projects the shell lists.
+vi.mock('./components/SidebarProject.js', async importOriginal => {
+  const { useProjects } = await import('./lib/shell-projects.js')
+  return {
+    ...(await importOriginal<typeof import('./components/SidebarProject.js')>()),
+    SidebarProject: ({ picked, pending, onPick }: { picked: string | null; pending: boolean; onPick: (id: string | null) => void }) => {
+      const projects = useProjects()
+      const [open, setOpen] = useState(false)
+      const name = pending ? 'loading' : picked === null ? 'All projects' : projects.find(project => project.id === picked)?.name
+      if (name === undefined) return null
+      const rows = [{ id: null, name: 'All projects' }, ...projects.map(project => ({ id: project.id as string | null, name: project.name }))]
+      return createElement(
+        'div',
+        null,
+        createElement('button', { type: 'button', role: 'combobox', 'aria-label': `Project: ${name}`, 'aria-expanded': open, onClick: () => setOpen(!open) }, pending ? '' : name),
+        open &&
+          createElement(
+            'div',
+            { role: 'listbox' },
+            rows.map(row => createElement('div', { key: row.id ?? 'all', role: 'option', 'aria-selected': row.id === picked, onClick: () => (setOpen(false), onPick(row.id)) }, row.name)),
+          ),
+      )
+    },
+  }
+})
 vi.mock('./components/ProjectHome.js', async importOriginal => {
   const { projectsChanged } = await import('./lib/shell-projects.js')
   return {

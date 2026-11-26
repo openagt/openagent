@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
-import type { UiActionAt } from '@openagt/ui/module'
+import { forgetRemembered, type UiActionAt } from '@openagt/ui/module'
 import { mountedOf, type MountedModules } from '@openagt/ui/module/testing'
 import { HotTicketsCard } from './HotTicketsCard.js'
 import { priorityTone } from './lib/ticket-priority.js'
@@ -176,6 +176,25 @@ describe('HotTicketsCard', () => {
     render({ p1: { list: [ticket('urgent.md', { priority: '8' })] } })
     expect((await screen.findByRole('alert')).textContent).toBe('Could not read the tickets of beta: no answer for p2: list')
     expect(screen.getByText('urgent')).toBeTruthy()
+  })
+
+  test("OpenAgent not answering (restarting, say) is not the card's to say: no red line, the read just waits for the next one", async () => {
+    // Projects of its own: a read of a project is shared while it is on its way, and an earlier test's may be; no read kept from one either.
+    forgetRemembered()
+    const one = { id: 'p8', name: 'one', remote: 'github.com/me/one' }
+    const two = { id: 'p9', name: 'two', remote: 'github.com/me/two' }
+    const unreachable = Object.assign(new Error('OpenAgent did not answer'), { name: 'Unreachable' })
+    host = fakeHost({ p8: { list: [ticket('urgent.md', { priority: '8' })] }, p9: { list: [] } })
+    const answered = host.call.getMockImplementation()!
+    host.call.mockImplementation(async (projectId, name, input) => {
+      if (projectId === 'p9') throw unreachable
+      return answered(projectId, name, input)
+    })
+    renderWithHost(<HotTicketsCard projects={[one, two]} />, host, NO_MODULES)
+    await waitFor(() => expect(host.call).toHaveBeenCalledWith('p9', 'list', {}))
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.queryByText(/did not answer|Try again/)).toBeNull()
   })
 
   test('a kind with nothing in it has no heading', async () => {

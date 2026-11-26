@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button, Input, SettingsRow, SettingsRowShapes, SettingsSection, cn, computerRpcClient, useAction, useLoaded, useModuleHost, type ModuleHost } from '@openagt/ui/module'
+import { Button, Input, isUnreachable, SettingsRow, SettingsRowShapes, SettingsSection, cn, computerRpcClient, useAction, useLoaded, useModuleHost, type ModuleHost } from '@openagt/ui/module'
 
 /** The module's server part, in no project: the command is this computer's. */
 const server = (host: ModuleHost) => computerRpcClient<typeof import('../src/server.js')>(host)
@@ -27,7 +27,10 @@ export function CommandSettings() {
         .command({})
         .then(
           (command): Read => ({ command }),
-          (err: unknown): Read => ({ error: err instanceof Error ? err.message : String(err) }),
+          (err: unknown): Read => {
+            if (isUnreachable(err)) throw err
+            return { error: err instanceof Error ? err.message : String(err) }
+          },
         ),
     undefined,
     [host],

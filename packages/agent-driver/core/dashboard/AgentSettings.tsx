@@ -1,8 +1,10 @@
 import { SettingsSection, SettingsSelectRow, ToggleRow, inPlace, usePolled, useModuleHost, type SettingsOption } from '@openagt/ui/module'
 import { agentOptions, type AgentOption } from './models.js'
 import { server, useAgentStates, useAgentsOffered, usePicked } from './reads.js'
+import { AgentUpdates } from './AgentUpdates.js'
 
-// Settings › Coding agent: the coding agent and the model every next run on this computer is on,
+// Settings › Coding agent: a newer version of a coding agent here, with its update (AgentUpdates),
+// then the coding agent and the model every next run on this computer is on,
 // the same pick the menu under the message box makes, and whether each run is named by a small
 // model as it starts. A run whose options name an agent is on that one.
 
@@ -34,6 +36,7 @@ export function AgentSettings() {
   const missing = states?.find(state => state.agent === driver && !state.ready && state.fix?.kind === 'install')
   return (
     <SettingsSection>
+      <AgentUpdates />
       <SettingsSelectRow
         label="Coding agent"
         description={

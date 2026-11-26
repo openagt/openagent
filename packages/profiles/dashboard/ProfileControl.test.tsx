@@ -41,8 +41,9 @@ describe("the launcher's Profile line", () => {
     expect(say).toHaveBeenLastCalledWith({ words: 'Profile Default' })
     await openSetupLine('Profile')
     const row = (name: RegExp) => screen.getByRole('menuitem', { name })
-    expect(row(/^Default/).querySelector('.lucide-check')!.classList.contains('opacity-100')).toBe(true)
-    expect(row(/^Reviewer/).querySelector('.lucide-check')!.classList.contains('opacity-0')).toBe(true)
+    // The tick at the row's end, on the picked one alone.
+    expect(row(/^Default/).lastElementChild!.querySelector('.lucide-check')).not.toBeNull()
+    expect(row(/^Reviewer/).querySelector('.lucide-check')).toBeNull()
     fireEvent.click(row(/^Reviewer/))
     await waitFor(() => expect(callComputer).toHaveBeenCalledWith('pickProfile', { id: 'reviewer' }))
     await waitFor(async () => expect((await setupLine('Profile')).textContent).toBe('Profile: Reviewer'))

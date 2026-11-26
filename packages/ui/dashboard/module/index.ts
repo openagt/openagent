@@ -218,7 +218,7 @@ export function useOpenAgentDown(): boolean {
 // The dashboard's own building blocks, so a module looks like the rest of the page.
 export { Button, buttonVariants, type ButtonProps } from '../components/ui/button.js'
 export { CopyButton } from '../components/ui/copy-button.js'
-export { Card, CardHeader, CardTitle, CardContent, PageLink } from '../components/ui/card.js'
+export { Card, CardHeader, CardTitle, CardContent, HEADING_PRESS_CLASS, PageLink } from '../components/ui/card.js'
 export { Skeleton, useSkeleton } from '../components/ui/skeleton.js'
 export { Slot, PanelShape, RowShapes, SentenceShape, WordsShape, type SlotRead } from '../components/ui/slot.js'
 export { PartDescription } from '../components/PartDescription.js'
@@ -267,20 +267,23 @@ export {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
   MenuMark,
+  MenuTick,
   MENU_BODY_CLASS,
   MENU_ITEM_CLASS,
   MENU_POPUP_CLASS,
   MENU_TRIGGER_OPEN_CLASS,
+  PICKER_SEARCH_CLASS,
 } from '../components/ui/dropdown-menu.js'
 // A searchable list in a popup, drawn as the module draws it: the same Base UI as the dashboard's pickers.
 export { Combobox } from '@base-ui/react/combobox'
 export { usePickerSearch } from '../components/ui/picker-search.js'
-export { usePopupPosition } from '../components/ui/popup-placement.js'
+export { POPUP_EDGE, usePopupPosition } from '../components/ui/popup-placement.js'
+export { PROJECT_ROW_CLASS } from '../components/ui/nav-row.js'
 export { OptionLabel } from '../components/ui/option-label.js'
 // The message box's rows, as a control there draws its item (`composer.control`).
 export { rowButtonClass, rowItemClass, RowChevron, RowSaid, RowItem, BoxOfRow } from '../components/ui/row-item.js'
 // A line of the gear's menu under the message box (`composer.control` at `setup`).
-export { SetupLine, SetupPress, SetupSaid } from '../components/SessionSetup.js'
+export { PICK_CLASS as SETUP_PICK_CLASS, SetupLine, SetupPress, SetupRow, SetupRows, SetupSaid, useSetupRows } from '../components/SessionSetup.js'
 // The places a module draws itself: a profile's editor draws every control of the message box, the usage card the usage bar's line.
 export { ComposerControls, HandoffOffers, ViewsAt, useViewsAt, useControlsSaid, useOptionsAt, type ControlBox, type ControlsSaid } from '../components/Places.js'
 export { ModuleSlot } from '../components/ModulePageView.js'
@@ -352,6 +355,8 @@ export { Waiting } from '../components/Waiting.js'
 export { AskedQuestion } from '../components/AskedQuestion.js'
 export { useHighlighted, useHighlightedIn, languageOfFence, Pieces, ColouredLines, type Piece } from '../lib/highlight.js'
 export { useAction } from '../lib/use-action.js'
+// OpenAgent did not answer, as against a refusal: a read that meets it lets it through, so it keeps what it showed and asks again.
+export { isUnreachable } from '../lib/rpc.js'
 export { useFileNames, pathsIn, type FileNames, type NamedFile } from '../lib/use-file-names.js'
 export { ConfirmDialog } from '../components/ui/confirm-dialog.js'
 // The dashboard's keys, as its keyboard shortcuts list names them: a module's are the same.

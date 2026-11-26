@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { Check, Copy, Info, MoreHorizontal, Plus } from 'lucide-react'
-import { Button, useAskOn, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, GaugeFace, Input, Panel, PanelGroup, Skeleton, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, useModuleHost, useOpenAgentDown, usePerson, usePolled, type ModuleHost } from '@openagt/ui/module'
+import { Button, HEADING_PRESS_CLASS, isUnreachable, useAskOn, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, GaugeFace, Input, Panel, PanelGroup, Skeleton, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, useModuleHost, useOpenAgentDown, usePerson, usePolled, type ModuleHost } from '@openagt/ui/module'
 import { ClaudeLogo, CodexLogo } from './logos.js'
 import { server, useAgentStates } from './reads.js'
 import { InstallAgent } from './setup.js'
@@ -29,9 +29,9 @@ const AGENTS = [
     logIn: 'Log in to Claude',
     /** What logs the computer's own CLI in, typed in a terminal: its login shows here by itself. */
     terminal: 'claude auth login',
-    help: "Opens this computer's browser, where you say yes once, signed in to that account. The login is kept on this computer alone and lasts a year.",
-    helpNoBrowser: "Gives you a page to open on your own device: press Authorize there, signed in to that account, and paste the code it shows back here. The login is kept on this computer alone and lasts a year.",
-    remove: 'Runs no longer use it. Its login is not ended: take it back on claude.ai to end it.',
+    help: "Opens this computer's browser, where you sign in to that account. The login is kept on this computer alone, and its usage shows here.",
+    helpNoBrowser: "Gives you a page to open on your own device: sign in there to that account, and paste the code it shows back here. The login is kept on this computer alone, and its usage shows here.",
+    remove: 'Runs no longer use it, and its login is taken off this computer.',
     adding: (name: string) => `Adding ${name}'s account: say yes in the page this computer's browser opened, signed in to ${name}'s Claude account.`,
   },
   {
@@ -101,7 +101,11 @@ async function read<T, Beside = object>(host: ModuleHost, word: 'list' | 'usage'
     [word]({})
     .then(
       (output): Read<T, Beside> => ({ ok: true, accounts: output as unknown as Record<AgentId, T[]> & Beside }),
-      (err: unknown): Read<T, Beside> => ({ ok: false, error: err instanceof Error ? err.message : String(err) }),
+      (err: unknown): Read<T, Beside> => {
+        // OpenAgent did not answer: the card keeps what it showed and asks again, rather than say it.
+        if (isUnreachable(err)) throw err
+        return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      },
     )
 }
 
@@ -294,7 +298,7 @@ function AddAccount({ agent, now, failed, suggested, field, onChanged, onClose }
 /** An open row, and the press that waits for a yes in it: taking an account off is a sign-in to undo. */
 type Opened = { asking?: 'remove' | 'logout' }
 
-function AgentAccounts({ agent, accounts, usage, reading, onPress, busy, missing }: { agent: (typeof AGENTS)[number]; accounts: Account[]; usage: Usage[]; reading: boolean; onPress: (args: string[]) => void; busy: boolean; /** What stands in the agent's place while it has no account. */ missing: ReactNode }) {
+function AgentAccounts({ agent, accounts, usage, reading, onPress, onSignInAgain, busy, missing }: { agent: (typeof AGENTS)[number]; accounts: Account[]; usage: Usage[]; reading: boolean; onPress: (args: string[]) => void; /** Sign in to an added account signed out, under its name, from the press. */ onSignInAgain: (name: string, from: HTMLElement) => void; busy: boolean; /** What stands in the agent's place while it has no account. */ missing: ReactNode }) {
   // One row is open at a time.
   const [open, setOpen] = useState<{ name: string } & Opened>()
   const now = Date.now()
@@ -324,6 +328,7 @@ function AgentAccounts({ agent, accounts, usage, reading, onPress, busy, missing
               open={open?.name === account.name ? open : undefined}
               onOpen={opened => setOpen(opened && { ...opened, name: account.name })}
               onPress={press}
+              onSignInAgain={from => onSignInAgain(account.name, from)}
               busy={busy}
             />
           ))}
@@ -346,6 +351,7 @@ function AccountRow({
   open,
   onOpen,
   onPress,
+  onSignInAgain,
   busy,
 }: {
   agent: (typeof AGENTS)[number]
@@ -363,9 +369,13 @@ function AccountRow({
   open: Opened | undefined
   onOpen: (open: Opened | undefined) => void
   onPress: (args: string[]) => void
+  /** Sign in to it again, signed out: from the press. */
+  onSignInAgain: (from: HTMLElement) => void
   busy: boolean
 }) {
   const limited = isLimited(account, now)
+  // An added account whose login is gone: said, and signed in to again from its open row.
+  const out = account.signedOut === true && !account.own
   const shown = account.who ?? account.name
   const isOpen = open !== undefined
   const more = details(account, reads, next)
@@ -397,7 +407,7 @@ function AccountRow({
             <span className="min-w-0 truncate font-medium">{shown}</span>
             {inUse && <span className="shrink-0 text-xs text-success">in use</span>}
           </span>
-          <span className={cn('mt-1 block truncate text-xs', limited ? 'text-warning' : 'text-muted-foreground')}>{limited ? `limited, free in ${inWords(account.limitedUntil!, now)}` : source(account)}</span>
+          <span className={cn('mt-1 block truncate text-xs', limited || out ? 'text-warning' : 'text-muted-foreground')}>{out ? 'signed out: sign in again' : limited ? `limited, free in ${inWords(account.limitedUntil!, now)}` : source(account)}</span>
         </span>
         <MoreHorizontal className={cn('size-4 shrink-0 self-center text-muted-foreground transition-opacity', isOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100')} aria-hidden />
         {reading ? (
@@ -441,6 +451,11 @@ function AccountRow({
             <>
               {more !== '' && <p className="text-xs text-muted-foreground">{more}</p>}
               <div className="-ml-2 flex items-center gap-1">
+                {out && (
+                  <Button variant="secondary" size="sm" disabled={busy} aria-label={`Sign in to ${shown} again`} onClick={event => onSignInAgain(event.currentTarget)}>
+                    Sign in again
+                  </Button>
+                )}
                 {!first && (
                   <Button variant="ghost" size="sm" disabled={busy} aria-label={`Use ${shown} first`} onClick={() => onPress(['use-first', agent.id, account.name])}>
                     Use first
@@ -483,8 +498,8 @@ export function useAddAccount({ adopt, onEnded, taken }: { adopt: boolean; /** A
   naming: AgentId | undefined
   /** Why the last sign-in did not go through, once the person closed the window on it. */
   dismissed: string | undefined
-  /** Open the window for an agent; `from` is the press it was opened with, where that is not the one at the card's title. */
-  open: (agent: AgentId, from?: HTMLElement) => void
+  /** Open the window for an agent; `from` is the press it was opened with, where that is not the one at the card's title; `again`, an added account signed out, signed in to again under its name. */
+  open: (agent: AgentId, from?: HTMLElement, again?: string) => void
   /** The window, which gives the keyboard back to the press it was opened with as it closes, else to `finalFocus`. */
   dialog: (finalFocus: RefObject<HTMLElement | null>) => ReactNode
 } {
@@ -501,6 +516,8 @@ export function useAddAccount({ adopt, onEnded, taken }: { adopt: boolean; /** A
   useAskOn(following, refreshAdding)
   // The agent an account is being added for: the dialog is open on it, from the press until the account is there or the dialog is closed.
   const [naming, setNaming] = useState<AgentId>()
+  // The added account signed out that the window signs in to again, by its name: its name the field's.
+  const [again, setAgain] = useState<string>()
   const nameField = useRef<HTMLInputElement>(null)
   const opener = useRef<HTMLElement | null>(null)
   // Why the last sign-in did not go through, once the person closed the dialog on it: not said again when it opens next.
@@ -552,19 +569,20 @@ export function useAddAccount({ adopt, onEnded, taken }: { adopt: boolean; /** A
     adding,
     naming,
     dismissed,
-    open: (agent, from) => {
+    open: (agent, from, name) => {
       opener.current = from ?? null
+      setAgain(name)
       setNaming(agent)
     },
     dialog: finalFocus => (
-      <Dialog open={namingAgent !== undefined} onOpenChange={open => !open && close()} title={namingAgent ? `Add a ${namingAgent.account} account` : ''} initialFocus={nameField} finalFocus={opener.current ? opener : finalFocus}>
+      <Dialog open={namingAgent !== undefined} onOpenChange={open => !open && close()} title={namingAgent ? (again !== undefined ? `Sign in to ${again} again` : `Add a ${namingAgent.account} account`) : ''} initialFocus={nameField} finalFocus={opener.current ? opener : finalFocus}>
         {namingAgent && (
           <AddAccount
             key={namingAgent.id}
             agent={namingAgent}
             now={namingNow}
             failed={namingNow.failed !== dismissed ? namingNow.failed : undefined}
-            suggested={taken?.(namingAgent.id).includes(own) ? '' : own}
+            suggested={again ?? (taken?.(namingAgent.id).includes(own) ? '' : own)}
             field={nameField}
             onChanged={changed}
             onClose={close}
@@ -685,7 +703,8 @@ export function AccountsCard({ quiet = false }: { /** No press of the card is th
   }
 
   // Rotation does something only for an agent with two accounts or more.
-  const shown = (agent: AgentId): Account[] => (list?.ok ? (list.accounts[agent] ?? []).filter(account => !account.signedOut) : [])
+  // The person's own login, logged out, is not one to list; an added one signed out is, with its way back in.
+  const shown = (agent: AgentId): Account[] => (list?.ok ? (list.accounts[agent] ?? []).filter(account => !(account.signedOut && account.own)) : [])
   const rotates = AGENTS.some(agent => shown(agent.id).length > 1)
   // An account is added with its agent's program: one not installed is offered no Add.
   const installed = (agent: AgentId): boolean => !(list?.ok && list.accounts.notInstalled?.includes(agent))
@@ -710,8 +729,8 @@ export function AccountsCard({ quiet = false }: { /** No press of the card is th
           {list?.ok && addable.length > 0 && (
             <DropdownMenu>
               {/* Unpainted, as a part's heading's presses are, pulled out by its own padding so its last mark ends on the card's edge. */}
-              <DropdownMenuTrigger ref={addPress} render={<Button variant="ghost" className="-mr-3" aria-label="Add an account" />}>
-                <Plus className="size-4" aria-hidden />
+              <DropdownMenuTrigger ref={addPress} className={HEADING_PRESS_CLASS} aria-label="Add an account">
+                <Plus className="size-3.5" aria-hidden />
                 Add
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-[10rem]">
@@ -743,6 +762,7 @@ export function AccountsCard({ quiet = false }: { /** No press of the card is th
                   reading={usage === undefined}
                   busy={busy || down}
                   onPress={press}
+                  onSignInAgain={(name, from) => add.open(agent.id, from, name)}
                   missing={<NoAccount agent={agent} installed={installed(agent.id)} primary={!quiet && none && addable[0] === agent} disabled={down} onAdd={press => add.open(agent.id, press)} />}
                 />
               ))}

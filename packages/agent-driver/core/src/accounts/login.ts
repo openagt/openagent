@@ -1,4 +1,4 @@
-import { addAccount, nameRefused, OWN_NAME, readAccounts, removeAccount } from './accounts.js'
+import { addAccount, nameRefused, OWN_NAME, readAccounts, removeAccount, replaceLogin } from './accounts.js'
 import type { LoginWiring } from './wiring.js'
 import type { AgentAccount, AgentLogins, SignInSaid } from '@openagt/hooks'
 
@@ -21,8 +21,15 @@ export async function logOut(logins: AgentLogins, wiring: LoginWiring): Promise<
   return undefined
 }
 
-/** The name refused before the browser opens: empty, or one an account has, the person's own by the name it shows. */
+/** An added account whose login is gone from this computer, by its name: signing in under that name signs in to it again. */
+export function signedOutAdded(logins: AgentLogins, name: string, wiring: LoginWiring): AgentAccount | undefined {
+  const account = readAccounts(wiring.path(logins.list)).find(a => a.login !== undefined && a.name.toLowerCase() === name.trim().toLowerCase())
+  return account && logins.addedLoginThere?.(account, wiring.env) === false ? account : undefined
+}
+
+/** The name refused before the browser opens: empty, or one an account has, the person's own by the name it shows; one signed out is signed in to again. */
 export async function nameTaken(logins: AgentLogins, name: string, wiring: LoginWiring): Promise<string | undefined> {
+  if (signedOutAdded(logins, name, wiring)) return undefined
   const accounts = readAccounts(wiring.path(logins.list))
   const own = accounts.find(a => a.login === undefined)
   const shown = own && own.name === OWN_NAME ? await logins.ownName(wiring.env) : undefined
@@ -32,8 +39,15 @@ export async function nameTaken(logins: AgentLogins, name: string, wiring: Login
 /** Sign the account in, and keep it under `name`. Why not, when it did not go through. */
 export async function signIn(logins: AgentLogins, name: string, wiring: LoginWiring, said: SignInSaid = {}): Promise<string | undefined> {
   const path = wiring.path(logins.list)
-  const signed = await logins.signIn(readAccounts(path), said, wiring.env)
+  // An added account signed out keeps its place and its name: the sign-in is its again, and what it kept of the old login goes.
+  const again = signedOutAdded(logins, name, wiring)
+  const signed = await logins.signIn(readAccounts(path).filter(a => a !== again && a.name !== again?.name), said, wiring.env)
   if (!signed.ok) return signed.error
+  if (again) {
+    replaceLogin(again.name, signed.login, path)
+    await logins.forget(again, wiring.env)
+    return undefined
+  }
   try {
     addAccount(name, signed.login, path, new Date(wiring.now()))
   } catch (err) {

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { Dialog, FixAction, useModuleHost, type UiActionAt, type UiActionResult } from '@openagt/ui/module'
+import { Dialog, FixAction, forgetRemembered, useModuleHost, type UiActionAt, type UiActionResult } from '@openagt/ui/module'
 import type { AgentState } from '../src/server.js'
-import { agentOfItem } from '../src/attention-items.js'
+import { agentOfItem, agentOfUpdate } from '../src/attention-items.js'
 import { ConnectAgent, isAccountsList, useAddAccount, type AgentId } from './AccountsCard.js'
 import { server, useAgentStates } from './reads.js'
 
@@ -45,6 +45,22 @@ export const installFix: UiActionAt<'attention.fix'> = {
     const agent = on.item !== undefined ? agentOfItem(on.item) : undefined
     if (agent === undefined) return { ok: false, error: 'Which coding agent to install is not said.' }
     return server(host).install({ agent })
+  },
+}
+
+/** Update the agent a note about its newer version is for: the person's menu's press. Its models may be others after: the menu asks for them again. */
+export const updateFix: UiActionAt<'attention.fix'> = {
+  place: 'attention.fix',
+  id: 'update',
+  label: 'Update',
+  busyLabel: 'Updating…',
+  async run(host, on): Promise<UiActionResult> {
+    const agent = agentOfUpdate(on.item)
+    if (agent === undefined) return { ok: false, error: 'Which coding agent to update is not said.' }
+    const done = await server(host).update({ agent })
+    if (!done.ok) return done
+    forgetRemembered('agent-driver:agents')
+    return { ok: true }
   },
 }
 

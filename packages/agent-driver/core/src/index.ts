@@ -11,6 +11,7 @@ export { readyPrompt } from './ready-prompt.js'
 // The run's record (#2394, decision 15): its card and its diary, how they read and are written.
 export {
   RUNS_DIR,
+  COPIES_DIR,
   ANONYMOUS_DIR,
   isRunId,
   runCardFile,

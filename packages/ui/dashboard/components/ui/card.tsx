@@ -24,6 +24,13 @@ export function CardContent({ className, ...props }: HTMLAttributes<HTMLDivEleme
 }
 
 /**
+ * A press at a part's heading (a link to its page, an Add): its words quiet, white under the pointer,
+ * and no fill, so nothing stands as a block over the card under it, its menu open too (his reports, 2026-11-27).
+ */
+export const HEADING_PRESS_CLASS =
+  'focus-ring -mr-2 inline-flex items-center gap-1 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:text-foreground active:text-foreground data-[popup-open]:bg-transparent data-[popup-open]:text-foreground md:h-7 max-md:h-11'
+
+/**
  * The way from a part of the Overview to its own page, at its heading's right: the page's name and an
  * arrow. A real link, so it also opens in a new tab; a plain click goes through `onOpen`, the
  * dashboard's own navigation.
@@ -33,7 +40,7 @@ export function PageLink({ children, href, onOpen }: { children: ReactNode; href
     <a
       href={href}
       onClick={inPlace(onOpen)}
-      className="focus-ring -mr-2 inline-flex items-center gap-1 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground active:bg-foreground/10 md:h-7 max-md:h-11"
+      className={HEADING_PRESS_CLASS}
     >
       {children}
       <ArrowRight className="size-3.5" aria-hidden />

@@ -330,19 +330,25 @@
   --primary-foreground: var(--color-neutral-950);
 }
 
-/* A menu's surface (dropdowns, selects, the composer's suggestions), as shadcn create sets its
-   menus, in the theme's own colours: the theme's card on light and its fill on dark (on Neutral,
-   shadcn's very grey), a little see-through over a blur, a faint ring for an edge. `--menu` is
-   read where the theme's tokens are, on the page's root, so each palette gets its own. Inside,
-   the lit row and the separators are the text's colour, faint, so they show on any of them. */
+/* A menu's surface (dropdowns, selects, the composer's suggestions), as Claude Code on the web
+   draws its menus in each mode (his asks, 2026-11-27, measured there), in the theme's own colours:
+   solid, the theme's card on light with a hairline and a light shadow for an edge (a white menu on
+   a white page needs both), its fill on dark, a step up from the page, with a deeper shadow alone.
+   `--menu` is read where the theme's tokens are, on the page's root, so each palette gets its own.
+   Inside, the lit row and the separators are the text's colour, faint, so they show on any. */
 :root {
-  --menu: color-mix(in oklab, var(--card) 85%, transparent);
+  --menu: var(--card);
+  --menu-edge: 0 0 0 1px rgb(0 0 0 / 0.08), 0 8px 24px rgb(0 0 0 / 0.12), 0 2px 6px rgb(0 0 0 / 0.08);
+  --menu-lit: 10%;
 }
 :root.dark {
-  --menu: color-mix(in oklab, var(--muted) 85%, transparent);
+  --menu: var(--muted);
+  --menu-edge: 0 8px 24px rgb(0 0 0 / 0.32), 0 2px 6px rgb(0 0 0 / 0.2);
+  --menu-lit: 15%;
 }
 .menu-surface {
-  --accent: color-mix(in oklab, var(--foreground) 10%, transparent);
+  box-shadow: var(--menu-edge);
+  --accent: color-mix(in oklab, var(--foreground) var(--menu-lit), transparent);
   --accent-foreground: var(--foreground);
   --border: color-mix(in oklab, var(--foreground) 10%, transparent);
   background-color: var(--menu);

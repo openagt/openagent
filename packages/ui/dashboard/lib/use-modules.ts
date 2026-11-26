@@ -56,9 +56,9 @@ export interface MountedModules {
   loaded: boolean
 }
 
-const VIEW_PLACES: readonly ViewPlace[] = ['app.page', 'app.overlay', 'overview.card', 'overview.line', 'chat.pane', 'chat.summary', 'chat.work', 'chat.environment', 'chat.notice', 'chat.labels', 'composer.control', 'composer.prompts', 'settings.section', 'permissions.section', 'usage.line', 'overview.notice']
+const VIEW_PLACES: readonly ViewPlace[] = ['app.page', 'app.overlay', 'overview.card', 'overview.line', 'chat.pane', 'chat.summary', 'chat.work', 'chat.environment', 'chat.notice', 'chat.labels', 'composer.control', 'composer.prompts', 'settings.section', 'permissions.section', 'usage.line', 'overview.notice', 'sidebar.project']
 const ACTION_PLACES: readonly ActionPlace[] = ['link.menu', 'chat.handoff', 'chat.menu', 'project.menu', 'person.menu', 'attention.fix']
-const OPTION_PLACES: readonly OptionPlace[] = ['composer.auto', 'composer.where', 'composer.images', 'composer.commands', 'chat.references']
+const OPTION_PLACES: readonly OptionPlace[] = ['composer.auto', 'composer.where', 'composer.images', 'composer.commands', 'chat.references', 'project.add']
 
 /** Nothing mounted at any place. */
 function nothingAt(loaded: boolean): MountedModules {
@@ -231,8 +231,8 @@ function mount(loadedModules: { module: DashboardModule; definition: UiModuleDef
       if (view.place === 'app.page' && (!isPageSegment(view.id) || at.some(page => page.id === view.id))) continue
       // Only a module of this computer's draws over every page: a project's package does not put things on every page.
       if (view.place === 'app.overlay' && !of.computer) continue
-      // The bar has one line: the first module's.
-      if (view.place === 'usage.line' && at.length > 0) continue
+      // The bar has one line, the sidebar one project select: the first module's.
+      if ((view.place === 'usage.line' || view.place === 'sidebar.project') && at.length > 0) continue
       at.push({ ...view, ...of })
     }
     for (const action of definition.hooks['ui.action'] ?? []) actions[action.place]?.push({ ...action, ...of })

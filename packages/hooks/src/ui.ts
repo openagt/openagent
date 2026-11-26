@@ -4,7 +4,7 @@
 // Four hooks, each taking a place: a component at a place (`ui.view`), something to do at one
 // (`ui.action`), something to pick in a shared menu (`ui.option`), and how a kind of content looks
 // (`ui.render`). Each place's props are typed here, so a new place needs no new hook.
-import type { ComponentType } from 'react'
+import type { ComponentType, RefObject } from 'react'
 import type { PullRequest, PullRequestState, RunOptions } from './run.js'
 
 /** An icon, drawn at the size its `className` gives. */
@@ -184,6 +184,16 @@ export interface UiUsageLineProps {
    * failed: the view draws it, with what it reads of the line.
    */
   Bar: ComponentType<{ offset?: number; onChangeOffset?: (points: number) => Promise<UiActionResult> }>
+}
+
+/** What the sidebar's project select is given: the project every page shows, or none for every one, and the pick of another. */
+export interface UiSidebarProjectProps {
+  /** The project picked, by id, or null for every project. */
+  picked: string | null
+  /** The project the address names is not read yet: the select holds its place, its name not said. */
+  pending: boolean
+  /** Show this project on every page, or every project (null). */
+  onPick: (projectId: string | null) => void
 }
 
 /** Which box a control under the message box is drawn in. */
@@ -384,6 +394,12 @@ export interface ViewPlaces {
   }
   /** The line on the usage bar where the module's unattended work stops; the first module's that has one. */
   'usage.line': { entry: { id: string }; props: UiUsageLineProps }
+  /**
+   * The project select at the top of the sidebar: the project every page shows, or every project,
+   * picked from the projects and, as the launcher offers them, the repos that could be one (the
+   * projects module's). The first module's that has one.
+   */
+  'sidebar.project': { entry: { id: string }; props: UiSidebarProjectProps }
 }
 
 export type ViewPlace = keyof ViewPlaces
@@ -520,6 +536,15 @@ export interface OptionPlaces {
     repos(host: UiHost): Promise<{ repos: UiWhereRepo[]; loading?: boolean; unreached?: string }>
   }
   /**
+   * The panel that makes a repository a project: asked the trust question, cloned to this computer
+   * from its address, and added (the projects module's). The Repos menu under a message box opens
+   * it for a repo only at an address, then copies the project's folder into the session. The first
+   * module's.
+   */
+  'project.add': {
+    Panel: ComponentType<UiAddProjectProps>
+  }
+  /**
    * Where the images a message goes with are kept: what the message box's attach button, a drop and
    * a paste take, the box's tiles and the chat's show, and a run is handed by the names they are kept
    * under (`RunInput.images`). The first module's; with none, a box takes no image.
@@ -557,6 +582,17 @@ export interface OptionPlaces {
     /** The page of issue or pull request `number` of `project`; none for a project the module does not answer for. */
     issue(project: UiProject, number: number): string | undefined
   }
+}
+
+/** What the panel that makes a repository a project is given (`project.add`). */
+export interface UiAddProjectProps {
+  /** The repository's address, as `UiWhereRepo.address` names it: the trust question is the first thing shown. */
+  address: string
+  /** The control that opened it, given focus back when it closes. */
+  opener: RefObject<HTMLElement | null>
+  /** It is a project now: its folder on this computer. */
+  onAdded: (path: string) => void
+  onClose: () => void
 }
 
 /** A command the message box offers: typed after the slash, and what it asks the agent is the command's own. */

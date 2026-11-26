@@ -929,4 +929,10 @@ export interface AgentLogins {
   forget(account: AgentAccount, env: NodeJS.ProcessEnv): Promise<void>
   /** How full the account is now, where the agent can read it now; none where it cannot: what its last turn said stands. */
   usage(account: AgentAccount, env: NodeJS.ProcessEnv): Promise<UsageWindow[] | undefined>
+  /**
+   * Whether an added account still has its login on this computer, for an agent whose added logins
+   * can end (signed out at the service): none signed out is said, and runs skip it, until it is
+   * signed in to again under its name. Unsaid: an added login never ends here.
+   */
+  addedLoginThere?(account: AgentAccount, env: NodeJS.ProcessEnv): boolean
 }

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import type { RunOptions } from '@openagt/hooks'
-import { forgetRemembered } from '@openagt/ui/module'
+import { forgetRemembered, useModuleHost } from '@openagt/ui/module'
 import { fakeHost, hoverTooltip, mountedOf, openMenu, renderWithHost } from '@openagt/ui/module/testing'
 import { folderName } from '../src/repo-names.js'
 import { repoGroups, ReposControl, ReposMenu, reposLabel, reposSaid, withRepos } from './ReposControl.js'
@@ -207,5 +207,59 @@ describe('the control', () => {
     const recorded = { 'git-branches': { repos: [{ name: 'vike', from: '/home/me/oss/vike' }] } }
     render(<ReposControl {...props('session', recorded)} recorded={recorded} />)
     expect(screen.getByRole('combobox', { name: 'Repos: 1 repo' })).toBeTruthy()
+  })
+})
+
+describe('repos only on GitHub', () => {
+  /** This computer's repos, GitHub's (one of them here already, one a project's), and the panel that makes a repo a project, which says what it was given and adds it on a press. */
+  const added = vi.fn()
+  function withGitHub(): ReturnType<typeof mountedOf> {
+    const github = {
+      place: 'composer.where' as const,
+      id: 'github',
+      label: 'On GitHub',
+      order: 10,
+      repos: async () => ({
+        repos: [
+          { address: 'github.com/me/recipe-box', label: 'me/recipe-box', private: true as const, why: '@me' },
+          { address: 'github.com/me/vike', label: 'me/vike' },
+          { address: 'github.com/me/shop', label: 'me/shop' },
+        ],
+      }),
+      package: '@openagt/github',
+      projects: [],
+      computer: true as const,
+    }
+    const here = {
+      ...THIS_COMPUTER.options['composer.where'][0]!,
+      repos: async () => ({ repos: [{ folder: '/home/me/oss/vike', label: 'vike', detail: 'github.com/me/vike', address: 'github.com/me/vike' }] }),
+    }
+    // It says whose host it is drawn with: its own module's, which its server answers.
+    const Panel = ({ address, onAdded, onClose }: { address: string; onAdded: (path: string) => void; onClose: () => void }) => (
+      <div role="dialog" aria-label={`Add ${address}`} data-host={useModuleHost().package}>
+        <button type="button" onClick={() => (added(address), onAdded(`/home/me/${address.split('/').pop()}`), onClose())}>
+          I trust it, add it
+        </button>
+      </div>
+    )
+    return mountedOf({ options: { 'composer.where': [here, github], 'project.add': [{ place: 'project.add', id: 'add', Panel, package: '@openagt/projects', projects: [], computer: true }] } })
+  }
+
+  test("GitHub's repos follow, under its heading, as the launcher lists them: one here or a project's left out; ticked, it is made a project first, then its folder is copied", async () => {
+    const onChange = vi.fn()
+    const shop = { id: 'shop-1', path: '/home/me/work/shop', name: 'shop', remote: 'github.com/me/shop' }
+    renderWithHost(<ReposMenu picked={[{ from: '/home/me/notes', name: 'notes' }]} projects={[shop]} busy={false} onChange={onChange} />, fakeHost('@openagt/git-branches'), withGitHub())
+    await openMenu(context())
+    const away = await screen.findByRole('option', { name: /recipe-box/ })
+    expect(screen.getByText('On GitHub')).toBeTruthy()
+    expect(away.textContent).toContain('Private · Not on this computer · @me')
+    expect(screen.getAllByRole('option').map(option => option.textContent?.split(/[/\s]|github/)[0])).toEqual(['notes', 'shop', 'vike', 'me'])
+    fireEvent.click(away)
+    expect(onChange).not.toHaveBeenCalled()
+    expect((await screen.findByRole('dialog', { name: 'Add github.com/me/recipe-box' })).getAttribute('data-host')).toBe('@openagt/projects')
+    fireEvent.click(await screen.findByRole('button', { name: 'I trust it, add it' }))
+    expect(added).toHaveBeenCalledWith('github.com/me/recipe-box')
+    expect(onChange).toHaveBeenLastCalledWith([{ from: '/home/me/notes', name: 'notes' }, { from: '/home/me/recipe-box', name: 'recipe-box' }])
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: /Add/ })).toBeNull())
   })
 })

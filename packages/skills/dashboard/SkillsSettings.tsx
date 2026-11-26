@@ -1,5 +1,5 @@
 import { Puzzle, SquareSlash } from 'lucide-react'
-import { Facts, Section, SettingsItem, SettingsItems, SettingsRowShapes, SettingsSection, Slot, useModuleHost, usePolled, type UiProject, type UiSettingsProps } from '@openagt/ui/module'
+import { Facts, isUnreachable, Section, SettingsItem, SettingsItems, SettingsRowShapes, SettingsSection, Slot, useModuleHost, usePolled, type UiProject, type UiSettingsProps } from '@openagt/ui/module'
 import { readSkills, type ProjectSkills } from './calls.js'
 
 // Settings › Skills (#2394): each project's own skills, the ones its repository keeps where the
@@ -42,7 +42,10 @@ export function SkillsSettings({ projects }: UiSettingsProps) {
 function ProjectSkillList({ project }: { project: UiProject }) {
   const host = useModuleHost()
   const read = usePolled<Read | undefined>(
-    () => readSkills(host, project.id).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) })),
+    () => readSkills(host, project.id).catch((error: unknown) => {
+      if (isUnreachable(error)) throw error
+      return { error: error instanceof Error ? error.message : String(error) }
+    }),
     undefined,
     EVERY_MS,
     [project.id],

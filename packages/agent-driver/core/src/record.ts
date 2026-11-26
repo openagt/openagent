@@ -9,6 +9,15 @@
  */
 export const RUNS_DIR = 'agents'
 
+/**
+ * Where a project's data keeps the records of the sessions with no project that had a copy of it:
+ * `sessions/<who>/<id>.json` and `<id>.jsonl`, the same two files as the session's own record in
+ * the sessions home, written there too each time it is. Beside the project's own runs, not among
+ * them: what works on the project's runs (its sweep, its scheduler) never takes one for its own.
+ * The project's logs read both.
+ */
+export const COPIES_DIR = 'sessions'
+
 /** How a run stands: still going, or how it ended. */
 export type RunStatus = 'running' | 'done' | 'stopped' | 'failed' | 'waiting'
 

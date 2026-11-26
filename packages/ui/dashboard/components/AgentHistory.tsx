@@ -31,7 +31,7 @@ import { agentLabel, awaitingName } from '../lib/agent-label.js'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuCheckboxItem, DropdownMenuSeparator } from './ui/dropdown-menu.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
-import { SidebarProjectPicker } from './SidebarProjectPicker.js'
+import { SidebarProject } from './SidebarProject.js'
 import { navRowClass } from './ui/nav-row.js'
 import {
   Sidebar,
@@ -377,7 +377,7 @@ export function AgentHistory({
             </span>
           </div>
           {/* The "Landing page | Dashboard" switch (`ViewToggle`) stood here: hidden for now, its code kept. */}
-          <SidebarProjectPicker picked={scope ?? null} pending={scopePending} projects={projects} onPick={onScope} />
+          <SidebarProject picked={scope ?? null} pending={scopePending} onPick={onScope} />
         </SidebarHeader>
         {/* Everything under the project select is one scroll (his pick, 2026-11-24): the pages, what
             waits and the Log. The pages used to stand still over the lists, which left the Log only
@@ -601,8 +601,8 @@ const railRowClass = (active: boolean, lines: 1 | 2 = 1): string =>
     active ? 'bg-foreground/8' : 'hover:bg-foreground/4 active:bg-foreground/8',
   )
 
-/** The marks a row has just before its age, 4 from it and so closer to it than to the name they would otherwise cut into. */
-const BEFORE_AGE = '-mr-2 flex shrink-0 items-center gap-1'
+/** The marks a row has just before its age, with the age: 4 from its word, so closer to it than to the name; the box as wide as the age's at the least ({@link AGE}), its end on the ages' x. */
+const AGE_WITH_MARKS = 'flex min-w-7 shrink-0 items-center justify-end gap-1'
 
 /**
  * A part's label, which sticks at the top of the sidebar's scroll while its rows pass: "Waiting on
@@ -797,6 +797,9 @@ const PERSON_MARK = 'size-5 text-xs font-medium'
 /** A row's time, in a box as wide as its longest word ("59m", "23h", "now") and set to its right, so it stands on one x down a list. */
 const AGE = 'w-7 shrink-0 text-right text-[11px] leading-4 text-muted-foreground tabular-nums'
 
+/** A Log row's age word inside the box it shares with the marks before it, which keeps its width. */
+const AGE_WORD = 'shrink-0 text-[11px] leading-4 text-muted-foreground tabular-nums'
+
 /** What a row shows beside its name and its age, by the person's picks: whose run it is, and which coding agent ran it. */
 type Showing = { person: boolean; agent: boolean }
 
@@ -823,10 +826,11 @@ function PrMarks({ prs }: { prs: readonly RunPr[] }) {
     const { Icon, tone } = PR_MARKS[state]
     const count = prs.filter(pr => pr.state === state).length
     return (
-      <span key={state} data-pr={state} className={cn('relative flex shrink-0 items-center', tone, count > 1 && 'mr-0.5')}>
+      // A count hangs past the glyph's corner: the room it takes is kept, so what follows (the age) stands clear of it (his ask, 2026-11-26).
+      <span key={state} data-pr={state} className={cn('relative flex shrink-0 items-center', tone, count > 1 && 'mr-2')}>
         <Icon className="size-3" aria-hidden />
         {/* The smallest type step, drawn at three quarters: a count at a 14 glyph's corner. */}
-        {count > 1 && <span className="absolute -top-2 -right-2.5 scale-75 rounded-full bg-sidebar px-0.5 text-xs leading-none font-bold tabular-nums">{count}</span>}
+        {count > 1 && <span className="absolute -top-2 -right-2 scale-75 rounded-full bg-sidebar px-0.5 text-xs leading-none font-bold tabular-nums">{count}</span>}
       </span>
     )
   })
@@ -991,21 +995,23 @@ function AgentHistoryRow({
             the prompt it is about to replace. */}
         {naming ? <span aria-hidden className="block h-3.5 w-2/3 animate-pulse rounded-sm bg-muted-foreground/20" /> : <RevealedTitle text={titleText} start={standIn || waitedForName.current} />}
       </span>
-      {/* What is unusual about where the run is, kept on the row as one small glyph: another
-          computer, a host. Rare, so the row stays a mark and a name nearly always. */}
-      {startedOn && (
-        <RowMark said={`Started on ${startedOn}`}>
-          <Laptop className="size-3 text-muted-foreground" />
-        </RowMark>
-      )}
-      {onHost && (
-        <RowMark said={onHost}>
-          <HOST_ICON className="size-3 text-muted-foreground" />
-        </RowMark>
-      )}
-      {/* Its pull requests and the work it left on the machine, just before its age. */}
-      {(prs.some(pr => pr.state) || left) && (
-        <span className={BEFORE_AGE}>
+      {/* Just before its age: what is unusual about where the run is, one small glyph (another
+          computer, a host; rare, so the row stays a mark and a name nearly always), then its pull
+          requests and the work it left on the machine. */}
+      {/* With its age, in one box set to the right and at least as wide as the age's own: the
+          ages still end on one x down the list, and the marks stand 4 from the age's word, not
+          from its box's edge (his ask, 2026-11-26: the laptop stood far from a short "2d"). */}
+      <span className={AGE_WITH_MARKS}>
+          {startedOn && (
+            <RowMark said={`Started on ${startedOn}`}>
+              <Laptop className="size-3 text-muted-foreground" />
+            </RowMark>
+          )}
+          {onHost && (
+            <RowMark said={onHost}>
+              <HOST_ICON className="size-3 text-muted-foreground" />
+            </RowMark>
+          )}
           {prSaid && prs.some(pr => pr.state) && (
             <RowMark said={prSaid}>
               <PrMarks prs={prs} />
@@ -1016,11 +1022,10 @@ function AgentHistoryRow({
               <left.Icon className="size-3 text-muted-foreground" />
             </RowMark>
           )}
+        {/* When it started, in a word: the list's own order, read down the rows' end. */}
+        <span aria-hidden className={AGE_WORD}>
+          {age}
         </span>
-      )}
-      {/* When it started, in a word: the list's own order, read down the rows' end. */}
-      <span aria-hidden className={AGE}>
-        {age}
       </span>
       {/* Whose run it is and which coding agent ran it, once the person asks for them (the menu
           beside "Log"). With both, the agent's logo rides on the person's picture, one mark for

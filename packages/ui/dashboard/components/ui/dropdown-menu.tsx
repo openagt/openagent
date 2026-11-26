@@ -15,15 +15,21 @@ import { POPUP_MOTION_CLASS, usePopupPosition } from './popup-placement.js'
 // long menu shows our own thin overlay bar (#1046) instead of the OS one, whose grey track read as
 // a second layer beside the border. #710 stands: no native scrollbar comes back.
 // The surface is shadcn create's menu in the theme's colours (`.menu-surface`, tailwind.css):
-// rounded, see-through over a blur, a faint ring for an edge.
-export const MENU_SURFACE_CLASS = 'menu-surface rounded-lg shadow-lg ring-1 ring-foreground/10 backdrop-blur-xl outline-none'
+// rounded, solid, its edge as each mode has it (`.menu-surface`: Claude Code's, measured, his asks 2026-11-27).
+export const MENU_SURFACE_CLASS = 'menu-surface rounded-lg outline-none'
 export const MENU_POPUP_CLASS = cn('min-w-[13rem]', MENU_SURFACE_CLASS, POPUP_MOTION_CLASS)
 
 /**
  * Around a menu's items: their fill 8 in from the menu's edges, so an item's icon (or its words, with
- * none) stands 16 in, and its words 12 after the icon, as a list row's do (ui/look/spacing.md 3).
+ * none) stands 16 in, as Claude Code's do, and its words 8 after the icon.
  */
 export const MENU_BODY_CLASS = 'p-2'
+
+/**
+ * A picker's search, the band over its list: 40 high (his ask, 2026-11-26: at 52 it stood too
+ * big), its icon 16 in and its words 8 after it, on the items' icons and words below.
+ */
+export const PICKER_SEARCH_CLASS = 'flex h-10 shrink-0 items-center gap-2 border-b border-hairline px-4'
 
 /** The scrolled body every popup shares: caps at the space the positioner allows, pads the items. */
 function PopupBody({ children }: { children: ReactNode }) {
@@ -39,7 +45,15 @@ function PopupBody({ children }: { children: ReactNode }) {
  * line's leading is inside it) as far from its fill over and under them as beside them, so a second line adds only its own.
  */
 export const MENU_ITEM_CLASS =
-  'relative flex cursor-pointer select-none items-center has-[[data-line2]]:items-start gap-3 rounded-md px-2 py-1.5 text-sm font-normal outline-none md:min-h-8 max-md:min-h-11 max-md:py-1 data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
+  'relative flex cursor-pointer select-none items-center has-[[data-line2]]:items-start gap-2 rounded-md px-2 py-1 text-sm font-normal outline-none md:min-h-7 max-md:min-h-11 data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
+
+/**
+ * The tick of a menu's picked row, at the row's end, where every mark of a pick stands, as Claude
+ * Code's menus have it (his pick, 2026-11-27): the box is there on every row, so the rows' ends line up.
+ */
+export function MenuTick({ on }: { on: boolean }) {
+  return <span className="ml-auto flex size-4 shrink-0 items-center justify-center">{on && <Check className="size-4" aria-hidden />}</span>
+}
 
 /** A row's icon or tick, in a box one line of its name tall: on that line whether the row has one line or two. */
 export function MenuMark({ children, className }: { children: ReactNode; className?: string }) {
@@ -149,12 +163,16 @@ export function DropdownMenuSubTrigger({ className, children, ...props }: Compon
 }
 
 /** A submenu beside its row: from the row's top down, or with `align="end"` from its foot up, for a menu that stands above what it must not cover. */
+/** How far a submenu stands from the row it opens from: past the menu's padding, then a gap of 2, as Claude Code's. */
+const SUBMENU_OFFSET = 8 + 2
+
 export function DropdownMenuSubContent({ className, align = 'start', children, ...props }: ComponentProps<typeof Menu.Popup> & { align?: 'start' | 'end' }) {
   const position = usePopupPosition()
   return (
     <Menu.Portal>
       {/* From the foot up, a list too tall for the room above slides down only as far as it must: turned to stand from the row's top, it would cover everything under the row. With no room beside the row, on a phone, it stands over it. */}
-      <Menu.Positioner {...position} side="right" align={align} {...(align === 'end' ? { collisionAvoidance: { side: 'flip' as const, align: 'shift' as const, fallbackAxisSide: 'start' as const } } : {})} sideOffset={2} className="z-50 outline-none">
+      {/* Clear of the menu it opens from, 2 beside its edge, never over it (his ask, 2026-11-27): the row it hangs from is the menu's padding (8) inside that edge. */}
+      <Menu.Positioner {...position} side="right" align={align} {...(align === 'end' ? { collisionAvoidance: { side: 'flip' as const, align: 'shift' as const, fallbackAxisSide: 'start' as const } } : {})} sideOffset={SUBMENU_OFFSET} className="z-50 outline-none">
         <Menu.Popup data-overlay="menu" className={cn(MENU_POPUP_CLASS, className)} {...props}>
           <PopupBody>{children}</PopupBody>
         </Menu.Popup>
@@ -171,7 +189,7 @@ export function DropdownMenuSeparator({ className, ...props }: ComponentProps<ty
 export function DropdownMenuLabel({ className, ...props }: ComponentProps<typeof Menu.GroupLabel>) {
   return (
     <Menu.GroupLabel
-      className={cn('px-2 py-1.5 text-xs font-semibold text-muted-foreground', className)}
+      className={cn('px-2 py-1.5 text-xs font-normal text-muted-foreground', className)}
       {...props}
     />
   )

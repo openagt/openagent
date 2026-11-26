@@ -1,4 +1,4 @@
-import { rpcClient, type UiHost } from '@openagt/ui/module'
+import { isUnreachable, rpcClient, type UiHost } from '@openagt/ui/module'
 import type { Ticket } from '../../src/tickets.js'
 
 /** Each project's list on its way, by project. */
@@ -16,10 +16,16 @@ export function listTickets(host: UiHost, projectId: string): Promise<{ tickets:
     .list(projectId, {})
     .then(
       tickets => ({ tickets }),
-      (err: unknown) => ({ error: err instanceof Error ? err.message : String(err) }),
+      (err: unknown) => {
+        // OpenAgent did not answer: the reader keeps what it showed and asks again, rather than say it.
+        if (isUnreachable(err)) throw err
+        return { error: err instanceof Error ? err.message : String(err) }
+      },
     )
   reading.set(projectId, read)
-  void read.finally(() => reading.get(projectId) === read && reading.delete(projectId))
+  // Once it settles, either way: a read OpenAgent never answered rejects, and its clean-up must not reject again.
+  const settled = () => void (reading.get(projectId) === read && reading.delete(projectId))
+  read.then(settled, settled)
   return read
 }
 

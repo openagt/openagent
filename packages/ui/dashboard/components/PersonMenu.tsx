@@ -1,6 +1,6 @@
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import { useState, useContext } from 'react'
-import { CircleAlert, Settings } from 'lucide-react'
+import { ChevronDown, CircleAlert, CircleArrowUp, Settings } from 'lucide-react'
 import type { Person } from '../rpc/person.js'
 import { usePerson } from '../lib/use-person.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.js'
@@ -15,7 +15,7 @@ import { attentionDetail, attentionKey, useAttentionFixes } from './Attention.js
 // that opens their menu (his pick, over a row of three icons): the theme and
 // Settings, under their whole name. The accounts a run takes are picked where the run is started,
 // beside the message box, for the computer it goes to: the agent's in the agent picker, the git
-// host's after the branch; not here a second time. A dot on the picture says something runs need is missing, or what a module says needs setting up on this computer (the agents' data not backed up, say); the menu says what fixes it. The gear at the row's end says what the row opens. The name and
+// host's after the branch; not here a second time. A dot on the picture says something runs need is missing, or what a module says needs setting up on this computer (the agents' data not backed up, say), in the warning colour; or, in blue, what a module offers here (a coding agent's newer version); the menu says what fixes it. The chevron at the row's end says the row opens a menu, as Claude Code's does. The name and
 // the picture are the person's own, set in Settings › Profile (`onPerson`); with no picture, the two letters their runs are marked with.
 
 /** The first word of a name: what the row says, the whole name being in the menu. */
@@ -23,8 +23,8 @@ export function firstName(name: string): string {
   return name.trim().split(/\s+/)[0] ?? name
 }
 
-/** A person's picture, or the letters of their mark beside their runs; `dot` says something runs need is missing. */
-export function Avatar({ person, dot = false, size = 'size-5 text-xs', className }: { person: Person | null; dot?: boolean; size?: string; className?: string }) {
+/** A person's picture, or the letters of their mark beside their runs; `dot` says something runs need is missing (`warning`), or that something is offered (`info`: a newer version of a coding agent). */
+export function Avatar({ person, dot = false, size = 'size-5 text-xs', className }: { person: Person | null; dot?: boolean | 'warning' | 'info'; size?: string; className?: string }) {
   // A picture that does not load leaves the letters, never a broken image.
   const [broken, setBroken] = useState(false)
   const picture = person?.avatar && !broken ? person.avatar : undefined
@@ -34,7 +34,7 @@ export function Avatar({ person, dot = false, size = 'size-5 text-xs', className
         {picture ? <img src={picture} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" onError={() => setBroken(true)} /> : person ? personLetters(person.name) : null}
       </span>
       {/* On the circle's edge, at its top right. */}
-      {dot && <span data-testid="missing-dot" className="absolute -top-px -right-px size-2 rounded-full bg-warning ring-2 ring-sidebar" />}
+      {dot && <span data-testid="missing-dot" className={cn('absolute -top-px -right-px size-2 rounded-full ring-2 ring-sidebar', dot === 'info' ? 'bg-info' : 'bg-warning')} />}
     </span>
   )
 }
@@ -43,7 +43,11 @@ export function PersonMenu({ onSettings }: { onSettings: (entry?: string) => voi
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   const { person } = usePerson()
   // What the modules say needs the person on this computer (`app.attention`): listed here, each opening its fix, and the dot on the picture.
-  const attention = (useAttention(null) ?? []).filter(item => item.kind === 'setup' && item.scope === 'computer')
+  // Beside them, what a module offers on this computer: a note with a press (a coding agent's newer version, and its update).
+  const about = (useAttention(null) ?? []).filter(item => item.scope === 'computer')
+  const missing = about.filter(item => item.kind === 'setup')
+  const notes = about.filter(item => item.kind === 'note' && item.fix !== undefined)
+  const attention = [...missing, ...notes]
   const fixes = useAttentionFixes(undefined)
   const needs = attention.length > 0
   // What the modules offer in the person's menu (`person.menu`), asked again as it opens.
@@ -53,14 +57,14 @@ export function PersonMenu({ onSettings }: { onSettings: (entry?: string) => voi
     <>
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger
-        aria-label={`${person ? `${person.name}: settings` : 'Settings'}${needs ? ', something is missing' : ''}`}
-        // A row of the sidebar's: 32 high (44 on a phone), the text's colour at 4% under the pointer, at 8% while its menu is open.
-        className="focus-ring flex w-full min-w-0 items-center gap-3 rounded-md px-2 text-left text-sm transition-colors hover:bg-foreground/4 active:bg-foreground/8 data-[popup-open]:bg-foreground/8 md:h-10 max-md:h-11"
+        aria-label={`${person ? `${person.name}: settings` : 'Settings'}${missing.length > 0 ? ', something is missing' : notes.length > 0 ? ', an update is out' : ''}`}
+        // As Claude Code's (his ask, 2026-11-26, measured there): 28 high (44 on a phone), corners 8, the picture 2 in from
+        // its left and a chevron 12 in from its right; the text's colour at 4% under the pointer, at 8% while its menu is open.
+        className="focus-ring flex w-full min-w-0 items-center gap-2 rounded-lg py-1 pr-3 pl-0.5 text-left text-sm transition-colors hover:bg-foreground/4 active:bg-foreground/8 data-[popup-open]:bg-foreground/8 md:h-7 max-md:h-11"
       >
-        {/* 24 wide, laid out as 16, so its centre is on the icons' axis and the name on their labels' edge. */}
-        <Avatar person={person} dot={needs} size="size-6 text-xs" />
+        <Avatar person={person} dot={missing.length > 0 ? 'warning' : notes.length > 0 && 'info'} size="size-5 text-[9px]" />
         <span className="min-w-0 flex-1 truncate">{person ? firstName(person.name) : ''}</span>
-        <Settings className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+        <ChevronDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />
       </DropdownMenuTrigger>
       {/* As wide as its longest line, from the row's width up to 320: a longer line goes onto a second one, never cut. */}
       <DropdownMenuContent align="start" className="w-max min-w-(--anchor-width) max-w-80">
@@ -81,7 +85,7 @@ export function PersonMenu({ onSettings }: { onSettings: (entry?: string) => voi
               const fix = fixes.fixOf(item)
               return (
                 <DropdownMenuItem key={attentionKey(item)} {...(fix ? { onClick: fix } : { disabled: true })} {...(attentionDetail(item) !== undefined ? { title: attentionDetail(item) } : {})}>
-                  <CircleAlert className="size-4 shrink-0 text-warning" aria-hidden />
+                  {item.kind === 'note' ? <CircleArrowUp className="size-4 shrink-0 text-info" aria-hidden /> : <CircleAlert className="size-4 shrink-0 text-warning" aria-hidden />}
                   <span className="flex-1">{item.fix?.label ?? item.words}</span>
                 </DropdownMenuItem>
               )

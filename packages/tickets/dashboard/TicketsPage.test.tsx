@@ -76,7 +76,7 @@ describe('TicketsPage (#1144)', () => {
     expect(title.className).toBe('text-2xl font-semibold tracking-tight')
     const line = title.closest('header')!.querySelector('p')!
     expect(line.textContent).toBe('Every project’s backlog agents plan from, read from tickets/.')
-    expect(line.className).toBe('mt-1 text-sm text-muted-foreground max-md:sr-only')
+    expect(line.className).toBe('mt-2 text-sm text-muted-foreground max-md:sr-only')
     expect(title.closest('.border-b')).toBeNull()
     cleanup()
     // With one project shown, the line does not say "every"; when its tickets last came from the

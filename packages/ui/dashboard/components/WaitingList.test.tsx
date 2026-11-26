@@ -37,14 +37,15 @@ describe('the rows of what waits on the person', () => {
       'Needs pushLocal only1 commit',
       'Needs mergeAdd README sentence#2',
     ])
-    // Each mark is its own: a question, a file, a branch, a pull request.
-    expect(screen.getAllByRole('listitem').map(row => row.querySelector('svg')!.getAttribute('class'))).toEqual([
-      expect.stringContaining('lucide-circle-help'),
-      expect.stringContaining('lucide-file-pen'),
-      expect.stringContaining('lucide-git-branch'),
-      expect.stringContaining('lucide-git-branch'),
-      expect.stringContaining('lucide-git-pull-request'),
-    ])
+    // Each row's mark is the sidebar's waiting hexagon, pulsing, in the colour of what it needs; the words are quiet.
+    const marks = screen.getAllByRole('listitem').map(row => row.querySelector('svg')!.getAttribute('class')!)
+    expect(marks.map(mark => ['text-warning', 'text-info', 'text-success'].find(tone => mark.split(' ').includes(tone)))).toEqual(['text-warning', 'text-info', 'text-info', 'text-info', 'text-success'])
+    for (const mark of marks) expect(mark).toContain('motion-safe:animate-pulse')
+    expect(screen.getByText('Needs merge').className).toContain('text-muted-foreground')
+    // A request to merge has its mark after the name, as a sidebar row has it; no other row has one.
+    const rows = screen.getAllByRole('listitem')
+    expect(rows.map(row => row.querySelector('.lucide-git-pull-request') !== null)).toEqual([false, false, false, false, true])
+    expect(screen.getByText('Add README sentence').nextElementSibling!.getAttribute('class')).toContain('lucide-git-pull-request')
   })
 
   test('a row is one line that ends with how long ago and an arrow to where it goes', () => {
@@ -73,11 +74,11 @@ describe('the rows of what waits on the person', () => {
     expect(screen.getByText('shop')).toBeTruthy()
   })
 
-  test("an item that names no mark has a plain dot; one about no run and with no page to open says what waits, and is no press", () => {
+  test("an item that names no mark has the waiting hexagon in the waiting colour; one about no run and with no page to open says what waits, and is no press", () => {
     render(<WaitingList items={[item({ module: 'tickets', id: 't1', words: 'Needs triage', title: 'Three new tickets' })]} onOpenAgent={() => {}} />)
     const row = screen.getByRole('listitem')
     expect(row.textContent).toBe('Needs triageThree new tickets')
-    expect(row.querySelector('.lucide-circle-dot')).toBeTruthy()
+    expect(row.querySelector('svg')!.getAttribute('class')!.split(' ')).toContain('text-warning')
     expect(screen.queryByRole('link')).toBeNull()
     expect(screen.queryByRole('button')).toBeNull()
   })

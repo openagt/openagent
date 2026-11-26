@@ -4,10 +4,11 @@ import { Button, CommandLine, FocusHome, cn, forgetRemembered, useAction, useMod
 import type { AgentUpdate } from '../src/server.js'
 import { server } from './reads.js'
 
-// The Overview's notice (`overview.notice`) for a coding agent on this computer with a newer
-// version out: the version it has, the newest, and the press that runs the agent's own update.
-// Nothing when every agent is up to date. A new version can offer other models, so the menu asks
-// for them again after.
+// In Settings › Coding agent, a line for each coding agent on this computer with a newer version
+// out: the version it has, the newest, and the press that runs the agent's own update. Nothing when
+// every agent is up to date. A new version can offer other models, so the menu asks for them again
+// after. The person's menu offers the same update, from the agent's note (`updateFix`, his pick
+// 2026-11-26: on the Overview the notice came late and moved the page).
 
 /** How often the page asks again: the server itself asks npm twice a day. */
 const EVERY_MS = 60 * 60_000

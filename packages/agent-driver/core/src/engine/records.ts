@@ -1,6 +1,6 @@
 import { isSkillName } from './names.js'
 import type { FileBranchWrite } from '@openagt/store-filesystem'
-import { isProfileId, MODULE_NAME, type AgentDriverOptions, type RunOptions } from '@openagt/hooks'
+import { isProfileId, MODULE_NAME, PROJECTS, type AgentDriverOptions, type RunOptions, type Settings } from '@openagt/hooks'
 import type { ProjectSkillsPick } from './profile.js'
 import { publishedBranch, type SessionProject, type SessionRepo } from '@openagt/git-branches'
 import { deleteRun, writeRun, type RecordDeps } from '../record-store.js'
@@ -203,6 +203,15 @@ export function markOptions(mark: Lasting): RunOptions {
 export function startOf(card: RunCard): { from?: string } {
   const from = runnerMark(card)?.baseCommit
   return from !== undefined ? { from } : {}
+}
+
+/**
+ * The folders of the projects on this computer's list, read off `settings` each time they are
+ * asked: what a session with no project is recorded in beside the sessions home, of the ones it
+ * has a copy of (`RecordDeps.projects`).
+ */
+export function projectFolders(settings: () => Promise<Pick<Settings, 'get'>>): () => Promise<string[]> {
+  return async () => (await (await settings()).get(PROJECTS)).map(record => record.path)
 }
 
 /** Put the run's card on the branch before its agent exists. The outcome says whether it reached origin. */

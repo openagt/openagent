@@ -1,12 +1,12 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { nodeGitRunner, DATA_BRANCH } from '@openagt/git-branches'
 import { fileBranchPath, withFileBranch, writeSharing } from '@openagt/store-filesystem'
 import { deleteRun, findRun, listRuns, patchRun, readDiary, runFiles, writeRun } from './record-store.js'
-import { RUNS_DIR } from './record.js'
+import { COPIES_DIR, RUNS_DIR } from './record.js'
 
 const git = nodeGitRunner()
 const RETRIED_RM = { recursive: true, force: true, maxRetries: 10 } as const
@@ -139,5 +139,43 @@ test('a repo with no remote records locally and says the push did not happen', a
     assert.deepEqual(await listRuns('/nowhere'), [], 'no checkout, no runs')
   } finally {
     await rm(root, RETRIED_RM)
+  }
+})
+
+test("a session with no project is recorded in each listed project it has a copy of too, under sessions/: written, patched and deleted with its own record; a copy of a folder not on the list gets nothing", async () => {
+  const listed = await repo()
+  const unlisted = await repo()
+  const config = await realpath(await mkdtemp(join(tmpdir(), 'logs-store-config-')))
+  const before = process.env.XDG_CONFIG_HOME
+  process.env.XDG_CONFIG_HOME = config
+  try {
+    const home = join(config, 'openagent-sessions')
+    await mkdir(home, { recursive: true })
+    const deps = { projects: async () => [listed.root] }
+    const session = card(R1, { intent: 'both', caller: { runner: { host: 'h', repos: [{ name: 'a', from: listed.root }, { name: 'b', from: unlisted.root }] } } })
+    assert.equal((await writeRun(home, session, [{ kind: 'said', text: 'hi' }], deps)).ok, true)
+    const copies = (bare: string) => git(['ls-tree', '-r', '--name-only', DATA_BRANCH], bare).then(out => out.split('\n').filter(path => path.startsWith(`${COPIES_DIR}/`)), () => [])
+    const [copy] = await copies(listed.bare)
+    assert.ok(copy?.endsWith(`/${R1}.json`), 'its card is in the listed project, pushed')
+    assert.deepEqual(JSON.parse(await git(['show', `${DATA_BRANCH}:${copy}`], listed.bare)), session)
+    assert.equal((await git(['show', `${DATA_BRANCH}:${copy!.replace(/\.json$/, '.jsonl')}`], listed.bare)), '{"kind":"said","text":"hi"}\n', 'and its diary')
+    assert.deepEqual(await copies(unlisted.bare), [], 'a folder not on the list gets nothing')
+    assert.deepEqual(await listRuns(listed.root), [], "never among the project's own runs")
+
+    assert.equal(await patchRun(home, R1, { pr: { number: 3, url: 'https://x/pull/3' } }, deps), true)
+    assert.deepEqual(JSON.parse(await git(['show', `${DATA_BRANCH}:${copy}`], listed.bare)).pr, { number: 3, url: 'https://x/pull/3' }, 'a late fact reaches the copy')
+
+    assert.equal((await deleteRun(home, R1, deps)).ok, true)
+    assert.deepEqual(await copies(listed.bare), [], 'deleted there too')
+
+    const own = card(R2, { caller: { runner: { host: 'h', repos: [{ name: 'a', from: unlisted.root }] } } })
+    await writeRun(listed.root, own, [], { projects: async () => [unlisted.root] })
+    assert.deepEqual(await copies(unlisted.bare), [], "a run in a project is recorded in its project alone, whatever copies it has")
+  } finally {
+    if (before === undefined) delete process.env.XDG_CONFIG_HOME
+    else process.env.XDG_CONFIG_HOME = before
+    await listed.cleanup()
+    await unlisted.cleanup()
+    await rm(config, RETRIED_RM)
   }
 })
