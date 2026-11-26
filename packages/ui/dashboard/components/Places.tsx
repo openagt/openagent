@@ -1,4 +1,4 @@
-import { Fragment, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ChevronDown, Loader2 } from 'lucide-react'
 import type { RunOptions } from '@openagt/hooks'
 import { moduleHost, type ActionPlace, type ActionPlaces, type ModuleHost, type OptionPlace, type UiActionResult, type UiComposerControlProps, type UiComposerIn, type UiControlSaid, type UiOffer, type ViewPlace, type ViewPlaces } from '../module/index.js'
@@ -188,7 +188,8 @@ export function useOffers<P extends ActionPlace>(place: P, on: ActionPlaces[P] |
     // `on` by its value, the actions by their keys: a new object of the same thing asks nothing again.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onKey, actionsKey, services, asked, again])
-  return { offers, reask: () => setAsked(n => n + 1) }
+  const reask = useCallback(() => setAsked(n => n + 1), [])
+  return { offers, reask }
 }
 
 /** Run an offered action: its link, its dialog, or its run, asked first when it asks to be. `overlay` is drawn where it outlives a menu that closed. */
@@ -285,6 +286,12 @@ export function useMenuActions<P extends 'chat.menu' | 'project.menu' | 'person.
   return { items, overlay, offered: items.length }
 }
 
+/**
+ * The places that show a repo's next step, by the run and the repo: the Activity panel's row and
+ * the line above the box show the same one, and a press in one changes what the other offers.
+ */
+const stepShown = new Map<string, Set<() => void>>()
+
 /** The row's press, as Claude Code's Create PR: grey, 24 high, its words at 13px. Busy, it stays focusable. */
 const NEXT_STEP_CLASS = 'h-6 rounded-md bg-foreground/10 text-xs font-normal hover:bg-foreground/15 aria-disabled:pointer-events-none aria-disabled:opacity-50'
 
@@ -301,9 +308,20 @@ export function HandoffOffers({ projectId, agentId, repo, again }: { projectId: 
   const { offers, reask } = useOffers('chat.handoff', on, projectId, again)
   const [said, setSaid] = useState<{ text: string; error: boolean } | null>(null)
   useEffect(() => setSaid(null), [again, agentId, repo])
+  // Every place showing this repo's step asks again after a press in any of them.
+  const shownAs = `${projectId}\n${agentId}\n${repo ?? ''}`
+  useEffect(() => {
+    const places = stepShown.get(shownAs) ?? new Set<() => void>()
+    stepShown.set(shownAs, places)
+    places.add(reask)
+    return () => {
+      places.delete(reask)
+      if (places.size === 0) stepShown.delete(shownAs)
+    }
+  }, [shownAs, reask])
   const { press, pending, overlay } = useRunOffer<'chat.handoff'>(on, (_offered, result) => {
     setSaid(result.ok ? (result.said !== undefined ? { text: result.said, error: false } : null) : { text: result.error, error: true })
-    reask()
+    for (const again of stepShown.get(shownAs) ?? []) again()
   })
   const down = useContext(DaemonDown)
   const inPanel = useContext(WorkRowPlace) === 'activity'

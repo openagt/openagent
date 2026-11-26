@@ -3,7 +3,7 @@ import { PICKED_GITHUB_ACCOUNT, PICKED_PROFILE, PROFILES, START_FROM, profileOf,
 import { nodeGitRunner, originDefaultBranch, currentBranch, isSafeAgentId, originGit, pushBranchByName, pushRefusalLine, workAt } from '@openagt/git-branches'
 import { forgetRequests, isWorking, prHandoffOf, readRunPr, requestText, type PrHandoff } from './handoff.js'
 import { homeUrlFor } from './home.js'
-import { cachedPrStates, requestsRead } from './pulls.js'
+import { cachedPrStates, holdRequest, requestsRead } from './pulls.js'
 import { HOST } from './accounts.js'
 import type { GithubAccounts } from './cli.js'
 import { accountsChanged, cliAnswer, githubAccounts } from './host-accounts.js'
@@ -154,6 +154,9 @@ export const openPr = act(async (host: RpcHost, { agentId, repo, draft }: { agen
   if (!opened.ok) return { ok: false, error: `Could not open the pull request: ${opened.error}` }
   const request = (opened.output as { request?: { number?: unknown; url?: unknown } }).request
   if (typeof request?.number !== 'number' || typeof request.url !== 'string') return { ok: false, error: 'GitHub named no pull request.' }
+  // GitHub's list of the branch's requests may not have it for a few seconds: known here at once.
+  const head = read.handoff.commits[0]?.sha
+  holdRequest(cwd, branch, { number: request.number, url: request.url, state: 'OPEN', title: text.title, createdAt: new Date().toISOString(), ...(head !== undefined ? { headRefOid: head } : {}) })
   // The run's request is on its record; a copy's is kept beside it, one per copy, the newest.
   if (repo === undefined) await host.record(agentId, { github: { pr: { number: request.number, url: request.url } } })
   else await host.record(agentId, { github: { copyPrs: [...(ended.run?.record?.copyPrs ?? []).filter(pr => pr.repo !== repo), { repo, number: request.number, url: request.url }] } }).catch(() => {})
@@ -190,6 +193,7 @@ export const mergePr = act(async (host: RpcHost, { agentId, repo }: { agentId: s
   if (!merged.ok) return { ok: false, error: `Could not merge the pull request: ${merged.error}` }
   const outcome = (merged.output as { outcome?: unknown }).outcome
   if (outcome === 'watching') watched.add(pr.url)
+  if (outcome === 'merged' && read.at.branch !== undefined) holdRequest(read.at.cwd, read.at.branch, { ...pr, state: 'MERGED' })
   return { ok: true, said: outcome === 'merged' ? `Merged PR #${pr.number}.` : `PR #${pr.number} merges when its checks pass.` }
 })
 
@@ -208,6 +212,7 @@ export const closePr = act(async (host: RpcHost, { agentId, repo }: { agentId: s
   forgetRequests(read.at.cwd, read.at.branch)
   watched.delete(pr.url)
   if (!closed.ok) return { ok: false, error: `Could not close the pull request: ${closed.error}` }
+  if (read.at.branch !== undefined) holdRequest(read.at.cwd, read.at.branch, { ...pr, state: 'CLOSED' })
   return { ok: true, said: `Closed PR #${pr.number}.` }
 })
 

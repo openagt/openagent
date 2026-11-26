@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { UiOffer } from '../module/index.js'
 import { ModulesContext, mountedOf, type MountedAction } from '../lib/use-modules.js'
 
@@ -75,5 +75,19 @@ describe('the next step of a session', () => {
     const press = await screen.findByRole('button', { name: 'Open PR' })
     expect(screen.queryByText('Nothing committed — README.md left uncommitted.')).toBeNull()
     expect(press.getAttribute('title')).toBe('Commits README.md\nNothing committed — README.md left uncommitted.')
+  })
+
+  test('a press in one place asks again every place showing the same step: the line above the box after the panel row', async () => {
+    let opened = false
+    const open: MountedAction<'chat.handoff'> = { ...openPr, id: 'open-pr', offer: () => (opened ? { label: 'Merge PR' } : {}), run: async () => ((opened = true), { ok: true }) }
+    render(
+      <ModulesContext.Provider value={mountedOf({ actions: { 'chat.handoff': [open] } })}>
+        <div data-testid="panel"><HandoffOffers projectId="p1" agentId="r-both" repo="oa-newuser" /></div>
+        <div data-testid="line"><HandoffOffers projectId="p1" agentId="r-both" repo="oa-newuser" /></div>
+      </ModulesContext.Provider>,
+    )
+    const [inPanel] = await screen.findAllByRole('button', { name: 'Open PR' })
+    fireEvent.click(inPanel!)
+    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Merge PR' })).toHaveLength(2))
   })
 })
