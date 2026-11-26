@@ -365,7 +365,7 @@ describe('ProjectPicker', () => {
     await screen.findByRole('option', { name: /client/ })
   })
 
-  test("the launcher's control is the picker, a pick moving the launcher; a session's box and a profile's have none", async () => {
+  test("the launcher's control is the picker, a pick moving the launcher; a session's box says its project in the same place, no menu; a profile's has none", async () => {
     const pickProject = vi.fn()
     const control = (props: Record<string, unknown>) =>
       renderWithHost(
@@ -383,6 +383,10 @@ describe('ProjectPicker', () => {
     cleanup()
     control({ in: 'session' })
     expect(screen.queryByRole('combobox')).toBeNull()
+    expect(screen.getByText('alpha')).toBeTruthy()
+    cleanup()
+    control({ in: 'session', projectId: undefined })
+    expect(screen.queryByText('alpha')).toBeNull()
     cleanup()
     control({ pickProject: undefined })
     expect(screen.queryByRole('combobox')).toBeNull()

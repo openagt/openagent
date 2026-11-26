@@ -12,6 +12,7 @@ import {
   MiddleCut,
   rowButtonClass,
   RowChevron,
+  RowSaid,
   ScrollArea,
   Tooltip,
   TooltipContent,
@@ -470,13 +471,25 @@ export function ProjectPicker({
 }
 
 /**
- * The picker as the launcher's control (`composer.control` at `start`): where the next session
- * works, a pick moving the launcher to that project, or to none, with what is typed. A session's
- * box says its project elsewhere, and a profile is for any project: neither has it.
+ * The picker as the launcher's control (`composer.control` at `context`, first after the gear):
+ * where the next session works, a pick moving the launcher to that project, or to none, with what
+ * is typed. A session's box says its project in the same place, said and not offered: a session
+ * keeps where it works. A profile is for any project: it has none.
  */
 export function ProjectControl({ in: box, projectId, busy, pickProject }: UiComposerControlProps) {
   const projects = useProjects()
   const label = useProjectLabel()
+  if (box === 'session') {
+    const name = projects.find(project => project.id === projectId)
+    if (!name) return null
+    const shown = label(name.id, name.name)
+    return (
+      <RowSaid tip={`The session works in ${shown}`}>
+        <Folder className="size-4 shrink-0" aria-hidden />
+        <span className="truncate">{shown}</span>
+      </RowSaid>
+    )
+  }
   if (box !== 'launcher' || !pickProject) return null
   // The first pick: the agent picks the project the task needs, from the person's, and asks when it cannot tell (Rom 11-22; his words C, 11-25).
   const none = { label: 'Agent picks', tip: 'The agent picks the project your task needs, and asks you when it can\u2019t tell', row: { label: 'Agent picks the project', detail: agentPicksDetail(projects.map(project => label(project.id, project.name))) }, agent: true }

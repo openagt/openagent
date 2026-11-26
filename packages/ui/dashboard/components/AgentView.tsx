@@ -232,7 +232,6 @@ export function AgentView({
       runsOn={runsOn}
       target={target}
       elsewhere={elsewhere || card?.otherHost === true}
-      projectName={projectName}
       run={{ projectId, agentId, working }}
     />
   )
