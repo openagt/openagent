@@ -188,10 +188,11 @@ test("a run stands as its sidebar row does: one that waits on the person waits, 
   )
   const row = (title: string) => screen.getAllByText(title)[0]!.closest('li')!
   await waitFor(() => expect(within(row('Image paste')).getByText('Merged')).toBeTruthy())
-  // Waiting, as the sidebar lists it under "Waiting on you": its hexagon waits, and its line says what it needs, not that it is done.
-  expect(within(row('Open request')).getByText('Needs merge')).toBeTruthy()
+  // Waiting, as the sidebar lists it under "Waiting on you": its hexagon waits, and its line says what it needs, not that it is done,
+  // both in the colour of what it needs (a merge green), as every list of what waits says it.
+  expect(within(row('Open request')).getByText('Needs merge').className).toContain('text-success')
   expect(row('Open request').textContent).not.toMatch(/Done/)
-  expect(row('Open request').querySelector('svg')!.getAttribute('class')).toContain('text-warning')
+  expect(row('Open request').querySelector('svg')!.getAttribute('class')).toContain('text-success')
   // Stopped, its pull request merged later: the merge glyph, as the sidebar marks it.
   expect(row('Image paste').querySelector('svg.lucide-git-merge')).toBeTruthy()
   expect(row('Image paste').textContent).not.toMatch(/Stopped/)
