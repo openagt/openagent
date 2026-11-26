@@ -64,8 +64,10 @@ export function runArgs(run: SpawnedRun): string[] {
   if (run.prBase !== undefined) args.push('--pr-base', run.prBase)
   if (run.branch !== undefined) args.push('--branch', run.branch)
   if (run.for !== undefined) args.push('--for', run.for)
-  // One argument, the folders one per line: the process reads them as the start did.
-  if (run.repos !== undefined && run.repos.length > 0) args.push(`--repos=${run.repos.map(repo => repo.from).join('\n')}`)
+  // One argument, the folders one per line, each with the branch its copy starts from after a tab: the process reads them as the start did.
+  if (run.repos !== undefined && run.repos.length > 0) args.push(`--repos=${run.repos.map(repo => (repo.base !== undefined ? `${repo.from}\t${repo.base}` : repo.from)).join('\n')}`)
+  // One argument, the projects as JSON: names may hold anything.
+  if (run.projects !== undefined && run.projects.length > 0) args.push(`--projects=${JSON.stringify(run.projects)}`)
   return args
 }
 
@@ -99,6 +101,8 @@ export interface SpawnedResume {
   publish?: Publish | typeof NO_PUBLISH
   /** The account it goes on with, by name, among the ones its coding agent may use: put in its environment ({@link ACCOUNT_ENV}). */
   account?: string
+  /** The repos its message gives the session, by their folders (`run --resume --repos`): copied into the session's folder as it goes on. */
+  repos?: string[]
 }
 
 /** The command line of a spawned resume: the text as the argument, or the answer. */
@@ -111,6 +115,7 @@ export function resumeArgs(run: SpawnedResume): string[] {
   if (run.effort !== undefined) args.push('--effort', run.effort)
   if (run.by !== undefined) args.push('--by', run.by)
   if (run.publish !== undefined) args.push('--publish', run.publish)
+  if (run.repos !== undefined && run.repos.length > 0) args.push(`--repos=${run.repos.join('\n')}`)
   return args
 }
 
@@ -272,6 +277,7 @@ export async function resumeProject(
     ...(opts.effort !== undefined ? { effort: opts.effort } : {}),
     ...(opts.by !== undefined ? { by: opts.by } : {}),
     ...(opts.publish !== undefined ? { publish: publishChange(opts.publish) ?? null } : {}),
+    ...(opts.repos !== undefined && opts.repos.length > 0 ? { repos: opts.repos } : {}),
     driver: (deps.driverFor ?? driverFor)(agent, opts.id, setup, accounts),
     profileOptions: profile.options,
     ...(opts.log ? { log: opts.log } : {}),

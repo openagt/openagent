@@ -192,8 +192,8 @@ export function AgentHistory({
 
   // All projects show: the rail pools every project's sessions. One project: just its own.
   const crossProject = scope === null && recentAgents !== undefined
-  // Whose `agents` are: the page's project, else the picked one.
-  const listOf = projectId ?? scope ?? null
+  // Whose `agents` are: the picked project's, on a session's page opened from its list too; else the page's project.
+  const listOf = scope ?? projectId ?? null
   const listed = crossProject ? recentAgents!.map(recent => recent.agent) : agents
 
   // The handover: the row this one stands in for has landed once the list holds the run the start
@@ -240,28 +240,42 @@ export function AgentHistory({
 
   // In the order the person picked from the button beside "Log" (`recents-sort.ts`).
   const order = preferences.recentsSort ?? 'created'
+  const groupBy = preferences.recentsGroup ?? 'none'
+  // A session with no project that has a copy of a project is listed under it (`projects-under.ts`): named by those projects,
+  // and, cut by project, a row in each one's group. It opens on its own page all the same.
+  const underOf = (agent: AgentMeta) => (agent.under ?? []).map(project => ({ id: project.id, label: label(project.id, project.name) }))
   const rows: Row[] = sortRuns(crossProject
-    ? recentAgents!.map(rr => ({
-        key: `${rr.projectId}:${rr.agent.id}`,
-        agent: rr.agent,
-        // A session with no project names none.
-        ...(rr.projectId !== SESSIONS_ID ? { project: label(rr.projectId, rr.projectName) } : {}),
-        projectId: rr.projectId,
-        active: rr.projectId === projectId && rr.agent.id === selectedAgentId,
-        href: hrefOf({ projectId: rr.projectId, agentId: rr.agent.id }),
-        onClick: () => onSelectRecent?.(rr.projectId, rr.agent.id),
-        ...near(rr.projectId, rr.agent),
-      }))
-    : agents.map(agent => ({
-        key: agent.id,
-        agent,
-        // The list is the picked project's on a page of no project too: the Overview, a module's page.
-        projectId: listOf,
-        active: agent.id === selectedAgentId,
-        href: hrefOf({ projectId: listOf, agentId: agent.id }),
-        onClick: () => onSelect(agent.id),
-        ...near(listOf, agent),
-      })), order)
+    ? recentAgents!.flatMap(rr => {
+        const row = {
+          key: `${rr.projectId}:${rr.agent.id}`,
+          agent: rr.agent,
+          projectId: rr.projectId,
+          active: rr.projectId === projectId && rr.agent.id === selectedAgentId,
+          href: hrefOf({ projectId: rr.projectId, agentId: rr.agent.id }),
+          onClick: () => onSelectRecent?.(rr.projectId, rr.agent.id),
+          ...near(rr.projectId, rr.agent),
+        }
+        // A session with no project names none, or the projects it is listed under.
+        if (rr.projectId !== SESSIONS_ID) return [{ ...row, project: label(rr.projectId, rr.projectName) }]
+        const under = underOf(rr.agent)
+        if (under.length === 0) return [row]
+        if (groupBy === 'project') return under.map(project => ({ ...row, key: `${row.key}:${project.id}`, project: project.label }))
+        return [{ ...row, project: under.map(project => project.label).join(', ') }]
+      })
+    : agents.map(agent => {
+        // The list is the picked project's on a page of no project too: the Overview, a module's page. A session listed
+        // under it is the sessions' own.
+        const own = agent.under ? SESSIONS_ID : listOf
+        return {
+          key: agent.id,
+          agent,
+          projectId: own,
+          active: agent.id === selectedAgentId,
+          href: hrefOf({ projectId: own, agentId: agent.id }),
+          onClick: () => (agent.under && onSelectRecent ? onSelectRecent(SESSIONS_ID, agent.id) : onSelect(agent.id)),
+          ...near(own, agent),
+        }
+      }), order)
 
   // New is the active view when a project is open on its launcher (its "New" / Start-a-session
   // screen: a project selected, no run picked, not following a live one). On the Overview that role
@@ -276,7 +290,6 @@ export function AgentHistory({
   // What a row shows beside its name and its age, and what the list is cut by: the person's picks
   // from the button beside "Log", all off until asked for. One project's list has no projects to cut it by.
   const show: Showing = { person: preferences.recentsPerson === true, agent: preferences.recentsAgent === true }
-  const groupBy = preferences.recentsGroup ?? 'none'
   const groups = groupRuns(logged, groupBy === 'project' && !crossProject ? 'none' : groupBy, order)
 
   const hasRecents = rows.length > 0 || showOptimistic

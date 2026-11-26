@@ -164,7 +164,7 @@ test("a letter typed on the launcher's branch picker starts its search and picks
 test("a letter typed on a no-project session's Repos starts its search and ticks nothing", needsChrome, async () => {
   await flow('typed-repos-context', async page => {
     await page.getByLabel('The session works in', { exact: true }).click()
-    await page.getByRole('option', { name: 'No project' }).click()
+    await page.getByRole('option', { name: /^Agent picks the project/ }).click()
     await typedOnPicker(page, 'Repos', 'Search repos', button => button.textContent())
   })
 })

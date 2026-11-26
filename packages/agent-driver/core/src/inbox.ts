@@ -52,7 +52,7 @@ export async function takeInbox(path: string): Promise<InboxLine[]> {
 function isInboxLine(value: unknown): value is InboxLine {
   if (!value || typeof value !== 'object') return false
   const v = value as Record<string, unknown>
-  if (v['kind'] === 'message') return typeof v['text'] === 'string' && v['text'].trim().length > 0 && (v['publish'] === undefined || typeof v['publish'] === 'string') && (v['id'] === undefined || typeof v['id'] === 'string') && (v['images'] === undefined || (Array.isArray(v['images']) && v['images'].every(isImageName)))
+  if (v['kind'] === 'message') return typeof v['text'] === 'string' && v['text'].trim().length > 0 && (v['publish'] === undefined || typeof v['publish'] === 'string') && (v['id'] === undefined || typeof v['id'] === 'string') && (v['images'] === undefined || (Array.isArray(v['images']) && v['images'].every(isImageName))) && (v['options'] === undefined || (typeof v['options'] === 'object' && v['options'] !== null && !Array.isArray(v['options'])))
   if (v['kind'] === 'answer') return typeof v['question'] === 'string' && typeof v['answer'] === 'string'
   if (v['kind'] === 'cancel') return typeof v['id'] === 'string'
   return v['kind'] === 'now'
@@ -109,9 +109,20 @@ export async function finishTurn(
   const { attached: _attached, images: _images, ...rest } = opts
   let further: DriverPromptOptions = rest
   for (const line of promptLines([...(turn.held ?? []), ...(await takeInbox(opts.inbox))])) {
-    // The caller says what the line changes, for it and the lines after it.
-    if (opts.onInboxLine) further = await opts.onInboxLine(line, further)
-    last = await session.prompt(promptOf(line), { ...further, resume: true, ...imagesOf(line) })
+    // The caller says what the line changes, for it and the lines after it, and what it hands over with this one line alone.
+    const { attached, ...carried } = opts.onInboxLine ? await opts.onInboxLine(line, further) : further
+    further = carried
+    last = await session.prompt(promptOf(line), { ...further, ...(attached !== undefined ? { attached } : {}), resume: true, ...imagesOf(line) })
   }
   return last
+}
+
+/**
+ * The repos a message gives the session, by their folders: the ones its options name (the session
+ * box's Repos), which the run copies into the session's folder; the ones it has already add nothing.
+ */
+export function givenRepos(line: PromptLine): string[] {
+  if (line.kind !== 'message') return []
+  const repos = line.options?.['git-branches']?.repos
+  return Array.isArray(repos) ? repos.flatMap(repo => (typeof repo?.from === 'string' && repo.from.trim() !== '' ? [repo.from] : [])) : []
 }

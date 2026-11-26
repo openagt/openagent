@@ -2,6 +2,18 @@ import { useMemo, useState, type ComponentProps } from 'react'
 import { Check, GitBranch, Search } from 'lucide-react'
 import {
   Combobox,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+  NO_PROJECT,
+  useProjects,
   MENU_BODY_CLASS,
   MENU_ITEM_CLASS,
   MENU_POPUP_CLASS,
@@ -23,10 +35,16 @@ import {
   usePopupPosition,
   type UiComposerControlProps,
 } from '@openagt/ui/module'
+import type { RunOptions } from '@openagt/hooks'
 import { server, type StartFrom, type StartPlaces } from './calls.js'
+import { withRepos } from './ReposControl.js'
+import { folderName, type SessionRepo } from '../src/repo-names.js'
 
-// The branch a run starts from, in the row above the message box (`composer.control` at `start`),
-// after the project. In the launcher, a menu to pick it: the project's main branch (origin's
+// The branch a run starts from, in the row under the message box (`composer.control` at
+// `context`), after the project and its repos. With repos copied into the session's folder it is
+// "Branches", as Claude Code on the web's with more than one repo: a row per repo, the project's
+// first, each with the branch it starts from and a menu of origin's others; a copy's pick goes with
+// the Start in its run options. With none, In the launcher, a menu to pick it: the project's main branch (origin's
 // default branch, fetched fresh) first, then "My local branch", the branch the project's folder is
 // on, as committed on this machine, then what origin has now, read each time the menu opens, with a
 // search for a repository that has hundreds. The button reads the pick itself, so where a Start
@@ -40,8 +58,116 @@ import { server, type StartFrom, type StartPlaces } from './calls.js'
 const ROWS_DRAWN = 200
 
 export function StartControl(props: UiComposerControlProps) {
-  if (props.in === 'profile' || props.projectId === undefined) return null
-  return props.in === 'session' ? <StartedFrom projectId={props.projectId} agentId={props.agentId} /> : <StartFromMenu projectId={props.projectId} busy={props.busy} />
+  if (props.in === 'profile') return null
+  if (props.in === 'session') return props.projectId !== undefined ? <StartedFrom projectId={props.projectId} agentId={props.agentId} /> : null
+  const repos = props.options['git-branches']?.repos ?? []
+  if (repos.length > 0) return <BranchesMenu projectId={props.projectId} options={props.options} onChange={props.onChange} busy={props.busy} />
+  return props.projectId !== undefined ? <StartFromMenu projectId={props.projectId} busy={props.busy} /> : null
+}
+
+/** The value a project's start pick has in its menu: `main`, `local`, or `published:<branch>`. */
+function pickValue(pick: StartFrom | undefined): string {
+  return pick === undefined ? 'main' : pick.kind === 'local' ? 'local' : `published:${pick.branch}`
+}
+
+/**
+ * "Branches": where each repo of the session starts from, as Claude Code on the web's with more
+ * than one repo. The project's row picks as its own menu does, for every next run; a copy's goes
+ * with this Start (`options['git-branches'].repos[].base`). Origin's branches are read as the menu opens.
+ */
+function BranchesMenu({ projectId, options, onChange, busy }: { projectId?: string | undefined; options: RunOptions; onChange: (options: RunOptions) => void; busy: boolean }) {
+  const host = useModuleHost()
+  const [open, setOpen] = useState(false)
+  const [asked, setAsked] = useState(0)
+  const repos = options['git-branches']?.repos ?? []
+  const own = useProjects().find(project => project.id === projectId)
+  const projectName = own ? folderName(own.path) : undefined
+  const places = useLoaded<StartPlaces | null>(projectId !== undefined ? () => server(host).startPlaces(projectId, {}).catch(() => null) : null, null, [projectId, asked], { remember: `git-branches:start-places:${projectId ?? ''}` })
+  const others = useLoaded<{ branches?: string[] } | null>(open && projectId !== undefined && places ? () => server(host).startBranches(projectId, {}).catch(() => ({})) : null, null, [open, projectId, places !== null])
+  const pickProject = async (value: string) => {
+    if (projectId === undefined) return
+    const next: StartFrom | undefined = value === 'main' ? undefined : value === 'local' ? { kind: 'local' } : { kind: 'published', branch: value.slice('published:'.length) }
+    await server(host).pickStart(projectId, next ? { pick: next } : {})
+    tellNextRunPicked()
+    setAsked(n => n + 1)
+  }
+  const pickCopy = (repo: SessionRepo, base: string | undefined) => {
+    onChange(withRepos(options, repos.map(had => (had.from !== repo.from ? had : base === undefined ? { name: had.name, from: had.from } : { ...had, base }))))
+  }
+  const said = 'Where each repo starts from'
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <Tooltip>
+        <TooltipTrigger render={<DropdownMenuTrigger disabled={busy} aria-label="Branches each repo starts from" className={MENU_TRIGGER_OPEN_CLASS} render={<BranchButton label="Branches" />} />} />
+        <TooltipContent>{said}</TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent align="start" className="w-[20rem] max-w-[var(--available-width)]">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="font-normal">{said}</DropdownMenuLabel>
+          {places && (
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <span className="min-w-0 flex-1 truncate">{projectName ?? 'This project'}</span>
+                <span className="shrink-0 text-xs text-muted-foreground">{startFromLabel(places.pick, places.main, places.local)}</span>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="max-h-[20rem] w-[18rem] overflow-y-auto">
+                <DropdownMenuRadioGroup value={pickValue(places.pick)} onValueChange={value => void pickProject(String(value))}>
+                  <BranchItem value="main" label={places.main} picked={pickValue(places.pick)} />
+                  <BranchItem value="local" label={`${places.local} (local)`} picked={pickValue(places.pick)} />
+                  {(others?.branches ?? []).slice(0, ROWS_DRAWN).map(branch => (
+                    <BranchItem key={branch} value={`published:${branch}`} label={branch} picked={pickValue(places.pick)} />
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          )}
+          {repos.map(repo => (
+            <CopyBranches key={repo.from} projectId={projectId ?? NO_PROJECT} repo={repo} open={open} onPick={base => pickCopy(repo, base)} />
+          ))}
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+/** A branch in a menu of "Branches": its name, and the tick at the row's end where it is the one picked. */
+function BranchItem({ value, label, picked }: { value: string; label: string; picked: string }) {
+  return (
+    <DropdownMenuRadioItem value={value}>
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {value === picked && (
+        <MenuMark className="ml-auto">
+          <Check className="size-3.5" aria-hidden />
+        </MenuMark>
+      )}
+    </DropdownMenuRadioItem>
+  )
+}
+
+/** A copy's row of "Branches": its name and the branch it starts from, and a menu of its origin's branches, its main one first. */
+function CopyBranches({ projectId, repo, open, onPick }: { projectId: string; repo: SessionRepo; open: boolean; onPick: (base: string | undefined) => void }) {
+  const host = useModuleHost()
+  const read = useLoaded<{ main?: string; branches?: string[] } | null>(open ? () => server(host).repoBranches(projectId, { folder: repo.from }).catch(() => ({})) : null, null, [open, repo.from], {
+    remember: `git-branches:repo-branches:${repo.from}`,
+  })
+  const main = read?.main ?? 'main'
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger>
+        <span className="min-w-0 flex-1 truncate">{repo.name}</span>
+        <span className="shrink-0 text-xs text-muted-foreground">{repo.base ?? main}</span>
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent className="max-h-[20rem] w-[18rem] overflow-y-auto">
+        <DropdownMenuRadioGroup value={repo.base ?? ''} onValueChange={value => onPick(value === '' ? undefined : String(value))}>
+          <BranchItem value="" label={main} picked={repo.base ?? ''} />
+          {(read?.branches ?? []).slice(0, ROWS_DRAWN).map(branch => (
+            <BranchItem key={branch} value={branch} label={branch} picked={repo.base ?? ''} />
+          ))}
+        </DropdownMenuRadioGroup>
+        {read === null ? <p className="px-2 py-1.5 text-xs text-muted-foreground">Reading the branches on origin…</p> : read.branches === undefined ? <p className="px-2 py-1.5 text-xs text-muted-foreground">The other branches could not be read from origin.</p> : null}
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
+  )
 }
 
 /** A session's start, said and not offered: a session keeps where it started. A start that cannot be said is left out. */

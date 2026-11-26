@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Check, Cloud, Folder, FolderGit2, FolderSearch, Layers, Plus, Search } from 'lucide-react'
+import { Check, Cloud, Folder, FolderGit2, FolderSearch, Layers, Plus, Search, Sparkles } from 'lucide-react'
 import {
   cn,
   Combobox,
@@ -12,6 +12,7 @@ import {
   MiddleCut,
   rowButtonClass,
   RowChevron,
+  RowSaid,
   ScrollArea,
   Tooltip,
   TooltipContent,
@@ -243,7 +244,12 @@ export function ProjectPicker({
   picked: string | null
   busy?: boolean
   /** The first row: what no project means here. */
-  none: { label: string; tip: string }
+  /**
+   * The first row: what no project means here. `row` is that row in the list where it says more
+   * than the button (its words and a line under them), and `agent` marks the pick where the agent
+   * picks the project (his words "Agent picks").
+   */
+  none: { label: string; tip: string; row?: { label: string; detail: string }; agent?: boolean }
   /** A project, or none, was picked. */
   onPick: (projectId: string | null) => void
 }) {
@@ -283,7 +289,10 @@ export function ProjectPicker({
     onPick(project.id)
   }, [added, picked, projects, onPick])
 
-  const NONE: Row = useMemo(() => ({ value: 'none', label: none.label, pick: { kind: 'none' }, search: '' }), [none.label])
+  const NONE: Row = useMemo(
+    () => ({ value: 'none', label: none.row?.label ?? none.label, ...(none.row ? { detail: none.row.detail } : {}), pick: { kind: 'none' }, search: '' }),
+    [none.label, none.row?.label, none.row?.detail],
+  )
   const projectRows = useMemo<Row[]>(
     () => projects.map(p => ({ value: `project:${p.id}`, label: label(p.id, p.name), pick: { kind: 'project', project: p }, search: p.path })),
     [projects, label],
@@ -308,7 +317,8 @@ export function ProjectPicker({
   )
   const groups = pickerGroups(NONE, projectRows, whereGroups, typed)
   const current = picked === null ? NONE : (projectRows.find(row => row.value === `project:${picked}`) ?? { value: `project:${picked}`, label: '', pick: { kind: 'none' }, search: '' })
-  const shown = current.label
+  // The button says the pick in its own words: the list's row may say more.
+  const shown = picked === null ? none.label : current.label
   // No project word until the name is known, never a wrong one.
   if (!shown) return null
 
@@ -322,7 +332,7 @@ export function ProjectPicker({
   const name = 'The session works in'
   const button = (
     <button type="button" className={cn(rowButtonClass, 'max-w-[16rem]!')}>
-      <Folder className="h-3.5 w-3.5 shrink-0" aria-hidden />
+      {picked === null && none.agent ? <Sparkles className="h-3.5 w-3.5 shrink-0" aria-hidden /> : <Folder className="h-3.5 w-3.5 shrink-0" aria-hidden />}
       <span className="truncate">{shown}</span>
       <RowChevron />
     </button>
@@ -377,7 +387,7 @@ export function ProjectPicker({
                                 </MenuMark>
                               ) : row.pick.kind === 'none' ? (
                                 <MenuMark>
-                                  <Layers className="size-3.5 text-muted-foreground" aria-hidden />
+                                  {none.agent ? <Sparkles className="size-3.5 text-muted-foreground" aria-hidden /> : <Layers className="size-3.5 text-muted-foreground" aria-hidden />}
                                 </MenuMark>
                               ) : row.pick.kind === 'repo' ? (
                                 <MenuMark>
@@ -401,7 +411,8 @@ export function ProjectPicker({
                                     >
                                       {/* A repo's path on one line, cut in its middle: where it starts and the folder it ends in show, and
                                           the whole of it is in the title and said to a screen reader. */}
-                                      {row.pick.kind === 'repo' && typeof row.detail === 'string' ? <MiddleCut text={row.detail} /> : <span className="min-w-0 truncate">{row.detail}</span>}
+                                      {/* The agent's pick says what it does whole, over two lines where it needs them. */}
+                                      {row.pick.kind === 'repo' && typeof row.detail === 'string' ? <MiddleCut text={row.detail} /> : row.pick.kind === 'none' ? <span className="min-w-0">{row.detail}</span> : <span className="min-w-0 truncate">{row.detail}</span>}
                                     </span>
                                   )}
                                 </span>
@@ -460,11 +471,38 @@ export function ProjectPicker({
 }
 
 /**
- * The picker as the launcher's control (`composer.control` at `start`): where the next session
- * works, a pick moving the launcher to that project, or to none, with what is typed. A session's
- * box says its project elsewhere, and a profile is for any project: neither has it.
+ * The picker as the launcher's control (`composer.control` at `context`, first after the gear):
+ * where the next session works, a pick moving the launcher to that project, or to none, with what
+ * is typed. A session's box says its project in the same place, said and not offered: a session
+ * keeps where it works. A profile is for any project: it has none.
  */
 export function ProjectControl({ in: box, projectId, busy, pickProject }: UiComposerControlProps) {
+  const projects = useProjects()
+  const label = useProjectLabel()
+  if (box === 'session') {
+    const name = projects.find(project => project.id === projectId)
+    if (!name) return null
+    const shown = label(name.id, name.name)
+    return (
+      <RowSaid tip={`The session works in ${shown}`}>
+        <Folder className="size-4 shrink-0" aria-hidden />
+        <span className="truncate">{shown}</span>
+      </RowSaid>
+    )
+  }
   if (box !== 'launcher' || !pickProject) return null
-  return <ProjectPicker none={{ label: 'No project', tip: 'The session works in a folder of its own' }} picked={projectId ?? null} busy={busy} onPick={id => pickProject(id ?? undefined)} />
+  // The first pick: the agent picks the project the task needs, from the person's, and asks when it cannot tell (Rom 11-22; his words C, 11-25).
+  const none = { label: 'Agent picks', tip: 'The agent picks the project your task needs, and asks you when it can\u2019t tell', row: { label: 'Agent picks the project', detail: agentPicksDetail(projects.map(project => label(project.id, project.name))) }, agent: true }
+  return <ProjectPicker none={none} picked={projectId ?? null} busy={busy} onPick={id => pickProject(id ?? undefined)} />
+}
+
+/**
+ * What the agent's pick says under its name (his pick C, 11-25): the projects it picks from, by
+ * name, the first few and how many more, and that it asks when it cannot tell.
+ */
+export function agentPicksDetail(names: readonly string[]): string {
+  if (names.length === 0) return 'From the projects you add, by your task. It asks you when it can\u2019t tell.'
+  const shown = names.length > 3 ? [...names.slice(0, 3), `${names.length - 3} more`] : [...names]
+  const said = shown.length === 1 ? shown[0]! : `${shown.slice(0, -1).join(', ')} and ${shown.at(-1)!}`
+  return `From ${said}, by your task. It asks you when it can\u2019t tell.`
 }

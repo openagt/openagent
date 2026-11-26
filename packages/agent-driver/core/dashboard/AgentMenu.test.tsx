@@ -69,6 +69,11 @@ describe('the agent and model tree (#658)', () => {
     expect(trigger.getAttribute('aria-label')).toContain('Claude Code')
   })
 
+  test('with no model picked, the trigger says "Default": never a mark alone', () => {
+    renderMenu({ model: undefined })
+    expect(screen.getByRole('button').textContent).toContain('Default')
+  })
+
   test('picking a model within an agent sets both the agent and the model', () => {
     const { onChange } = renderMenu()
     fireEvent.click(screen.getByRole('button'))

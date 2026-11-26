@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createRef } from 'react'
 import type { Preferences } from '../../src/index.js'
 import { resetRunHostsForTest } from '../lib/run-hosts.js'
@@ -435,15 +435,14 @@ describe('Composer (#721)', () => {
     expect(screen.queryByRole('button', { name: 'Send' })).toBeNull() // nothing seeded
   })
 
-  test('the row above the box: the launcher\'s, led by "Run on"; inside a session, the one it is given, in the same place, and no "Run on" of its own', async () => {
+  test('the row above the box: the launcher\'s holds "Run on" alone, where a host is offered; inside a session, the one it is given, in the same place, and no "Run on" of its own', async () => {
     withHost()
-    renderComposer({ startsAt: <span>the launcher's place</span> })
+    renderComposer()
     // In the row that stands right before the box.
     const followedByBox = (el: Element) => {
       for (let row = el.parentElement; row; row = row.parentElement) if (row.nextElementSibling === box()) return true
       return false
     }
-    expect(followedByBox(screen.getByText("the launcher's place"))).toBe(true)
     expect(followedByBox(await screen.findByRole('button', { name: /^Run on: / }))).toBe(true)
     cleanup()
     renderComposer({ inAgent: true, sessionRow: <div><span>where it started</span></div> })
@@ -495,6 +494,18 @@ const box = (): HTMLElement => {
 const commands = () => screen.getByRole('button', { name: 'Commands' })
 
 describe('the box', () => {
+  test("the files that go with the message are chips in the box, above its text, each by its name with its path in its hover, and its × takes it off; + offers a file of the project where the box points at files", async () => {
+    const onDetach = vi.fn()
+    renderComposer({ files: ['src/app.ts', 'README.md'], addContext: () => {}, attached: ['src/app.ts'], onDetach })
+    const chips = within(screen.getByRole('list', { name: 'Files' })).getAllByRole('listitem')
+    expect(chips.map(chip => [chip.textContent, chip.title])).toEqual([['app.ts', 'src/app.ts']])
+    expect(box().contains(chips[0]!)).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Take src/app.ts off' }))
+    expect(onDetach).toHaveBeenCalledWith('src/app.ts')
+    await openMenu(commands())
+    expect(await screen.findByRole('menuitem', { name: /^File from / })).toBeTruthy()
+  })
+
   test('with the keyboard in it, or in the menu its + opened, its hairline is a step brighter and its shadow a step deeper: no ring, and no colour', () => {
     renderComposer()
     const cls = box().className.split(' ')
@@ -537,13 +548,12 @@ describe('the box', () => {
 const runOn = () => screen.getByRole('button', { name: /^Run on: / })
 
 describe('the rows around the box', () => {
-  test('where the agent starts is a row above the box: "Run on", then the caller\'s words; under it, the gear, then the caller\'s controls, and the modules\' row controls at the right', async () => {
+  test('where the agent runs is a row above the box, "Run on"; under it, the gear, then the caller\'s controls, and the modules\' row controls at the right', async () => {
     withHost()
-    renderWithRowControl({ startsAt: <span>a-place</span>, controls: <span>a-control</span>, setup: { said: 'Profile Default · 3 skills', lines: <span>a-line</span> } })
+    renderWithRowControl({ controls: <span>a-control</span>, setup: { said: 'Profile Default · 3 skills', lines: <span>a-line</span> } })
     await screen.findByRole('button', { name: /^Run on: / })
     const above = box().previousElementSibling!
     const under = box().nextElementSibling!
-    const place = screen.getByText('a-place')
     const control = screen.getByText('a-control')
     const gear = screen.getByRole('button', { name: 'Session setup' })
     const select = rowControl()
@@ -553,8 +563,6 @@ describe('the rows around the box', () => {
     expect(gear.compareDocumentPosition(control) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(under.contains(screen.getByText('a-line'))).toBe(false)
     expect(above.contains(runOn())).toBe(true)
-    expect(above.contains(place)).toBe(true)
-    expect(runOn().compareDocumentPosition(place) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(under.contains(control)).toBe(true)
     expect(under.contains(select)).toBe(true)
     expect(control.compareDocumentPosition(select) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
@@ -567,7 +575,6 @@ describe('the rows around the box', () => {
       expect(row.className).toContain('h-8')
       expect(row.className).not.toContain('flex-wrap')
     }
-    expect(place.parentElement!.className).toContain('min-w-0')
     // The model is the row's last, so it ends on the box's right edge.
     expect(under.lastElementChild).toBe(select)
   })
@@ -575,7 +582,8 @@ describe('the rows around the box', () => {
   test('with nothing of the caller\'s, the row above still carries "Run on", and the row under the modules\' controls', async () => {
     withHost()
     renderWithRowControl()
-    expect(box().previousElementSibling!.contains(await screen.findByRole('button', { name: /^Run on: / }))).toBe(true)
+    const runOnButton = await screen.findByRole('button', { name: /^Run on: / })
+    expect(box().previousElementSibling!.contains(runOnButton)).toBe(true)
     expect(box().nextElementSibling!.contains(rowControl())).toBe(true)
   })
 

@@ -1,6 +1,6 @@
-import { errorMessage, sessionsHomeOf, type SessionRepo } from '@openagt/git-branches'
+import { errorMessage, moreRepos, sessionsHomeOf, type SessionProject, type SessionRepo } from '@openagt/git-branches'
 import { projectId } from '@openagt/projects'
-import { projectNameOf, repositoryAddress, type GitRunner, continuationPrompt, createHooks, type DistributionEntry, type ProjectRef, type RunFacts, type RunInput, type RunOptions as ModuleOptions } from '@openagt/hooks'
+import { projectNameOf, repositoryAddress, sessionsHome, type GitRunner, continuationPrompt, createHooks, type DistributionEntry, type ProjectRef, type RunFacts, type RunInput, type RunOptions as ModuleOptions } from '@openagt/hooks'
 import { findRun, readDiary } from '../record-store.js'
 import { type RunCard, type RunStatus } from '../record.js'
 import { runProcess, withLeg, type Leg, type RunDeps } from './leg.js'
@@ -81,6 +81,8 @@ export interface RunRequest {
   for?: string
   /** The repos a session has as context (`run --repos`), each copied into its folder; kept on its mark. */
   repos?: SessionRepo[]
+  /** The person's projects the session may bring in itself (`run --projects`), by name and folder; kept on its mark. */
+  projects?: SessionProject[]
 }
 
 /** What the profile a run is on brings each of its legs. */
@@ -195,6 +197,8 @@ export interface ResumeOptions extends RunDeps, OnProfile {
   model?: string
   /** How hard the model may think on this leg; the record's own when absent. */
   effort?: string
+  /** The repos the message gives the session, by their folders: named beside the ones its record names, and copied as its modules start the leg. */
+  repos?: string[]
 }
 
 /**
@@ -242,9 +246,12 @@ export async function resumeRun(repo: string, opts: ResumeOptions): Promise<RunO
     }
 
     // The level its record names, or the one this resume gives it from here on.
-    const { publish: recorded, ...lasts } = lasting(previous)
+    const { publish: recorded, repos: had, ...lasts } = lasting(previous)
     const publish = opts.publish === undefined ? recorded : (opts.publish ?? undefined)
-    const mark: RunnerMark = { host: here.host, pid: here.pid, ...lasts, ...(publish !== undefined ? { publish } : {}), ...(opts.by !== undefined ? { resumed: { by: opts.by, at: here.clock() } } : {}) }
+    // The repos the message gives the session join the ones it has: git-branches copies them as the leg starts, and tells the agent where.
+    const given = opts.repos !== undefined && opts.repos.length > 0 ? await moreRepos(sessionsHome(), opts.id, had ?? [], opts.repos, here.git) : []
+    const repos = [...(had ?? []), ...given]
+    const mark: RunnerMark = { host: here.host, pid: here.pid, ...lasts, ...(repos.length > 0 ? { repos } : {}), ...(publish !== undefined ? { publish } : {}), ...(opts.by !== undefined ? { resumed: { by: opts.by, at: here.clock() } } : {}) }
     const model = opts.model ?? card.model
     const effort = opts.effort ?? card.effort
 

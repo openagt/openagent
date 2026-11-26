@@ -7,6 +7,7 @@ import { isRunId, parseRunCard, startOfId, type AnyDiaryLine, type RunCard } fro
 import { findRun, keptRuns, readDiary } from '../record-store.js'
 import { logCardFile, logDiaryFile } from '../session-log.js'
 import { liveDir } from '../engine/live-card.js'
+import { lasting } from '../engine/records.js'
 import { fromDiaryLine } from './run-events.js'
 import { partialReader, tailAgentEvents, type TailTarget } from './events-tail.js'
 
@@ -169,6 +170,29 @@ function isOptions(options: unknown): options is RunOptions {
  * it started from, its pull requests), and what its writer kept under `caller` that a page shows
  * (its options, its facts, the computer it ran on, its agent's session).
  */
+/**
+ * A run's options as its box says them: as it was asked, and where it was asked no agent, model or
+ * effort, the ones it ran on (the coding agent's own default model, by its name): a session's model
+ * button says what ran, never nothing. Its repos are the ones its record says it has now: the ones
+ * it started with, and the ones it took in while it went on (a repo given with a message, or a
+ * project its agent brought in with `add`), which its options, written at its start, do not name.
+ */
+function withRan(options: RunOptions | undefined, card: Listed): { options?: RunOptions } {
+  const asked = options?.['agent-driver'] ?? {}
+  const ran = { ...(card.driver !== undefined ? { driver: card.driver } : {}), ...(card.model !== undefined ? { model: card.model } : {}), ...(card.effort !== undefined ? { effort: card.effort } : {}) }
+  const agent = { ...ran, ...asked }
+  const has = lasting(runnerMarkOf(card)).repos
+  const branches = has !== undefined && has.length > 0 ? { ...options?.['git-branches'], repos: has } : options?.['git-branches']
+  const merged = { ...options, ...(Object.keys(agent).length > 0 ? { 'agent-driver': agent } : {}), ...(branches !== undefined ? { 'git-branches': branches } : {}) }
+  return Object.keys(merged).length > 0 ? { options: merged } : {}
+}
+
+/** The mark the run's own tool keeps on its record, as far as it is one: nothing for any other. */
+function runnerMarkOf(card: Listed): Record<string, unknown> {
+  const mark = card.caller?.['runner']
+  return mark !== null && typeof mark === 'object' && !Array.isArray(mark) ? (mark as Record<string, unknown>) : {}
+}
+
 export function summaryOf(card: Listed, at: SummaryAt): RunSummary {
   const status: RunStatus = card.status === 'running' ? 'working' : card.status
   const computer = text(card, 'host')
@@ -203,7 +227,7 @@ export function summaryOf(card: Listed, at: SummaryAt): RunSummary {
     ...(card.cost !== undefined ? { cost: card.cost } : {}),
     ...(card.contextTokens !== undefined ? { contextTokens: card.contextTokens } : {}),
     ...(card.driver !== undefined ? { agent: { id: card.driver, ...(card.model !== undefined ? { model: card.model } : {}), ...(card.effort !== undefined ? { effort: card.effort } : {}) } } : {}),
-    ...(isOptions(options) ? { options } : {}),
+    ...withRan(isOptions(options) ? options : undefined, card),
     ...(branch !== undefined ? { branch } : {}),
     ...(typeof base === 'string' ? { base } : {}),
     ...(card.pr ? { pr: card.pr } : {}),

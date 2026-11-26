@@ -81,3 +81,8 @@ test("a session's picks last on the mark, for its readers too, its profile with 
   assert.equal(card.caller?.['projectSkills'], 'none')
   assert.deepEqual(runnerMark(card), { ...mark, pluginsWithout: ['ask'], projectSkills: 'none' })
 })
+
+test('the projects a session may bring in last on the mark, each a name and a folder; anything else there is dropped', () => {
+  assert.deepEqual(lasting({ projects: [{ name: 'shop', dir: '/w/shop' }, { name: 'blog' }, 'x'] }), { projects: [{ name: 'shop', dir: '/w/shop' }] })
+  assert.deepEqual(lasting({ projects: [] }), {})
+})

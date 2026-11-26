@@ -4,9 +4,9 @@
 // it has ended what its branch holds, and its next steps there (`chat.handoff`): Commit, Publish
 // branch, Merge on this machine, a copy's work brought back to its folder, and uncommitted work
 // discarded; a row per copy of a repo the session holds work in after it (`chat.work`);
-// Remove worktree in the session's menu (`chat.menu`); the branch a run starts from, in the row
-// above the box (`composer.control` at `start`); the repos a session works with, each copied into
-// its folder, under the box (`composer.control` at `context`); the Auto menu's Commit and Publish branch
+// Remove worktree in the session's menu (`chat.menu`); under the box (`composer.control` at
+// `context`), after the project, the repos a session works with, each copied into its folder, and
+// the branch a run starts from, as Claude Code on the web has them; the Auto menu's Commit and Publish branch
 // (`composer.auto`); and the press that brings a project's folder up to its remote
 // (`attention.fix`), for the item its Node part says. What it reads and does is its own server
 // part's (`../src/server.ts`).
@@ -57,8 +57,8 @@ export default defineUiModule({
     'ui.view': [
       { place: 'chat.work', id: 'project', order: 10, View: ProjectRow },
       { place: 'chat.work', id: 'copies', order: 20, View: CopyRows },
-      { place: 'composer.control', id: 'start-from', at: 'start', order: 10, View: StartControl },
-      { place: 'composer.control', id: 'repos', at: 'context', order: 10, View: ReposControl },
+      { place: 'composer.control', id: 'repos', at: 'context', order: 20, View: ReposControl },
+      { place: 'composer.control', id: 'start-from', at: 'context', order: 30, View: StartControl },
     ],
     'ui.action': [...handoffActions, removeWorktree, updateFolder],
     'ui.option': [

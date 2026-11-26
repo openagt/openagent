@@ -1,6 +1,6 @@
 import { stat } from 'node:fs/promises'
 import { errorMessage, nodeGitRunner } from './git.js'
-import { type GitRunner, START_FROM, defineModule, isBranchName, RunOrder, type AppContext, type AttentionArgs, type AttentionItem, type ModuleDefinition, type ProjectRef, type RunContext, type Settings, sessionsHome } from '@openagt/hooks'
+import { type GitRunner, START_FROM, defineModule, isBranchName, RunOrder, type AppContext, type AttentionArgs, type AttentionItem, type ModuleDefinition, type ProjectRef, type RunContext, type Settings, sessionsHome, PROJECTS, projectNameOf } from '@openagt/hooks'
 import { publishedBase, agentBranchName } from './branch-names.js'
 import { readBranchesAhead } from './branch-ahead.js'
 import { attachCheckout, createCheckout } from './checkout.js'
@@ -9,10 +9,13 @@ import { readFolderBehind } from './folder-behind.js'
 import { branchesOnOrigin } from './origin-branches.js'
 import { originGit } from './origin-git.js'
 import { reclaimWorktree } from './reclaim.js'
-import { isCopyName } from './repo-names.js'
+import { folderName, isCopyName } from './repo-names.js'
 import { checkedRepos, dropUntouchedCopies, openSessionFolder, SESSION_FOLDER_STAYS } from './session-folder.js'
 import { unpublishedItems, unpublishedRuns } from './unpublished.js'
 import { currentBranch, worktreeBranch, worktreePath, type AddedWorktree } from './worktree.js'
+import { PROJECTS_ENV, projectsLine, SESSION_ENV, type SessionProject } from './add.js'
+import { linkPackage } from './command-link.js'
+import { OWN_SKILL } from './skill-links.js'
 
 /**
  * git-branches, the module (#2394): where a run works, made before anything is linked into it;
@@ -36,6 +39,7 @@ export function gitBranchesModule(deps: GitBranchesDeps = {}): ModuleDefinition 
     hooks: {
       'run.step': [
         { order: RunOrder.WORKSPACE, name: 'make the checkout', run: ctx => makeCheckout(ctx, git) },
+        { order: RunOrder.CONTEXT, name: 'tell the agent its projects', run: ctx => tellProjects(ctx, git) },
         { order: RunOrder.RECORD - 20, name: 'read the branch back', run: ctx => readBranch(ctx, git) },
         { order: RunOrder.CLEANUP, name: 'reclaim the checkout', run: ctx => reclaim(ctx, git) },
       ],
@@ -67,7 +71,10 @@ async function makeCheckout(ctx: RunContext, git: GitRunner): Promise<void> {
   // The repos are named by whoever wrote the options: a name that is no folder's, or a folder that is no repository's, refuses the run.
   const repos = await checkedRepos(options.repos ?? [], git)
   if (!ctx.project) {
-    ctx.workspace = (await openSessionFolder(sessionsHome(), ctx.id, repos, git)).path
+    const folder = await openSessionFolder(sessionsHome(), ctx.id, repos, git)
+    ctx.workspace = folder.path
+    // A fresh run starts in the folder that holds its copies; a resume given more is told of the new ones (projects' line).
+    if (ctx.resume && folder.made.length > 0) ctx.facts['git-branches'] = { ...ctx.facts['git-branches'], copies: { folder: folder.path, branch: agentBranchName(ctx.id), made: folder.made.map(({ name, from }) => ({ name, from })) } }
     return
   }
   const { dir } = ctx.project
@@ -103,6 +110,41 @@ async function pickedBase(projectId: string, dir: string, settings: Settings, gi
   const pick = (await settings.get(START_FROM).catch(() => ({}) as Record<string, never>))[projectId]
   if (pick?.kind === 'local') return currentBranch(dir, git)
   return pick?.kind === 'published' ? publishedBase(pick.branch) : undefined
+}
+
+/**
+ * The person's projects the session may bring in itself (Auto), handed to its agent's environment
+ * with the session's id: what its `add` command reads. A fresh session with no project is told
+ * their names with its first prompt, and Rom's rule (11-22): the picked project is not what the
+ * agent starts from; it finds the one the work needs, asks when it cannot tell, and brings it in.
+ * Injected names, not a command that lists them (Rom, 11-24: cheaper). A project the session has a
+ * copy of already is not offered; a resume was told them when it began.
+ *
+ * The command is this package's, run by its full name (`npx @openagt/git-branches@0.1`): a checkout
+ * of a project has it linked with this package's skill, and a session's own folder, which gets no
+ * such skill, has it linked here, so the agent runs this copy and npm is never asked.
+ */
+async function tellProjects(ctx: RunContext, git: GitRunner): Promise<void> {
+  const options = ctx.options['git-branches'] ?? {}
+  // A session with no project is handed the person's projects (Agent picks): the ones its options
+  // name, else the list of projects on this computer, each whose folder is still here.
+  const projects = options.projects ?? (ctx.project ? [] : await listedProjects(ctx.settings))
+  if (projects.length === 0) return
+  ctx.env[PROJECTS_ENV] = JSON.stringify(projects)
+  ctx.env[SESSION_ENV] = ctx.id
+  if (!ctx.project && ctx.workspace !== undefined) await linkPackage(ctx.workspace, ctx.workspace, OWN_SKILL.package!, git).catch(() => {})
+  if (ctx.project || ctx.resume) return
+  const offered = projects.filter(project => !(options.repos ?? []).some(repo => repo.from === project.dir))
+  if (offered.length > 0) ctx.context.push(projectsLine(offered.map(project => project.name)))
+}
+
+/** The projects on this computer's list (`projects.list`), by the names the dashboard shows and their folders: the ones whose folder is here. */
+async function listedProjects(settings: Settings): Promise<SessionProject[]> {
+  const records = await settings.get(PROJECTS).catch(() => [])
+  const found = await Promise.all(
+    records.map(async record => ((await stat(record.path).then(s => s.isDirectory(), () => false)) ? { name: await projectNameOf(record.path).catch(() => folderName(record.path)), dir: record.path } : undefined)),
+  )
+  return found.filter((project): project is SessionProject => project !== undefined)
 }
 
 /**
@@ -148,10 +190,8 @@ async function reclaim(ctx: RunContext, git: GitRunner): Promise<void> {
       (err: unknown) => ({ ok: false, reason: errorMessage(err) }) as const,
     )
     facts.reclaimed = reclaimed.ok ? { reclaimed: true, ...(reclaimed.branchesDeleted ? { deleted: reclaimed.branchesDeleted } : {}) } : { reclaimed: false, reason: reclaimed.reason }
-    // Its copies of repos: the ones it never touched go with the run, the rest stay with their work.
-    // Only names of copies: a run refused over a name it was given made no copy by it.
-    const repos = (ctx.options['git-branches']?.repos ?? []).filter(repo => isCopyName(repo.name))
-    if (repos.length > 0) await dropUntouchedCopies(sessionsHome(), ctx.id, repos, git).catch(() => {})
+    // Its copies of repos, the ones added while it went on too: the ones it never touched go with the run, the rest stay with their work.
+    await dropUntouchedCopies(sessionsHome(), ctx.id, git).catch(() => {})
   }
 }
 

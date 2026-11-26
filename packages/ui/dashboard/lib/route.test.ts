@@ -36,6 +36,12 @@ describe('parseRoute', () => {
     expect(parseRoute('/session', named)).toEqual({ projectId: 'session', agentId: null })
   })
 
+  it('keeps the project picked over a session opened from its list, by its address; a word that names no project picks none', () => {
+    expect(parse('/session/2026-07-19T12-00-00-000Z?in=app')).toEqual({ projectId: 'session', agentId: '2026-07-19T12-00-00-000Z', scope: 'app-a1' })
+    expect(format({ projectId: 'session', agentId: '2026-07-19T12-00-00-000Z', scope: 'app-a1' })).toBe('/session/2026-07-19T12-00-00-000Z?in=app')
+    expect(parse('/session/2026-07-19T12-00-00-000Z?in=nowhere')).toEqual({ projectId: 'session', agentId: '2026-07-19T12-00-00-000Z' })
+  })
+
   it("reads a project's agent: a second segment that starts with a digit", () => {
     expect(parse('/app/2026-07-19T12-00-00-000Z')).toEqual({ projectId: 'app-a1', agentId: '2026-07-19T12-00-00-000Z', scope: 'app-a1' })
   })

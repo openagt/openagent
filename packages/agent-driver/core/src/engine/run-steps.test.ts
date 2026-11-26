@@ -30,6 +30,7 @@ test("a run's steps, in their order: its account, its project's repository, its 
       'git-branches: make the checkout',
       'skills: link the skills',
       'projects: tell the agent where its repos are',
+      'git-branches: tell the agent its projects',
       'ask: ask the person',
       'agent-driver: run the agent',
       'git-branches: read the branch back',

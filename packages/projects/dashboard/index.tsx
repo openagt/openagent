@@ -23,7 +23,7 @@ export default defineUiModule({
   hooks: {
     'ui.view': [
       // First in the row above the box: where the session works, before the branch it starts from.
-      { place: 'composer.control', id: 'project', at: 'start', order: 0, View: ProjectControl },
+      { place: 'composer.control', id: 'project', at: 'context', order: 0, View: ProjectControl },
       { place: 'settings.section', id: 'repos', title: 'Repos', icon: FolderSearch, order: 60, View: RepoFolders },
     ],
     'ui.action': [

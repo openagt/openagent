@@ -1103,4 +1103,28 @@ describe('AgentHistory on a phone', () => {
     renderRail(<AgentHistory projectId={null} agents={[]} recentAgents={recentAgents} selectedAgentId={null} onSelect={() => {}} />)
     expect(lines()).toEqual(['Cart', 'Chat', 'Login'])
   })
+
+  test('a session with no project that has a copy of a project stands under that project, in each one\'s group, and opens on its own page', () => {
+    const at = (secondsAgo: number) => new Date(Date.now() - secondsAgo * 1000).toISOString()
+    const under = [{ id: 'p1', name: 'shop' }, { id: 'p2', name: 'blog' }]
+    const recentAgents = [
+      { projectId: 'p1', projectName: 'shop', agent: agent({ id: 'a', status: 'done', title: 'Cart', startedAt: at(0) }) },
+      { projectId: 'session', projectName: 'session', agent: agent({ id: 'b', status: 'done', title: 'Both apps', startedAt: at(1), under }) },
+      { projectId: 'p2', projectName: 'blog', agent: agent({ id: 'c', status: 'done', title: 'Post', startedAt: at(2) }) },
+    ]
+    const lines = () => [...document.querySelector('[data-rail-part="log"] ul')!.children].map(item => (item.getAttribute('role') === 'presentation' ? `— ${item.textContent}` : item.firstElementChild!.getAttribute('aria-label')!.split(' · ')[0]))
+    preferences.current = { recentsGroup: 'project' }
+    renderRail(<AgentHistory projectId={null} agents={[]} recentAgents={recentAgents} selectedAgentId={null} onSelect={() => {}} />)
+    expect(lines()).toEqual(['— shop', 'Cart', 'Both apps', '— blog', 'Both apps', 'Post'])
+    expect(screen.getAllByRole('link', { name: /^Both apps/ }).map(link => link.getAttribute('href'))).toEqual(['/session/b', '/session/b'])
+    cleanup()
+    // One project's list: the session is listed there, and opens as the sessions' own.
+    const onSelectRecent = vi.fn()
+    preferences.current = {}
+    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ id: 'b', status: 'done', title: 'Both apps', startedAt: at(1), under })]} selectedAgentId={null} onSelect={() => {}} onSelectRecent={onSelectRecent} />)
+    const link = screen.getByRole('link', { name: /^Both apps/ })
+    expect(link.getAttribute('href')).toBe('/session/b')
+    fireEvent.click(link)
+    expect(onSelectRecent).toHaveBeenCalledWith('session', 'b')
+  })
 })

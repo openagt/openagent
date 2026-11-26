@@ -52,8 +52,17 @@ export interface GitBranchesOptions {
   base?: string
   /** A branch that exists, worked on in place of a fresh one: a person's pull request's. */
   branch?: string
-  /** The repos copied into the session's folder, each under its name there: where a run with no project works, beside the checkout of a run in a project. */
-  repos?: { name: string; from: string }[]
+  /**
+   * The repos copied into the session's folder, each under its name there: where a run with no
+   * project works, beside the checkout of a run in a project. `base` is the branch of its origin a
+   * copy starts from, by its name; origin's default branch when none is named.
+   */
+  repos?: { name: string; from: string; base?: string }[]
+  /**
+   * The person's projects the session may bring in itself, each by its name and folder (Auto): its
+   * agent is told their names, and its `add` command copies one into the session's folder.
+   */
+  projects?: { name: string; dir: string }[]
 }
 
 /** skills' slice: which of the project's own skills the run gets. The modules' skills are their plugins' to switch (`PluginsOptions`). */
@@ -150,6 +159,8 @@ export interface RunInput {
   publish?: Publish | 'nothing'
   /** With a message: the images it goes with, by the names this computer keeps them under ({@link DriverPromptOptions.images}). */
   images?: string[]
+  /** With a message: the repos it gives the session, by their folders, each copied into the session's folder before the run goes on. */
+  repos?: string[]
 }
 
 /**

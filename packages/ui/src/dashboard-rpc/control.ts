@@ -6,6 +6,7 @@ import { runRefAt } from '../distribution-hooks.js'
 import { errorMessage } from '../error-message.js'
 import { isRunId } from '../store/index.js'
 import { withAgentLock } from '../agent-locks.js'
+import type { RunOptions } from '@openagt/hooks'
 import type {
   DeleteAgentResult,
   StartAgentOptions,
@@ -43,10 +44,11 @@ export async function sendStop(projectId: string, agentId?: string): Promise<Ste
  * or, sent `later`, when its turn ends; an ended run is resumed with them. Empty messages are
  * dropped. `publish`, when the person changed the session's "Auto" pick, is how far the run takes
  * its work from these words on, `nothing` for no level: the run reads it from the inbox line, or
- * its host resumes it with it. `id` names the message for {@link withdrawMessage} and for
- * the run's word that it landed.
+ * its host resumes it with it. `options` are what the session box's controls changed for these
+ * words on (a repo to copy into the session's folder, say): its host takes them with the message.
+ * `id` names the message for {@link withdrawMessage} and for the run's word that it landed.
  */
-export async function sendMessage(projectId: string, text: string, agentId?: string, publish?: PublishPick | null, sent?: { id?: string; later?: boolean; images?: string[] }): Promise<SteerResult> {
+export async function sendMessage(projectId: string, text: string, agentId?: string, publish?: PublishPick | null, sent?: { id?: string; later?: boolean; images?: string[]; options?: RunOptions }): Promise<SteerResult> {
   const message = text.trim()
   if (!message) return { ok: true }
   // The run's host takes the images by their names, or refuses them.
@@ -54,11 +56,18 @@ export async function sendMessage(projectId: string, text: string, agentId?: str
   // A call that names how it is sent and no level passes the level as nothing.
   const level = publish ?? undefined
   if (level !== undefined && !isPublishPick(level)) return { ok: false, error: 'unknown publish level' }
+  const options = sent?.options
+  if (options !== undefined && !isOptions(options)) return { ok: false, error: 'Options are one slice per module.' }
   const id = typeof sent?.id === 'string' && sent.id !== '' ? sent.id : undefined
   const later = sent?.later === true
   const cwd = await resolveProjectPath(projectId)
   if (!cwd || !agentId || !isRunId(agentId)) return { ok: false, error: 'unknown session' }
-  return (await startedElsewhere(projectId, agentId)) ?? sayToRun(projectId, cwd, agentId, { kind: 'message', text: message, ...(level !== undefined ? { publish: level } : {}), ...(id !== undefined ? { id } : {}), ...(later ? { later: true as const } : {}), ...(images.length > 0 ? { images } : {}) })
+  return (await startedElsewhere(projectId, agentId)) ?? sayToRun(projectId, cwd, agentId, { kind: 'message', text: message, ...(level !== undefined ? { publish: level } : {}), ...(id !== undefined ? { id } : {}), ...(later ? { later: true as const } : {}), ...(images.length > 0 ? { images } : {}), ...(options !== undefined ? { options } : {}) })
+}
+
+/** A run's options as a call may carry them: one plain object per module. */
+function isOptions(value: unknown): value is RunOptions {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) && Object.values(value).every(slice => typeof slice === 'object' && slice !== null && !Array.isArray(slice))
 }
 
 /**

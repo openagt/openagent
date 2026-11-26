@@ -5,6 +5,7 @@
  */
 
 import type { AgentCalls } from './calls.js'
+import type { RunOptions } from './run.js'
 
 /**
  * The **driver** seam: the one abstraction a coding-agent CLI is wrapped behind.
@@ -298,7 +299,8 @@ export interface DriverPromptOptions {
    * What a line taken from the inbox changes for the prompts from it on, the caller's to say: it
    * is handed each line before the line is sent, with the options the line would go with, and
    * answers the ones it goes with instead (the sentence after it, say, when the line gives the run
-   * a new level). Absent, every line goes with this prompt's options.
+   * a new level). An `attached` text in its answer goes with that one line alone (where the repos
+   * the line gives the session were copied). Absent, every line goes with this prompt's options.
    */
   onInboxLine?: (line: PromptLine, sent: DriverPromptOptions) => Promise<DriverPromptOptions>
   /**
@@ -691,8 +693,11 @@ export type InboxLine =
    * it and for the `steered` event that says it landed. `later` keeps it for after the turn, as
    * Claude Code's ⌘Enter does, rather than handing it to the agent while it works. `images` are the
    * images it goes with, by the names this computer keeps them under ({@link DriverPromptOptions.images}).
+   * `options` are what the session box's controls changed for it and the messages after it, one
+   * slice per module: a repo given to the session, say, which the tool that runs it copies into the
+   * session's folder before the message is sent, handing the agent the line saying where.
    */
-  | { kind: 'message'; text: string; publish?: string; id?: string; later?: true; images?: string[] }
+  | { kind: 'message'; text: string; publish?: string; id?: string; later?: true; images?: string[]; options?: RunOptions }
   /** The user's answer to the question the agent stopped on: the question's title and the chosen label or labels. */
   | { kind: 'answer'; question: string; answer: string }
   /** Take back the message `id`, which has not reached the agent yet: the person edits it instead. */

@@ -210,6 +210,13 @@ test('a session with no project that waits on its question is in the list too, a
   assert.deepEqual((await buildWaiting([project('a', '/a')], waitingDeps({ prs: noPrs, liveAgents, events, hooks: withAsk }))).items, [])
 })
 
+test("a session with no project that has a copy of a project waits in that project's list too: its item names the project", async () => {
+  const liveAgents = async (cwd: string): Promise<AgentMeta[]> => (cwd === '/sessions' ? [live(runningAgentMeta({ id: 's1', status: 'waiting', title: 'Greeting exchange', options: { 'git-branches': { repos: [{ name: 'a', from: '/a' }] } } }))] : [])
+  const events = async () => waitingOn('gate-1', 'Which login?')
+  const { items } = await buildWaiting([project('a', '/a'), project('b', '/b')], waitingDeps({ prs: noPrs, liveAgents, events, hooks: withAsk }), SESSIONS)
+  assert.deepEqual(items.map(item => [item.projectId, item.under]), [['session', ['a']]])
+})
+
 test('a module is given the runs of its project that wait, newest first, each with its name, when it ended and the questions it still waits on; their diaries read only when it asks', async () => {
   const given: WaitingRun[][] = []
   const asking = (read: boolean) => async (): Promise<Hooks> =>

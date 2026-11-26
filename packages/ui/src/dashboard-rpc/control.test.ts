@@ -62,3 +62,25 @@ test("a Stop and what a person says to a run go to the host the run is on: the f
     await rm(dir, { recursive: true, force: true })
   }
 })
+
+test("what the session box's controls changed goes with the message to the run's host, as one slice per module; anything else is refused", async () => {
+  const dir = await realpath(await mkdtemp(join(tmpdir(), 'openagent-control-')))
+  const previous = process.env.XDG_CONFIG_HOME
+  process.env.XDG_CONFIG_HOME = join(dir, 'cfg')
+  try {
+    await listTestProject(dir, '2026-11-19T00:00:00.000Z')
+    const id = projectId(dir)
+    const HERE = '2026-11-19T11-00-00-000Z'
+    const lines: unknown[] = []
+    provideTestContext({ host: { ...fakeHost({ id: 'here' }), find: async () => ({ changedNothing: false }), steer: async (_run, line) => void lines.push(line) }, otherHosts: async () => [] })
+    const options = { 'git-branches': { repos: [{ name: 'vike', from: '/home/me/oss/vike' }] } }
+    assert.deepEqual(await sendMessage(id, 'compare with it', HERE, null, { options }), { ok: true })
+    assert.deepEqual(lines, [{ kind: 'message', text: 'compare with it', options }])
+    assert.deepEqual(await sendMessage(id, 'compare', HERE, null, { options: ['vike'] as never }), { ok: false, error: 'Options are one slice per module.' })
+    assert.equal(lines.length, 1)
+  } finally {
+    if (previous === undefined) delete process.env.XDG_CONFIG_HOME
+    else process.env.XDG_CONFIG_HOME = previous
+    await rm(dir, { recursive: true, force: true })
+  }
+})

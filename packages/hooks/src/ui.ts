@@ -207,9 +207,11 @@ export interface UiComposerControlProps {
   /**
    * The options picked: the next run's in the launcher (the ones picked for that run alone: a pick
    * made for every run is its module's setting, which its step reads where the run's options say
-   * nothing), the session's as its record keeps them, the profile's in its editor.
+   * nothing), the session's as its next message goes with them, the profile's in its editor.
    */
   options: RunOptions
+  /** In a session's box: its options as its record keeps them, which its next message can add to and not take back. */
+  recorded?: RunOptions
   /** Change the options picked, whole: the next run's, the next message's in a session's box, the profile's in its editor. */
   onChange(options: RunOptions): void
   /** A start or a send is under way: the control takes no pick. */
@@ -312,12 +314,12 @@ export interface ViewPlaces {
   /** Words at the end of the row above a session's message box: github's pull request labels. */
   'chat.labels': { entry: { id: string; order?: number }; props: UiChatLabelsProps }
   /**
-   * A control of the message box, writing its module's run options: in the row above the box
-   * (`start`: where the run starts, after the project), a line of the gear's menu (`setup`), after
-   * the gear in the row under the box (`context`), or at the right of that row (`row`: the model).
-   * Drawn in the launcher, in a session's box, and in a profile's editor.
+   * A control of the message box, writing its module's run options: a line of the gear's menu
+   * (`setup`), after the gear in the row under the box (`context`: where the run works and starts,
+   * as Claude Code on the web has its environment, repos and branch there), or at the right of that
+   * row (`row`: the model). Drawn in the launcher, in a session's box, and in a profile's editor.
    */
-  'composer.control': { entry: { id: string; at: 'start' | 'setup' | 'context' | 'row'; order?: number }; props: UiComposerControlProps }
+  'composer.control': { entry: { id: string; at: 'setup' | 'context' | 'row'; order?: number }; props: UiComposerControlProps }
   /**
    * Prompts a person saved, which the message box offers in its `/` menu and its Commands menu,
    * each loading its text into the box. The view is the panel that saves what the box holds as

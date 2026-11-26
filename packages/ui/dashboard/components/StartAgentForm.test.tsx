@@ -65,6 +65,7 @@ vi.mock('./Composer.js', async () => {
       <>
         <div data-testid="starts-at">{props.startsAt}</div>
         <div data-testid="controls">{props.controls}</div>
+        <div data-testid="files">{props.attached?.join(', ')}</div>
         {props.setup && (
           <DropdownMenu open>
             <DropdownMenuTrigger data-warn={props.setup.warn === true}>gear</DropdownMenuTrigger>
@@ -312,13 +313,14 @@ describe('StartAgentForm (#1774)', () => {
     expect(alert.parentElement!.dataset.testid).toBe('notes')
   })
 
-  test("the gear's line after the modules', set apart: \"When it finishes\"; after the gear, the Context picker alone", async () => {
+  test("the gear's line after the modules', set apart: \"When it finishes\"; the files picked are chips in the box, nothing of the form's after the gear", async () => {
     onCommands.mockResolvedValue(WITH_BRANCHES)
-    render(<StartAgentForm {...props} />)
+    render(<StartAgentForm {...props} context={new Set(['src/app.ts'])} />)
     const auto = await waitFor(autoMenu)
     expect(auto.textContent).toBe('When it finishes: Commit')
     expect(auto.previousElementSibling?.getAttribute('role')).toBe('separator')
-    expect(within(screen.getByTestId('controls')).getAllByRole('button').map(button => button.textContent)).toEqual(['Context'])
+    expect(screen.getByTestId('controls').textContent).toBe('')
+    expect(screen.getByTestId('files').textContent).toBe('src/app.ts')
   })
 
   test("the gear's hover says its own pick with the menu shut, the level; the modules' lines say theirs", async () => {

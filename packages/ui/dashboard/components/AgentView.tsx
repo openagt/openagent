@@ -226,16 +226,12 @@ export function AgentView({
     () => ({ projectId, agentId, working: going, ended: live === false && !going, saving: card?.saving === true, ...(projectName ? { projectName } : {}), ...(pr ? { pr } : {}) }),
     [projectId, agentId, live, going, card?.saving, projectName, pr],
   )
-  // Where the session started, right above the message box, as the "New agent session" page has it. It is
-  // there whatever stands in the box's place.
-  const sessionBox = useMemo(() => ({ in: 'session' as const, projectId, agentId, options: card?.options ?? picks?.options ?? {}, onChange: () => {}, busy: false }), [projectId, agentId, card?.options, picks?.options])
+  // Where the session runs, right above the message box. It is there whatever stands in the box's place.
   const row = (
     <SessionRow
       runsOn={runsOn}
       target={target}
       elsewhere={elsewhere || card?.otherHost === true}
-      projectName={projectName}
-      box={sessionBox}
       run={{ projectId, agentId, working }}
     />
   )

@@ -14,15 +14,15 @@ const { fakeHost, mountedOf, renderWithHost } = await import('../module/testing.
 
 afterEach(cleanup)
 
-const facts = { runsOn: 'This machine', elsewhere: false, projectName: 'site' }
+const facts = { runsOn: 'This machine', elsewhere: false }
 /** The items' words as the row shows them: what only a screen reader hears left out. */
 const words = (container: HTMLElement) =>
   [...container.querySelectorAll<HTMLElement>('[data-hover]')].map(item => [...item.childNodes].filter(node => !(node instanceof HTMLElement && node.classList.contains('sr-only'))).map(node => node.textContent).join(''))
 
 describe('a session\'s row above the box', () => {
-  test('where it runs and the project: each said in words the keyboard stops on, none a menu, and nothing else, as the launcher\'s row (the setup and the model are under the box; the branch is a module\'s control)', () => {
+  test('where it runs: said in words the keyboard stops on, no menu, and nothing else, where the launcher has "Run on" (the project, the repos, the branch, the setup and the model are under the box, as the launcher\'s)', () => {
     const { container } = render(<SessionRow {...facts} />)
-    expect(words(container)).toEqual(['This machine', 'site'])
+    expect(words(container)).toEqual(['This machine'])
     expect(container.querySelector('button')).toBeNull()
     for (const item of container.querySelectorAll<HTMLElement>('[data-hover]')) expect(item.tabIndex).toBe(0)
   })
@@ -51,13 +51,13 @@ describe('a session\'s row above the box', () => {
     expect(row.lastElementChild!.className.split(' ')).toContain('shrink-0')
     // Not in the left side, which scrolls and fades in a narrow box.
     expect(row.firstElementChild!.contains(links[0]!)).toBe(false)
-    expect(row.firstElementChild!.textContent).toContain('site')
+    expect(row.firstElementChild!.textContent).toContain('This machine')
     rerender(<SessionRow {...facts} />)
     expect(screen.queryByRole('link')).toBeNull()
     expect(row.childElementCount).toBe(1)
   })
 
-  test('a session with no project says where it runs alone: its repos are under the box, as Context', () => {
+  test('a session with no project says where it runs alone: its repos are under the box', () => {
     const { container } = render(<SessionRow runsOn="This machine" elsewhere={false} />)
     expect(container.textContent).toContain('This machine')
     expect(container.querySelector('.lucide-folder-git-2')).toBeNull()
@@ -66,11 +66,6 @@ describe('a session\'s row above the box', () => {
   test('its height is the row\'s own, whatever has landed: nothing moves when a name lands', () => {
     const { container } = render(<SessionRow runsOn="This machine" elsewhere={false} />)
     expect(container.firstElementChild!.className.split(' ')).toContain('h-8')
-    expect(words(container)).toEqual(['This machine'])
-  })
-
-  test('no project name yet: no word for it, never a guess', () => {
-    const { container } = render(<SessionRow {...facts} projectName={null} />)
     expect(words(container)).toEqual(['This machine'])
   })
 

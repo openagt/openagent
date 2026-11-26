@@ -62,6 +62,8 @@ export interface ControlBox {
   projectId?: string | undefined
   agentId?: string | undefined
   options: RunOptions
+  /** In a session's box: its options as its record keeps them, which the next message can add to. */
+  recorded?: RunOptions | undefined
   onChange: (options: RunOptions) => void
   busy: boolean
   /** In the launcher: move it to another project, or none, taking what is typed along. */
@@ -87,6 +89,7 @@ export function ComposerControls({ at, box, onSaid }: { at: ViewPlaces['composer
           ...(projectId !== undefined ? { projectId } : {}),
           ...(box.agentId !== undefined ? { agentId: box.agentId } : {}),
           options: box.options,
+          ...(box.recorded !== undefined ? { recorded: box.recorded } : {}),
           onChange: box.onChange,
           busy: box.busy,
           ...(box.pickProject ? { pickProject: box.pickProject } : {}),

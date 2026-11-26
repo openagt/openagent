@@ -241,7 +241,9 @@ test('a line said to a working run goes to its inbox; one to a run that ended re
     await here.steer({ id: ended, project }, { kind: 'answer', question: 'Which way?', answer: 'Left' })
     // A take-back or a Send now acts on a turn that runs: with none, it is done.
     await here.steer({ id: ended, project }, { kind: 'now' })
-    assert.deepEqual(resumes, [{ id: ended, text: 'ship it', publish: 'pr' }, { id: ended, answer: 'Left' }])
+    // The repos a message gives the session go with its resume, by their folders.
+    await here.steer({ id: ended, project }, { kind: 'message', text: 'compare with the blog', options: { 'git-branches': { repos: [{ name: 'blog', from: '/w/blog' }] } } })
+    assert.deepEqual(resumes, [{ id: ended, text: 'ship it', publish: 'pr' }, { id: ended, answer: 'Left' }, { id: ended, text: 'compare with the blog', repos: ['/w/blog'] }])
     await assert.rejects(here.resume({ id: 'no-such-run', project }, { text: 'go on' }), /no run no-such-run in this project/)
     await assert.rejects(here.resume({ id: ended, project }, {}), /A run goes on with a message or an answer/)
   } finally {
@@ -315,6 +317,14 @@ test("the runs it lists are the project's records and its runs at work, newest f
       [LOCAL_HOST, 'shop', HERE, 0.5, { id: 'claude-code', model: 'opus' }, 'pr', '2026-09-16T14:02:00.000Z'],
     )
     assert.ok(done.person, 'kept under the person its record is filed under')
+    // A repo taken in while it went on (an agent's `add`) is on its mark, not in the options it started with: its box says it.
+    const third = '2026-09-16T13-00-00-000Z'
+    const tookIn = markerCard({ id: third, startedAt: '2026-09-16T13:00:00.000Z', prompt: 'third', driver: 'claude-code', mark: { host: HERE, repos: [{ name: 'blog', from: '/w/blog' }] } })
+    await writeMarker(repo, { ...tookIn, status: 'done', caller: { ...tookIn.caller, options: {} } })
+    assert.deepEqual((await here.list(project, { ids: [third] }))[0]?.options?.['git-branches'], { repos: [{ name: 'blog', from: '/w/blog' }] })
+    // Asked no model, the box says the one it ran on; a model asked is said as asked.
+    assert.deepEqual(listed[0]!.options?.['agent-driver'], { driver: 'claude-code' })
+    assert.deepEqual(done.options?.['agent-driver'], { driver: 'claude-code', model: 'opus' })
 
     // Resumed in its checkout: its live card says it works, on the branch the checkout has out, its session's command said by its coding agent; the pull request a press wrote on the record stays.
     await patchRun(repo, first, { pr: { number: 7, url: 'https://github.com/o/r/pull/7' } })

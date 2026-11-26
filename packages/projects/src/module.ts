@@ -57,12 +57,12 @@ async function cloned(ctx: RunContext, git: GitRunner): Promise<void> {
 /**
  * What the agent is told of the repos the task is about, beside the project: the copies of the
  * run's repos made for this start (git-branches' facts), where each is and where it came from. A
- * run with no project is told nothing: it starts in the folder that holds them. A resumed run that
- * has its copies already is not told again.
+ * run with no project starts in the folder that holds them, and is told only of the ones a resume
+ * made beside the ones it had. A resumed run that has its copies already is not told again.
  */
 function told(ctx: RunContext): void {
   const copies = ctx.facts['git-branches']?.copies
-  if (!ctx.project || !copies || copies.made.length === 0) return
+  if (!copies || copies.made.length === 0 || (!ctx.project && !ctx.resume)) return
   ctx.context.push(copiesLine(copies.folder, copies.branch, copies.made))
 }
 

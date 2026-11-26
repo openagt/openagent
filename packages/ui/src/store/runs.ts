@@ -43,6 +43,11 @@ export interface AgentMeta {
   publish?: string
   /** The run's options, one slice per module, as its record keeps them: what its box's controls say. */
   options?: RunOptions
+  /**
+   * A session with no project: the projects it is listed under, each one it has a copy of
+   * (`dashboard/projects-under.ts`). Its row opens on its own page, the sessions'.
+   */
+  under?: { id: string; name: string }[]
   /** The folder the run's agent works or worked in. */
   workspace?: string
   /** The coding agent it is on, by its id (`RunAgent.id`). */

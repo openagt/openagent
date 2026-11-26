@@ -1,6 +1,6 @@
 import type { UiCommand } from '../module/index.js'
 import type { OfferedPrompt } from '../lib/use-prompts.js'
-import { Plus, X } from 'lucide-react'
+import { FileText, Paperclip, Plus, X } from 'lucide-react'
 import { cn } from '../lib/utils.js'
 import { IN_BOX } from '../lib/in-box.js'
 import { buttonVariants } from './ui/button.js'
@@ -88,6 +88,8 @@ export function CommandsMenu({
   onLoad,
   onNew,
   onDelete,
+  onAddImages,
+  onAddFile,
 }: {
   commands: CommandEntry[]
   /** The saved prompts the box offers: each group of them is a part of the menu. */
@@ -99,6 +101,10 @@ export function CommandsMenu({
   onNew?: (() => void) | undefined
   /** Delete a saved prompt. */
   onDelete: (prompt: OfferedPrompt) => void
+  /** Add files or photos from this computer, where the box takes images. */
+  onAddImages?: (() => void) | undefined
+  /** Point at a file of the project: the box's `#` menu, with the project's name. */
+  onAddFile?: { project: string; add: () => void } | undefined
 }) {
   return (
     <DropdownMenu>
@@ -117,9 +123,30 @@ export function CommandsMenu({
           <Plus className="h-4 w-4" aria-hidden />
         </TooltipTrigger>
         {/* Beside the box, not over the pickers above it. */}
-        <TooltipContent side="left" className="max-w-[15rem]">{'Run a command or load a saved prompt. In the box: /\u00a0commands · @\u00a0projects · #\u00a0files'}</TooltipContent>
+        <TooltipContent side="left" className="max-w-[15rem]">{'Add files or photos, run a command or load a saved prompt. In the box: /\u00a0commands · @\u00a0projects · #\u00a0files'}</TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="start" className="min-w-[16rem] max-w-[20rem]">
+        {/* What goes with the message, as Claude Code on the web's +: files or photos, and a file of the project. */}
+        {(onAddImages || onAddFile) && (
+          <>
+            <DropdownMenuGroup>
+              {onAddImages && (
+                <DropdownMenuItem onClick={onAddImages}>
+                  <Paperclip className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                  Add files or photos
+                </DropdownMenuItem>
+              )}
+              {onAddFile && (
+                <DropdownMenuItem onClick={onAddFile.add}>
+                  <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <span className="min-w-0 flex-1 truncate">File from {onAddFile.project}</span>
+                  <span className="text-xs text-muted-foreground">#</span>
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+          </>
+        )}
         <DropdownMenuGroup>
           <DropdownMenuLabel>Commands</DropdownMenuLabel>
           {commands.length === 0 && <div className="px-2 py-1.5 text-xs text-muted-foreground">This project has no commands.</div>}

@@ -1,10 +1,15 @@
 // How a session's repos are named in its folder, by whoever writes the run's options: the launcher's
 // Context picker in the browser, the `run --repos` command. Node-free, so both name them alike.
 
-/** A repo a session has as context: the folder it is copied from, and the name of its copy in the session's folder. */
+/**
+ * A repo a session has as context: the folder it is copied from, the name of its copy in the
+ * session's folder, and the branch of origin's its copy starts from, by its name; origin's default
+ * branch when none is named.
+ */
 export interface SessionRepo {
   name: string
   from: string
+  base?: string
 }
 
 /** A folder's own name, the last part of its path. */
@@ -21,14 +26,20 @@ export function isCopyName(name: unknown): name is string {
  * The repos for these top folders of repositories, each named by its folder's name, a name two of
  * them share told apart by a number (`app`, `app-2`). The same folders in the same order answer
  * the same names; a folder given twice counts once.
+ *
+ * A session that has repos already is given more beside them: `have` are its repos, and `taken`
+ * the other names its folder holds. A repo it has is not given again, and a new one takes a name
+ * none of them has. Answers the new ones alone.
  */
-export function nameRepos(folders: readonly string[]): SessionRepo[] {
+export function nameRepos(folders: readonly string[], have: readonly SessionRepo[] = [], taken: readonly string[] = []): SessionRepo[] {
   const repos: SessionRepo[] = []
+  const known = (): SessionRepo[] => [...have, ...repos]
   for (const from of folders) {
-    if (repos.some(repo => repo.from === from)) continue
+    if (known().some(repo => repo.from === from)) continue
     const name = folderName(from)
+    const used = (shown: string): boolean => taken.includes(shown) || known().some(repo => repo.name === shown)
     let shown = name
-    for (let n = 2; repos.some(repo => repo.name === shown); n++) shown = `${name}-${n}`
+    for (let n = 2; used(shown); n++) shown = `${name}-${n}`
     repos.push({ name: shown, from })
   }
   return repos

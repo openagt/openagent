@@ -1,6 +1,6 @@
 import { rm, stat } from 'node:fs/promises'
 import { hostname } from 'node:os'
-import { appendInbox, imagesOf, promptLines, takeInbox } from '../inbox.js'
+import { appendInbox, givenRepos, imagesOf, promptLines, takeInbox } from '../inbox.js'
 import { deleteRun, findRun, patchRun } from '../record-store.js'
 import { isRunId, type RunCard, type RunPatch } from '../record.js'
 import { PLUGINS_WITHOUT_ENV, PROFILE_ENV, PROJECT_SKILLS_ENV, isSkillName } from './names.js'
@@ -138,6 +138,7 @@ export function localHost(deps: LocalHostDeps = {}): RunHost {
         ...(input.images !== undefined && input.images.length > 0 ? { images: input.images } : {}),
         ...(input.answer !== undefined ? { answer: input.answer } : {}),
         ...(input.publish !== undefined ? { publish: input.publish } : {}),
+        ...(input.repos !== undefined && input.repos.length > 0 ? { repos: input.repos } : {}),
       },
       deps.spawnResume ? { spawn: deps.spawnResume } : {},
     )
@@ -407,6 +408,7 @@ function asked(options: RunOptions): Omit<AskedRun, 'prompt'> {
     ...(branches.base !== undefined ? { base: branches.base } : {}),
     ...(branches.branch !== undefined ? { branch: branches.branch } : {}),
     ...(branches.repos !== undefined && branches.repos.length > 0 ? { repos: branches.repos } : {}),
+    ...(branches.projects !== undefined && branches.projects.length > 0 ? { projects: branches.projects } : {}),
     ...(options.github?.prBase !== undefined ? { prBase: options.github.prBase } : {}),
   }
 }
@@ -429,7 +431,12 @@ function picks(options: RunOptions): Record<string, string> {
 function inputOf(line: PromptLine): RunInput {
   if (line.kind === 'answer') return { answer: line.answer }
   const publish = line.publish
-  return { text: line.text, ...(publish !== undefined && (isPublish(publish) || publish === NO_PUBLISH) ? { publish } : {}), ...imagesOf(line) }
+  return {
+    text: line.text,
+    ...(publish !== undefined && (isPublish(publish) || publish === NO_PUBLISH) ? { publish } : {}),
+    ...imagesOf(line),
+    ...(givenRepos(line).length > 0 ? { repos: givenRepos(line) } : {}),
+  }
 }
 
 /** The naming sessions this process keeps waiting for the runs it starts, made at the first that is named. */

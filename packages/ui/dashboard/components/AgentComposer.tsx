@@ -11,7 +11,6 @@ import { keepDraft, keepDraftImages, keptDraft, keptDraftImages } from '../lib/d
 import { DaemonDown } from '../lib/use-daemon-health.js'
 import { Button } from './ui/button.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
-import { ContextMenu } from './ContextMenu.js'
 import { AutoMenu, autoCovers, autoSaid, useAutoLevels } from './AutoMenu.js'
 import { isPublishPick, type PublishPick } from '../../src/client.js'
 import { useProjectLauncher } from '../lib/use-project-launcher.js'
@@ -152,8 +151,11 @@ export function AgentComposer({
   const recorded: PublishPick = isPublishPick(publish) ? publish : 'nothing'
   const [picked, setPicked] = useState<PublishPick | null>(null)
   useEffect(() => setPicked(null), [agentId])
-  // The session's controls, as its record keeps their options: said, not offered.
-  const controlBox: ControlBox = { in: 'session', projectId, agentId, options: options ?? {}, onChange: () => {}, busy }
+  // The session's controls: their options as its record keeps them, and what a control changed for the next message
+  // (a repo to copy in, say), which goes with it and is dropped once it went.
+  const [next, setNext] = useState<RunOptions | null>(null)
+  useEffect(() => setNext(null), [agentId])
+  const controlBox: ControlBox = { in: 'session', projectId, agentId, options: next ?? options ?? {}, recorded: options ?? {}, onChange: setNext, busy }
   useEffect(() => {
     if (picked === recorded) setPicked(null)
   }, [picked, recorded])
@@ -169,11 +171,11 @@ export function AgentComposer({
       else onSending?.(text)
     }
     const id = crypto.randomUUID()
-    const withImages = images.length > 0 ? { images } : {}
-    // To an ended run, the level goes only when one was picked, and how it is sent only with images.
+    const extras = { ...(images.length > 0 ? { images } : {}), ...(next !== null ? { options: next } : {}) }
+    // To an ended run, the level goes only when one was picked, and how it is sent only with images or changed options.
     const send = () => {
-      if (wasLive) return sendMessage(projectId, text, agentId, picked, { id, ...(later ? { later } : {}), ...withImages })
-      if (images.length > 0) return sendMessage(projectId, text, agentId, picked, withImages)
+      if (wasLive) return sendMessage(projectId, text, agentId, picked, { id, ...(later ? { later } : {}), ...extras })
+      if (Object.keys(extras).length > 0) return sendMessage(projectId, text, agentId, picked, extras)
       return picked !== null ? sendMessage(projectId, text, agentId, picked) : sendMessage(projectId, text, agentId)
     }
     const outcome = await run(
@@ -184,8 +186,12 @@ export function AgentComposer({
       if (!wasLive) onSending?.(null)
       return false
     }
-    if (!wasLive && shown.current === agentId) setPicked(null)
-    if (wasLive) onQueued?.({ id, text, later, ...withImages })
+    if (shown.current === agentId) {
+      if (!wasLive) setPicked(null)
+      // What the controls changed went with it: the record says it from here on.
+      setNext(null)
+    }
+    if (wasLive) onQueued?.({ id, text, later, ...(images.length > 0 ? { images } : {}) })
     // An ended run goes live again under the same id: tell the shell, which keeps its feed (#762).
     else onAgentStarted?.(text, agentId)
     return true
@@ -299,7 +305,7 @@ export function AgentComposer({
         {...(contextSet ? { addContext: contextSet.add, removeContext: contextSet.remove } : {})}
         // The launcher's gear, line for line in its places: the modules' lines, as the session's record
         // keeps its options; then, set apart and still a pick, "When it finishes". After the
-        // gear, in a project, Context: the files picked for the next message; then the modules' controls there.
+        // gear, the modules' controls there. The files picked for the next message are chips in the box.
         controlBox={controlBox}
         setup={{
           said: setupSaid,
@@ -309,7 +315,7 @@ export function AgentComposer({
             </>
           ),
         }}
-        controls={!noProject && contextSet && <ContextMenu files={[...contextSet.context]} busy={busy} onRemove={contextSet.toggle} />}
+        {...(!noProject && contextSet ? { attached: [...contextSet.context], onDetach: contextSet.toggle } : {})}
         idleControl={idleControl}
         notes={
           <>

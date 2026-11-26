@@ -1,27 +1,32 @@
 import { strict as assert } from 'node:assert'
-import { test } from 'node:test'
+import { afterEach, test } from 'node:test'
 import { lstat, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { FakeDriver } from '../fake.js'
 import { findRun, readDiary } from '../record-store.js'
 import { type Driver, sessionsHome } from '@openagt/hooks'
 import { personalFolder, SESSIONS_DIR } from '@openagt/store-filesystem'
-import { sessionFolder, SESSION_FOLDER_STAYS, sessionRepos, worktreePath } from '@openagt/git-branches'
-import { readLiveCard } from './live-card.js'
+import { addSessionRepos, sessionFolder, SESSION_FOLDER_STAYS, sessionRepos, worktreePath } from '@openagt/git-branches'
+import { inboxPath, readLiveCard } from './live-card.js'
+import { appendInbox } from '../inbox.js'
 import { resumeRun, runCommand } from './run.js'
 import { addedLine, PUBLISH_LINES } from './session.js'
 import { markerCard, writeMarker } from './records.js'
 import { sweep } from './sweep.js'
 import { runCli } from './cli.js'
-import { runArgs } from './runner.js'
+import { resumeArgs, runArgs } from './runner.js'
 import { copiesLine } from '@openagt/projects/module'
-import { NOW, testModules } from './run-test-support.js'
+import { testModules, wrap } from './run-test-support.js'
 import { git, removeRepo, testRepo } from './test-repo.js'
 
 // A session with no project: a run in the sessions home works in a folder of its own there, with
 // no git, and its record is kept with the other sessions' in the personal folder.
 
-const ID = '2026-09-16T14-01-00-000Z'
+// A clock of these tests' own: the files run side by side in one sessions home, and a run of
+// another file under the same id would find the copies one here left in its session's folder.
+const NOW = new Date('2026-09-17T09:30:00.000Z')
+const ID = '2026-09-17T09-30-00-000Z'
 
 /** An agent that writes a file where it works and says so. */
 function writingDriver(seen: { cwd?: string } = {}): Driver {
@@ -34,6 +39,12 @@ function writingDriver(seen: { cwd?: string } = {}): Driver {
     },
   }
 }
+
+// Every test here leaves the sessions home as it found it: another file's run, under the same id,
+// would find the copies one left in its folder and take them for its own.
+afterEach(async () => {
+  await freshHome()
+})
 
 async function freshHome(): Promise<string> {
   const home = sessionsHome()
@@ -235,7 +246,7 @@ test('repos are given by folders in them, each once, and a folder that is no rep
   }
 })
 
-test('--repos is read one folder per line, and handed on to the run\'s process; a resume takes none', async () => {
+test('--repos is read one folder per line, and handed on to the run\'s process; a resume takes them with a text', async () => {
   const home = await freshHome()
   const repo = await testRepo()
   try {
@@ -245,11 +256,105 @@ test('--repos is read one folder per line, and handed on to the run\'s process; 
     assert.match(err.at(-1) ?? '', /is not a git repository/)
     assert.equal(JSON.parse(out[0]!).reason, 'not-a-repo')
     err.length = 0
-    assert.equal(await runCli(['run', '--resume', ID, '--repos', repo, 'More'], { cwd: home, stdout: () => {}, stderr: line => err.push(line) }), 2)
-    assert.match(err[0] ?? '', /--resume takes no --repos/)
+    assert.equal(await runCli(['run', '--resume', ID, '--repos', repo, '--answer', 'Yes'], { cwd: home, stdout: () => {}, stderr: line => err.push(line) }), 2)
+    assert.match(err[0] ?? '', /--repos goes with a text on a resume/)
     const repos = [{ name: 'repo', from: repo }, { name: 'other', from: '/x/other' }]
     assert.ok(runArgs({ id: ID, prompt: 'Read', repos }).includes(`--repos=${repo}\n/x/other`))
+    // A copy picked to start from a branch of its origin: the branch after a tab on its line.
+    assert.ok(runArgs({ id: ID, prompt: 'Read', repos: [{ name: 'repo', from: repo, base: 'dev' }] }).includes(`--repos=${repo}\tdev`))
+    assert.ok(resumeArgs({ id: ID, text: 'More', repos: [repo, '/x/other'] }).includes(`--repos=${repo}\n/x/other`), 'a resume hands on the folders its message gives')
+    // The projects the session may bring in go as one JSON argument, and only to a new run: a resume has its record's.
+    const projects = [{ name: 'shop', dir: '/w/shop' }]
+    assert.ok(runArgs({ id: ID, prompt: 'Read', projects }).includes(`--projects=${JSON.stringify(projects)}`))
+    err.length = 0
+    assert.equal(await runCli(['run', '--resume', ID, '--projects', '[]', 'More'], { cwd: home, stdout: () => {}, stderr: line => err.push(line) }), 2)
+    assert.match(err[0] ?? '', /--resume takes no --projects/)
+    err.length = 0
+    assert.equal(await runCli(['run', '--projects', '[{"name":"shop"}]', 'Read'], { cwd: home, stdout: () => {}, stderr: line => err.push(line) }), 2)
+    assert.match(err[0] ?? '', /--projects is a JSON list of projects/)
   } finally {
     await removeRepo(repo)
+  }
+})
+
+test('a message gives a running session a repo: copied before the message goes, the line saying where handed with it, the publish sentence naming it, and the record keeping it', async () => {
+  await freshHome()
+  const project = await testRepo()
+  const other = await repoWithoutOrigin()
+  try {
+    // The agent, sent the message, finds the copy where the line says.
+    let copyThen = false
+    const respond = (sent: string, i: number): string => {
+      const at = /agent-[^:]+: (\S+) \(copied from/.exec(sent)?.[1]
+      if (i === 1 && at !== undefined) copyThen = existsSync(join(at, '.git'))
+      return i === 0 ? 'First.' : 'Second.'
+    }
+    const driver: Driver = {
+      id: 'fake',
+      start: async opts => {
+        const fake = await new FakeDriver({ respond }).start(opts)
+        return wrap(fake, async () => {
+          if (fake.prompts.length === 0) await appendInbox(inboxPath(opts.cwd), { kind: 'message', text: 'compare with the other repo', options: { 'git-branches': { repos: [{ name: 'other', from: other }] } } })
+        })
+      },
+    }
+    const outcome = await runCommand(project, { prompt: 'Fix it', publish: 'commit', driver, host: 'this-box', pid: 4242, now: () => NOW, modules: testModules() })
+    assert.equal(outcome.status, 'done')
+    const folder = sessionFolder(sessionsHome(), outcome.id)
+    const copy = join(folder, 'repo')
+    assert.equal(copyThen, true, 'the repo is a copy in the session folder before the message goes')
+    assert.equal(await lstat(copy).then(() => true, () => false), false, 'never touched, it goes with the run as a copy given at the start does')
+    const starts = (await readDiary(project, outcome.id))!.filter(line => line.kind === 'start')
+    assert.deepEqual(starts.map(line => [line['prompt'], line['attached']]), [
+      ['Fix it', undefined],
+      ['compare with the other repo', copiesLine(folder, `agent-${outcome.id}`, [{ name: 'repo', from: other }])],
+    ])
+    assert.equal(starts[1]?.['added'], addedLine('commit', undefined, { folders: [copy], alone: false }), 'the level covers the new copy from that message on')
+    assert.deepEqual((await findRun(project, outcome.id))?.caller?.['repos'], [{ name: 'repo', from: other }], 'the record names it')
+  } finally {
+    await removeRepo(project)
+    await removeRepo(other)
+  }
+})
+
+test("a copy the agent adds itself while its turn runs (its `add` command) is the session's from then on: the record names it", async () => {
+  const home = await freshHome()
+  const other = await repoWithoutOrigin()
+  try {
+    const driver: Driver = {
+      id: 'fake',
+      start: async opts => {
+        const fake = await new FakeDriver({ turns: [{ text: 'Added it.' }] }).start(opts)
+        return wrap(fake, async () => {
+          await addSessionRepos(sessionsHome(), ID, [], [other])
+        })
+      },
+    }
+    const outcome = await runCommand(home, { prompt: 'Work on the other repo', driver, host: 'this-box', pid: 4242, now: () => NOW, modules: testModules() })
+    assert.equal(outcome.status, 'done')
+    assert.deepEqual((await findRun(home, ID))?.caller?.['repos'], [{ name: 'repo', from: other }])
+  } finally {
+    await removeRepo(other)
+  }
+})
+
+test('a resume with a message that gives a session with no project a repo: copied as the run goes on, its agent told where, and the record keeping it beside the ones it had', async () => {
+  const home = await freshHome()
+  const one = await testRepo()
+  const two = await repoWithoutOrigin()
+  try {
+    const repos = await sessionRepos([one])
+    await runCommand(home, { prompt: 'Start', driver: writingDriver(), host: 'this-box', pid: 4242, now: () => NOW, modules: testModules(), repos })
+    const outcome = await resumeRun(home, { id: ID, text: 'Now the other one', repos: [two, one], driver: writingDriver(), host: 'this-box', pid: 4243, modules: testModules() })
+    assert.equal(outcome.status, 'done')
+    const folder = sessionFolder(home, ID)
+    const added = { name: 'repo-2', from: two }
+    assert.equal(await branchOf(join(folder, 'repo-2')), `agent-${ID}`, 'named beside the copy it has')
+    assert.deepEqual((await findRun(home, ID))?.caller?.['repos'], [...repos, added])
+    const starts = (await readDiary(home, ID))!.filter(line => line.kind === 'start')
+    assert.deepEqual(starts.map(line => line['attached']), [undefined, copiesLine(folder, `agent-${ID}`, [added])], 'a fresh session starts in its folder; the resume is told of the new copy alone')
+  } finally {
+    await removeRepo(one)
+    await removeRepo(two)
   }
 })

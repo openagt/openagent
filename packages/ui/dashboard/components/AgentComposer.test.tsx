@@ -20,10 +20,6 @@ vi.mock('./AutoMenu.js', () => ({
   ),
 }))
 vi.mock('../lib/use-project-launcher.js', () => ({ useProjectLauncher: () => ({ gitHost: true, remote: true }) }))
-// The Context picker is tested on its own; here it is a stand-in that says what it was given.
-vi.mock('./ContextMenu.js', () => ({
-  ContextMenu: ({ files }: { files: readonly string[] }) => <span>Context · {files.join(', ')}</span>,
-}))
 
 // The Composer is exercised by its own tests; here it only has to hand back a submit and report
 // the props this component sets on it.
@@ -51,6 +47,7 @@ vi.mock('./Composer.js', async () => {
       {props.idleControl}
       <span data-testid="composer-setup" data-said={props.setup?.said} data-warn={props.setup?.warn === true}>{props.setup?.lines}</span>
       <span data-testid="composer-controls">{props.controls}</span>
+      <span data-testid="composer-files">{props.attached?.join(', ')}</span>
       {props.sessionRow}
     </div>
     )
@@ -100,11 +97,12 @@ describe('AgentComposer row', () => {
 })
 
 describe('AgentComposer row under the box', () => {
-  test('the launcher\'s gear, line for line in its places, the session\'s own said and not offered: Auto; after the gear, Context alone', () => {
+  test('the launcher\'s gear, line for line in its places, the session\'s own said and not offered: Auto; the files picked are chips in the box, nothing of the caller\'s after the gear', () => {
     const contextSet = { context: new Set(['src/app.ts']), add: vi.fn(), remove: vi.fn(), toggle: vi.fn(), reset: vi.fn() }
     renderComposer({ publish: 'pr', contextSet })
     expect(screen.getByTestId('composer-setup').textContent).toBe('Auto: prpick Open PRpick Commit')
-    expect(screen.getByTestId('composer-controls').textContent).toBe('Context · src/app.ts')
+    expect(screen.getByTestId('composer-files').textContent).toBe('src/app.ts')
+    expect(screen.getByTestId('composer-controls').textContent).toBe('')
   })
 
   test("a session with no project: Auto for its copies of repos in the gear; no file Context after it, the repos being a module's control", () => {
@@ -497,7 +495,7 @@ describe('AgentComposer sending to an ended run', () => {
     const remove = vi.fn()
     const contextSet = { context: new Set(['src/app.ts']), add: vi.fn(), remove, toggle: vi.fn(), reset: vi.fn() }
     renderComposer({ contextSet })
-    expect(screen.getByText('Context · src/app.ts')).toBeTruthy()
+    expect(screen.getByTestId('composer-files').textContent).toBe('src/app.ts')
     fireEvent.click(screen.getByText('submit'))
     // Cleared of what it went with, which is all of it here (AgentComposer.editor.test.tsx: what was picked meanwhile stays).
     await waitFor(() => expect(remove).toHaveBeenCalledWith('src/app.ts'))
