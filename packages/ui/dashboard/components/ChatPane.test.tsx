@@ -76,11 +76,11 @@ describe('ChatPane', () => {
     expect(document.body.textContent).toBe('top barchatmessage box')
   })
 
-  test('a column beside the chat stands under the top bar, which then runs over both, as Claude Code\'s over its details', () => {
+  test('a column beside the chat stands under the top bar, which then runs over both, as Claude Code\'s over its details; what is in the bar ends where it does without the column', () => {
     render(<ChatPane top={<b>top bar</b>} bottom={<b>message box</b>} side={<p>activity</p>}><p>chat</p></ChatPane>)
     const column = screen.getByRole('complementary', { name: 'Activity panel' })
     expect(column.className.split(' ')).toEqual(expect.arrayContaining(['mt-11', 'w-80', 'border-l']))
-    expect(screen.getByTestId('chat-top').className.split(' ')).toEqual(expect.arrayContaining(['right-0']))
+    expect(screen.getByTestId('chat-top').className.split(' ')).toEqual(expect.arrayContaining(['right-0', 'pr-(--chat-edge)', 'pointer-coarse:pr-(--chat-scroll-bar)']))
     expect(screen.queryByTestId('chat-top-line')).toBeNull()
     expect(document.body.textContent).toBe('top barchatmessage boxactivity')
   })

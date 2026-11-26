@@ -57,8 +57,10 @@ export function ChatPane({ top, bottom, side, children }: { top: ReactNode; bott
         {/* Over the chat's start, as Claude Code's: what scrolls under it shows through, blurred. It
             stops short of the scroll bar, which is drawn over the whole page's height, the bar's top
             too; only the bar's line crosses it, to the panes' edge. */}
-        {/* With a column beside the chat the bar runs over both, as Claude Code's over its details. */}
-        <div ref={topBar} data-testid="chat-top" className={cn('absolute top-0 left-0 z-20 bg-background/80 backdrop-blur-md', side ? 'right-0' : 'right-(--chat-edge) pointer-coarse:right-(--chat-scroll-bar)')}>
+        {/* With a column beside the chat the bar runs over both, as Claude Code's over its details;
+            what is in it still ends where it does without the column, so showing the column moves
+            no icon. */}
+        <div ref={topBar} data-testid="chat-top" className={cn('absolute top-0 left-0 z-20 bg-background/80 backdrop-blur-md', side ? 'right-0 pr-(--chat-edge) pointer-coarse:pr-(--chat-scroll-bar)' : 'right-(--chat-edge) pointer-coarse:right-(--chat-scroll-bar)')}>
           {top}
         </div>
         {!side && <div aria-hidden data-testid="chat-top-line" className="pointer-events-none absolute right-0 top-[calc(2.75rem-1px)] z-20 h-px w-(--chat-edge) bg-border pointer-coarse:w-(--chat-scroll-bar)" />}
