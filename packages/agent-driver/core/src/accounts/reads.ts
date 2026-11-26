@@ -21,7 +21,13 @@ export async function listed(logins: AgentLogins, wiring: LoginWiring): Promise<
   const unnamed = (a: ShownAccount): boolean => a.name === OWN_NAME
   const who = accounts.some(a => a.own && unnamed(a)) ? await logins.ownName(wiring.env) : undefined
   const computer = hostname().replace(/\.local$/i, '')
-  return accounts.map(a => (a.own ? { ...a, computer, ...(unnamed(a) && who !== undefined ? { who } : {}), ...(there ? {} : { signedOut: true as const }) } : a))
+  // An added one whose login is gone from this computer is signed out too: signed in to again under its name.
+  const added = readAccounts(wiring.path(logins.list))
+  const outOfAdded = (a: ShownAccount): boolean => {
+    const account = added.find(one => one.name === a.name && one.login !== undefined)
+    return account !== undefined && logins.addedLoginThere?.(account, wiring.env) === false
+  }
+  return accounts.map(a => (a.own ? { ...a, computer, ...(unnamed(a) && who !== undefined ? { who } : {}), ...(there ? {} : { signedOut: true as const }) } : outOfAdded(a) ? { ...a, signedOut: true as const } : a))
 }
 
 /** What `list` answers: each list's accounts by its name, in the order runs try them, and the lists whose agent's program this computer does not have. */

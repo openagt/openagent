@@ -423,7 +423,7 @@ describe('AccountsCard', () => {
     const run = renderCard(listed([{ name: 'This computer', who: 'Ada', own: true, signedOut: true }, { name: 'Here', own: false }]))
     await openRow('Here')
     fireEvent.click(screen.getByRole('button', { name: "Remove Here's account" }))
-    expect(screen.getByText(/take it back on claude.ai/)).toBeTruthy()
+    expect(screen.getAllByText(/its login is taken off this computer/).length).toBeGreaterThan(0)
     expect(run).not.toHaveBeenCalledWith(['remove', 'claude', 'Here'], 'account-rotation')
     fireEvent.click(within(screen.getByRole('group', { name: "Remove Here's account" })).getByRole('button', { name: 'Remove' }))
     await waitFor(() => expect(run).toHaveBeenCalledWith(['remove', 'claude', 'Here'], 'account-rotation'))
@@ -553,5 +553,18 @@ describe('ConnectAgent', () => {
     await screen.findByRole('button', { name: 'Connect Codex' })
     await new Promise(resolve => setTimeout(resolve, 50))
     expect(screen.queryByRole('dialog')).toBeNull()
+  })
+})
+
+describe('an added account signed out', () => {
+  test('its row says so, in the warning colour, and opened, Sign in again opens the window named for it, its name in the field: the sign-in is its again', async () => {
+    const calls = renderAdding(() => ({ claude: {} }), () => ({ ok: true, output: {} }), { claude: [{ name: 'This computer', who: 'Ada', own: true }, { name: 'Dani', own: false, signedOut: true }], codex: [] })
+    const said = await screen.findByText('signed out: sign in again')
+    expect(said.className).toContain('text-warning')
+    await openRow('Dani')
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in to Dani again' }))
+    const window = await screen.findByRole('dialog', { name: 'Sign in to Dani again' })
+    expect((within(window).getByRole('textbox') as HTMLInputElement).value).toBe('Dani')
+    expect(calls.some(call => call.args[0] === 'add')).toBe(false)
   })
 })

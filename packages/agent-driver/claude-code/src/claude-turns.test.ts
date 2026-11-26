@@ -1,32 +1,56 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { Readable, Writable } from 'node:stream'
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readlinkSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { type SpawnLike, type SpawnedProcess, accountRotation, addAccount, goOn, markLimited, nameOwnAccount, OWN_NAME, readAccounts, usableAccounts, useFirst, removeAccount, UsageLimitError } from '@openagt/agent-driver'
 import type { DriverEvent } from '@openagt/hooks'
-import { CLAUDE_ACCOUNT_ENV, CLAUDE_TOKEN_ENV } from './claude-accounts.js'
+import { CLAUDE_TOKEN_ENV, claudeAccountsDir } from './claude-accounts.js'
 import { ClaudeCodeDriver } from './claude-code.js'
 import { claudeLogins } from './logins.js'
 
-// Claude Code's turns on the person's accounts: an added one's login in the turn's environment, and
-// the next free account going on with the same conversation at a limit (the rotation is
-// `@openagt/agent-driver`'s, the same for every agent).
+// Claude Code's turns on the person's accounts: an added one's folder for Claude Code's own in the
+// turn's environment, and the next free account going on with the same conversation at a limit (the
+// rotation is `@openagt/agent-driver`'s, the same for every agent).
 
 const HOUR = 60 * 60_000
 const NOW = Date.parse('2026-10-22T12:00:00Z')
 
-function withFile(body: (path: string) => Promise<void> | void): () => Promise<void> {
+/** The accounts' file, and a home of the test's own: where added accounts' folders and the person's Claude folder are. */
+function withFile(body: (path: string, home: Home) => Promise<void> | void): () => Promise<void> {
   return async () => {
     const dir = mkdtempSync(join(tmpdir(), 'claude-accounts-'))
+    const env = { HOME: dir }
+    const home: Home = {
+      env,
+      add(name, login, signedIn = true) {
+        addAccount(name, login, join(dir, 'accounts.json'))
+        const folder = join(claudeAccountsDir(env), login)
+        mkdirSync(folder, { recursive: true })
+        if (signedIn) writeFileSync(join(folder, '.claude.json'), JSON.stringify({ oauthAccount: { accountUuid: `${name}-uuid` } }))
+        return folder
+      },
+    }
     try {
-      await body(join(dir, 'accounts.json'))
+      await body(join(dir, 'accounts.json'), home)
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
   }
 }
+
+/** A test's home: its environment, and an added account signed in there, its folder answered. */
+interface Home {
+  env: NodeJS.ProcessEnv
+  add(name: string, login: string, signedIn?: boolean): string
+}
+
+const DANI = 'acct-00000000000000da'
+const ROM = 'acct-00000000000000a0'
+
+/** Which login a turn ran on: an added account's folder by its name, else the person's own. */
+const on = (spawned: Spawned): string => spawned.env['CLAUDE_CONFIG_DIR']?.split('/').pop() ?? 'own'
 
 /** What Claude Code says when the account's limit stops a turn, as a real one did: the line says `rejected`, then its own message. */
 const LIMITED = (resetsAt: number): string[] => [
@@ -69,19 +93,18 @@ function turns(said: { lines: string[]; code?: number }[], seen: Spawned[]): Spa
   }
 }
 
-test('a turn the account\'s limit stops goes on in the same conversation on the next free account, told so, and the chat says why; each account keeps its windows', withFile(async path => {
-  addAccount('Dani', 'sk-ant-oat01-dani', path)
+test('a turn the account\'s limit stops goes on in the same conversation on the next free account, told so, and the chat says why; each account keeps its windows', withFile(async (path, home) => {
+  home.add('Dani', DANI)
   nameOwnAccount('Rom', path)
   const seen: Spawned[] = []
   const events: DriverEvent[] = []
   const frees = NOW + 2 * HOUR
-  const session = await new ClaudeCodeDriver({ spawn: turns([{ lines: LIMITED(frees), code: 1 }, { lines: DONE('finished') }], seen), env: { HOME: '/nowhere' }, accounts: accountRotation(claudeLogins(), { ownLoginThere: () => true, path, now: () => NOW }) }).start({ cwd: '/ws', onEvent: e => events.push(e) })
+  const session = await new ClaudeCodeDriver({ spawn: turns([{ lines: LIMITED(frees), code: 1 }, { lines: DONE('finished') }], seen), env: home.env, accounts: accountRotation(claudeLogins(), { ownLoginThere: () => true, path, now: () => NOW }) }).start({ cwd: '/ws', onEvent: e => events.push(e) })
   const turn = await session.prompt('fix the bug')
   assert.equal(turn.text, 'finished')
   assert.equal(seen.length, 2)
-  // The person's own login as Claude Code keeps it, then Dani's in the turn's environment alone.
-  assert.equal(seen[0]!.env[CLAUDE_TOKEN_ENV], undefined)
-  assert.equal(seen[1]!.env[CLAUDE_TOKEN_ENV], 'sk-ant-oat01-dani')
+  // The person's own login as Claude Code keeps it, then Dani's folder in the turn's environment alone.
+  assert.deepEqual(seen.map(on), ['own', DANI])
   // The same conversation, told to go on: the prompt is in it already.
   assert.deepEqual(seen[1]!.args.slice(seen[1]!.args.indexOf('--resume'), seen[1]!.args.indexOf('--resume') + 2), ['--resume', 's1'])
   assert.match(seen[1]!.stdin, new RegExp(goOn('Claude').slice(0, 30)))
@@ -93,26 +116,26 @@ test('a turn the account\'s limit stops goes on in the same conversation on the 
   assert.deepEqual(after.find(a => a.name === 'Dani')?.windows?.map(w => [w.window, w.percentUsed]), [['five_hour', 20]])
   // The session stays on Dani's: the next turn does not try Rom's again.
   await session.prompt('and the test').catch(() => undefined)
-  assert.equal(seen[2]!.env[CLAUDE_TOKEN_ENV], 'sk-ant-oat01-dani')
+  assert.equal(on(seen[2]!), DANI)
 }))
 
-test('a run starts on the account it was told to; with every account at its limit the turn ends, saying which frees first', withFile(async path => {
-  addAccount('Dani', 'sk-ant-oat01-dani', path)
+test('a run starts on the account it was told to; with every account at its limit the turn ends, saying which frees first', withFile(async (path, home) => {
+  home.add('Dani', DANI)
   const seen: Spawned[] = []
-  const driver = new ClaudeCodeDriver({ spawn: turns([{ lines: LIMITED(NOW + 3 * HOUR), code: 1 }, { lines: LIMITED(NOW + HOUR), code: 1 }], seen), env: {}, accounts: accountRotation(claudeLogins(), { ownLoginThere: () => true, path, prefer: 'Dani', now: () => NOW }) })
+  const driver = new ClaudeCodeDriver({ spawn: turns([{ lines: LIMITED(NOW + 3 * HOUR), code: 1 }, { lines: LIMITED(NOW + HOUR), code: 1 }], seen), env: home.env, accounts: accountRotation(claudeLogins(), { ownLoginThere: () => true, path, prefer: 'Dani', now: () => NOW }) })
   const session = await driver.start({ cwd: '/ws' })
   await assert.rejects(session.prompt('go'), (err: unknown) => err instanceof UsageLimitError && err.message === `All 2 Claude accounts are at their limit: ${OWN_NAME}'s is free again in 1 h.`)
-  assert.deepEqual(seen.map(s => s.env[CLAUDE_TOKEN_ENV]), ['sk-ant-oat01-dani', undefined])
+  assert.deepEqual(seen.map(on), [DANI, 'own'])
   // Nothing is started while every account is out.
   await assert.rejects(session.prompt('again'), UsageLimitError)
   assert.equal(seen.length, 2)
 }))
 
-test('a limit line on a turn that went through, a turn that failed on something else, and a stopped turn are no limit to switch over', withFile(async path => {
-  addAccount('Dani', 'sk-ant-oat01-dani', path)
+test('a limit line on a turn that went through, a turn that failed on something else, and a stopped turn are no limit to switch over', withFile(async (path, home) => {
+  home.add('Dani', DANI)
   const rejected = LIMITED(NOW + HOUR).slice(0, 2)
   const seen: Spawned[] = []
-  const session = await new ClaudeCodeDriver({ spawn: turns([{ lines: [...rejected, JSON.stringify({ type: 'result', result: 'done anyway', session_id: 's1' })] }, { lines: ['{}'], code: 1 }], seen), env: {}, accounts: accountRotation(claudeLogins(), { ownLoginThere: () => true, path, now: () => NOW }) }).start({ cwd: '/ws' })
+  const session = await new ClaudeCodeDriver({ spawn: turns([{ lines: [...rejected, JSON.stringify({ type: 'result', result: 'done anyway', session_id: 's1' })] }, { lines: ['{}'], code: 1 }], seen), env: home.env, accounts: accountRotation(claudeLogins(), { ownLoginThere: () => true, path, now: () => NOW }) }).start({ cwd: '/ws' })
   assert.equal((await session.prompt('go')).text, 'done anyway')
   await assert.rejects(session.prompt('again'))
   assert.equal(seen.length, 2)
@@ -120,7 +143,7 @@ test('a limit line on a turn that went through, a turn that failed on something 
 
   const stop = new AbortController()
   const stoppedSeen: Spawned[] = []
-  const stopped = await new ClaudeCodeDriver({ spawn: turns([{ lines: LIMITED(NOW + HOUR), code: 1 }], stoppedSeen), env: {}, accounts: accountRotation(claudeLogins(), { ownLoginThere: () => true, path, now: () => NOW }) }).start({ cwd: '/ws', signal: stop.signal })
+  const stopped = await new ClaudeCodeDriver({ spawn: turns([{ lines: LIMITED(NOW + HOUR), code: 1 }], stoppedSeen), env: home.env, accounts: accountRotation(claudeLogins(), { ownLoginThere: () => true, path, now: () => NOW }) }).start({ cwd: '/ws', signal: stop.signal })
   stop.abort()
   await assert.rejects(stopped.prompt('go'))
   assert.equal(stoppedSeen.length <= 1, true)
@@ -133,26 +156,26 @@ test('without accounts a turn runs on whatever login Claude Code has, and a limi
   assert.deepEqual(seen.map(s => s.env[CLAUDE_TOKEN_ENV]), ['the-servers-own'])
 })
 
-test('with one account there is no choice: a turn tries it whatever a limit said of it before, and keeps nothing', withFile(async path => {
+test('with one account there is no choice: a turn tries it whatever a limit said of it before, and keeps nothing', withFile(async (path, home) => {
   markLimited(OWN_NAME, NOW + HOUR, NOW, path)
   const seen: Spawned[] = []
-  const session = await new ClaudeCodeDriver({ spawn: turns([{ lines: DONE('fine') }], seen), env: {}, accounts: accountRotation(claudeLogins(), { ownLoginThere: () => true, path, now: () => NOW }) }).start({ cwd: '/ws' })
+  const session = await new ClaudeCodeDriver({ spawn: turns([{ lines: DONE('fine') }], seen), env: home.env, accounts: accountRotation(claudeLogins(), { ownLoginThere: () => true, path, now: () => NOW }) }).start({ cwd: '/ws' })
   assert.equal((await session.prompt('go')).text, 'fine')
   assert.equal(readAccounts(path)[0]?.windows, undefined)
 }))
 
-test('a project’s own few: its runs use only the accounts it names, in the file’s order; one named is that one’s login; none still there is all of them', withFile(async path => {
-  addAccount('Dani', 'sk-ant-oat01-dani', path)
-  addAccount('Rom', 'sk-ant-oat01-rom', path)
+test('a project’s own few: its runs use only the accounts it names, in the file’s order; one named is that one’s login; none still there is all of them', withFile(async (path, home) => {
+  home.add('Dani', DANI)
+  home.add('Rom', ROM)
   const seen: Spawned[] = []
-  const session = await new ClaudeCodeDriver({ spawn: turns([{ lines: LIMITED(NOW + HOUR), code: 1 }, { lines: DONE('done') }], seen), env: {}, accounts: accountRotation(claudeLogins(), { ownLoginThere: () => true, path, only: ['Rom', 'Dani'], now: () => NOW }) }).start({ cwd: '/ws' })
+  const session = await new ClaudeCodeDriver({ spawn: turns([{ lines: LIMITED(NOW + HOUR), code: 1 }, { lines: DONE('done') }], seen), env: home.env, accounts: accountRotation(claudeLogins(), { ownLoginThere: () => true, path, only: ['Rom', 'Dani'], now: () => NOW }) }).start({ cwd: '/ws' })
   assert.equal((await session.prompt('go')).text, 'done')
   // Never the person's own: Dani's first (the file's order), then Rom's.
-  assert.deepEqual(seen.map(s => s.env[CLAUDE_TOKEN_ENV]), ['sk-ant-oat01-dani', 'sk-ant-oat01-rom'])
+  assert.deepEqual(seen.map(on), [DANI, ROM])
 
   const one: Spawned[] = []
-  await (await new ClaudeCodeDriver({ spawn: turns([{ lines: DONE('fine') }], one), env: {}, accounts: accountRotation(claudeLogins(), { ownLoginThere: () => true, path, only: ['Rom'], now: () => NOW }) }).start({ cwd: '/ws' })).prompt('go')
-  assert.deepEqual(one.map(s => s.env[CLAUDE_TOKEN_ENV]), ['sk-ant-oat01-rom'])
+  await (await new ClaudeCodeDriver({ spawn: turns([{ lines: DONE('fine') }], one), env: home.env, accounts: accountRotation(claudeLogins(), { ownLoginThere: () => true, path, only: ['Rom'], now: () => NOW }) }).start({ cwd: '/ws' })).prompt('go')
+  assert.deepEqual(one.map(on), [ROM])
 
   assert.deepEqual(usableAccounts(readAccounts(path), ['Gone']).map(a => a.name), [OWN_NAME, 'Dani', 'Rom'])
 }))
@@ -160,29 +183,32 @@ test('a project’s own few: its runs use only the accounts it names, in the fil
 /** Claude Code's answer to the `initialize` a model list asks with. */
 const INITIALIZED = [JSON.stringify({ type: 'control_response', response: { subtype: 'success', request_id: 'models', response: { models: [{ value: 'opus', displayName: 'Opus 5.5', resolvedModel: 'claude-opus-5-5' }] } } })]
 
-test('an added account whose Claude account is known runs with it beside its login; one not known runs with none, never another\'s', withFile(async path => {
-  addAccount('Dani', 'sk-ant-oat01-dani', path, new Date(NOW), 'dani-account-id')
-  addAccount('Rom', 'sk-ant-oat01-rom', path)
-  useFirst('Dani', path)
+test("an added account's turn runs in its folder, linked to the person's conversations and setup, with no login handed in beside it; one signed out takes no turn", withFile(async (path, home) => {
+  const folder = home.add('Dani', DANI)
+  home.add('Rom', ROM, false)
+  const personal = join(home.env['HOME']!, '.claude')
+  mkdirSync(join(personal, 'skills'), { recursive: true })
+  writeFileSync(join(personal, 'settings.json'), '{}')
+  useFirst('Rom', path)
   const seen: Spawned[] = []
-  const env = { [CLAUDE_ACCOUNT_ENV]: 'the-servers-own-account' }
-  const session = await new ClaudeCodeDriver({ spawn: turns([{ lines: LIMITED(NOW + HOUR), code: 1 }, { lines: LIMITED(NOW + HOUR), code: 1 }, { lines: DONE('done') }], seen), env, accounts: accountRotation(claudeLogins(), { ownLoginThere: () => true, path, now: () => NOW }) }).start({ cwd: '/ws' })
+  const env = { ...home.env, [CLAUDE_TOKEN_ENV]: 'the-servers-own' }
+  const session = await new ClaudeCodeDriver({ spawn: turns([{ lines: DONE('done') }], seen), env, accounts: accountRotation(claudeLogins(), { ownLoginThere: () => true, path, prefer: 'Dani', now: () => NOW }) }).start({ cwd: '/ws' })
   assert.equal((await session.prompt('go')).text, 'done')
-  assert.deepEqual(seen.map(s => [s.env[CLAUDE_TOKEN_ENV], s.env[CLAUDE_ACCOUNT_ENV]]), [
-    ['sk-ant-oat01-dani', 'dani-account-id'],
-    // The person's own: as Claude Code keeps it, with what the computer's own login says of itself.
-    [undefined, 'the-servers-own-account'],
-    ['sk-ant-oat01-rom', undefined],
-  ])
+  // Rom's, first but signed out, is passed over.
+  assert.deepEqual(seen.map(on), [DANI])
+  assert.equal(seen[0]!.env['CLAUDE_CONFIG_DIR'], folder)
+  assert.equal(seen[0]!.env[CLAUDE_TOKEN_ENV], undefined, "the computer's own login is not the account's")
+  for (const name of ['projects', 'skills', 'settings.json']) assert.equal(lstatSync(join(folder, name)).isSymbolicLink() && readlinkSync(join(folder, name)), join(personal, name))
+  assert.equal(existsSync(join(folder, 'CLAUDE.md')), false, 'nothing the person does not have')
 }))
 
-test('the models are asked on the account runs take first, with who it is: what a run there is given', withFile(async path => {
-  addAccount('Dani', 'sk-ant-oat01-dani', path, new Date(NOW), 'dani-account-id')
+test('the models are asked on the account runs take first, in its folder: what a run there is given', withFile(async (path, home) => {
+  const folder = home.add('Dani', DANI)
   useFirst('Dani', path)
   const seen: Spawned[] = []
-  const models = await new ClaudeCodeDriver({ spawn: turns([{ lines: INITIALIZED }], seen), env: {}, accounts: accountRotation(claudeLogins(), { ownLoginThere: () => true, path, now: () => NOW }) }).listModels()
+  const models = await new ClaudeCodeDriver({ spawn: turns([{ lines: INITIALIZED }], seen), env: home.env, accounts: accountRotation(claudeLogins(), { ownLoginThere: () => true, path, now: () => NOW }) }).listModels()
   assert.deepEqual(models.map(m => m.name), ['Opus 5.5'])
-  assert.deepEqual([seen[0]!.env[CLAUDE_TOKEN_ENV], seen[0]!.env[CLAUDE_ACCOUNT_ENV]], ['sk-ant-oat01-dani', 'dani-account-id'])
+  assert.equal(seen[0]!.env['CLAUDE_CONFIG_DIR'], folder)
 
   // Without accounts, on whatever login Claude Code has.
   const plain: Spawned[] = []
@@ -191,8 +217,6 @@ test('the models are asked on the account runs take first, with who it is: what 
 }))
 
 test('the models of a login in the environment are asked in a folder of their own, removed after; the person\'s own login in their folder', withFile(async path => {
-  addAccount('Dani', 'sk-ant-oat01-dani', path, new Date(NOW), 'dani-account-id')
-  useFirst('Dani', path)
   const there: boolean[] = []
   const asked = (seen: Spawned[]): SpawnLike => {
     const spawn = turns([{ lines: INITIALIZED }], seen)
@@ -205,18 +229,14 @@ test('the models of a login in the environment are asked in a folder of their ow
   const closed = () => new Promise(resolve => setImmediate(resolve))
   const own = { CLAUDE_CONFIG_DIR: '/home/me/.claude' }
 
-  const dani: Spawned[] = []
-  await new ClaudeCodeDriver({ spawn: asked(dani), env: own, accounts: accountRotation(claudeLogins(), { ownLoginThere: () => true, path, now: () => NOW }) }).listModels()
-  await closed()
-  const folder = dani[0]!.env['CLAUDE_CONFIG_DIR']!
-  assert.notEqual(folder, own.CLAUDE_CONFIG_DIR)
-  assert.equal(there[0], true)
-  assert.equal(existsSync(folder), false)
-
   // A server person's login, in the environment Claude Code is started with.
   const person: Spawned[] = []
   await new ClaudeCodeDriver({ spawn: asked(person), env: { ...own, [CLAUDE_TOKEN_ENV]: 'sk-ant-oat01-rom' } }).listModels()
-  assert.notEqual(person[0]!.env['CLAUDE_CONFIG_DIR'], own.CLAUDE_CONFIG_DIR)
+  await closed()
+  const folder = person[0]!.env['CLAUDE_CONFIG_DIR']!
+  assert.notEqual(folder, own.CLAUDE_CONFIG_DIR)
+  assert.equal(there[0], true)
+  assert.equal(existsSync(folder), false)
 
   useFirst(OWN_NAME, path)
   const mine: Spawned[] = []
@@ -224,16 +244,15 @@ test('the models of a login in the environment are asked in a folder of their ow
   assert.equal(mine[0]!.env['CLAUDE_CONFIG_DIR'], own.CLAUDE_CONFIG_DIR)
 }))
 
-test('the person\'s own login first and not there: a run takes the next account, and a limit there hands over past it; alone it is still tried', withFile(async path => {
-  addAccount('Dani', 'sk-ant-oat01-dani', path, new Date(NOW))
+test('the person\'s own login first and not there: a run takes the next account, and a limit there hands over past it; alone it is still tried', withFile(async (path, home) => {
+  home.add('Dani', DANI)
   useFirst('This computer', path)
   const rotation = accountRotation(claudeLogins(), { path, now: () => NOW, ownLoginThere: () => false })
-  assert.equal(rotation.first({})?.name, 'Dani')
+  assert.equal(rotation.first(home.env)?.name, 'Dani')
   const seen: Spawned[] = []
-  const session = await new ClaudeCodeDriver({ spawn: turns([{ lines: DONE('fine') }], seen), env: {}, accounts: rotation }).start({ cwd: '/w' })
+  const session = await new ClaudeCodeDriver({ spawn: turns([{ lines: DONE('fine') }], seen), env: home.env, accounts: rotation }).start({ cwd: '/w' })
   await session.prompt('go')
-  assert.equal(seen.length, 1)
-  assert.equal(seen[0]!.env?.['CLAUDE_CODE_OAUTH_TOKEN'], 'sk-ant-oat01-dani')
+  assert.deepEqual(seen.map(on), [DANI])
   removeAccount('Dani', path)
-  assert.equal(rotation.first({})?.name, 'This computer')
+  assert.equal(rotation.first(home.env)?.name, 'This computer')
 }))

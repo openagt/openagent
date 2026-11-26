@@ -1,6 +1,6 @@
 export { ClaudeCodeDriver, claudeCodeReady, type ClaudeCodeDriverOptions, type McpServerSpec, type PermissionMode } from './claude-code.js'
 export { StreamJsonParser } from './claude-code-stream.js'
 export { readClaudeQuota, parseQuotaReadout, type ReadClaudeQuotaOptions } from './claude-code-quota.js'
-export { claudeAccountHere, CLAUDE_TOKEN_ENV, CLAUDE_ACCOUNT_ENV } from './claude-accounts.js'
+export { claudeAccountHere, CLAUDE_TOKEN_ENV } from './claude-accounts.js'
 export { mintClaude, isSignInCode, type Mint, type MintOptions } from './claude-login.js'
 export { claudeLogins, type ClaudeLoginsDeps } from './logins.js'

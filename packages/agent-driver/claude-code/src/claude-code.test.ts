@@ -902,13 +902,15 @@ test('a ready prompt starts claude before its words, writes them when sent, and 
 
 test('a ready prompt goes on the account a turn would take first', async () => {
   const spawned: { args: string[]; env: NodeJS.ProcessEnv }[] = []
-  const accounts = { first: () => ({ name: 'work', login: 'token-of-work' }), turn: () => Promise.reject(new Error('not used')) }
-  const driver = new ClaudeCodeDriver({ spawn: waitingClaude([], spawned), env: {}, accounts })
+  const home = mkdtempSync(join(tmpdir(), 'claude-ready-'))
+  const accounts = { first: () => ({ name: 'work', login: 'acct-00000000000000aa' }), turn: () => Promise.reject(new Error('not used')) }
+  const driver = new ClaudeCodeDriver({ spawn: waitingClaude([], spawned), env: { HOME: home }, accounts })
   const session = await driver.start({ cwd: '/empty', noTools: true })
   const ready = session.ready!()
   await ready.prompt('words')
-  assert.equal(spawned[0]!.env['CLAUDE_CODE_OAUTH_TOKEN'], 'token-of-work')
+  assert.equal(spawned[0]!.env['CLAUDE_CONFIG_DIR'], join(home, '.local', 'state', 'agent-driver', 'claude-accounts', 'acct-00000000000000aa'))
   ready.cancel()
+  rmSync(home, { recursive: true, force: true })
 })
 
 // A fake `claude` whose agent starts a server in the background and ends its turn on it, as

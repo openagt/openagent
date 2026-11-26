@@ -74,6 +74,11 @@ export function addAccount(name: string, login: string, path: string, now: Date 
   }, path)
 }
 
+/** The added account named `name` with a new login: signed in to again, it keeps its place and its name. */
+export function replaceLogin(name: string, login: string, path: string): AgentAccount[] {
+  return changeAccounts(accounts => accounts.map(a => (a.name === name && a.login !== undefined ? { name: a.name, login: login.trim(), ...(a.added !== undefined ? { added: a.added } : {}) } : a)), path)
+}
+
 /** The accounts without the added one named `name`. The person's own cannot be removed: the agent has it. */
 export function removeAccount(name: string, path: string): AgentAccount[] {
   return changeAccounts(accounts => accounts.filter(a => a.name !== name || a.login === undefined), path)
@@ -106,13 +111,13 @@ export function isLimited(account: AgentAccount, now: number): boolean {
 
 /**
  * The accounts that have a login: the person's own is on the list whether or not the agent has one,
- * and a run on one it does not have dies at once, while the next account is free. With no other
- * account the list stays: the run says what is wrong.
+ * and an added one whose login is gone (`addedThere`) too, and a run on one it does not have dies
+ * at once, while the next account is free. With no account that has one the list stays: the run
+ * says what is wrong.
  */
-export function withLogin(accounts: AgentAccount[], ownThere: boolean): AgentAccount[] {
-  if (ownThere) return accounts
-  const added = accounts.filter(a => a.login !== undefined)
-  return added.length > 0 ? added : accounts
+export function withLogin(accounts: AgentAccount[], ownThere: boolean, addedThere: (account: AgentAccount) => boolean = () => true): AgentAccount[] {
+  const there = accounts.filter(a => (a.login === undefined ? ownThere : addedThere(a)))
+  return there.length > 0 ? there : accounts
 }
 
 /** The accounts a project's runs may use, by name, in the file's order; all of them when it names none, or none that is still there. */

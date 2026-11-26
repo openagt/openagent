@@ -39,6 +39,8 @@ export interface TurnOnAccounts extends RotatedTurn {
   agent: string
   /** Whether the agent has a login of the person's own here: without one, the turn takes an added account. */
   ownThere?: boolean
+  /** Whether an added account still has its login here: one signed out takes no turn. */
+  addedThere?: (account: AgentAccount) => boolean
 }
 
 /** Why no account can take the turn: each is at its limit, and the first to free says when. */
@@ -57,7 +59,7 @@ function allLimited(accounts: AgentAccount[], agent: string, now: number): strin
  */
 export async function turnOnAccounts(on: TurnOnAccounts): Promise<DriverTurn> {
   const now = on.option.now ?? Date.now
-  const usable = (all: AgentAccount[]): AgentAccount[] => withLogin(usableAccounts(all, on.option.only), on.ownThere ?? true)
+  const usable = (all: AgentAccount[]): AgentAccount[] => withLogin(usableAccounts(all, on.option.only), on.ownThere ?? true, on.addedThere)
   const ended = (result: AccountTurn): DriverTurn => {
     if (result.turn === undefined) throw result.failure
     return result.turn
@@ -90,11 +92,12 @@ export async function turnOnAccounts(on: TurnOnAccounts): Promise<DriverTurn> {
 }
 
 /** The accounts of an agent's list, as its driver is handed them: what its sessions run on. */
-export function accountRotation(logins: Pick<AgentLogins, 'list' | 'service' | 'ownLoginThere'>, option: AccountsOption = {}): AccountRotation {
+export function accountRotation(logins: Pick<AgentLogins, 'list' | 'service' | 'ownLoginThere' | 'addedLoginThere'>, option: AccountsOption = {}): AccountRotation {
   const path = (env: NodeJS.ProcessEnv): string => option.path ?? accountsPath(logins.list, env)
   const ownThere = (env: NodeJS.ProcessEnv): boolean => (option.ownLoginThere ?? logins.ownLoginThere)(env)
+  const addedThere = (env: NodeJS.ProcessEnv) => (account: AgentAccount): boolean => logins.addedLoginThere?.(account, env) !== false
   return {
-    first: env => pickAccount(withLogin(readAccounts(path(env)), ownThere(env)), (option.now ?? Date.now)(), option.prefer),
-    turn: (env, on) => turnOnAccounts({ ...on, option, path: path(env), agent: logins.service, ownThere: ownThere(env) }),
+    first: env => pickAccount(withLogin(readAccounts(path(env)), ownThere(env), addedThere(env)), (option.now ?? Date.now)(), option.prefer),
+    turn: (env, on) => turnOnAccounts({ ...on, option, path: path(env), agent: logins.service, ownThere: ownThere(env), addedThere: addedThere(env) }),
   }
 }
