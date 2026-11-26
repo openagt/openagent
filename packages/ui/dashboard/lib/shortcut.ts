@@ -32,6 +32,8 @@ export const SHORTCUTS = {
   jump: { keys: ['k'], mod: true, where: 'Anywhere', does: 'Jump to a run, a project or a page' },
   shortcuts: { keys: ['?'], outsideFields: true, where: 'Anywhere', does: 'Show the keyboard shortcuts' },
   sidebar: { keys: ['b'], mod: true, where: 'Anywhere', does: 'Hide or show the sidebar' },
+  changesTab: { keys: ['D'], mod: true, shift: true, where: 'Anywhere', does: 'Open Changes in the side panel' },
+  filesTab: { keys: ['F'], mod: true, shift: true, where: 'Anywhere', does: 'Open Files in the side panel' },
   newTab: { keys: ['Enter'], mod: true, where: 'Jump', does: 'Open the marked place in a new tab' },
   send: { keys: ['Enter'], where: 'The message box', does: 'Send' },
   newLine: { keys: ['Enter'], shift: true, where: 'The message box', does: 'Start a new line' },

@@ -95,6 +95,8 @@ export interface UiPaneProps {
   reveal?: { path?: string; at: number }
   /** On a pane that shows a run's files (`files`): the file a click in the chat asked to see, by its path as the agent named it. `at` tells one ask from the next. */
   show?: { path: string; at: number }
+  /** The run's copied repo the pane is opened on, in a tab of its own: its name in the session's folder. Absent: the project. */
+  repo?: string
   context: UiContext
 }
 
@@ -278,12 +280,12 @@ export interface ViewPlaces {
   'overview.line': { entry: { id: string; label: string; order?: number }; props: UiCardProps }
   /** A notice on the Overview, under the card of what needs the person: news of this computer, such as a coding agent's newer version. Nothing drawn when there is none. */
   'overview.notice': { entry: { id: string; order?: number }; props: UiCardProps }
-  /** A pane beside the chat, on every project's page and every run's page: an icon in the page's top bar opens it. */
+  /** A pane beside the chat, on every project's page and every run's page: a tab of the side panel, which the panel's "+" and its list open. */
   'chat.pane': {
     entry: {
       /** Which pane this is among the module's own, for its key and for remembering that it is open. */
       id: string
-      /** Its name: on its card, and what its icon is called. */
+      /** Its name: on its tab, and in the panel's "+" and list. */
       label: string
       icon: UiIcon
       /** It lists what a run changed: the chat's row of a changed file opens it, handing it the file as `reveal`. */

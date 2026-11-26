@@ -1,12 +1,15 @@
 import { useSyncExternalStore } from 'react'
 
-// The panes beside the chat (Changes, Files, the Browser, …), for each page that has them: an
-// agent's page, or the "New agent session" page. Which panes are open there, in the order they were
-// opened, and how the room is shared: between the chat and the panes, and between the open panes.
-// A page is found as it was left on coming back, and a page that was never sized starts with the
-// sizes last set on any page. Remembered in this browser: it is how one person left this screen,
-// not a setting of the project, and it is read at once, so the panes are where they were left from
-// the first frame.
+// The side panel beside the chat, as Claude Code on the web has it, for each page that has one: an
+// agent's page, or the "New agent session" page. Whether the panel is open, its tabs (Changes,
+// Files, the Browser, …) in the order they were opened, the tab it shows, and how the room is
+// shared between the chat and the panel. A page is found as it was left on coming back, and a page
+// that was never sized starts with the share last set on any page. Remembered in this browser: it
+// is how one person left this screen, not a setting of the project, and it is read at once, so the
+// panel is where it was left from the first frame.
+//
+// And, for every page at once, whether the session's Activity panel (where it runs, its repos, its
+// context and its changes) stands beside the chat while the side panel is closed.
 
 /** localStorage key holding the pages' panes, oldest page first, and the sizes last set anywhere. */
 const PANES_KEY = 'oa.panes'
@@ -17,9 +20,11 @@ const REMEMBERED = 200
 /** How a group's room is shared: each part's share in percent, by its id. */
 export type Sizes = Record<string, number>
 
-/** One page's panes: the open ones, first opened first, and the sizes set there, by group. */
+/** One page's panel: its tabs, first opened first, the one it shows, whether it is open, and the sizes set there, by group. */
 interface Page {
   open: string[]
+  active?: string | undefined
+  shown?: boolean | undefined
   sizes: Record<string, Sizes>
 }
 
@@ -60,7 +65,9 @@ function parse(raw: string | null): Kept {
   if (isRecord(kept) && isRecord(kept['pages'])) {
     for (const [name, page] of Object.entries(kept['pages'])) {
       if (!isRecord(page)) continue
-      pages[name] = { open: Array.isArray(page['open']) ? page['open'].filter(id => typeof id === 'string') : [], sizes: sizesOf(page['sizes']) }
+      const open = Array.isArray(page['open']) ? page['open'].filter(id => typeof id === 'string') : []
+      const active = typeof page['active'] === 'string' && open.includes(page['active']) ? page['active'] : open.at(-1)
+      pages[name] = { open, ...(active !== undefined ? { active } : {}), ...(page['shown'] === true ? { shown: true } : {}), sizes: sizesOf(page['sizes']) }
     }
   }
   return { pages, last: isRecord(kept) ? sizesOf(kept['last']) : {} }
@@ -84,12 +91,12 @@ function kept(): Kept {
   return read.kept
 }
 
-/** Keep the page as `change` leaves it, as the newest page; a page with nothing open and nothing sized is not kept. */
+/** Keep the page as `change` leaves it, as the newest page; a page with the panel closed, no tab and nothing sized is not kept. */
 function write(name: string, change: (page: Page) => Page, last?: Record<string, Sizes>): void {
   const now = kept()
   const { [name]: was, ...others } = now.pages
   const page = change(was ?? { open: [], sizes: {} })
-  const pages = page.open.length > 0 || Object.keys(page.sizes).length > 0 ? { ...others, [name]: page } : others
+  const pages = page.open.length > 0 || page.shown === true || Object.keys(page.sizes).length > 0 ? { ...others, [name]: page } : others
   const names = Object.keys(pages)
   for (const old of names.slice(0, Math.max(0, names.length - REMEMBERED))) delete pages[old]
   const raw = JSON.stringify({ pages, last: last ?? now.last } satisfies Kept)
@@ -108,33 +115,52 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener)
 }
 
-/** Narrower than this a screen has room for one pane: two would leave the chat too narrow to read. */
-const ONE_PANE = '(width < 64rem)'
-
-/** Whether the screen has room for one pane only, now; jsdom has no matchMedia, and is wide. */
-const onePane = () => (typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia(ONE_PANE).matches : false)
-
 /**
- * Open or close one pane of the page with this name, and remember it. A pane just opened is the
- * last of the open ones; on a screen with room for one, it takes the place of those open.
+ * Open a tab of the page with this name, or close it, and remember it. A tab opened is the last of
+ * the tabs (one open already stays where it is), the one shown, and opens the panel. A tab closed
+ * that was shown hands its place to the tab before it, or else after it; the last one closed
+ * leaves the panel open on what it can show.
  */
 export function setPaneOpen(name: string, id: string, open: boolean): void {
-  if (!open && expanded.get(name) === id) expanded.delete(name)
+  if (!open && expanded.get(name) && kept().pages[name]?.open.length === 1) expanded.delete(name)
   write(name, page => {
-    if (page.open.includes(id) === open) return page
-    return { ...page, open: open ? [...(onePane() ? [] : page.open), id] : page.open.filter(other => other !== id) }
+    if (open) return { ...page, open: page.open.includes(id) ? page.open : [...page.open, id], active: id, shown: true }
+    if (!page.open.includes(id)) return page
+    const at = page.open.indexOf(id)
+    const rest = page.open.filter(other => other !== id)
+    return { ...page, open: rest, active: page.active === id ? (rest[at - 1] ?? rest[at]) : page.active }
   })
 }
 
-/** Close every pane of the page with this name. */
-export function closePanes(name: string): void {
-  expanded.delete(name)
-  write(name, page => ({ ...page, open: [] }))
+/** Show this tab of the page with this name. */
+export function setActivePane(name: string, id: string): void {
+  write(name, page => (page.open.includes(id) ? { ...page, active: id } : page))
 }
 
-/** The open panes of the page with this name, first opened first, as reactive state. */
+/** Open the panel of the page with this name, on the tabs it had, or close it, keeping them. */
+export function setPanelShown(name: string, shown: boolean): void {
+  if (!shown) expanded.delete(name)
+  write(name, page => ({ ...page, shown }))
+}
+
+/** Close the panel of the page with this name; its tabs are kept for when it opens again. */
+export function closePanes(name: string): void {
+  setPanelShown(name, false)
+}
+
+/** The tabs of the page with this name, first opened first, as reactive state. */
 export function useOpenPanes(name: string): readonly string[] {
   return useSyncExternalStore(subscribe, () => kept().pages[name]?.open ?? NONE, () => NONE)
+}
+
+/** The tab the page with this name shows, as reactive state. */
+export function useActivePane(name: string): string | undefined {
+  return useSyncExternalStore(subscribe, () => kept().pages[name]?.active, () => undefined)
+}
+
+/** Whether the panel of the page with this name is open, as reactive state. */
+export function usePanelShown(name: string): boolean {
+  return useSyncExternalStore(subscribe, () => kept().pages[name]?.shown === true, () => false)
 }
 
 /** How the room of this group was last shared on the page with this name; else on any page; none when it never was. */
@@ -163,19 +189,49 @@ export function setPaneSizes(name: string, group: string, sizes: Sizes): void {
   write(name, page => ({ ...page, sizes: { ...page.sizes, [group]: sizes } }), { ...kept().last, [group]: sizes })
 }
 
-/** The pane that fills each page, by the page's name: for the page's life, not remembered. */
-const expanded = new Map<string, string>()
+/** The pages whose panel fills the page, by name: for the page's life, not remembered. */
+const expanded = new Map<string, true>()
 
-/** Let one pane of the page with this name fill the page, or (`undefined`) bring it back to its place. */
-export function setExpandedPane(name: string, id: string | undefined): void {
-  if (id === undefined) expanded.delete(name)
-  else expanded.set(name, id)
+/** Let the panel of the page with this name fill the page, or bring it back to its place. */
+export function setPanelExpanded(name: string, fills: boolean): void {
+  if (fills) expanded.set(name, true)
+  else expanded.delete(name)
   for (const listener of listeners) listener()
 }
 
-/** The pane that fills the page with this name, as reactive state; none when none does. */
-export function useExpandedPane(name: string): string | undefined {
-  return useSyncExternalStore(subscribe, () => expanded.get(name), () => undefined)
+/** Whether the panel of the page with this name fills the page, as reactive state. */
+export function usePanelExpanded(name: string): boolean {
+  return useSyncExternalStore(subscribe, () => expanded.has(name), () => false)
+}
+
+/** localStorage key: '0' once the Activity panel was put away; it stands beside the chat otherwise. */
+const ACTIVITY_KEY = 'oa.activity'
+/** What a browser that keeps nothing was last told of the Activity panel. */
+let activityFallback: boolean | undefined
+
+function activityShown(): boolean {
+  if (activityFallback !== undefined) return activityFallback
+  try {
+    return globalThis.localStorage?.getItem(ACTIVITY_KEY) !== '0'
+  } catch {
+    return true
+  }
+}
+
+/** Put the Activity panel beside the chat, or away, on every page, and remember it. */
+export function setActivityShown(shown: boolean): void {
+  try {
+    globalThis.localStorage?.setItem(ACTIVITY_KEY, shown ? '1' : '0')
+    activityFallback = undefined
+  } catch {
+    activityFallback = shown
+  }
+  for (const listener of listeners) listener()
+}
+
+/** Whether the Activity panel stands beside the chat while the side panel is closed, as reactive state. */
+export function useActivityShown(): boolean {
+  return useSyncExternalStore(subscribe, activityShown, () => true)
 }
 
 /** Forget every page's panes (for tests). */
@@ -183,9 +239,11 @@ export function forgetPanes(): void {
   expanded.clear()
   set = 0
   fallback = undefined
+  activityFallback = undefined
   read = undefined
   try {
     globalThis.localStorage?.removeItem(PANES_KEY)
+    globalThis.localStorage?.removeItem(ACTIVITY_KEY)
   } catch {
     // Nothing was kept.
   }
