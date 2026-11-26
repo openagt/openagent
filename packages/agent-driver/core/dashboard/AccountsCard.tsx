@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { Check, Copy, Info, MoreHorizontal, Plus } from 'lucide-react'
-import { Button, isUnreachable, useAskOn, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, GaugeFace, Input, Panel, PanelGroup, Skeleton, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, useModuleHost, useOpenAgentDown, usePerson, usePolled, type ModuleHost } from '@openagt/ui/module'
+import { Button, HEADING_PRESS_CLASS, isUnreachable, useAskOn, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, GaugeFace, Input, Panel, PanelGroup, Skeleton, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, useModuleHost, useOpenAgentDown, usePerson, usePolled, type ModuleHost } from '@openagt/ui/module'
 import { ClaudeLogo, CodexLogo } from './logos.js'
 import { server, useAgentStates } from './reads.js'
 import { InstallAgent } from './setup.js'
@@ -729,8 +729,8 @@ export function AccountsCard({ quiet = false }: { /** No press of the card is th
           {list?.ok && addable.length > 0 && (
             <DropdownMenu>
               {/* Unpainted, as a part's heading's presses are, pulled out by its own padding so its last mark ends on the card's edge. */}
-              <DropdownMenuTrigger ref={addPress} render={<Button variant="ghost" size="sm" className="-mr-2 text-muted-foreground hover:text-foreground" aria-label="Add an account" />}>
-                <Plus className="size-4" aria-hidden />
+              <DropdownMenuTrigger ref={addPress} className={HEADING_PRESS_CLASS} aria-label="Add an account">
+                <Plus className="size-3.5" aria-hidden />
                 Add
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-[10rem]">

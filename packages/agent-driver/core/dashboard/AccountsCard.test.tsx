@@ -568,3 +568,11 @@ describe('an added account signed out', () => {
     expect(calls.some(call => call.args[0] === 'add')).toBe(false)
   })
 })
+
+test("the heading's Add is words with no fill, under the pointer and with its menu open: no block over the card", async () => {
+  renderCard(listed([{ name: 'This computer', who: 'Ada', own: true }]))
+  const press = await screen.findByRole('button', { name: 'Add an account' })
+  const classes = press.className.split(' ')
+  expect(classes).toContain('data-[popup-open]:bg-transparent')
+  expect(classes.some(name => /^(hover|data-\[popup-open\]):bg-(?!transparent)/.test(name))).toBe(false)
+})

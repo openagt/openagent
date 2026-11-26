@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Loader2, MoreHorizontal, Plus } from 'lucide-react'
 import {
+  HEADING_PRESS_CLASS,
   Button,
   DropdownMenu,
   DropdownMenuContent,
@@ -40,10 +41,10 @@ export function AccountsSection() {
       action={
         // Another account, at the heading as the coding agents' card has it. Unpainted, as a part's heading's presses are, pulled out by its own padding so its word ends on the cards' edge.
         accounts?.installed && (
-          <Button variant="ghost" size="sm" className="-mr-2 text-muted-foreground hover:text-foreground" aria-label={`Add a ${accounts.name} account`} onClick={adding.add}>
-            <Plus className="size-4" aria-hidden />
+          <button type="button" className={HEADING_PRESS_CLASS} aria-label={`Add a ${accounts.name} account`} onClick={adding.add}>
+            <Plus className="size-3.5" aria-hidden />
             Add
-          </Button>
+          </button>
         )
       }
     >
