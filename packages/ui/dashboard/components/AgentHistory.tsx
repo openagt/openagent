@@ -791,7 +791,7 @@ function LogViewMenu({ order, show, group, byProject }: { order: RecentsSort; sh
 const PERSON_MARK = 'size-5 text-xs font-medium'
 
 /** A row's time, in a box as wide as its longest word ("59m", "23h", "now") and set to its right, so it stands on one x down a list. */
-const AGE = 'w-7 shrink-0 text-right text-xs text-muted-foreground tabular-nums'
+const AGE = 'w-7 shrink-0 text-right text-[11px] leading-4 text-muted-foreground tabular-nums'
 
 /** What a row shows beside its name and its age, by the person's picks: whose run it is, and which coding agent ran it. */
 type Showing = { person: boolean; agent: boolean }
@@ -820,7 +820,7 @@ function PrMarks({ prs }: { prs: readonly RunPr[] }) {
     const count = prs.filter(pr => pr.state === state).length
     return (
       <span key={state} data-pr={state} className={cn('relative flex shrink-0 items-center', tone, count > 1 && 'mr-0.5')}>
-        <Icon className="size-3.5" aria-hidden />
+        <Icon className="size-3" aria-hidden />
         {/* The smallest type step, drawn at three quarters: a count at a 14 glyph's corner. */}
         {count > 1 && <span className="absolute -top-2 -right-2.5 scale-75 rounded-full bg-sidebar px-0.5 text-xs leading-none font-bold tabular-nums">{count}</span>}
       </span>
@@ -991,12 +991,12 @@ function AgentHistoryRow({
           computer, a host. Rare, so the row stays a mark and a name nearly always. */}
       {startedOn && (
         <RowMark said={`Started on ${startedOn}`}>
-          <Laptop className="size-3.5 text-muted-foreground" />
+          <Laptop className="size-3 text-muted-foreground" />
         </RowMark>
       )}
       {onHost && (
         <RowMark said={onHost}>
-          <HOST_ICON className="size-3.5 text-muted-foreground" />
+          <HOST_ICON className="size-3 text-muted-foreground" />
         </RowMark>
       )}
       {/* Its pull requests and the work it left on the machine, just before its age. */}
@@ -1009,7 +1009,7 @@ function AgentHistoryRow({
           )}
           {left && (
             <RowMark said={left.said}>
-              <left.Icon className="size-3.5 text-muted-foreground" />
+              <left.Icon className="size-3 text-muted-foreground" />
             </RowMark>
           )}
         </span>
@@ -1042,7 +1042,7 @@ function AgentHistoryRow({
       )}
       {show.agent && !(show.person && (personWords || standIn)) && ran && agentSaid && (
         <RowMark said={agentSaid}>
-          <PackageLogo svg={ran.logo} className="size-3.5 text-muted-foreground" />
+          <PackageLogo svg={ran.logo} className="size-3 text-muted-foreground" />
         </RowMark>
       )}
     </>
