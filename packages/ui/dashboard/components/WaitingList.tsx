@@ -1,9 +1,11 @@
-import { useContext, useState, type ComponentType, type ReactNode } from 'react'
-import { ArrowRight, CircleDot, CircleHelp, FilePen, GitBranch, GitPullRequest } from 'lucide-react'
+import { useContext, useState, type ReactNode } from 'react'
+import { ArrowRight } from 'lucide-react'
 import type { Waiting } from '../../src/index.js'
 import { waitingKey } from '../../src/client.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { cn } from '../lib/utils.js'
+import { PR_MARKS } from '../lib/pr-marks.js'
+import { RunMark } from './RunMark.js'
 import { inPlace } from '../lib/in-place.js'
 import { formatRelative } from '../lib/format-date.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
@@ -11,20 +13,20 @@ import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.j
 /** How many rows show before the list offers the rest. */
 const SHOWN_AT_FIRST = 5
 
-/** Each mark's icon and colour: what is needed reads at a glance. */
-const MARKS: Record<NonNullable<Waiting['mark']>, { Icon: ComponentType<{ className?: string }>; tone: string }> = {
-  question: { Icon: CircleHelp, tone: 'text-warning' },
-  changes: { Icon: FilePen, tone: 'text-info' },
-  branch: { Icon: GitBranch, tone: 'text-info' },
-  'pull-request': { Icon: GitPullRequest, tone: 'text-success' },
+/** Each need's colour: what is needed reads at a glance. */
+const TONES: Record<NonNullable<Waiting['mark']>, string> = {
+  question: 'text-warning',
+  changes: 'text-info',
+  branch: 'text-info',
+  'pull-request': 'text-success',
 }
 
-/** An item that names no mark: a plain dot, quiet. */
-const PLAIN = { Icon: CircleDot, tone: 'text-muted-foreground' }
+/** The mark of a request waiting to be merged: an open one's, as the sidebar's rows mark it. */
+const PR_OPEN = PR_MARKS.open
 
 /** What an item needs, as its colour says it, the same in every list of what waits: an answer yellow, a merge green, work left blue. */
 export function waitingTone(item: Waiting): string {
-  return item.mark ? MARKS[item.mark].tone : 'text-warning'
+  return item.mark ? TONES[item.mark] : 'text-warning'
 }
 
 /** Where a click on the row takes the person, said on its hover: the session it is about, else the page that fixes it. */
@@ -92,7 +94,7 @@ export function holdsBack(items: readonly Waiting[]): boolean {
 
 /**
  * The things only a person can clear (#632/#1139), one row each, as the Human Queue and the
- * launcher's "Waiting on you" both list them: what is needed, with its mark and colour, the
+ * launcher's "Waiting on you" both list them: what is needed, by the sidebar's waiting hexagon in its colour, the
  * run's name as the sidebar says it, then what it is about, its project, how long ago, and an arrow
  * to where the row goes. A row is one line that lights up under the pointer, with no rule between
  * rows and no panel around them (his picks). The rows read as columns: what is needed takes one
@@ -122,17 +124,23 @@ export function WaitingList({
     <div className="-mx-2">
       <ul>
         {rows.map(({ key, item, hint, since, href, open }) => {
-          const { Icon, tone } = item.mark ? MARKS[item.mark] : PLAIN
           const row = (
             <>
-              <span className={cn('flex w-28 shrink-0 items-center gap-1.5 text-xs max-md:w-auto max-md:flex-1', tone)}>
-                <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              {/* The sidebar's waiting hexagon, in the colour of what is needed; the words quiet, as the sidebar's (his ask, 2026-11-26). */}
+              <span className="flex w-28 shrink-0 items-center gap-2 text-xs text-muted-foreground max-md:w-auto max-md:flex-1">
+                <span className="flex size-4 shrink-0 items-center justify-center">
+                  <RunMark status="waiting" className={waitingTone(item)} />
+                </span>
                 {item.words}
               </span>
               {/* The name and what it is about give up width, each cut short with an ellipsis: in a
                   narrow column the row still fits, and nothing scrolls sideways. On a phone each
-                  has a line of its own under what is needed, where, and since when. */}
-              <span className="min-w-0 shrink truncate text-foreground md:max-w-[50%] max-md:order-1 max-md:basis-full">{item.title}</span>
+                  has a line of its own under what is needed, where, and since when. A request to
+                  merge has its mark after the name, as a sidebar row has it. */}
+              <span className="flex min-w-0 shrink items-center gap-1 md:max-w-[50%] max-md:order-1 max-md:basis-full">
+                <span className="min-w-0 truncate text-foreground">{item.title}</span>
+                {item.mark === 'pull-request' && <PR_OPEN.Icon className={cn('size-3 shrink-0', PR_OPEN.tone)} aria-hidden />}
+              </span>
               {/* A count is never cut; a question keeps room for its first words. */}
               <span className={cn('truncate text-muted-foreground md:grow max-md:order-2 max-md:basis-full', item.mark === 'question' ? 'max-md:min-w-0 md:min-w-24' : 'min-w-0 shrink-0')}>{item.detail}</span>
               {projects && <span className="shrink-0 text-xs text-muted-foreground">{item.projectName}</span>}

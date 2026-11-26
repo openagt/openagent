@@ -475,9 +475,11 @@ describe('AgentHistory rows', () => {
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={[main]} waiting={waitingOn({ run: 'main', words: 'Needs push', detail: '1 commit', mark: 'branch' })} selectedAgentId={null} onSelect={() => {}} />)
     const row = (await screen.findByLabelText('Runs on Claude Code on the web')).closest('a')!
     expect([...row.querySelectorAll('[aria-label]')].map(mark => mark.getAttribute('aria-label'))).toEqual(['done', 'Runs on Claude Code on the web', 'PR #3 open', 'Needs push · 1 commit', 'Codex'])
-    // The request and the work stand just before the age, closer to it than to the name.
-    expect(screen.getByLabelText('PR #3 open').parentElement!.className).toContain('-mr-2')
-    expect(screen.getByLabelText('PR #3 open').parentElement!.nextElementSibling!.textContent).toMatch(/^\d+[a-z]$/)
+    // Where it runs, the request and the work stand in one box with the age, set to its right, 4 from the age's word.
+    const box = screen.getByLabelText('PR #3 open').parentElement!
+    expect(box).toBe(screen.getByLabelText('Runs on Claude Code on the web').parentElement)
+    expect(box.className.split(' ')).toEqual(expect.arrayContaining(['justify-end', 'gap-1', 'min-w-7']))
+    expect(box.lastElementChild!.textContent).toMatch(/^\d+[a-z]$/)
   })
 
   test('a run another machine started says whose it is; this daemon\'s own does not (#1067, #1648)', () => {
