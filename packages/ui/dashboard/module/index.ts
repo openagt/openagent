@@ -267,6 +267,7 @@ export {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
   MenuMark,
+  MenuTick,
   MENU_BODY_CLASS,
   MENU_ITEM_CLASS,
   MENU_POPUP_CLASS,

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
-import { Check, Plus } from 'lucide-react'
-import { DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, Facts, cn, useModuleHost } from '@openagt/ui/module'
+import { Plus } from 'lucide-react'
+import { MenuTick, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, Facts, cn, useModuleHost } from '@openagt/ui/module'
 import { AccountBar } from './account-bar.js'
 import { longest, runAccounts, useAccounts, type AccountRow, type AccountsView } from './accounts.js'
 
@@ -45,9 +45,9 @@ export function AgentAccountItems({ view, onPick, onAdd }: { view: AccountsView;
         <DropdownMenuLabel>Accounts</DropdownMenuLabel>
         {runAccounts(view).map((account, i) => (
           <DropdownMenuItem key={account.id} closeOnClick={false} onClick={() => onPick(account.id)}>
-            <Check className={cn('h-3.5 w-3.5 shrink-0', i === 0 ? 'opacity-100' : 'opacity-0')} aria-hidden />
             <span className="flex-1 truncate">{account.name}</span>
             <span className="text-xs text-muted-foreground">{account.state === 'limited' ? 'limited' : longest(account) !== undefined ? `${Math.round(longest(account)!.percent)}%` : ''}</span>
+            <MenuTick on={i === 0} />
           </DropdownMenuItem>
         ))}
         <DropdownMenuItem onClick={onAdd}>

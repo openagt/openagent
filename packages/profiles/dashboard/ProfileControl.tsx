@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
-import { Bot, Check, Settings2 } from 'lucide-react'
-import { DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, SetupLine, SetupSaid, cn, tellNextRunPicked, useModuleHost, type UiComposerControlProps } from '@openagt/ui/module'
+import { Bot, Settings2 } from 'lucide-react'
+import { MenuTick, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, SetupLine, SetupSaid, cn, tellNextRunPicked, useModuleHost, type UiComposerControlProps } from '@openagt/ui/module'
 import { DEFAULT_PROFILE } from '@openagt/hooks'
 import { PROFILES_PAGE, pickProfile, useProfiles } from './calls.js'
 
@@ -42,8 +42,8 @@ function PickedProfile({ say, busy }: UiComposerControlProps) {
             <DropdownMenuLabel>Profile</DropdownMenuLabel>
             {read.profiles.map(profile => (
               <DropdownMenuItem key={profile.id} onClick={() => void pick(profile.id)}>
-                <Check className={cn('h-3.5 w-3.5 shrink-0', profile.id === on.id ? 'opacity-100' : 'opacity-0')} aria-hidden />
                 <span className="flex-1 truncate">{profile.name}</span>
+                <MenuTick on={profile.id === on.id} />
               </DropdownMenuItem>
             ))}
           </DropdownMenuGroup>

@@ -132,7 +132,8 @@ describe('the effort, in the model menu', () => {
     expect(trigger.getAttribute('aria-label')).toBe('Coding agent: Claude Code · Model: Opus · Effort: High')
     fireEvent.click(trigger)
     const items = ["The coding agent's default", 'Low', 'Medium', 'High'].map(name => screen.getByRole('menuitem', { name }))
-    expect(items.map(item => item.firstElementChild!.classList.contains('opacity-100'))).toEqual([false, false, false, true])
+    // The tick at the row's end, on the one in force alone.
+    expect(items.map(item => item.lastElementChild!.querySelector('.lucide-check') !== null)).toEqual([false, false, false, true])
     fireEvent.click(screen.getByRole('menuitem', { name: 'Medium' }))
     expect(picked.onChange).toHaveBeenCalledWith('medium')
   })

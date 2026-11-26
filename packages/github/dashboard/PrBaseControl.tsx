@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Check, GitPullRequestArrow } from 'lucide-react'
-import { DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, SetupLine, SetupSaid, cn, nextRunAgain, useModuleHost, usePolled, type UiComposerControlProps } from '@openagt/ui/module'
+import { GitPullRequestArrow } from 'lucide-react'
+import { MenuTick, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, SetupLine, SetupSaid, cn, nextRunAgain, useModuleHost, usePolled, type UiComposerControlProps } from '@openagt/ui/module'
 import type { RunOptions } from '@openagt/hooks'
 import { server } from './calls.js'
 
@@ -55,8 +55,8 @@ function LauncherPrBase({ projectId, options, onChange, busy, say }: UiComposerC
         <DropdownMenuLabel>The branch its pull request goes into</DropdownMenuLabel>
         {picks.map(branch => (
           <DropdownMenuItem key={branch} onClick={() => setToMain(branch !== start)}>
-            <Check className={cn('h-3.5 w-3.5 shrink-0', branch === into ? 'opacity-100' : 'opacity-0')} aria-hidden />
             <span className="flex-1 truncate">{branch}</span>
+            <MenuTick on={branch === into} />
           </DropdownMenuItem>
         ))}
       </DropdownMenuGroup>

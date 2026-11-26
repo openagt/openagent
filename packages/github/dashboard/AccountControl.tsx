@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
-import { Check, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import {
+  MenuTick,
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -106,11 +107,11 @@ function LauncherAccount({ accounts: read, options, busy, say, onAdded }: UiComp
       <SetupLine icon={LOGO(read)} label={label} value={<Login read={read} login={account} />} className="min-w-[14rem]" disabled={busy}>
         <DropdownMenuGroup>
           <DropdownMenuLabel>{`${read.name} account for every next session`}</DropdownMenuLabel>
-          {/* The tick leads its rows (his pick). */}
+          {/* The tick at the row's end, as every menu's (his pick, 2026-11-27). */}
           {read.accounts.map(one => (
             <DropdownMenuItem key={one.login} disabled={!one.ok} onClick={() => void pick(one.login)}>
-              <Check className={cn('h-3.5 w-3.5 shrink-0', one.login === account ? 'opacity-100' : 'opacity-0')} aria-hidden />
               <span className="flex-1 truncate">@{one.login}</span>
+              <MenuTick on={one.login === account} />
             </DropdownMenuItem>
           ))}
         </DropdownMenuGroup>
@@ -155,13 +156,13 @@ function ProfileAccount({ accounts: read, options, onChange, busy, say, onAdded 
         <DropdownMenuGroup>
           <DropdownMenuLabel title="Runs push and open pull requests as this account. An account this computer does not have refuses the start.">{`${read.name} account for this profile`}</DropdownMenuLabel>
           <DropdownMenuItem onClick={() => onChange(withAccount(options, undefined))}>
-            <Check className={cn('h-3.5 w-3.5 shrink-0', account === undefined ? 'opacity-100' : 'opacity-0')} aria-hidden />
             <span className="flex-1 truncate">{COMPUTERS}</span>
+            <MenuTick on={account === undefined} />
           </DropdownMenuItem>
           {logins.map(login => (
             <DropdownMenuItem key={login} onClick={() => onChange(withAccount(options, login))}>
-              <Check className={cn('h-3.5 w-3.5 shrink-0', login === account ? 'opacity-100' : 'opacity-0')} aria-hidden />
               <span className="flex-1 truncate">@{login}</span>
+              <MenuTick on={login === account} />
             </DropdownMenuItem>
           ))}
         </DropdownMenuGroup>

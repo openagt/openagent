@@ -47,6 +47,14 @@ function PopupBody({ children }: { children: ReactNode }) {
 export const MENU_ITEM_CLASS =
   'relative flex cursor-pointer select-none items-center has-[[data-line2]]:items-start gap-2 rounded-md px-2 py-1 text-sm font-normal outline-none md:min-h-7 max-md:min-h-11 data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
 
+/**
+ * The tick of a menu's picked row, at the row's end, where every mark of a pick stands, as Claude
+ * Code's menus have it (his pick, 2026-11-27): the box is there on every row, so the rows' ends line up.
+ */
+export function MenuTick({ on }: { on: boolean }) {
+  return <span className="ml-auto flex size-4 shrink-0 items-center justify-center">{on && <Check className="size-4" aria-hidden />}</span>
+}
+
 /** A row's icon or tick, in a box one line of its name tall: on that line whether the row has one line or two. */
 export function MenuMark({ children, className }: { children: ReactNode; className?: string }) {
   return <span className={cn('flex h-5 shrink-0 items-center', className)}>{children}</span>

@@ -1,7 +1,8 @@
 import { useEffect, type ReactNode } from 'react'
-import { Bot, Check, Users } from 'lucide-react'
+import { Bot, Users } from 'lucide-react'
 import type { AgentDriverOptions, RunOptions } from '@openagt/hooks'
 import {
+  MenuTick,
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
@@ -163,22 +164,22 @@ export function AgentMenu({
           <DropdownMenuLabel>Coding agent</DropdownMenuLabel>
           {agents.map(a => (
             <DropdownMenuSub key={a.value}>
-              {/* The tick leads every row of this menu (his pick): the rows' ends carry the account and the way into its models. */}
+              {/* The tick at the row's end, as every menu's (his pick, 2026-11-27): after the account, before the way into its models. */}
               <DropdownMenuSubTrigger>
-                <Check className={cn('h-3.5 w-3.5 shrink-0', a.value === picked ? 'opacity-100' : 'opacity-0')} aria-hidden />
                 {a.logo !== undefined && <PackageLogo svg={a.logo} className="size-4" />}
                 <span className="flex-1">{a.label}</span>
                 {/* A long name gives way, never how full the account is. */}
                 {a.account && (
                   <Facts oneLine facts={[{ fact: a.account.name, className: 'not-last:shrink' }, a.account.percent !== undefined && { fact: a.account.percent, className: 'shrink-0' }]} className="max-w-48 text-muted-foreground" />
                 )}
+                <MenuTick on={a.value === picked} />
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="min-w-[15rem]">
                 {a.models.length === 0 && <DropdownMenuItem disabled>{a.modelsNote}</DropdownMenuItem>}
                 {a.models.map(m => (
                   <DropdownMenuItem key={m.value} onClick={() => onChange(a.value, m.value)}>
-                    <Check className={cn('h-3.5 w-3.5 shrink-0', a.value === picked && m.value === model ? 'opacity-100' : 'opacity-0')} aria-hidden />
                     {m.label}
+                    <MenuTick on={a.value === picked && m.value === model} />
                   </DropdownMenuItem>
                 ))}
                 {a.accounts}
@@ -192,13 +193,13 @@ export function AgentMenu({
             <DropdownMenuGroup>
               <DropdownMenuLabel>Effort</DropdownMenuLabel>
               <DropdownMenuItem onClick={() => effort!.onChange(undefined)}>
-                <Check className={cn('h-3.5 w-3.5 shrink-0', effort?.level === undefined ? 'opacity-100' : 'opacity-0')} aria-hidden />
                 The coding agent's default
+                <MenuTick on={effort?.level === undefined} />
               </DropdownMenuItem>
               {levels.map(one => (
                 <DropdownMenuItem key={one} onClick={() => effort!.onChange(one)}>
-                  <Check className={cn('h-3.5 w-3.5 shrink-0', effort?.level === one ? 'opacity-100' : 'opacity-0')} aria-hidden />
                   {effortLabel(one)}
+                  <MenuTick on={effort?.level === one} />
                 </DropdownMenuItem>
               ))}
             </DropdownMenuGroup>
