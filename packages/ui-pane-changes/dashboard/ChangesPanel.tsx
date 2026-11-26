@@ -617,13 +617,13 @@ export function ChangesPanel({ projectId, agentId, activity, reveal, repo: opene
           </div>
         )}
         {!(narrow && listShown) && (
-          <div ref={setDiffsElement} aria-label="Diffs" className="flex min-h-0 min-w-0 flex-auto flex-col gap-2 overflow-y-auto p-2">
+          <div ref={setDiffsElement} aria-label="Diffs" className="flex min-h-0 min-w-0 flex-auto flex-col overflow-y-auto">
             {caption && (
-              <p className="shrink-0 truncate px-2 text-xs text-muted-foreground" title={caption}>
+              <p className="shrink-0 truncate px-3 py-2 text-xs text-muted-foreground" title={caption}>
                 {caption}
               </p>
             )}
-            {paths.length === 0 && (nothing === undefined ? <Reading className="px-2" /> : <PaneNote>{nothing}</PaneNote>)}
+            {paths.length === 0 && (nothing === undefined ? <Reading className="px-3 py-2" /> : <PaneNote>{nothing}</PaneNote>)}
             {paths.map(path => {
               const mark = changes[path]!
               const isFolded = folded.has(path)
@@ -642,14 +642,16 @@ export function ChangesPanel({ projectId, agentId, activity, reveal, repo: opene
                     type="button"
                     aria-expanded={!isFolded}
                     onClick={() => foldDiff(page, path, !isFolded)}
-                    className={cn('sticky top-0 z-10 flex h-8 w-full items-center gap-2 rounded-md bg-muted px-2 text-start text-sm text-muted-foreground hover:bg-accent focus-ring-inset', path === picked && 'text-foreground')}
+                    className={cn('sticky top-0 z-10 flex h-8 w-full items-center gap-1 border-b border-border bg-card px-3 text-start text-sm hover:bg-accent focus-ring-inset', path === picked && 'bg-accent')}
                   >
-                    <ChevronRight aria-hidden className={cn('size-4 shrink-0', !isFolded && 'rotate-90')} />
-                    <FileIcon path={path} />
-                    <span className={cn('flex min-w-0', mark.status === 'deleted' && 'line-through')}>
+                    <ChevronRight aria-hidden className={cn('size-4 shrink-0 text-muted-foreground', !isFolded && 'rotate-90')} />
+                    <FileIcon path={path} className="size-3.5" />
+                    <span className={cn('ml-1 flex min-w-0', mark.status === 'deleted' && 'line-through')}>
                       <PathCut path={path} />
                     </span>
-                    {isNewFile(mark.status) && mark.added !== undefined && <span className="shrink-0 text-xs">{`new file, ${mark.added} ${mark.added === 1 ? 'line' : 'lines'}`}</span>}
+                    {isNewFile(mark.status) && mark.added !== undefined && <span className="shrink-0 pl-1 text-xs text-muted-foreground">{`new file, ${mark.added} ${mark.added === 1 ? 'line' : 'lines'}`}</span>}
+                    {/* What the file holds, at the bar's end, as each file's bar says it. */}
+                    <Counts mark={mark} className="ml-auto pl-2 text-sm" />
                   </button>
                   {!isFolded && (
                     <LazyDiff

@@ -457,7 +457,7 @@ function SidePanel({ over = false }: { /** Laid over the chat: flush, its way ou
     <div className={fills ? 'absolute inset-0 z-30 flex bg-background' : 'flex h-full min-h-0 min-w-0'}>
       <section aria-label="Side panel" className={cn('flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background', over && 'border-t border-border')}>
         {/* Flush with the page, as Claude Code's: its tab bar as high as the page's top bar, 44, and lined under. */}
-        <header className="flex h-11 shrink-0 items-center gap-1 border-b border-border px-2">
+        <header className="flex h-11 shrink-0 items-center gap-1 border-b border-border pr-4 pl-2">
           {over && (
             <Tooltip>
               <TooltipTrigger render={<Button variant="ghost" size="icon-bar" className="ml-0.5 shrink-0 text-muted-foreground" aria-label="Back to the chat" onClick={() => setPanelShown(page, false)} />}>
@@ -494,7 +494,8 @@ function SidePanel({ over = false }: { /** Laid over the chat: flush, its way ou
               <TooltipContent>{fills ? 'Back to its place' : 'Fill the page'}</TooltipContent>
             </Tooltip>
           )}
-          {!over && <PanelButton className="mr-0.5" />}
+          {/* Where the top bar has it, 22 from the window's edge, so it does not move under the pointer as the panel opens. */}
+          {!over && <PanelButton className="mr-1.5" />}
         </header>
         {active ? <TabBody key={active.id} pane={active} /> : <EmptyPanel />}
       </section>

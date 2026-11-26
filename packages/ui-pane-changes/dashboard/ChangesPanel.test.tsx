@@ -345,13 +345,13 @@ describe('ChangesPanel, a file asked for from the chat', () => {
 })
 
 describe('ChangesPanel, as Claude Code on the web draws it', () => {
-  test('each file shows its lines added and removed, a count of none too, once: in the list, not again over its diff', async () => {
+  test('each file shows its lines added and removed, a count of none too: in the list, and at the end of its diff\'s bar', async () => {
     readRun.mockResolvedValue({ source: 'checkout', changes: { 'src/app.ts': { status: 'modified', committed: true, added: 3, removed: 0 } }, merged: false, from: 'main', to: 'agent-x' })
     render(<ChangesPanel projectId="p1" agentId="run-1" context={context} />)
     await waitFor(() => expect(row(/app\.ts/).textContent).toContain('app.ts+3 −0'))
     // Said in words, not as the signs a screen reader would spell out.
     expect(row(/app\.ts.*3 lines added, none removed/)).toBe(row(/app\.ts/))
-    expect(within(screen.getByRole('region', { name: 'src/app.ts' })).queryAllByText('+3')).toHaveLength(0)
+    expect(within(screen.getByRole('region', { name: 'src/app.ts' })).getByRole('button', { expanded: true }).textContent).toBe('src/app.ts+3 −03 lines added, none removed')
   })
 
   test('each file says what git did to it in a letter, and the header the sum of every file\'s lines', async () => {
