@@ -14,10 +14,10 @@ import { HandoffSummary } from './HandoffSummary.js'
 // branch-addressed, so it survives the checkout: a clean run's checkout is removed when it ends.
 
 /**
- * The project's row, while there is something to say: a pull request, uncommitted changes while
+ * The project's row, while there is something to say: a pull request, in whatever state (a merged
+ * or closed one too, its mark saying so, as Claude Code keeps its row), uncommitted changes while
  * the agent works, or, once it has ended and its branch is read, what the branch holds. A run that
- * changed nothing has no row, nor one whose work is over: its pull request merged or closed, or its
- * work landed without one, and the branch holding nothing the request does not.
+ * changed nothing has no row, nor one whose work landed with no request, or whose branch merged.
  */
 export function ProjectRow({ projectId, agentId, working, ended, saving, projectName, pr }: UiWorkProps) {
   const host = useModuleHost()
@@ -32,8 +32,8 @@ export function ProjectRow({ projectId, agentId, working, ended, saving, project
   const kept = read.handoff !== null && read.handoff.exists && !read.handoff.empty
   const { handoff, state } = saving && !kept ? { handoff: null, state: 'unknown' as const } : read
   const known = state !== 'unknown'
-  // Over: there is no step left. The request itself is not lost with the row: it is in the row above the message box.
-  const over = ended && (handoff?.landed === true || ((handoff?.merged === true || pr?.state === 'merged' || pr?.state === 'closed') && !handoff?.pendingFiles?.length))
+  // Over: there is no step left and no request to name. A run's request keeps its row, as a copy's does.
+  const over = ended && pr === undefined && (handoff?.landed === true || (handoff?.merged === true && !handoff?.pendingFiles?.length))
   // Once the row has something to say for this run it keeps it (`held`): a run makes its own last
   // commit while it cleans up, after its turn ends, and the branch read taken in between answers
   // for a branch that holds nothing, which used to hide the row for the seconds until the next
