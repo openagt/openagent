@@ -22,7 +22,7 @@ import { pressed, shortcutKeys, type ShortcutId } from '../lib/shortcut.js'
 
 // The side panel beside the chat, as Claude Code on the web has it: tabs at its top, one per thing
 // it shows (what the installed modules add: Changes, Files, the Browser; the project's surfaced
-// docs; the run's subagents), a "+" that opens another, and with no tab open a list of what it can
+// docs; the run's background tasks and subagents), a "+" that opens another, and with no tab open a list of what it can
 // show, each with its shortcut. The panel icon at the end of the page's top bar opens it, and at
 // the end of its own tab bar closes it; its tabs are kept for when it opens again. The line
 // between the chat and the panel is dragged to share the room, and the panel can fill the page.
@@ -44,7 +44,7 @@ import { pressed, shortcutKeys, type ShortcutId } from '../lib/shortcut.js'
 /** A pane's own id among the page's: a module's by its package and the id it gave, the dashboard's own by name. */
 const panelId = (panel: MountedView<'chat.pane'>): string => `${panel.package}/${panel.id}`
 const DOCS = 'docs'
-const SUBAGENTS = 'subagents'
+const BACKGROUND = 'background'
 
 /** The tab of a module's pane opened on one of the run's copied repos: its pane's id, then the repo. */
 const REPO_MARK = '#'
@@ -89,13 +89,13 @@ interface PanesValue {
   show: RevealedFile | undefined
   docs: WorkspaceDoc[]
   docsLoaded: boolean
-  /** What the Subagents pane shows. */
-  subagents: ReactNode
+  /** What the Background tasks tab shows. */
+  background: ReactNode
   /** What a pane's entry says beside its name in the list of what the panel can show, by its id. */
   counts: Record<string, ReactNode>
 }
 
-const NO_PANES: PanesValue = { page: '', enabled: false, panes: [], open: [], active: undefined, shown: false, expanded: false, panelProps: undefined, reveal: undefined, show: undefined, docs: [], docsLoaded: false, subagents: null, counts: {} }
+const NO_PANES: PanesValue = { page: '', enabled: false, panes: [], open: [], active: undefined, shown: false, expanded: false, panelProps: undefined, reveal: undefined, show: undefined, docs: [], docsLoaded: false, background: null, counts: {} }
 
 const PanesContext = createContext<PanesValue>(NO_PANES)
 
@@ -132,7 +132,7 @@ export function PanesProvider({
   context,
   toggleContext,
   activity,
-  subagents,
+  background,
   counts,
   children,
 }: {
@@ -148,8 +148,8 @@ export function PanesProvider({
   toggleContext: (path: string) => void
   /** How many events the selected run's feed has shown, for the modules' panes. */
   activity?: number
-  /** What the Subagents pane shows: on the page of a run that started subagents. */
-  subagents?: ReactNode
+  /** What the Background tasks tab shows: on the page of a run that left commands running in the background or started subagents. */
+  background?: ReactNode
   /** What a pane's entry says beside its name in the panel's list, by its id. */
   counts?: Record<string, ReactNode>
   children: ReactNode
@@ -174,7 +174,7 @@ export function PanesProvider({
   const mounted = views['chat.pane']
   const page = panesPage(shown ?? '', agentId)
   const subagentAsked = useRevealedSubagent(page)
-  const hasSubagents = subagents !== undefined
+  const hasBackground = background !== undefined
   const panes = useMemo<Pane[]>(() => {
     if (!shown) return []
     const ofModules = mounted
@@ -182,10 +182,10 @@ export function PanesProvider({
       .map(panel => ({ id: panelId(panel), label: panel.label, icon: panel.icon, panel, ...(panel.changes ? { key: 'changesTab' as const } : panel.files ? { key: 'filesTab' as const } : {}) }))
     const own: Pane[] = [
       ...(docs.length > 0 ? [{ id: DOCS, label: 'Docs', icon: FileText }] : []),
-      ...(hasSubagents ? [{ id: SUBAGENTS, label: 'Subagents', icon: Bot }] : []),
+      ...(hasBackground ? [{ id: BACKGROUND, label: 'Background tasks', icon: Bot }] : []),
     ]
     return [...ofModules, ...own]
-  }, [mounted, shown, docs.length, hasSubagents])
+  }, [mounted, shown, docs.length, hasBackground])
 
   const openIds = useOpenPanes(page)
   // A tab is a pane, or a module's pane on a copied repo: its own tab, named for the repo.
@@ -242,7 +242,7 @@ export function PanesProvider({
   const screenAsked = useRevealedScreen(page)
   useOpenOnAsk(page, screenAsked?.at, panes.find(pane => pane.panel?.screen)?.id)
   // A subagent asked for from the chat: the pane of the run's subagents is opened, with that one open.
-  useOpenOnAsk(page, subagentAsked?.key !== undefined ? subagentAsked.at : undefined, hasSubagents ? SUBAGENTS : undefined)
+  useOpenOnAsk(page, subagentAsked?.key !== undefined ? subagentAsked.at : undefined, hasBackground ? BACKGROUND : undefined)
 
   // The Context as a module's pane sees it: its files only, never the project paths the
   // launcher's project checkboxes also put in it (#661).
@@ -254,8 +254,8 @@ export function PanesProvider({
   )
 
   const value = useMemo<PanesValue>(
-    () => ({ page, enabled: shown !== null, panes, open, active, shown: panelShown, expanded, panelProps, reveal, show, docs, docsLoaded, subagents: subagents ?? null, counts: counts ?? {} }),
-    [page, shown, panes, open, active, panelShown, expanded, panelProps, reveal, show, docs, docsLoaded, subagents, counts],
+    () => ({ page, enabled: shown !== null, panes, open, active, shown: panelShown, expanded, panelProps, reveal, show, docs, docsLoaded, background: background ?? null, counts: counts ?? {} }),
+    [page, shown, panes, open, active, panelShown, expanded, panelProps, reveal, show, docs, docsLoaded, background, counts],
   )
   return <PanesContext.Provider value={value}>{children}</PanesContext.Provider>
 }
@@ -398,7 +398,7 @@ function EmptyPanel() {
 
 /** What one tab shows, under a row of its own where the pane puts its title and its presses (`PaneTitle`, `PaneActions`). */
 function TabBody({ pane }: { pane: Pane }) {
-  const { panelProps, reveal, show, docs, docsLoaded, subagents } = useContext(PanesContext)
+  const { panelProps, reveal, show, docs, docsLoaded, background } = useContext(PanesContext)
   const [title, setTitle] = useState<HTMLElement | null>(null)
   const [actions, setActions] = useState<HTMLElement | null>(null)
   const slots = useMemo(() => ({ title, actions }), [title, actions])
@@ -411,8 +411,8 @@ function TabBody({ pane }: { pane: Pane }) {
       </div>
       {/* The pane fills what is left of its height, and scrolls inside itself. */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        {pane.id === SUBAGENTS ? (
-          <PaneHeaderContext.Provider value={slots}>{subagents}</PaneHeaderContext.Provider>
+        {pane.id === BACKGROUND ? (
+          <PaneHeaderContext.Provider value={slots}>{background}</PaneHeaderContext.Provider>
         ) : pane.panel && panelProps ? (
           <ModuleSlot package={pane.panel.package} label={`${pane.label} pane`}>
             <PaneHeaderContext.Provider value={slots}>

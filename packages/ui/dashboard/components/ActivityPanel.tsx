@@ -2,6 +2,7 @@ import { useEffect, useState, type ComponentType, type ReactNode } from 'react'
 import { Bot, Folder, GitBranch, List as ListIcon, SquareTerminal } from 'lucide-react'
 import type { BackgroundTask } from '@openagt/hooks'
 import { EnvironmentRow, repoPath } from './EnvironmentRow.js'
+import { lasted, useNow } from './BackgroundTasksPane.js'
 import type { UiWorkProps } from '../module/index.js'
 import { cn } from '../lib/utils.js'
 import { tokenWords } from './ContextCircle.js'
@@ -29,26 +30,6 @@ function Part({ name, children }: { name: string; children: ReactNode }) {
       {children}
     </section>
   )
-}
-
-/** How long something has gone on, as a short count: `34s`, `1m 12s`, `2h 5m`. */
-function lasted(ms: number): string {
-  const s = Math.max(0, Math.floor(ms / 1000))
-  if (s < 60) return `${s}s`
-  const m = Math.floor(s / 60)
-  if (m < 60) return `${m}m ${s % 60}s`
-  return `${Math.floor(m / 60)}h ${m % 60}m`
-}
-
-/** The time now, a second at a time while `ticking`. */
-function useNow(ticking: boolean): number {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    if (!ticking) return
-    const timer = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(timer)
-  }, [ticking])
-  return now
 }
 
 /** A subagent working now, as the panel lists it. */

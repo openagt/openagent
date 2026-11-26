@@ -375,23 +375,23 @@ describe('asked for from the chat', () => {
   })
 })
 
-describe("a run's subagents", () => {
-  test('a run that started some has their pane in the panel\'s list, after the modules\' and Docs', async () => {
-    render(<Page subagents={<div>the subagents</div>} />)
+describe("a run's background tasks", () => {
+  test('a run that left something running or started subagents has a Background tasks tab in the panel\'s list, after the modules\' and Docs, saying how many run', async () => {
+    render(<Page background={<div>the background</div>} counts={{ background: <span>2 running</span> }} />)
     fireEvent.click(opener())
     await waitFor(() => expect(entry('Docs')).toBeTruthy())
-    expect(entry('Subagents')).toBeTruthy()
-    fireEvent.click(entry('Subagents'))
-    expect(within(body()!).getByText('the subagents')).toBeTruthy()
+    expect(entry('Background tasks').textContent).toBe('Background tasks2 running')
+    fireEvent.click(entry('Background tasks'))
+    expect(within(body()!).getByText('the background')).toBeTruthy()
   })
 
-  test('a subagent asked for from the chat opens their tab; an ask on a run with none opens nothing', () => {
+  test('a subagent asked for from the chat opens the tab; an ask on a run with none opens nothing', () => {
     const { rerender } = render(<Page />)
     act(() => revealSubagent('p1/r1', 'call-1'))
     expect(panel()).toBeNull()
-    rerender(<Page subagents={<div>the subagents</div>} />)
+    rerender(<Page background={<div>the background</div>} />)
     act(() => revealSubagent('p1/r1', 'call-2'))
-    expect(tabs()).toEqual(['Subagents'])
+    expect(tabs()).toEqual(['Background tasks'])
   })
 })
 
