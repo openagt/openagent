@@ -1,6 +1,6 @@
 import { act, read, type RpcHost } from '@openagt/hooks/rpc'
 import { PICKED_GITHUB_ACCOUNT, PICKED_PROFILE, PROFILES, START_FROM, profileOf, type RunFound, type PullRequestState } from '@openagt/hooks'
-import { nodeGitRunner, originDefaultBranch, currentBranch, isSafeAgentId, originGit, pushBranchByName, pushRefusalLine } from '@openagt/git-branches'
+import { nodeGitRunner, originDefaultBranch, currentBranch, isSafeAgentId, originGit, pushBranchByName, pushRefusalLine, workAt } from '@openagt/git-branches'
 import { forgetRequests, isWorking, prHandoffOf, readRunPr, requestText, type PrHandoff } from './handoff.js'
 import { homeUrlFor } from './home.js'
 import { cachedPrStates, requestsRead } from './pulls.js'
@@ -242,14 +242,24 @@ export interface RunPr {
   state?: PullRequestState
 }
 
-/** The run's pull requests, oldest first: the ones it opened before, then the one its record names, each with how it stands. */
+/** The run's pull requests, oldest first: the ones it opened before, the one its record names, then its copies' (`copyPrs`), each with how it stands. */
 export const runPrs = read(async (host: RpcHost, { agentId }: { agentId: string }): Promise<RunPr[]> => {
   if (!isRunId(agentId)) return []
-  const record = (await host.run(agentId))?.record
+  const run = await host.run(agentId)
+  const record = run?.record
   const own = record?.pr
-  const prs = [...(record?.earlierPrs ?? []).filter(pr => pr.url !== own?.url), ...(own ? [own] : [])]
+  const copies = (record?.copyPrs ?? []).filter(pr => pr.url !== own?.url)
+  // The project's, then each copy's: a session with no project has only its copies'.
+  const prs = [...(record?.earlierPrs ?? []).filter(pr => pr.url !== own?.url), ...(own ? [own] : []), ...copies]
   if (prs.length === 0) return []
-  const states = await cachedPrStates(host.root).catch(() => undefined)
+  // Each copy is its own repository on GitHub: its requests are read where it is, for their states.
+  const [states] = await Promise.all([
+    cachedPrStates(host.root).catch(() => undefined),
+    ...copies.map(async pr => {
+      const at = await workAt(host.root, agentId, run, pr.repo).catch(() => undefined)
+      if (at) await cachedPrStates(at.cwd).catch(() => undefined)
+    }),
+  ])
   host.pullRequestsRead(requestsRead())
   return prs.map(pr => {
     const state = states?.get(pr.url)?.state
