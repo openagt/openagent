@@ -110,3 +110,25 @@ describe('PersonMenu: what is missing', () => {
     expect(openSettings).toHaveBeenCalledWith('agent-data')
   })
 })
+
+describe('PersonMenu: what a module offers here', () => {
+  test("a coding agent's newer version: a blue dot on the picture, and its update in the menu, said in full under the pointer; with something missing too, the dot is that one's", async () => {
+    onPerson.mockResolvedValue({ name: 'Ada Lovelace' })
+    const update = { kind: 'note', scope: 'computer', id: 'update:codex', words: 'Codex 0.172.0 is out', detail: 'Codex 0.172.0 is out. This computer has 0.171.0.', fix: { label: 'Update Codex to 0.172.0', href: '/permissions' }, module: 'agent-driver' }
+    // A note with nothing to press, and one about a project, are not the menu's.
+    const quiet = { kind: 'note', scope: 'computer', id: 'kept', words: 'Records kept here', module: 'store-filesystem' }
+    onAttention.mockResolvedValue({ items: [update, quiet], whole: true })
+    const { container, unmount } = render(<PersonMenu onSettings={vi.fn()} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Ada Lovelace: settings, an update is out' }))
+    expect(container.ownerDocument.querySelector('[data-testid="missing-dot"]')!.className).toContain('bg-info')
+    const item = await screen.findByRole('menuitem', { name: 'Update Codex to 0.172.0' })
+    expect(item.getAttribute('title')).toBe('Codex 0.172.0 is out. This computer has 0.171.0.')
+    expect(screen.queryByRole('menuitem', { name: 'Records kept here' })).toBeNull()
+    unmount()
+    forgetRemembered()
+    onAttention.mockResolvedValue({ items: [update, { kind: 'setup', scope: 'computer', id: 'x', words: 'Connect GitHub', module: 'github' }], whole: true })
+    render(<PersonMenu onSettings={vi.fn()} />)
+    await screen.findByRole('button', { name: 'Ada Lovelace: settings, something is missing' })
+    expect(document.querySelector('[data-testid="missing-dot"]')!.className).toContain('bg-warning')
+  })
+})

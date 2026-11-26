@@ -25,3 +25,13 @@ export function notInstalled(state: AgentState): boolean {
 export function loggedOut(state: AgentState): boolean {
   return / logged in/.test(state.problem ?? '')
 }
+
+/** The note about this computer that the agent `id` has a newer version out: its id names the agent the update acts on. */
+export function updateItem(id: string): string {
+  return `update:${id}`
+}
+
+/** The agent a note about a newer version is for, by {@link updateItem}'s id. */
+export function agentOfUpdate(item: string | undefined): string | undefined {
+  return item?.startsWith('update:') ? item.slice('update:'.length) : undefined
+}
