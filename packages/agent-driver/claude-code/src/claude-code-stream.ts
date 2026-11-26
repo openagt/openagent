@@ -461,7 +461,11 @@ export class StreamJsonParser {
     // The work the CLI runs in the background, as a level: every change says the whole set.
     if (type === 'system' && obj['subtype'] === 'background_tasks_changed' && Array.isArray(obj['tasks'])) {
       const gone = this.backgroundTasks(obj['tasks'])
-      if (this.idle && this.background.size === 0 && gone.some(id => this.stoppedTasks.has(id))) this.stoppedAll()
+      // Idle, the agent is woken by no task the person stopped: what it waits on is said as it goes.
+      if (this.idle) {
+        if (this.background.size === 0 && gone.some(id => this.stoppedTasks.has(id))) this.stoppedAll()
+        return [...announced, { type: 'background', tasks: [...this.background.values()] }]
+      }
     }
     if (type === 'result') {
       const result = obj['result']

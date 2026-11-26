@@ -980,8 +980,8 @@ test('a turn the agent ends with a server still running in the background ends o
   assert.equal(turn.stopped, undefined)
   assert.ok(written.some(line => line.includes('"stop_task"')), 'the server was stopped')
   const waits = events.filter(e => e.type === 'background')
-  assert.equal(waits.length, 1)
-  assert.equal(waits[0]!.type === 'background' && waits[0]!.tasks[0]!.command, 'node dist/bin.js')
+  // Idle on it, then none once the wait's stop ended it: said as it goes.
+  assert.deepEqual(waits.map(e => (e.type === 'background' ? e.tasks.map(task => task.command) : [])), [['node dist/bin.js'], []])
   assert.ok(events.some(e => e.type === 'notice' && e.message.includes('`node dist/bin.js` still ran')), JSON.stringify(events))
   assert.equal(events.at(-1)?.type, 'result')
 })

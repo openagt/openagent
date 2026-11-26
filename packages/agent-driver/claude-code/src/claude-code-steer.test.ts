@@ -265,7 +265,8 @@ test("the ■ that stopped the last of what the agent idled on ends its turn whe
   quiet.talk({ write: () => {}, end: () => void ended++ })
   idleOn(quiet)
   quiet.stopTask('b1')
-  push(quiet, { type: 'system', subtype: 'background_tasks_changed', tasks: [], session_id: 's1' })
+  // What it waits on is said as it goes, since nothing wakes it to say so.
+  assert.deepEqual(push(quiet, { type: 'system', subtype: 'background_tasks_changed', tasks: [], session_id: 's1' }), [{ type: 'background', tasks: [] }])
   await new Promise(resolve => setTimeout(resolve, 60))
   assert.equal(ended, 1)
   assert.equal(quiet.result().text, 'Waiting on it.')
