@@ -371,6 +371,7 @@ function talking(parser: StreamJsonParser, words: string | Promise<string>, imag
     steer: message => parser.steer(message),
     withdraw: id => parser.withdraw(id),
     hurry: () => parser.hurry(),
+    stopTask: task => parser.stopTask(task),
     stop: () => parser.stop(),
     over: () => parser.over(),
     converse: io => {

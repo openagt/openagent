@@ -118,6 +118,13 @@ function resultText(content: unknown): string {
  */
 export const BACKGROUND_WAIT_MS = 30 * 60_000
 
+/**
+ * How long an agent idle on work in the background is given to wake once the person's ■ stopped the
+ * last of it. Claude Code (2.1.332) wakes the agent when a task ends by itself, never when one is
+ * stopped: past this, nothing is left to wake it, and its turn is over.
+ */
+export const STOPPED_WAKE_MS = 5_000
+
 /** What the person is told when the work in the background outlasted the wait ({@link BACKGROUND_WAIT_MS}). */
 function backgroundStopped(tasks: readonly BackgroundTask[], ms: number): string {
   const named = tasks.map(task => `\`${task.command ?? task.description ?? task.id}\``)
@@ -177,6 +184,8 @@ export class StreamJsonParser {
   private hurrying = false
   /** The tasks the CLI runs in the background now, by their id, as its last `background_tasks_changed` said. */
   private readonly background = new Map<string, BackgroundTask>()
+  /** The tasks the person's ■ stopped ({@link stopTask}). */
+  private readonly stoppedTasks = new Set<string>()
   /** The shell command of each Bash call, by the call's id. */
   private readonly commands = new Map<string, string>()
   /** The shell command each task runs, by the task's id: what it is when it goes in the background. */
@@ -190,7 +199,10 @@ export class StreamJsonParser {
   /** Events to say with the next line read: what happened between two lines, on a timer. */
   private pending: DriverEvent[] = []
 
-  constructor(private readonly backgroundWaitMs: number = BACKGROUND_WAIT_MS) {}
+  constructor(
+    private readonly backgroundWaitMs: number = BACKGROUND_WAIT_MS,
+    private readonly stoppedWakeMs: number = STOPPED_WAKE_MS,
+  ) {}
 
   /** Answer the CLI's requests on `io` from now on, and close it when the turn is over. */
   talk(io: CliIo): void {
@@ -251,6 +263,7 @@ export class StreamJsonParser {
    */
   stopTask(task: string): void {
     if (!this.io || this.answered) return
+    this.stoppedTasks.add(task)
     this.control(`stop-task-${task}`, { subtype: 'stop_task', task_id: task })
   }
 
@@ -270,8 +283,8 @@ export class StreamJsonParser {
     this.io?.write(JSON.stringify({ type: 'control_request', request_id: id, request }))
   }
 
-  /** The tasks in the background, as the CLI's list says them: one it names for the first time began now. */
-  private backgroundTasks(listed: unknown[]): void {
+  /** The tasks in the background, as the CLI's list says them: one it names for the first time began now. The ids of those gone from it. */
+  private backgroundTasks(listed: unknown[]): string[] {
     const now = new Date().toISOString()
     const ids = new Set<string>()
     for (const item of listed) {
@@ -285,7 +298,25 @@ export class StreamJsonParser {
       const command = this.taskCommands.get(id)
       this.background.set(id, { ...(known ?? { id, since: now }), ...(description !== undefined ? { description } : {}), ...(command !== undefined ? { command } : {}) })
     }
-    for (const id of this.background.keys()) if (!ids.has(id)) this.background.delete(id)
+    const gone = [...this.background.keys()].filter(id => !ids.has(id))
+    for (const id of gone) this.background.delete(id)
+    return gone
+  }
+
+  /**
+   * The person's ■ stopped the last of what the agent idled on: the CLI wakes it for no stopped
+   * task, so unless something else wakes it within {@link stoppedWakeMs}, its turn is over, as its
+   * last answer said it, and stdin is closed so the CLI exits.
+   */
+  private stoppedAll(): void {
+    this.clearWait()
+    this.waitTimer = setTimeout(() => {
+      this.waitTimer = undefined
+      if (!this.idle || this.answered || this.stopping) return
+      this.succeeded = this.idleSucceeded
+      this.answered = this.succeeded
+      this.io?.end()
+    }, this.stoppedWakeMs)
   }
 
   /** The command a task runs, off the Bash call it came from: said on its row in the background, if it is there already. */
@@ -428,7 +459,10 @@ export class StreamJsonParser {
       return limit ? [...announced, { type: 'rate-limit', limit }] : announced
     }
     // The work the CLI runs in the background, as a level: every change says the whole set.
-    if (type === 'system' && obj['subtype'] === 'background_tasks_changed' && Array.isArray(obj['tasks'])) this.backgroundTasks(obj['tasks'])
+    if (type === 'system' && obj['subtype'] === 'background_tasks_changed' && Array.isArray(obj['tasks'])) {
+      const gone = this.backgroundTasks(obj['tasks'])
+      if (this.idle && this.background.size === 0 && gone.some(id => this.stoppedTasks.has(id))) this.stoppedAll()
+    }
     if (type === 'result') {
       const result = obj['result']
       if (typeof result === 'string') this.finalText = result

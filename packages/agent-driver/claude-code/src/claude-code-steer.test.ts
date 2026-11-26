@@ -253,3 +253,40 @@ test("a task's ■ after the turn is over asks nothing", () => {
   parser.stopTask('t1')
   assert.deepEqual(io.lines, [])
 })
+
+test("the ■ that stopped the last of what the agent idled on ends its turn when nothing wakes it; a wake in time goes on", async () => {
+  const idleOn = (parser: StreamJsonParser) => {
+    push(parser, { type: 'system', subtype: 'background_tasks_changed', tasks: [{ task_id: 'b1', task_type: 'local_bash', description: 'Wait' }], session_id: 's1' })
+    push(parser, { type: 'result', subtype: 'success', is_error: false, result: 'Waiting on it.', session_id: 's1' })
+  }
+  // Nothing wakes it: stdin is closed, so the CLI exits, and the turn is the answer it gave as it went idle.
+  const quiet = new StreamJsonParser(60_000, 20)
+  let ended = 0
+  quiet.talk({ write: () => {}, end: () => void ended++ })
+  idleOn(quiet)
+  quiet.stopTask('b1')
+  push(quiet, { type: 'system', subtype: 'background_tasks_changed', tasks: [], session_id: 's1' })
+  await new Promise(resolve => setTimeout(resolve, 60))
+  assert.equal(ended, 1)
+  assert.equal(quiet.result().text, 'Waiting on it.')
+  // A task that ended by itself wakes the agent: its emptying is no stop of the person's.
+  const natural = new StreamJsonParser(60_000, 20)
+  let closed = 0
+  natural.talk({ write: () => {}, end: () => void closed++ })
+  idleOn(natural)
+  push(natural, { type: 'system', subtype: 'background_tasks_changed', tasks: [], session_id: 's1' })
+  await new Promise(resolve => setTimeout(resolve, 60))
+  assert.equal(closed, 0)
+  natural.over()
+  // Woken in time after the ■: it goes on.
+  const woken = new StreamJsonParser(60_000, 20)
+  let shut = 0
+  woken.talk({ write: () => {}, end: () => void shut++ })
+  idleOn(woken)
+  woken.stopTask('b1')
+  push(woken, { type: 'system', subtype: 'background_tasks_changed', tasks: [], session_id: 's1' })
+  push(woken, { type: 'assistant', message: { id: 'msg2', content: [{ type: 'text', text: 'It was stopped.' }] }, session_id: 's1' })
+  await new Promise(resolve => setTimeout(resolve, 60))
+  assert.equal(shut, 0)
+  woken.over()
+})
