@@ -714,7 +714,7 @@ export function AccountsCard({ quiet = false }: { /** No press of the card is th
           {list?.ok && addable.length > 0 && (
             <DropdownMenu>
               {/* Unpainted, as a part's heading's presses are, pulled out by its own padding so its last mark ends on the card's edge. */}
-              <DropdownMenuTrigger ref={addPress} render={<Button variant="ghost" className="-mr-3" aria-label="Add an account" />}>
+              <DropdownMenuTrigger ref={addPress} render={<Button variant="ghost" size="sm" className="-mr-2 text-muted-foreground hover:text-foreground" aria-label="Add an account" />}>
                 <Plus className="size-4" aria-hidden />
                 Add
               </DropdownMenuTrigger>

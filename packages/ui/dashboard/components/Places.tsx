@@ -369,7 +369,8 @@ export function HandoffOffers({ projectId, agentId, repo, again }: { projectId: 
           </Button>
           {more.length > 0 && (
             <>
-              <ButtonGroupSeparator className="bg-border opacity-100" />
+              {/* A filled pair's halves apart by a line of the page under them, as shadcn's group of filled buttons: the border's colour on the fill was all but unseen (his report, 2026-11-26). */}
+              <ButtonGroupSeparator className="bg-background opacity-100" />
               <DropdownMenu>
                 <DropdownMenuTrigger type="button" aria-label="Other choices" {...step} className={cn(buttonVariants({ size: 'sm', variant: 'ghost' }), NEXT_STEP_CLASS, 'px-1 data-[popup-open]:bg-foreground/15')}>
                   <ChevronDown className="h-3.5 w-3.5" />

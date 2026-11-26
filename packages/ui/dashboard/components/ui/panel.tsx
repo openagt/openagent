@@ -53,10 +53,10 @@ export function PanelGroup({ title, badge, count, action, bare = false, children
   return (
     // A column whose last part, its card, takes the height left: two groups side by side end on one line, the shorter one's card as tall as the other's.
     <section aria-labelledby={heading} className={cn('min-w-0', inPage ? 'grid grid-cols-subgrid content-start *:col-span-full' : 'flex flex-col *:last:grow')}>
-      {/* Its name 8 over its card, the row as tall as the name: a press or a link at its right stands out of it
-          above and below, so groups side by side have their names on one line and their cards at one height.
-          On a phone, where a link is 44 tall to touch and no group stands beside another, the row is the link's height. */}
-      <div className="mb-2 flex items-center gap-2">
+      {/* Its name 8 over its card, the row as tall as a heading's press (28), so a press's fill under the pointer
+          never reaches the card (his report, 2026-11-26), and groups side by side have their names on one line
+          and their cards at one height. On a phone, where a link is 44 tall to touch, the row is the link's height. */}
+      <div className="mb-2 flex items-center gap-2 md:min-h-7">
         <Heading className="flex min-w-0 flex-1 items-center gap-2 text-sm font-semibold">
           <span id={heading} className="min-w-0 truncate">
             {title}
@@ -75,7 +75,7 @@ export function PanelGroup({ title, badge, count, action, bare = false, children
             </>
           )}
         </Heading>
-        {action !== undefined && <div className="flex shrink-0 items-center gap-2 md:h-5">{action}</div>}
+        {action !== undefined && <div className="flex shrink-0 items-center gap-2">{action}</div>}
       </div>
       {bare ? children : <Panel>{children}</Panel>}
     </section>

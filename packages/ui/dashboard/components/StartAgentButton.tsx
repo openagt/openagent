@@ -196,7 +196,9 @@ export function StartAgentButton({
   const column = pair?.closest('main') ?? undefined
 
   return (
-    <ButtonGroup ref={setPair} {...(fill ? { className: 'w-full' } : {})}>
+    // A pair drawn with a ring (secondary) has one ring round the two and a hairline between, as shadcn's group of
+    // outline buttons: each half's own ring met the other's and the line in the middle as one thick bar (his report, 2026-11-26).
+    <ButtonGroup ref={setPair} className={cn(fill && 'w-full', variant === 'secondary' && 'rounded-md shadow-sm ring-1 ring-hairline [&>*]:shadow-none [&>*]:ring-0')}>
       {leading}
       <StartAgentPress
         icon={icon}
@@ -216,7 +218,7 @@ export function StartAgentButton({
       {/* A filled pair has no border to tell its halves apart: a hairline does. An outline pair shares
           its border, and a ghost pair needs none — nothing is drawn between them until one is hovered. */}
       {variant === 'default' && <ButtonGroupSeparator className="bg-[var(--color-primary-foreground)]" />}
-      {variant === 'secondary' && <ButtonGroupSeparator />}
+      {variant === 'secondary' && <ButtonGroupSeparator className="bg-hairline opacity-100" />}
       {/* Never gated on `busy` or on OpenAgent not answering, only on `disabled`: this starts nothing, and
           being unable to go and look at the settings because a start is in flight would be the opposite of the point. */}
       <DropdownMenu>
