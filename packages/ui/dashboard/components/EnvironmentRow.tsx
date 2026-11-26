@@ -31,6 +31,6 @@ export function repoPath(address: string): string {
   return at < 0 ? address : address.slice(at + 1)
 }
 
-/** The pull request's mark's colour, by how it stands: open as Claude Code's green, merged purple, closed red. */
-export const prTone = (state: PullRequestState | undefined): string => (state === 'merged' ? 'text-merged' : state === 'closed' ? 'text-danger' : 'text-success')
+/** The pull request's mark's colour, by how it stands: open as Claude Code's green, merged purple, closed red; a draft, or one not read yet, grey. */
+export const prTone = (state: PullRequestState | undefined): string => (state === 'merged' ? 'text-merged' : state === 'closed' ? 'text-danger' : state === 'open' ? 'text-success' : 'text-muted-foreground')
 

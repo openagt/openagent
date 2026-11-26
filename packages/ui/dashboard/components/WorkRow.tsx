@@ -1,5 +1,5 @@
 import { createContext, useContext, type ReactNode } from 'react'
-import { FileDiff, GitMerge, GitPullRequest, GitPullRequestClosed } from 'lucide-react'
+import { FileDiff, GitMerge, GitPullRequest, GitPullRequestClosed, GitPullRequestDraft } from 'lucide-react'
 import type { PullRequestState } from '@openagt/hooks'
 import { cn } from '../lib/utils.js'
 import { prTone } from './EnvironmentRow.js'
@@ -51,7 +51,7 @@ export function WorkRow({
   error?: string | null | undefined
 }) {
   const state = pr?.state?.toLowerCase()
-  const Mark = pr ? (state === 'merged' ? GitMerge : state === 'closed' ? GitPullRequestClosed : GitPullRequest) : FileDiff
+  const Mark = pr ? (state === 'merged' ? GitMerge : state === 'closed' ? GitPullRequestClosed : state === 'draft' ? GitPullRequestDraft : GitPullRequest) : FileDiff
   const onLine = useContext(WorkRowPlace) === 'line'
   const openChanges = useContext(OpenChanges)
   return (
