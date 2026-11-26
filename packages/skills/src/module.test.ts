@@ -50,3 +50,35 @@ test("a run's skills are linked into its checkout for every coding agent, with t
     await rm(base, { recursive: true, force: true })
   }
 })
+
+test("the skills of the run's copies of other repositories are linked beside the run's own; a skill of a name already there, a module's or the project's, wins", async () => {
+  const base = await realpath(await mkdtemp(join(tmpdir(), 'skills-copies-')))
+  const had = process.env.XDG_CONFIG_HOME
+  process.env.XDG_CONFIG_HOME = base
+  const id = '2026-11-26T05-00-00-000Z'
+  const folder = join(base, 'openagent-sessions', id)
+  try {
+    const site = join(folder, 'site')
+    await mkdir(site, { recursive: true })
+    await git(['init', '-q', '-b', 'main'], site)
+    for (const [dir, name, text] of [['.claude/skills', 'lint', 'the copy\'s lint'], ['.agents/skills', 'queue', 'the copy\'s queue']] as const) {
+      await mkdir(join(site, dir, name), { recursive: true })
+      await writeFile(join(site, dir, name, 'SKILL.md'), `---\nname: ${name}\n---\n${text}\n`)
+    }
+    // A folder with no SKILL.md is no skill.
+    await mkdir(join(site, '.claude', 'skills', 'notes'), { recursive: true })
+    const queue = await skillPackage(base, 'queue')
+    const step = skillsModule().hooks['run.step']![0]!
+    await step.run(fakeRun({ id, workspace: folder, skills: [{ name: 'queue', dir: pathToFileURL(`${queue}/`), command: 'queue' }] }))
+    for (const dir of HARNESS_SKILL_DIRS) {
+      assert.match(await readFile(join(folder, dir, 'lint', 'SKILL.md'), 'utf8'), /the copy's lint/, `${dir} has the copy's skill`)
+      assert.match(await readFile(join(folder, dir, 'queue', 'SKILL.md'), 'utf8'), /^name: queue$/m, `${dir}: the module's skill of the name wins`)
+      assert.doesNotMatch(await readFile(join(folder, dir, 'queue', 'SKILL.md'), 'utf8'), /the copy's queue/)
+      assert.equal(await lstat(join(folder, dir, 'notes')).then(() => true, () => false), false)
+    }
+  } finally {
+    if (had === undefined) delete process.env.XDG_CONFIG_HOME
+    else process.env.XDG_CONFIG_HOME = had
+    await rm(base, { recursive: true, force: true })
+  }
+})
