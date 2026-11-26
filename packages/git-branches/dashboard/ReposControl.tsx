@@ -1,5 +1,5 @@
-import { useContext, useEffect, useMemo, useState } from 'react'
-import { Check, FolderGit2, Lock, Plus, Search, X } from 'lucide-react'
+import { useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { Check, Cloud, FolderGit2, Lock, Plus, Search, X } from 'lucide-react'
 import {
   BoxOfRow,
   cn,
@@ -11,6 +11,7 @@ import {
   PICKER_SEARCH_CLASS,
   MenuMark,
   MiddleCut,
+  ModuleHostContext,
   rowButtonClass,
   RowChevron,
   ScrollArea,
@@ -54,19 +55,48 @@ interface RepoHere {
   detail: string
 }
 
+/** A repo a module offers only at an address (`composer.where`), not on this computer: a pick makes it a project first (`project.add`). */
+interface RepoAway {
+  address: string
+  name: string
+  /** What is said under its name: whether only some can see it, that it is not here, why it is listed. */
+  detail: string
+}
+
+/** What the modules offer: the repos on this computer, by folder; the ones only at an address, under each module's heading; and whether some are still being read. */
+interface ReposRead {
+  repos: RepoHere[]
+  away: { label: string; repos: RepoAway[] }[]
+  loading: boolean
+}
+
 /**
- * The repos on this computer the modules offer (`composer.where`): each by its folder, a repo only
- * at an address left out, since a session's copy is made from a folder. Read each time the menu
- * opens, and again shortly while one is still being read.
+ * The repos the modules offer (`composer.where`), as the launcher's project picker lists them: the
+ * ones on this computer, by folder, and those only at an address (on GitHub), each under its
+ * module's heading, which a pick clones here as a project before it is copied into the session
+ * (his pick, 2026-11-26: as the launcher). Read each time the menu opens, and again shortly while
+ * one is still being read.
  */
-function useReposHere(open: boolean): { repos: RepoHere[]; loading: boolean } | null {
+function useReposHere(open: boolean): ReposRead | null {
   const where = useOptionsAt('composer.where', undefined)
   const [again, setAgain] = useState(0)
-  const read = useLoaded<{ repos: RepoHere[]; loading: boolean } | null>(
+  const read = useLoaded<ReposRead | null>(
     async () => {
-      const answers = await Promise.all(where.map(({ option, host }) => option.repos(host).catch(() => ({ repos: [], loading: false }))))
+      const answers = await Promise.all(where.map(async ({ option, host }) => ({ label: option.label, ...(await option.repos(host).catch(() => ({ repos: [], loading: false }))) })))
       const repos = answers.flatMap(answer => answer.repos.flatMap(repo => (repo.folder !== undefined ? [{ path: repo.folder, name: repo.label, detail: repo.detail ?? repo.folder }] : [])))
-      return { repos, loading: answers.some(answer => answer.loading === true) }
+      // A repository here already, as a folder, is listed once: by its folder.
+      const here = new Set(answers.flatMap(answer => answer.repos.flatMap(repo => (repo.folder !== undefined && repo.address !== undefined ? [repo.address.toLowerCase()] : []))))
+      const away = answers
+        .map(answer => ({
+          label: answer.label,
+          repos: answer.repos.flatMap(repo =>
+            repo.folder === undefined && repo.address !== undefined && !here.has(repo.address.toLowerCase())
+              ? [{ address: repo.address, name: repo.label, detail: [repo.private ? 'Private' : undefined, 'Not on this computer', repo.why].filter(Boolean).join(' · ') }]
+              : [],
+          ),
+        }))
+        .filter(group => group.repos.length > 0)
+      return { repos, away, loading: answers.some(answer => answer.loading === true) }
     },
     null,
     [open, again, where],
@@ -79,13 +109,16 @@ function useReposHere(open: boolean): { repos: RepoHere[]; loading: boolean } | 
   return read
 }
 
-/** A row of the menu: a repo, a project's or one that is no project. */
+/** A row of the menu: a repo, a project's or one that is no project, here or only at an address. */
 interface Row {
   value: string
   label: string
   /** Under the label, muted: the repo's address, or its folder when it has none. */
   detail: string
+  /** Its folder; for a repo only at an address, its row's value, which no folder is. */
   path: string
+  /** A repo only at an address: a pick makes it a project first. */
+  address?: string
   /** What the search matches besides the label. */
   search: string
 }
@@ -102,7 +135,7 @@ type Group = {
  * picked. With nothing typed, only the first {@link REPOS_SHOWN} repos; a search finds any of
  * them, by name, folder or address, and keeps every picked one in sight.
  */
-export function repoGroups(projects: readonly Row[], repos: readonly Row[], picked: readonly SessionRepo[], typed: string): Group[] {
+export function repoGroups(projects: readonly Row[], repos: readonly Row[], picked: readonly SessionRepo[], typed: string, away: readonly Group[] = []): Group[] {
   const query = typed.trim().toLowerCase()
   const isPicked = (row: Row) => picked.some(repo => repo.from === row.path)
   const matching = (rows: readonly Row[], most: number) => rows.filter(row => !isPicked(row) && (!query || `${row.label}\n${row.search}`.toLowerCase().includes(query))).slice(0, most)
@@ -110,6 +143,7 @@ export function repoGroups(projects: readonly Row[], repos: readonly Row[], pick
     { value: 'picked', label: '', items: picked.map<Row>(repo => ({ value: `picked:${repo.from}`, label: repo.name, detail: repo.from, path: repo.from, search: repo.from })) },
     { value: 'projects', label: 'Projects', items: matching(projects, SEARCH_SHOWN) },
     { value: 'repos', label: 'Repos', items: matching(repos, query ? SEARCH_SHOWN : REPOS_SHOWN) },
+    ...away.map(group => ({ ...group, items: matching(group.items, query ? SEARCH_SHOWN : REPOS_SHOWN) })),
   ].filter(group => group.items.length > 0)
 }
 
@@ -176,7 +210,34 @@ export function ReposMenu({
     () => (repos?.repos ?? []).filter(repo => repo.path !== without).map(repo => ({ value: `repo:${repo.path}`, label: repo.name, detail: repo.detail, path: repo.path, search: `${repo.path}\n${repo.detail}` })),
     [repos, without],
   )
-  const groups = repoGroups(projectRows, repoRows, picked, typed)
+  // The repos only at an address, under each module's heading, left out where a project has the address.
+  const projectAddresses = useMemo(() => new Set(projects.flatMap(p => (p.remote ? [p.remote.toLowerCase()] : []))), [projects])
+  const awayGroups = useMemo<Group[]>(
+    () =>
+      (repos?.away ?? []).map((group, at) => ({
+        value: `away:${at}`,
+        label: group.label,
+        items: group.repos
+          .filter(repo => !projectAddresses.has(repo.address.toLowerCase()))
+          .map(repo => ({ value: `where:${repo.address}`, label: repo.name, detail: repo.detail, path: `where:${repo.address}`, address: repo.address, search: `${repo.address}\n${repo.detail}` })),
+      })),
+    [repos, projectAddresses],
+  )
+  const groups = repoGroups(projectRows, repoRows, picked, typed, awayGroups)
+  // The panel that makes a repo only at an address a project (`project.add`, the projects module's), open for that address.
+  const [adding, setAdding] = useState<string | null>(null)
+  // Drawn as its own module's: what it asks of its server is that module's, not this one's.
+  const adder = useOptionsAt('project.add', undefined)[0]
+  const AddPanel = adder?.option.Panel
+  const trigger = useRef<HTMLButtonElement>(null)
+  /** The whole pick for these folders: a session keeps the repos it has, a new one is named beside them, and a repo picked already keeps the branch picked for it. */
+  const pickFolders = (folders: readonly string[]): SessionRepo[] => {
+    const named = kept ? [...kept, ...nameRepos(folders.filter(folder => !kept.some(repo => repo.from === folder)), kept)] : nameRepos(folders)
+    return named.map(repo => {
+      const base = picked.find(had => had.from === repo.from)?.base
+      return base !== undefined ? { ...repo, base } : repo
+    })
+  }
   // The picked ones as the menu's rows: a row is the same repo as a pick by its folder.
   const pickedRows = groups.find(group => group.value === 'picked')?.items ?? []
   const isPicked = (row: Row) => picked.some(repo => repo.from === row.path)
@@ -186,115 +247,121 @@ export function ReposMenu({
   const label = reposLabel(project, picked)
 
   return (
-    <Combobox.Root<Row, true>
-      multiple
-      items={groups}
-      filteredItems={groups}
-      value={pickedRows}
-      isItemEqualToValue={(row, pick) => row.path === pick.path}
-      itemToStringLabel={row => row.label}
-      autoHighlight
-      {...search.root}
-      onValueChange={rows => {
-        const folders = rows.map(row => row.path)
-        // A session keeps the repos it has: a new one is named beside them. A repo picked already keeps the branch picked for it.
-        const named = kept ? [...kept, ...nameRepos(folders.filter(folder => !kept.some(repo => repo.from === folder)), kept)] : nameRepos(folders)
-        onChange(named.map(repo => {
-          const base = picked.find(had => had.from === repo.from)?.base
-          return base !== undefined ? { ...repo, base } : repo
-        }))
-      }}
-    >
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Combobox.Trigger
-              disabled={busy}
-              aria-label={picked.length > 0 ? `Repos: ${counted(picked.length)}` : 'Repos'}
-              className={MENU_TRIGGER_OPEN_CLASS}
-              {...search.trigger}
-              render={
-                <button type="button" className={cn(rowButtonClass, 'max-w-[14rem]!')}>
-                  <FolderGit2 className="size-4 shrink-0" aria-hidden />
-                  <span className="truncate">{label.first}</span>
-                  {label.more > 0 && <span className="shrink-0 text-muted-foreground">+{label.more}</span>}
-                  <RowChevron />
-                </button>
-              }
-            />
+    <>
+      {adder && AddPanel && adding !== null && (
+        <ModuleHostContext.Provider value={adder.host}>
+          <AddPanel address={adding} opener={trigger} onAdded={path => onChange(pickFolders([...picked.map(repo => repo.from), path]))} onClose={() => setAdding(null)} />
+        </ModuleHostContext.Provider>
+      )}
+      <Combobox.Root<Row, true>
+        multiple
+        items={groups}
+        filteredItems={groups}
+        value={pickedRows}
+        isItemEqualToValue={(row, pick) => row.path === pick.path}
+        itemToStringLabel={row => row.label}
+        autoHighlight
+        {...search.root}
+        onValueChange={rows => {
+          // A repo only at an address is made a project first: its folder is picked once it is one.
+          const away = rows.find(row => row.address !== undefined)
+          if (away?.address !== undefined) {
+            if (AddPanel) setAdding(away.address)
+            return
           }
-        />
-        <TooltipContent>{reposSaid(picked.map(repo => repo.name))}</TooltipContent>
-      </Tooltip>
-      <Combobox.Portal>
-        <Combobox.Positioner {...position} {...(above ? { anchor: box, side: 'top' as const } : {})} sideOffset={6} align="start" className="z-50 outline-none">
-          <Combobox.Popup data-overlay="picker" aria-label="Repos" className={cn(MENU_POPUP_CLASS, 'w-[24rem] max-w-[var(--available-width)]')}>
-            <div className={PICKER_SEARCH_CLASS}>
-              <Search className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-              <Combobox.Input aria-label="Search repos" placeholder="Search repos" className="h-5 w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
-            </div>
-            <ScrollArea viewportClassName="h-[min(20rem,calc(var(--available-height)-5rem))]">
-              <div className={MENU_BODY_CLASS}>
-                {/* The project's own repo leads, kept with the project. */}
-                {project !== undefined && without !== undefined && (
-                  <div role="presentation" className={cn(MENU_ITEM_CLASS, 'cursor-default')}>
-                    <MenuMark>
-                      <FolderGit2 className="size-3.5" aria-hidden />
-                    </MenuMark>
-                    <RowWords label={project} detail={without} tag="project" />
-                    <Lock className="size-3.5 shrink-0 text-muted-foreground" aria-label="Kept with the project" />
-                    <MenuMark className="w-4 justify-center">
-                      <Check className="size-4" aria-hidden />
-                    </MenuMark>
-                  </div>
-                )}
-                <Combobox.Empty className="px-2 py-1.5 text-xs text-muted-foreground empty:hidden">{repos === null ? '' : 'No repo by that name.'}</Combobox.Empty>
-                <Combobox.List>
-                  {(group: Group) => (
-                    <Combobox.Group key={group.value} items={group.items}>
-                      {group.label ? <Combobox.GroupLabel className="px-2 pt-2 pb-1 text-xs font-semibold text-muted-foreground">{group.label}</Combobox.GroupLabel> : null}
-                      <Combobox.Collection>
-                        {(row: Row) => (
-                          <Combobox.Item key={row.value} value={row} className={MENU_ITEM_CLASS}>
-                            <MenuMark>
-                              <FolderGit2 className="size-3.5" aria-hidden />
-                            </MenuMark>
-                            <RowWords label={row.label} detail={row.detail} tag={isPicked(row) ? tagOf(row) : undefined} />
-                            {/* At the right, where every menu's mark stands: a picked one's × (a lock for one the session keeps) and its tick; any other's +. */}
-                            {isPicked(row) ? (
-                              <>
-                                {isKept(row) ? <Lock className="size-3.5 shrink-0 text-muted-foreground" aria-label="Copied already" /> : <X className="size-3.5 shrink-0 text-muted-foreground" aria-label="Take it off" />}
-                                <MenuMark className="w-4 justify-center">
-                                  <Check className="size-4" aria-hidden />
-                                </MenuMark>
-                              </>
-                            ) : (
-                              <MenuMark className="w-4 justify-center">
-                                <span className="flex size-4 items-center justify-center rounded-sm border border-border text-primary">
-                                  <Plus className="size-3" aria-label="Add" />
-                                </span>
-                              </MenuMark>
-                            )}
-                          </Combobox.Item>
-                        )}
-                      </Combobox.Collection>
-                    </Combobox.Group>
-                  )}
-                </Combobox.List>
-                <p className="px-2 pt-1.5 pb-1 text-xs text-muted-foreground">
-                  {project !== undefined ? "The project's repo comes with the project. + copies another repo into the session's folder." : kept ? "Repos already copied stay. + copies one more for your next message." : "+ copies a repo into the session's folder."}
-                </p>
-                {repos === null || repos.loading ? (
-                  <p role="status" className="px-2 py-1.5 text-xs text-muted-foreground">Looking for repos on this computer…</p>
-                ) : !typed.trim() && repos.repos.length > REPOS_SHOWN ? (
-                  <p className="px-2 py-1.5 text-xs text-muted-foreground">Search to see more of the {repos.repos.length} repos.</p>
-                ) : null}
+          onChange(pickFolders(rows.map(row => row.path)))
+        }}
+      >
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Combobox.Trigger
+                ref={trigger}
+                disabled={busy}
+                aria-label={picked.length > 0 ? `Repos: ${counted(picked.length)}` : 'Repos'}
+                className={MENU_TRIGGER_OPEN_CLASS}
+                {...search.trigger}
+                render={
+                  <button type="button" className={cn(rowButtonClass, 'max-w-[14rem]!')}>
+                    <FolderGit2 className="size-4 shrink-0" aria-hidden />
+                    <span className="truncate">{label.first}</span>
+                    {label.more > 0 && <span className="shrink-0 text-muted-foreground">+{label.more}</span>}
+                    <RowChevron />
+                  </button>
+                }
+              />
+            }
+          />
+          <TooltipContent>{reposSaid(picked.map(repo => repo.name))}</TooltipContent>
+        </Tooltip>
+        <Combobox.Portal>
+          <Combobox.Positioner {...position} {...(above ? { anchor: box, side: 'top' as const } : {})} sideOffset={6} align="start" className="z-50 outline-none">
+            <Combobox.Popup data-overlay="picker" aria-label="Repos" className={cn(MENU_POPUP_CLASS, 'w-[24rem] max-w-[var(--available-width)]')}>
+              <div className={PICKER_SEARCH_CLASS}>
+                <Search className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                <Combobox.Input aria-label="Search repos" placeholder="Search repos" className="h-5 w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
               </div>
-            </ScrollArea>
-          </Combobox.Popup>
-        </Combobox.Positioner>
-      </Combobox.Portal>
-    </Combobox.Root>
+              <ScrollArea viewportClassName="h-[min(20rem,calc(var(--available-height)-5rem))]">
+                <div className={MENU_BODY_CLASS}>
+                  {/* The project's own repo leads, kept with the project. */}
+                  {project !== undefined && without !== undefined && (
+                    <div role="presentation" className={cn(MENU_ITEM_CLASS, 'cursor-default')}>
+                      <MenuMark>
+                        <FolderGit2 className="size-3.5" aria-hidden />
+                      </MenuMark>
+                      <RowWords label={project} detail={without} tag="project" />
+                      <Lock className="size-3.5 shrink-0 text-muted-foreground" aria-label="Kept with the project" />
+                      <MenuMark className="w-4 justify-center">
+                        <Check className="size-4" aria-hidden />
+                      </MenuMark>
+                    </div>
+                  )}
+                  <Combobox.Empty className="px-2 py-1.5 text-xs text-muted-foreground empty:hidden">{repos === null ? '' : 'No repo by that name.'}</Combobox.Empty>
+                  <Combobox.List>
+                    {(group: Group) => (
+                      <Combobox.Group key={group.value} items={group.items}>
+                        {group.label ? <Combobox.GroupLabel className="px-2 pt-2 pb-1 text-xs font-semibold text-muted-foreground">{group.label}</Combobox.GroupLabel> : null}
+                        <Combobox.Collection>
+                          {(row: Row) => (
+                            <Combobox.Item key={row.value} value={row} className={MENU_ITEM_CLASS}>
+                              <MenuMark>{row.address !== undefined ? <Cloud className="size-3.5" aria-hidden /> : <FolderGit2 className="size-3.5" aria-hidden />}</MenuMark>
+                              <RowWords label={row.label} detail={row.detail} tag={isPicked(row) ? tagOf(row) : undefined} />
+                              {/* At the right, where every menu's mark stands: a picked one's × (a lock for one the session keeps) and its tick; any other's +. */}
+                              {isPicked(row) ? (
+                                <>
+                                  {isKept(row) ? <Lock className="size-3.5 shrink-0 text-muted-foreground" aria-label="Copied already" /> : <X className="size-3.5 shrink-0 text-muted-foreground" aria-label="Take it off" />}
+                                  <MenuMark className="w-4 justify-center">
+                                    <Check className="size-4" aria-hidden />
+                                  </MenuMark>
+                                </>
+                              ) : (
+                                <MenuMark className="w-4 justify-center">
+                                  <span className="flex size-4 items-center justify-center rounded-sm border border-border text-primary">
+                                    <Plus className="size-3" aria-label="Add" />
+                                  </span>
+                                </MenuMark>
+                              )}
+                            </Combobox.Item>
+                          )}
+                        </Combobox.Collection>
+                      </Combobox.Group>
+                    )}
+                  </Combobox.List>
+                  <p className="px-2 pt-1.5 pb-1 text-xs text-muted-foreground">
+                    {project !== undefined ? "The project's repo comes with the project. + copies another repo into the session's folder." : kept ? "Repos already copied stay. + copies one more for your next message." : "+ copies a repo into the session's folder."}
+                  </p>
+                  {repos === null || repos.loading ? (
+                    <p role="status" className="px-2 py-1.5 text-xs text-muted-foreground">Looking for repos on this computer…</p>
+                  ) : !typed.trim() && repos.repos.length > REPOS_SHOWN ? (
+                    <p className="px-2 py-1.5 text-xs text-muted-foreground">Search to see more of the {repos.repos.length} repos.</p>
+                  ) : null}
+                </div>
+              </ScrollArea>
+            </Combobox.Popup>
+          </Combobox.Positioner>
+        </Combobox.Portal>
+      </Combobox.Root>
+    </>
   )
 }
 

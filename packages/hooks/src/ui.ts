@@ -4,7 +4,7 @@
 // Four hooks, each taking a place: a component at a place (`ui.view`), something to do at one
 // (`ui.action`), something to pick in a shared menu (`ui.option`), and how a kind of content looks
 // (`ui.render`). Each place's props are typed here, so a new place needs no new hook.
-import type { ComponentType } from 'react'
+import type { ComponentType, RefObject } from 'react'
 import type { PullRequest, PullRequestState, RunOptions } from './run.js'
 
 /** An icon, drawn at the size its `className` gives. */
@@ -536,6 +536,15 @@ export interface OptionPlaces {
     repos(host: UiHost): Promise<{ repos: UiWhereRepo[]; loading?: boolean; unreached?: string }>
   }
   /**
+   * The panel that makes a repository a project: asked the trust question, cloned to this computer
+   * from its address, and added (the projects module's). The Repos menu under a message box opens
+   * it for a repo only at an address, then copies the project's folder into the session. The first
+   * module's.
+   */
+  'project.add': {
+    Panel: ComponentType<UiAddProjectProps>
+  }
+  /**
    * Where the images a message goes with are kept: what the message box's attach button, a drop and
    * a paste take, the box's tiles and the chat's show, and a run is handed by the names they are kept
    * under (`RunInput.images`). The first module's; with none, a box takes no image.
@@ -573,6 +582,17 @@ export interface OptionPlaces {
     /** The page of issue or pull request `number` of `project`; none for a project the module does not answer for. */
     issue(project: UiProject, number: number): string | undefined
   }
+}
+
+/** What the panel that makes a repository a project is given (`project.add`). */
+export interface UiAddProjectProps {
+  /** The repository's address, as `UiWhereRepo.address` names it: the trust question is the first thing shown. */
+  address: string
+  /** The control that opened it, given focus back when it closes. */
+  opener: RefObject<HTMLElement | null>
+  /** It is a project now: its folder on this computer. */
+  onAdded: (path: string) => void
+  onClose: () => void
 }
 
 /** A command the message box offers: typed after the slash, and what it asks the agent is the command's own. */
