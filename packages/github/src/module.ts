@@ -96,7 +96,7 @@ export function githubModule(deps: GithubDeps = {}): ModuleDefinition {
           app.runs(args.project).catch(() => []),
           (deps.requestStates ?? cachedPrStates)(args.project.dir).catch(() => undefined),
         ])
-        const items = requestsWaiting(open, runs)
+        const items = [...requestsWaiting(open, runs), ...copyRequestsWaiting(runs, requestsRead())]
         args.pullRequestsRead?.([...requestsRead(), ...open.map(pr => ({ url: pr.url, state: pr.isDraft ? ('draft' as const) : ('open' as const), title: pr.title, ...(pr.headRefName !== undefined ? { branch: pr.headRefName } : {}) }))])
         return items
       },
@@ -240,6 +240,38 @@ export function requestsWaiting(open: readonly OpenPr[], runs: readonly RunSumma
       },
     ]
   })
+}
+
+/**
+ * The open pull requests of the project's runs' copies of other repositories, each waiting on the
+ * person as its run's: a session that opened oa-newuser's #11 from a copy waits on its merge, and
+ * its row in "Waiting on you" opens the session, not just the request. How each stands is what was
+ * last read of it here (`read`): a copy of a project registered here is read with that project's
+ * requests, another once its row in the session was shown. The same request listed by its own
+ * project, with no run, is the same item: the lists keep the run's.
+ */
+export function copyRequestsWaiting(runs: readonly RunSummary[], read: readonly { url: string; state: string; title?: string }[]): AttentionItem[] {
+  const states = new Map(read.map(pr => [pr.url, pr]))
+  return runs.flatMap(run =>
+    (run.copyPrs ?? []).flatMap((pr): AttentionItem[] => {
+      const known = states.get(pr.url)
+      if (known?.state !== 'open' && known?.state !== 'draft') return []
+      return [
+        {
+          kind: 'waiting',
+          scope: 'run',
+          run: run.id,
+          id: pr.url,
+          words: 'Needs merge',
+          title: runName(run, run.branch) ?? known.title ?? `${pr.repo} #${pr.number}`,
+          detail: `${pr.repo} #${pr.number}`,
+          mark: 'pull-request',
+          ...(run.endedAt !== undefined ? { since: run.endedAt } : {}),
+          fix: { label: `Open PR #${pr.number}`, href: pr.url },
+        },
+      ]
+    }),
+  )
 }
 
 /** The newest pull request of a branch on GitHub; none for a project that is not on GitHub. */

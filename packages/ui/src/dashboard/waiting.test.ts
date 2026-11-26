@@ -162,6 +162,29 @@ test('build dedupes a PR shared by two registered projects (same repo), keeping 
   assert.deepEqual(items.map(i => i.detail), ['#285'])
 })
 
+test("a request said by a session's run (its copy's) and by its own project with none is the run's: its row opens the session", async () => {
+  const url = 'https://github.com/me/oa-newuser/pull/11'
+  const both = async (): Promise<Hooks> =>
+    createHooks([
+      {
+        module: defineModule({
+          name: 'github',
+          hooks: {
+            'app.attention': async args =>
+              args.project?.id === 'test-project'
+                ? [{ kind: 'waiting', scope: 'run', run: 'r1', id: url, words: 'Needs merge', title: 'Add PR-flow test lines', mark: 'pull-request', since: '2026-11-26T16:00:00Z' }]
+                : [{ kind: 'waiting', scope: 'project', id: url, words: 'Needs merge', title: 'Add a line', mark: 'pull-request', since: '2026-11-26T16:00:00Z' }],
+          },
+        }),
+      },
+    ])
+  // Either order of the projects: the run's is kept.
+  for (const projects of [[project('oa-newuser', '/oa'), project('test-project', '/tp')], [project('test-project', '/tp'), project('oa-newuser', '/oa')]]) {
+    const { items } = await buildWaiting(projects, { hooks: both, agents: async () => [] })
+    assert.deepEqual(items.map(item => [item.scope, item.run, item.projectId]), [['run', 'r1', 'test-project']])
+  }
+})
+
 const noPrs = async (): Promise<OpenPr[]> => []
 
 /** A run that ended on a question: its meta says `waiting`, its diary holds the question. */
