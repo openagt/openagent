@@ -1,4 +1,4 @@
-import { ExternalLink, GitMerge, GitPullRequestClosed, GitPullRequestDraft } from 'lucide-react'
+import { ExternalLink, GitMerge, GitPullRequest, GitPullRequestArrow, GitPullRequestClosed, GitPullRequestDraft } from 'lucide-react'
 import type { UiActionAt, UiActionResult, UiHost, UiOffer } from '@openagt/ui/module'
 import { server, type Carries, type PrHandoff } from './calls.js'
 
@@ -95,9 +95,9 @@ const repoOf = (on: WorkOn) => (on.repo !== undefined ? { repo: on.repo } : {})
 
 /** The bar's pull request presses. */
 export const handoffActions: UiActionAt<'chat.handoff'>[] = [
-  press('open-pr', { label: 'Open PR', busyLabel: 'Opening PR…', run: async (host, on) => pressed(on, await server(host).openPr(on.projectId, { agentId: on.agentId, ...repoOf(on) })) }),
+  press('open-pr', { label: 'Open PR', busyLabel: 'Opening PR…', icon: GitPullRequest, run: async (host, on) => pressed(on, await server(host).openPr(on.projectId, { agentId: on.agentId, ...repoOf(on) })) }),
   press('draft-pr', { label: 'Create draft PR', busyLabel: 'Opening PR…', icon: GitPullRequestDraft, run: async (host, on) => pressed(on, await server(host).openPr(on.projectId, { agentId: on.agentId, ...repoOf(on), draft: true })) }),
-  press('update-pr', { label: 'Update PR', busyLabel: 'Updating PR…', run: async (host, on) => pressed(on, await server(host).updatePr(on.projectId, { agentId: on.agentId, ...repoOf(on) })) }),
+  press('update-pr', { label: 'Update PR', busyLabel: 'Updating PR…', icon: GitPullRequestArrow, run: async (host, on) => pressed(on, await server(host).updatePr(on.projectId, { agentId: on.agentId, ...repoOf(on) })) }),
   press('merge-pr', { label: 'Merge PR', busyLabel: 'Merging…', icon: GitMerge, run: async (host, on) => pressed(on, await server(host).mergePr(on.projectId, { agentId: on.agentId, ...repoOf(on) })) }),
   press('pr-page', { label: 'Open on GitHub', icon: ExternalLink }),
   press('close-pr', { label: 'Close PR', busyLabel: 'Closing PR…', icon: GitPullRequestClosed, run: async (host, on) => pressed(on, await server(host).closePr(on.projectId, { agentId: on.agentId, ...repoOf(on) })) }),
