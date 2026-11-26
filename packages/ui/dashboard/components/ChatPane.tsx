@@ -32,11 +32,16 @@ export function ChatPane({ top, bottom, side, children }: { top: ReactNode; bott
   const bottomBar = useRef<HTMLDivElement>(null)
   const probe = useRef<HTMLDivElement>(null)
   const [notes, setNotes] = useState<HTMLDivElement | null>(null)
+  const beside = Boolean(side)
   useLayoutEffect(() => {
     const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
     const read = () => {
       const style = pane.current!.style
-      style.setProperty('--chat-top', `${topBar.current!.getBoundingClientRect().height}px`)
+      const head = topBar.current!.getBoundingClientRect().height
+      // With a column beside it, the bar runs over the chat's scroll bar too: the chat starts under
+      // the bar (`--chat-head`), so its bar is never behind it, and its rows need no room of their own.
+      style.setProperty('--chat-head', `${head}px`)
+      style.setProperty('--chat-top', beside ? '0px' : `${head}px`)
       const bar = bottomBar.current!.getBoundingClientRect().height
       style.setProperty('--chat-bar', `${bar}px`)
       style.setProperty('--chat-bottom', touch ? '0px' : `${bar}px`)
@@ -50,7 +55,7 @@ export function ChatPane({ top, bottom, side, children }: { top: ReactNode; bott
     const observer = new ResizeObserver(read)
     for (const measured of [topBar, bottomBar, probe]) observer.observe(measured.current!)
     return () => observer.disconnect()
-  }, [])
+  }, [beside])
   return (
     <div ref={pane} data-testid="chat-pane" className="@container flex min-h-0 flex-1 flex-col">
       <div className="relative isolate flex min-h-0 flex-1 overflow-hidden">
@@ -65,7 +70,7 @@ export function ChatPane({ top, bottom, side, children }: { top: ReactNode; bott
             {top}
           </div>
         </div>
-        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col pointer-coarse:pb-(--chat-bar)">
+        <div className={cn('relative flex min-h-0 min-w-0 flex-1 flex-col pointer-coarse:pb-(--chat-bar)', beside && 'mt-(--chat-head)')}>
         {/* Styled as the chat's scroller is (MessageScrollerViewport): a gutter kept, a thin bar. */}
         <div ref={probe} className="scrollbar-thin scrollbar-gutter-stable invisible absolute h-0 w-8 overflow-y-auto" aria-hidden />
         {children}
