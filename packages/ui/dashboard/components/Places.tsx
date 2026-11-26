@@ -286,6 +286,9 @@ export function useMenuActions<P extends 'chat.menu' | 'project.menu' | 'person.
   return { items, overlay, offered: items.length }
 }
 
+/** How long a press done waits, busy, for the step after it before its button shows what is offered anyway. */
+const SETTLE_MS = 10_000
+
 /**
  * The places that show a repo's next step, by the run and the repo: the Activity panel's row and
  * the line above the box show the same one, and a press in one changes what the other offers.
@@ -319,10 +322,20 @@ export function HandoffOffers({ projectId, agentId, repo, again }: { projectId: 
       if (places.size === 0) stepShown.delete(shownAs)
     }
   }, [shownAs, reask])
-  const { press, pending, overlay } = useRunOffer<'chat.handoff'>(on, (_offered, result) => {
+  // A press done stays busy until the step after it is known: its button never goes back to its old words meanwhile.
+  const [settling, setSettling] = useState<string | null>(null)
+  useEffect(() => setSettling(null), [offers])
+  useEffect(() => {
+    if (settling === null) return
+    const timer = setTimeout(() => setSettling(null), SETTLE_MS)
+    return () => clearTimeout(timer)
+  }, [settling])
+  const { press, pending: running, overlay } = useRunOffer<'chat.handoff'>(on, (offered, result) => {
     setSaid(result.ok ? (result.said !== undefined ? { text: result.said, error: false } : null) : { text: result.error, error: true })
+    setSettling(offered.key)
     for (const again of stepShown.get(shownAs) ?? []) again()
   })
+  const pending = running ?? settling
   const down = useContext(DaemonDown)
   const inPanel = useContext(WorkRowPlace) === 'activity'
   const offered = offers ?? []
@@ -331,6 +344,8 @@ export function HandoffOffers({ projectId, agentId, repo, again }: { projectId: 
   // In the panel, what the bar says beside the press is its hover, after its own.
   const hover = [first?.offer.title, ...(inPanel ? notes.map(each => each.offer.note) : [])].filter(Boolean).join('\n') || undefined
   const labelOf = (each: Offered<'chat.handoff'>) => (pending === each.key && each.action.busyLabel ? each.action.busyLabel : (each.offer.label ?? each.action.label))
+  // Busy on a choice under the arrow, the button says that choice's work: "Closing PR…".
+  const busy = pending !== null ? offered.find(each => each.key === pending) : undefined
   const step = { disabled: down, 'aria-disabled': pending !== null || undefined }
   return (
     <>
@@ -349,8 +364,8 @@ export function HandoffOffers({ projectId, agentId, repo, again }: { projectId: 
       {first && (
         <ButtonGroup>
           <Button size="sm" variant="ghost" className={cn(NEXT_STEP_CLASS, 'min-w-18 justify-center px-3', first.offer.danger && 'text-danger')} data-next-step {...step} {...(hover !== undefined ? { title: hover } : {})} onClick={() => press(first)}>
-            {pending === first.key && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
-            {labelOf(first)}
+            {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
+            {busy?.action.busyLabel ?? labelOf(first)}
           </Button>
           {more.length > 0 && (
             <>

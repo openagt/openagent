@@ -90,4 +90,33 @@ describe('the next step of a session', () => {
     fireEvent.click(inPanel!)
     await waitFor(() => expect(screen.getAllByRole('button', { name: 'Merge PR' })).toHaveLength(2))
   })
+
+  test("a press done stays busy until the step after it is known: it never says its old words again meanwhile", async () => {
+    let merged = false
+    let answer: (offer: UiOffer) => void = () => {}
+    const merge: MountedAction<'chat.handoff'> = {
+      ...openPr,
+      id: 'merge-pr',
+      label: 'Merge PR',
+      busyLabel: 'Merging…',
+      // After the merge, the next answer is slow to come.
+      offer: () => (merged ? new Promise<UiOffer>(resolve => (answer = resolve)) : {}),
+      run: async () => ((merged = true), { ok: true }),
+    }
+    render(
+      <ModulesContext.Provider value={mountedOf({ actions: { 'chat.handoff': [merge] } })}>
+        <HandoffOffers projectId="p1" agentId="r-settle" />
+      </ModulesContext.Provider>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Merge PR' }))
+    // Done, and the step after it not known yet: still busy.
+    await waitFor(() => expect(merged).toBe(true))
+    await new Promise(resolve => setTimeout(resolve, 50))
+    expect(screen.queryByRole('button', { name: 'Merge PR' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Merging…' })).toBeTruthy()
+    // Known: what it offers now.
+    answer({ noteOnly: true, note: 'Merged.' })
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Merging…' })).toBeNull())
+    expect(screen.queryByRole('button', { name: 'Merge PR' })).toBeNull()
+  })
 })
