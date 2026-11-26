@@ -58,7 +58,7 @@ export function WorkRow({
     <div data-work-row role="group" aria-label={`${name}: its work`} className="flex flex-col">
       <div className={cn('flex min-h-8 items-center gap-3 rounded-md text-sm', onLine ? 'gap-2' : '-mx-1.5 px-1.5 hover:bg-accent')}>
         <Mark className={cn('size-4 shrink-0', pr ? prTone(state as PullRequestState | undefined) : 'text-muted-foreground')} aria-hidden />
-        <div className="flex min-w-0 flex-1 items-center gap-2">
+        <div className="flex min-w-20 flex-1 items-center gap-2">
           <Tooltip>
             <TooltipTrigger render={<span className={cn('min-w-0 truncate', onLine ? 'font-medium' : 'text-muted-foreground')} />}>{name}</TooltipTrigger>
             <TooltipContent className="whitespace-pre-line">{[project ? `${name} (the project)` : name, branch, path].filter(Boolean).join('\n')}</TooltipContent>
@@ -78,7 +78,8 @@ export function WorkRow({
               <span className="flex min-w-0 shrink-0 items-center text-xs">{summary}</span>
             ))}
         </div>
-        {actions && <span className="flex shrink-0 items-center gap-2 empty:hidden">{actions}</span>}
+        {/* It gives way before the name does: what it says beside its press is cut first. */}
+        {actions && <span className="flex min-w-0 items-center gap-2 empty:hidden">{actions}</span>}
       </div>
       {error && (
         <span role="alert" className="block pb-1 pl-7 text-xs whitespace-pre-line text-danger">

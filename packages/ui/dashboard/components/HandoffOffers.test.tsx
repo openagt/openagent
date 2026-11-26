@@ -4,6 +4,7 @@ import type { UiOffer } from '../module/index.js'
 import { ModulesContext, mountedOf, type MountedAction } from '../lib/use-modules.js'
 
 const { HandoffOffers } = await import('./Places.js')
+const { WorkRowPlace } = await import('./WorkRow.js')
 
 // A session's next step, as its row draws it: back on a session, the step it last offered.
 
@@ -54,5 +55,25 @@ describe('the next step of a session', () => {
     const menu = await screen.findByRole('menu')
     expect([...menu.querySelectorAll('[role="menuitem"], [role="separator"]')].map(one => (one.getAttribute('role') === 'separator' ? '—' : one.textContent))).toEqual(['Merge PR', 'Open on GitHub', '—', 'Close PR'])
     expect(screen.getByRole('menuitem', { name: 'Close PR' }).className).toContain('text-danger')
+  })
+
+  test("what it says beside its press: drawn on the line above the box; in the Activity panel's one-line row, the press's hover", async () => {
+    answer = { note: 'Nothing committed — README.md left uncommitted.', title: 'Commits README.md' }
+    const draw = (place: 'line' | 'activity') =>
+      render(
+        <ModulesContext.Provider value={mountedOf({ actions: { 'chat.handoff': [openPr] } })}>
+          <WorkRowPlace.Provider value={place}>
+            <HandoffOffers projectId="p1" agentId={`r-${place}`} />
+          </WorkRowPlace.Provider>
+        </ModulesContext.Provider>,
+      )
+    draw('line')
+    expect(await screen.findByText('Nothing committed — README.md left uncommitted.')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Open PR' }).getAttribute('title')).toBe('Commits README.md')
+    cleanup()
+    draw('activity')
+    const press = await screen.findByRole('button', { name: 'Open PR' })
+    expect(screen.queryByText('Nothing committed — README.md left uncommitted.')).toBeNull()
+    expect(press.getAttribute('title')).toBe('Commits README.md\nNothing committed — README.md left uncommitted.')
   })
 })

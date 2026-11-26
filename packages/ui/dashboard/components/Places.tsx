@@ -8,6 +8,7 @@ import { SESSIONS_ID } from '../../src/project-address.js'
 import { ModuleSlot } from './ModulePageView.js'
 import { ConfirmDialog } from './ui/confirm-dialog.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.js'
+import { WorkRowPlace } from './WorkRow.js'
 import { Button, buttonVariants } from './ui/button.js'
 import { ButtonGroup, ButtonGroupSeparator } from './ui/button-group.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
@@ -292,7 +293,8 @@ const NEXT_STEP_CLASS = 'h-6 rounded-md bg-foreground/10 text-xs font-normal hov
  * the modules offer now for the run's checkout, or for one of its copies (`repo`). The words they
  * say beside it first, then the first press; its arrow lists them all, the first too, as Claude
  * Code's Create PR does, a line above the first that loses something; what the last press did
- * is said until the work moves on. Asked again when `again` changes (the run's work moved).
+ * is said until the work moves on. In the Activity panel's one-line rows the words beside the press
+ * are its hover instead. Asked again when `again` changes (the run's work moved).
  */
 export function HandoffOffers({ projectId, agentId, repo, again }: { projectId: string; agentId: string; repo?: string | undefined; again?: unknown }) {
   const on = useMemo(() => ({ projectId, agentId, ...(repo !== undefined ? { repo } : {}) }), [projectId, agentId, repo])
@@ -304,19 +306,23 @@ export function HandoffOffers({ projectId, agentId, repo, again }: { projectId: 
     reask()
   })
   const down = useContext(DaemonDown)
+  const inPanel = useContext(WorkRowPlace) === 'activity'
   const offered = offers ?? []
   const notes = offered.filter(each => each.offer.note !== undefined)
   const [first, ...more] = offered.filter(each => !each.offer.noteOnly)
+  // In the panel, what the bar says beside the press is its hover, after its own.
+  const hover = [first?.offer.title, ...(inPanel ? notes.map(each => each.offer.note) : [])].filter(Boolean).join('\n') || undefined
   const labelOf = (each: Offered<'chat.handoff'>) => (pending === each.key && each.action.busyLabel ? each.action.busyLabel : (each.offer.label ?? each.action.label))
   const step = { disabled: down, 'aria-disabled': pending !== null || undefined }
   return (
     <>
       {said && (
-        <span role={said.error ? 'alert' : 'status'} className={cn('min-w-0 truncate text-xs', said.error ? 'text-danger' : 'text-muted-foreground')}>
+        <span role={said.error ? 'alert' : 'status'} title={said.text} className={cn('min-w-0 truncate text-xs', said.error ? 'text-danger' : 'text-muted-foreground')}>
           {said.text}
         </span>
       )}
       {!said &&
+        !inPanel &&
         notes.map(each => (
           <span key={`${each.key}:note`} className="min-w-0 truncate text-xs text-muted-foreground" {...(each.offer.title !== undefined ? { title: each.offer.title } : {})}>
             {each.offer.note}
@@ -324,7 +330,7 @@ export function HandoffOffers({ projectId, agentId, repo, again }: { projectId: 
         ))}
       {first && (
         <ButtonGroup>
-          <Button size="sm" variant="ghost" className={cn(NEXT_STEP_CLASS, 'min-w-18 justify-center px-3', first.offer.danger && 'text-danger')} data-next-step {...step} {...(first.offer.title !== undefined ? { title: first.offer.title } : {})} onClick={() => press(first)}>
+          <Button size="sm" variant="ghost" className={cn(NEXT_STEP_CLASS, 'min-w-18 justify-center px-3', first.offer.danger && 'text-danger')} data-next-step {...step} {...(hover !== undefined ? { title: hover } : {})} onClick={() => press(first)}>
             {pending === first.key && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
             {labelOf(first)}
           </Button>
