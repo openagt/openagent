@@ -115,7 +115,7 @@ test('a session with no project that had a copy of the repo is listed among its 
   const R0 = '2026-07-05T12-00-00-000Z'
   const { agents, cleanup } = await rig(1, {
     ...RUNS,
-    [`../${COPIES_DIR}/c@c/${R0}.json`]: JSON.stringify(card(R0, { intent: 'with copies', caller: { runner: { repos: [] } } })),
+    [`../${COPIES_DIR}/c@c/${R0}.json`]: JSON.stringify(card(R0, { intent: 'with copies', caller: { runner: { repos: [{ name: 'shop', from: '/work/shop' }, { name: 'site', from: '/work/site' }] } } })),
     [`../${COPIES_DIR}/c@c/${R0}.jsonl`]: '{"kind":"said","text":"Edited the README."}\n',
   })
   try {
@@ -128,6 +128,9 @@ test('a session with no project that had a copy of the repo is listed among its 
       assert.deepEqual((await run(cwd, ['show', R0, ...flags])).json, { ...card(R0), intent: 'with copies', noProject: true, diary: [{ kind: 'said', text: 'Edited the README.' }] })
       assert.deepEqual((await run(cwd, [...flags, '--branch', 'agent-r3'])).json.map((c: { id: string }) => c.id), [R3])
     }
+    // The page's read has it too, with the repos it had copies of, by name.
+    const shown = await runsRead(rpcHost({ root: agents[0]! }), { limit: 5 })
+    assert.deepEqual(shown.find(run => run.id === R0), { ...card(R0), intent: 'with copies', person: 'c@c', noProject: true, copies: ['shop', 'site'] })
   } finally {
     await cleanup()
   }

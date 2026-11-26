@@ -435,3 +435,13 @@ test('a session with no project recorded in two projects it had copies of, and l
   expect(links[0]!.getAttribute('href')).toBe('/session/s1')
   expect(screen.getAllByText('No project · alpha, beta')).toHaveLength(1)
 })
+
+test("a session with no project names every repo its record says it copied, the projects the page does not read too", async () => {
+  const session = { id: 's1', startedAt: at(now - 1000), endedAt: at(now), status: 'done', title: 'Read both READMEs', noProject: true, copies: ['alpha', 'oa-newuser'] }
+  render(
+    <ModuleHostContext.Provider value={hostWith([session])}>
+      <LogsPage projects={[{ id: 'p1', name: 'alpha', remote: 'github.com/me/alpha' }]} projectId={null} path={[]} />
+    </ModuleHostContext.Provider>,
+  )
+  expect(await screen.findByText('No project · alpha, oa-newuser')).toBeTruthy()
+})

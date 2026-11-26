@@ -17,6 +17,8 @@ export interface RunRow {
     person?: string
     /** A session with no project, recorded in the row's project because it had a copy of it. */
     noProject?: true
+    /** Such a session's copies of repos, by name: every one, the projects this page does not read too. */
+    copies?: string[]
     /** Its pull request merged, as the git host last said, read where the sidebar reads it: the run reads as merged there and here. */
     merged?: boolean
   }
@@ -65,8 +67,9 @@ export function oneRowPerRun(rows: readonly RunRow[]): RunRow[] {
       if (!first) kept.set(key, row)
       continue
     }
-    const copies = [...(first?.copies ?? []), ...(first?.copies?.includes(row.project.name) ? [] : [row.project.name])]
-    kept.set(key, { ...(first ?? row), in: NO_PROJECT, copies })
+    // What its record says it copied, else the projects that listed it.
+    const named = [...(first?.copies ?? []), ...(row.card.copies ?? [row.project.name])]
+    kept.set(key, { ...(first ?? row), in: NO_PROJECT, copies: [...new Set(named)] })
   }
   return [...kept.values()]
 }
