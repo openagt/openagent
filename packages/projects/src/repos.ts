@@ -1,5 +1,7 @@
+import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { basename, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 // The repos on this computer (Rom's "repos are not projects"): every Git repository a quick look
 // through the person's folders finds, so a new session can be started in one that is not a project
@@ -85,6 +87,8 @@ export interface CrawlOptions {
   limitMs?: number
   fs?: CrawlFs
   now?: () => number
+  /** Folders neither listed nor looked through: OpenAgent's own checkout, which runs it ({@link ownCheckout}). */
+  without?: readonly string[]
 }
 
 /** What a crawl found, and whether it looked everywhere or the time was up first. */
@@ -106,7 +110,8 @@ export async function crawlRepos(roots: readonly string[], options: CrawlOptions
   const now = options.now ?? Date.now
   const deadline = now() + (options.limitMs ?? CRAWL_LIMIT_MS)
   const found = new Map<string, FoundRepo>()
-  const seen = new Set<string>()
+  // A folder left out counts as seen: it is never listed, nor looked through.
+  const seen = new Set<string>(options.without ?? [])
   let level = roots.filter(root => !seen.has(root) && seen.add(root))
   let whole = true
   for (let at = 0; level.length > 0 && at <= depth && whole; at++) {
@@ -202,6 +207,21 @@ let thisComputer: RepoIndex | undefined
  * and in the folders the person added (`REPO_FOLDERS`), as `folders` reads them.
  */
 export function thisComputersRepos(folders: () => Promise<string[]>): RepoIndex {
-  thisComputer ??= repoIndex(async () => [homedir(), ...(await folders())])
+  const own = ownCheckout()
+  thisComputer ??= repoIndex(async () => [homedir(), ...(await folders())], { crawl: (roots, limitMs) => crawlRepos(roots, { limitMs, ...(own !== undefined ? { without: [own] } : {}) }) })
   return thisComputer
+}
+
+/**
+ * The Git checkout OpenAgent runs from, where it runs from one (a computer that runs a checkout of
+ * main, as experiment does): no repo to start sessions in, since an agent's work there would change
+ * the OpenAgent that runs it (his report, 2026-11-27: it was listed beside the project of the same
+ * repository). None where OpenAgent is an installed package.
+ */
+export function ownCheckout(from: string = dirname(fileURLToPath(import.meta.url)), exists: (path: string) => boolean = existsSync): string | undefined {
+  for (let folder = from; ; folder = dirname(folder)) {
+    if (folder.split(/[\\/]/).includes('node_modules')) return undefined
+    if (exists(join(folder, '.git'))) return folder
+    if (dirname(folder) === folder) return undefined
+  }
 }
