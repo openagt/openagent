@@ -44,12 +44,14 @@ export function linkedFile(files: readonly string[], from: string, name: string)
   return files.includes(fromRoot) ? fromRoot : undefined
 }
 
-export function FileView({ page, projectId, agentId, path, wrap, source, files, onOpen }: {
+export function FileView({ page, projectId, agentId, path, at, wrap, source, files, onOpen }: {
   /** The page whose open files these are (`open-files.ts`). */
   page: string
   projectId: string
   agentId?: string | undefined
   path: string
+  /** Where the file is read, in a tree with a folder per repo: a copy of another repository (`repo`), or the project's own, and its path there. The tree's path otherwise. */
+  at?: { repo?: string; path: string } | undefined
   wrap: boolean
   /** A Markdown file is shown as its source rather than rendered. */
   source: boolean
@@ -58,7 +60,9 @@ export function FileView({ page, projectId, agentId, path, wrap, source, files, 
   onOpen: (path: string, keep: boolean) => void
 }) {
   const host = useModuleHost()
-  const read = usePolled<FileContent | null>(() => readContent(host, projectId, path, agentId), null, 5_000, [projectId, agentId, path], { remember: contentKey(projectId, agentId, path) })
+  const readPath = at?.path ?? path
+  const repo = at?.repo
+  const read = usePolled<FileContent | null>(() => readContent(host, projectId, readPath, agentId, ...(repo !== undefined ? [repo] : [])), null, 5_000, [projectId, agentId, readPath, repo], { remember: contentKey(projectId, agentId, path) })
   const markdown = isMarkdown(path)
   const rendered = markdown && !source
   const opens = useMemo(

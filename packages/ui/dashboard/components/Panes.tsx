@@ -18,6 +18,7 @@ import { closePanes, paneSizes, paneSizesOwner, panesPage, setActivePane, setPan
 import { useRevealedChange, useRevealedFile, useRevealedScreen, useRevealedSubagent, type RevealedChange, type RevealedFile } from '../lib/reveal-change.js'
 import { isMobileScreen, useIsMobile } from '../lib/use-mobile.js'
 import { useNarrow } from '../lib/use-narrow.js'
+import { SESSIONS_ID } from '../../src/project-address.js'
 import { pressed, shortcutKeys, type ShortcutId } from '../lib/shortcut.js'
 
 // The side panel beside the chat, as Claude Code on the web has it: tabs at its top, one per thing
@@ -99,6 +100,16 @@ const NO_PANES: PanesValue = { page: '', enabled: false, panes: [], open: [], ac
 
 const PanesContext = createContext<PanesValue>(NO_PANES)
 
+/**
+ * What opens the Changes tab on this page: the project's, or (`repo`) a copied repo's own tab, as
+ * a row's count in the Activity panel opens it. None on a page with no pane that lists changes.
+ */
+export function useOpenChanges(): ((repo?: string) => void) | undefined {
+  const { page, panes } = useContext(PanesContext)
+  const changes = panes.find(pane => pane.panel?.changes)?.id
+  return useMemo(() => (changes === undefined ? undefined : (repo?: string) => setPaneOpen(page, repo === undefined ? changes : repoTab(changes, repo), true)), [page, changes])
+}
+
 /** Whether the page's side panel is open: the session's Activity panel stands beside the chat only while it is not. */
 export function usePanesShown(): boolean {
   return useContext(PanesContext).shown
@@ -178,7 +189,7 @@ export function PanesProvider({
   const panes = useMemo<Pane[]>(() => {
     if (!shown) return []
     const ofModules = mounted
-      .filter(panel => panel.projects.includes(shown))
+      .filter(panel => panel.projects.includes(shown) || (shown === SESSIONS_ID && panel.sessions === true))
       .map(panel => ({ id: panelId(panel), label: panel.label, icon: panel.icon, panel, ...(panel.changes ? { key: 'changesTab' as const } : panel.files ? { key: 'filesTab' as const } : {}) }))
     const own: Pane[] = [
       ...(docs.length > 0 ? [{ id: DOCS, label: 'Docs', icon: FileText }] : []),
@@ -249,7 +260,7 @@ export function PanesProvider({
   const contextFiles = useMemo(() => new Set(files.filter(f => context.has(f))), [files, context])
   const moduleContext = useMemo<UiContext>(() => ({ files: contextFiles, toggle: toggleContext }), [contextFiles, toggleContext])
   const panelProps = useMemo<UiPaneProps | undefined>(
-    () => (shown ? { projectId: shown, ...(agentId ? { agentId, ...(activity !== undefined ? { activity } : {}) } : {}), context: moduleContext } : undefined),
+    () => (shown ? { projectId: shown, ...(agentId ? { agentId, ...(activity !== undefined ? { activity } : {}) } : {}), ...(shown === SESSIONS_ID ? { copiesOnly: true as const } : {}), context: moduleContext } : undefined),
     [shown, agentId, activity, moduleContext],
   )
 

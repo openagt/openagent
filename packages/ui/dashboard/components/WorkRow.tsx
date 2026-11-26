@@ -16,6 +16,9 @@ import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
  */
 export const WorkRowPlace = createContext<'activity' | 'line'>('activity')
 
+/** What a row's count opens: the Changes tab of its repo (none for the project), in the side panel. */
+export const OpenChanges = createContext<((repo?: string) => void) | undefined>(undefined)
+
 /**
  * One repo's row, as Claude Code's Changes rows: a mark (a pull request's, in its state's colour,
  * else a change's), the repo's name in grey, its pull request's number, what its branch holds
@@ -50,6 +53,7 @@ export function WorkRow({
   const state = pr?.state?.toLowerCase()
   const Mark = pr ? (state === 'merged' ? GitMerge : state === 'closed' ? GitPullRequestClosed : GitPullRequest) : FileDiff
   const onLine = useContext(WorkRowPlace) === 'line'
+  const openChanges = useContext(OpenChanges)
   return (
     <div data-work-row role="group" aria-label={`${name}: its work`} className="flex flex-col">
       <div className={cn('flex min-h-8 items-center gap-3 rounded-md text-sm', onLine ? 'gap-2.5' : '-mx-1.5 px-1.5 hover:bg-accent')}>
@@ -65,7 +69,14 @@ export function WorkRow({
               <TooltipContent>{[pr.title || `PR #${pr.number}`, state].filter(Boolean).join(' · ')}</TooltipContent>
             </Tooltip>
           )}
-          {summary && <span className="flex min-w-0 shrink-0 items-center text-[13px]">{summary}</span>}
+          {summary &&
+            (openChanges ? (
+              <button type="button" aria-label={`${name}: its changes`} className="flex min-w-0 shrink-0 items-center rounded-sm px-1 text-[13px] hover:bg-foreground/10" onClick={() => openChanges(project ? undefined : name)}>
+                {summary}
+              </button>
+            ) : (
+              <span className="flex min-w-0 shrink-0 items-center text-[13px]">{summary}</span>
+            ))}
         </div>
         {actions && <span className="flex shrink-0 items-center gap-2 empty:hidden">{actions}</span>}
       </div>

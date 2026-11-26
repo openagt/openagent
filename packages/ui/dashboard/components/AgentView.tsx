@@ -31,6 +31,8 @@ import { hostOf, useRunHosts } from '../lib/run-hosts.js'
 import { HOST_ICON, THIS_MACHINE } from './RunOnMenu.js'
 import { ActivityButton, ActivityPanel, useActivityPlace } from './ActivityPanel.js'
 import { NextStepLine } from './NextStepLine.js'
+import { OpenChanges } from './WorkRow.js'
+import { useOpenChanges } from './Panes.js'
 import { callSubagents } from '../lib/subagents.js'
 import { Laptop } from 'lucide-react'
 
@@ -240,7 +242,9 @@ export function AgentView({
         .map(one => ({ key: `call:${one.id}`, name: one.name ?? one.role ?? 'Subagent', ...(one.startedAt !== undefined ? { since: one.startedAt } : {}) })),
     [shown],
   )
+  const openChanges = useOpenChanges()
   const activity = (
+    <OpenChanges.Provider value={openChanges}>
     <ActivityPanel
       runsOn={runsOn}
       runsOnIcon={host !== undefined ? HOST_ICON : Laptop}
@@ -252,6 +256,7 @@ export function AgentView({
       onOpenSubagent={onOpenSubagent}
       work={work}
     />
+    </OpenChanges.Provider>
   )
   const { column } = useActivityPlace()
   // Where the session runs, right above the message box. It is there whatever stands in the box's place.
@@ -300,7 +305,9 @@ export function AgentView({
       bottom={
         <>
           {/* The first step waiting among the session's repos, above the message box; all of them are in the Activity panel. */}
-          <NextStepLine work={work} />
+          <OpenChanges.Provider value={openChanges}>
+            <NextStepLine work={work} />
+          </OpenChanges.Provider>
           {/* Until the run's record or its feed says whether it works, no box: it would say an ended run's words. */}
           {live === null && !feedLive ? null : card?.otherHost && card.host ? (
             // A run another computer started is only read here: a

@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { isCopyName, readHandoff, sessionCopies, sessionRepos, workAt } from './handoff.js'
+import { isCopyName, readHandoff, sessionCopies, copyRepos, workAt } from './handoff.js'
 
 // A session's copies of repos, read off its folder in a sessions home of the test's own, with real git.
 
@@ -45,7 +45,7 @@ test("each copy names the repository it is a copy of, as its origin says it; a c
       git(join(folder, name), 'init', '-q', '-b', 'main')
     }
     git(join(folder, 'site'), 'remote', 'add', 'origin', 'git@github.com:Me/Site.git')
-    assert.deepEqual(await sessionRepos(ID, { home }), [{ name: 'notes' }, { name: 'site', address: 'github.com/Me/Site' }])
+    assert.deepEqual(await copyRepos(ID, { home }), [{ name: 'notes' }, { name: 'site', address: 'github.com/Me/Site' }])
   } finally {
     await rm(home, { recursive: true, force: true })
   }

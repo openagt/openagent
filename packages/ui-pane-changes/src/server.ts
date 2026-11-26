@@ -1,15 +1,23 @@
+import { sessionCopies } from '@openagt/git-branches'
 import { read, type RpcHost } from '@openagt/hooks/rpc'
 import { readFileStatuses, type FileGitStatus } from './status.js'
 import { CONTEXT_LINES } from './confined.js'
 import { WHOLE_FILE, readFileChanges, readFileDiff, type FileChange, type FileDiff } from './diff.js'
-import { checkoutBranch, defaultBranchName, pendingChanges, readAgentChanges, readAgentCommitChanges, readAgentCommitFileDiff, readAgentCommits, readAgentFileDiff, resolveAgentWork, type AgentChanges, type AgentCommit, type FileMark } from './run.js'
+import { checkoutBranch, defaultBranchName, pendingChanges, readAgentChanges, resolveCopyWork, readAgentCommitChanges, readAgentCommitFileDiff, readAgentCommits, readAgentFileDiff, resolveAgentWork, type AgentChanges, type AgentCommit, type FileMark } from './run.js'
 
 // The Changes module's server part: the functions its browser part calls (`@openagt/hooks/rpc`),
 // all reads. One about a run takes the run's id (`agentId`) and reads wherever the run's work is
 // now (`run.ts`); one without it is about the project's own folder. What a caller sends is checked
-// here, whatever its type says: it comes from a page.
+// here, whatever its type says: it comes from a page. A read about a run may name one of its
+// copies of other repositories (`repo`): it reads that copy's folder instead (`resolveCopyWork`).
 
 const text = (value: unknown): string | undefined => (typeof value === 'string' ? value : undefined)
+
+/** Where the work a call asks about is: the run's own, or its copy `repo`'s, in the session's folder. */
+const workOf = (host: RpcHost, agentId: string, repo: unknown) => {
+  const copy = text(repo)
+  return copy !== undefined ? resolveCopyWork(agentId, copy) : resolveAgentWork(host, agentId)
+}
 
 /** What a run changed, and the branches it is between: the one it is measured from, and its own. */
 export type RunChanges = AgentChanges & { from?: string; to?: string }
@@ -22,10 +30,19 @@ export const project = read(async (host: RpcHost, _input: object): Promise<Recor
  * says it started from, else the default branch; and the one its record names, else the one its
  * checkout has out.
  */
-export const run = read(async (host: RpcHost, input: { agentId: string }): Promise<RunChanges> => {
+export const run = read(async (host: RpcHost, input: { agentId: string; repo?: string }): Promise<RunChanges> => {
   const agentId = text(input.agentId)
   if (agentId === undefined) return { source: 'gone' }
   try {
+    const repo = text(input.repo)
+    if (repo !== undefined) {
+      // A copy of another repository: measured from the commit it was made at, on its own branch.
+      const at = await resolveCopyWork(agentId, repo)
+      const changes = await readAgentChanges(host.root, at)
+      if (!('changes' in changes) || at.source !== 'checkout') return changes
+      const [from, to] = await Promise.all([defaultBranchName(at.path), checkoutBranch(at.path)])
+      return { ...changes, ...(from ? { from } : {}), ...(to ? { to } : {}) }
+    }
     const [found, at] = await Promise.all([host.run(agentId).catch(() => undefined), resolveAgentWork(host, agentId)])
     const changes = await readAgentChanges(host.root, at)
     if (!('changes' in changes)) return changes
@@ -46,13 +63,13 @@ export const run = read(async (host: RpcHost, input: { agentId: string }): Promi
  * the list does, never from the caller: a page that thinks a file is untracked cannot make the
  * read treat it as one.
  */
-export const diff = read(async (host: RpcHost, input: { path: string; agentId?: string; commit?: string; whole?: boolean }): Promise<FileDiff | null> => {
+export const diff = read(async (host: RpcHost, input: { path: string; agentId?: string; repo?: string; commit?: string; whole?: boolean }): Promise<FileDiff | null> => {
   const path = text(input.path)
   if (path === undefined) return null
   const context = input.whole === true ? WHOLE_FILE : CONTEXT_LINES
   const agentId = text(input.agentId)
   if (agentId !== undefined) {
-    const at = await resolveAgentWork(host, agentId)
+    const at = await workOf(host, agentId, input.repo)
     const sha = text(input.commit)
     return (sha !== undefined ? readAgentCommitFileDiff(host.root, at, sha, path, context) : readAgentFileDiff(host.root, at, path, context)).catch(() => null)
   }
@@ -73,16 +90,22 @@ export const counts = read(async (host: RpcHost, input: { agentId: string }): Pr
 })
 
 /** The commits of a run's work, newest first; none for a call naming no run. */
-export const commits = read(async (host: RpcHost, input: { agentId: string }): Promise<AgentCommit[]> => {
+export const commits = read(async (host: RpcHost, input: { agentId: string; repo?: string }): Promise<AgentCommit[]> => {
   const agentId = text(input.agentId)
   if (agentId === undefined) return []
-  return readAgentCommits(host.root, await resolveAgentWork(host, agentId)).catch(() => [])
+  return readAgentCommits(host.root, await workOf(host, agentId, input.repo)).catch(() => [])
 })
 
 /** What one commit of a run's work changed; null when the call names no run, or a commit that is not the run's. */
-export const commit = read(async (host: RpcHost, input: { agentId: string; commit: string }): Promise<Record<string, FileMark> | null> => {
+export const commit = read(async (host: RpcHost, input: { agentId: string; repo?: string; commit: string }): Promise<Record<string, FileMark> | null> => {
   const agentId = text(input.agentId)
   const sha = text(input.commit)
   if (agentId === undefined || sha === undefined) return null
-  return readAgentCommitChanges(host.root, await resolveAgentWork(host, agentId), sha).catch(() => null)
+  return readAgentCommitChanges(host.root, await workOf(host, agentId, input.repo), sha).catch(() => null)
+})
+
+/** The run's copies of other repositories, by their names in the session's folder: the pane's repo menu lists them after the project. */
+export const repos = read(async (_host: RpcHost, input: { agentId: string }): Promise<string[]> => {
+  const agentId = text(input.agentId)
+  return agentId !== undefined && /^[\w.-]+$/.test(agentId) ? sessionCopies(agentId).catch(() => []) : []
 })

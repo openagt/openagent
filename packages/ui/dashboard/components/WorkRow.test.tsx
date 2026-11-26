@@ -36,3 +36,17 @@ describe("a repo's row in the session's changes", () => {
     expect(tone('CLOSED')).toContain('text-danger')
   })
 })
+
+test("a row's count opens its repo's changes: the project's, or the copy's own tab", async () => {
+  const { OpenChanges } = await import('./WorkRow.js')
+  const opened: (string | undefined)[] = []
+  render(
+    <OpenChanges.Provider value={repo => opened.push(repo)}>
+      <WorkRow project name="test-project" branch="b" summary={<span>+1 −0</span>} />
+      <WorkRow name="oa-newuser" branch="b" summary={<span>+3 −1</span>} />
+    </OpenChanges.Provider>,
+  )
+  screen.getByRole('button', { name: 'test-project: its changes' }).click()
+  screen.getByRole('button', { name: 'oa-newuser: its changes' }).click()
+  expect(opened).toEqual([undefined, 'oa-newuser'])
+})

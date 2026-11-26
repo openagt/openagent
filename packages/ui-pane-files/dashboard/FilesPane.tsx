@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ListTree, MoreVertical, Search, X } from 'lucide-react'
 import {
   Button,
@@ -24,7 +24,7 @@ import {
 } from '@openagt/ui/module'
 import type { AgentTree } from '../src/tree.js'
 import { projectKey, treeKey } from './keys.js'
-import { readProject, readTree } from './reads.js'
+import { readCopies, readProject, readTree } from './reads.js'
 import { FileTree } from './FileTree.js'
 import { FileView, NoFileOpen } from './FileView.js'
 import { closeFile, openFile, setFilesSetting, showFile, useFilesSettings, useOpenFiles, type OpenTab } from './open-files.js'
@@ -169,7 +169,32 @@ function FilesHeader({ page, tabs, active, tree, onOpen, onSearch, onShowTree }:
 /** Narrower than this, the pane has room for the tree or the file, not both. */
 const NARROW = 520
 
-export function FilesPane({ projectId, agentId, activity, show, context }: UiPaneProps) {
+/** What the server says of the run's copies: their files, and the project's own folder's name. */
+interface CopiesRead {
+  project: string
+  copies: { name: string; files: string[] }[]
+}
+
+/** The repos of a tree with a folder per repo: the project's folder's name and the copies; none for a run with no copy. */
+type Repos = { project: string; copies: CopiesRead['copies'] }
+
+function reposOf(read: CopiesRead | null, copiesOnly: boolean): Repos | undefined {
+  if (!read || read.copies.length === 0) return undefined
+  // A copy named as the project's folder is would share its folder in the tree: the project's is told apart. With no project there is none.
+  const project = copiesOnly ? '' : read.copies.some(copy => copy.name === read.project) ? `${read.project} (project)` : read.project
+  return { project, copies: read.copies }
+}
+
+/** Where a path of the tree with a folder per repo is: in a copy (`repo`), or the project's own, and its path there. */
+export function whereIs(repos: Repos, path: string): { repo?: string; path: string } {
+  const cut = path.indexOf('/')
+  const top = cut < 0 ? path : path.slice(0, cut)
+  const rest = cut < 0 ? '' : path.slice(cut + 1)
+  if (top === repos.project) return { path: rest }
+  return repos.copies.some(copy => copy.name === top) ? { repo: top, path: rest } : { path }
+}
+
+export function FilesPane({ projectId, agentId, activity, show, context, copiesOnly }: UiPaneProps) {
   const host = useModuleHost()
   const page = `${projectId}/${agentId ?? ''}`
   const { tabs, active, source } = useOpenFiles(page)
@@ -198,7 +223,7 @@ export function FilesPane({ projectId, agentId, activity, show, context }: UiPan
   // tree instead (#815), polled so they track an agent editing.
   const { value: projectFiles, state: projectState } = usePolled<string[]>(agentId ? null : () => readProject(host, projectId), EMPTY_FILES, 8_000, [projectId, agentId], { remember: projectKey(projectId) })
   const { value: answer, state: treeState, reload: reloadTree } = usePolled<AgentTree | null>(
-    agentId ? () => readTree(host, projectId, agentId) : null,
+    agentId && !copiesOnly ? () => readTree(host, projectId, agentId) : null,
     null,
     8_000,
     [projectId, agentId],
@@ -224,7 +249,18 @@ export function FilesPane({ projectId, agentId, activity, show, context }: UiPan
     const timer = setInterval(reloadTree, 2_000)
     return () => clearInterval(timer)
   }, [pending, reloadTree])
-  const files = agentId ? (runTree && 'files' in runTree ? runTree.files : EMPTY_FILES) : projectFiles
+  const own = agentId ? (runTree && 'files' in runTree ? runTree.files : EMPTY_FILES) : projectFiles
+  // The run's copies of other repositories: with any, the tree has a folder per repo, the project's
+  // first, named as its folder is, as Claude Code's tree has a top folder per repo.
+  const { value: copiesRead } = usePolled<CopiesRead | null>(agentId ? () => readCopies(host, projectId, agentId) : null, null, 15_000, [projectId, agentId], agentId ? { remember: `files:copies:${projectId}:${agentId}` } : undefined)
+  const repos = useMemo(() => reposOf(copiesRead, copiesOnly === true), [copiesRead, copiesOnly])
+  // A session with no project has its copies' folders alone.
+  const files = useMemo(() => (repos ? [...(copiesOnly ? [] : own.map(path => `${repos.project}/${path}`)), ...repos.copies.flatMap(copy => copy.files.map(path => `${copy.name}/${path}`))] : own), [own, repos, copiesOnly])
+  // The Context holds the project's own files: in the tree with folders, under the project's.
+  const shownContext = useMemo<UiPaneProps['context']>(
+    () => (repos ? { files: new Set([...context.files].map(path => `${repos.project}/${path}`)), toggle: path => { const at = whereIs(repos, path); if (at.repo === undefined) context.toggle(at.path) } } : context),
+    [repos, context],
+  )
   // A file asked for from the chat, by the path its agent named it by: whole, on whichever computer
   // the run is on, so it is found in the tree by its end. Opened as a click in the tree opens one,
   // once the tree has it; each ask once.
@@ -262,10 +298,14 @@ export function FilesPane({ projectId, agentId, activity, show, context }: UiPan
       <Waiting shape={<RowShapes rows={3} />} className="px-3 py-1" />
     </>
   )
-  if (agentId && (treeState === 'unknown' || runTree?.source === 'pending')) return waiting
+  if (copiesOnly) {
+    if (copiesRead === null) return waiting
+    if (files.length === 0) return line('This session has no copy of a repository.')
+  }
+  if (agentId && !copiesOnly && (treeState === 'unknown' || runTree?.source === 'pending')) return waiting
   // No checkout, no branch and no merge commit on this machine: say so rather than show the
   // project's own files, which reads as "these are the run's".
-  if (agentId && runTree?.source === 'gone') return line('This session’s files are gone from this machine: its checkout was reclaimed and it left no branch or merged pull request here.')
+  if (agentId && !copiesOnly && runTree?.source === 'gone') return line('This session’s files are gone from this machine: its checkout was reclaimed and it left no branch or merged pull request here.')
   if (!agentId && projectState === 'unknown') return waiting
   if (files.length === 0) return line('No files here.')
 
@@ -276,11 +316,11 @@ export function FilesPane({ projectId, agentId, activity, show, context }: UiPan
       <div ref={setBody} className="flex min-h-0 min-w-0 flex-auto">
         {tree && (
           <div className={cn('flex min-h-0 flex-col', narrow ? 'w-full' : 'w-1/2 max-w-72 min-w-48 shrink-0 border-r border-hairline')}>
-            <FileTree files={files} caption={runTree ? sourceCaption(runTree) : undefined} shown={active} context={context} filter={filter} onOpen={open} />
+            <FileTree files={files} caption={runTree ? sourceCaption(runTree) : undefined} shown={active} context={shownContext} filter={filter} onOpen={open} />
           </div>
         )}
         {narrow && tree ? null : active !== undefined ? (
-          <FileView key={active} page={page} projectId={projectId} agentId={agentId} path={active} wrap={settings.wrap} source={source?.has(active) ?? false} files={files} onOpen={open} />
+          <FileView key={active} page={page} projectId={projectId} agentId={agentId} path={active} {...(repos ? { at: whereIs(repos, active) } : {})} wrap={settings.wrap} source={source?.has(active) ?? false} files={files} onOpen={open} />
         ) : (
           <NoFileOpen />
         )}

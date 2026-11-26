@@ -106,13 +106,13 @@ export async function sessionCopies(agentId: string, home: string = sessionsHome
 }
 
 /** A session's copy of a repo, by its name in the session's folder, and the address of the repository it is a copy of (`github.com/me/shop`): none for a copy of a folder with no remote. */
-export interface SessionRepo {
+export interface CopyRepo {
   name: string
   address?: string
 }
 
 /** The session's copies of repos, with where each is a copy of, as its `origin` says. */
-export async function sessionRepos(agentId: string, deps: { home?: string; git?: GitRunner } = {}): Promise<SessionRepo[]> {
+export async function copyRepos(agentId: string, deps: { home?: string; git?: GitRunner } = {}): Promise<CopyRepo[]> {
   const folder = sessionFolder(deps.home ?? sessionsHome(), agentId)
   const git = deps.git ?? nodeGitRunner()
   return Promise.all(

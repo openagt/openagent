@@ -97,6 +97,8 @@ export interface UiPaneProps {
   show?: { path: string; at: number }
   /** The run's copied repo the pane is opened on, in a tab of its own: its name in the session's folder. Absent: the project. */
   repo?: string
+  /** The session has no project: only its copies of repositories have files and changes. */
+  copiesOnly?: true
   context: UiContext
 }
 

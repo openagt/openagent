@@ -739,9 +739,10 @@ export function App() {
         <PanesProvider
           projectId={projectId}
           agentId={agentId}
-          // A session with no project has no files or changes of a project's to show beside it, and
-          // one that is gone, or a project that is not registered, has none at all.
-          enabled={!pageSegment && !noProject && !sessionGone && !unknownProject}
+          // A session with no project has the files and changes of its copies of repositories beside
+          // it, and the "New agent session" page with no project none; a session that is gone, or a
+          // project that is not registered, has none at all.
+          enabled={!pageSegment && !(noProject && agentId === null) && !sessionGone && !unknownProject}
           files={files}
           context={context}
           toggleContext={toggleContext}
