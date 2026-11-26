@@ -39,6 +39,7 @@ describe('nextSteps', () => {
     expect(steps.discard?.confirm?.confirmLabel).toBe('Discard')
     // On a branch with commits, "Nothing committed" would be false.
     expect(nextSteps({ ...worked, pendingFiles: ['a.ts'] }).commit?.note).toBe('a.ts left uncommitted.')
+    expect(nextSteps({ ...worked, pendingFiles: ['a.ts'] }).discard?.confirm?.description).toBe('a.ts goes back to what the branch holds, and new files are deleted. This cannot be undone.')
   })
 
   test('what is left to say with nothing to press: landed, merged, a branch gone, commits that cancel out; a run that changed nothing says nothing', () => {

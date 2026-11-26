@@ -33,7 +33,7 @@ export function nextSteps(handoff: Handoff | null, repo?: string): Partial<Recor
         rank: 90,
         confirm: {
           title: 'Discard the uncommitted changes?',
-          description: `${namePending(paths)} go back to what the branch holds, and new files are deleted. This cannot be undone.`,
+          description: `${namePending(paths)} ${paths.length === 1 ? 'goes' : 'go'} back to what the branch holds, and new files are deleted. This cannot be undone.`,
           confirmLabel: 'Discard',
           danger: true,
         },
