@@ -8,7 +8,7 @@ import { ScrollArea } from './ui/scroll-area.js'
 import { Skeleton, useSkeleton } from './ui/skeleton.js'
 import { MENU_BODY_CLASS, MENU_ITEM_CLASS, MENU_POPUP_CLASS, MENU_TRIGGER_OPEN_CLASS, MenuMark } from './ui/dropdown-menu.js'
 import { PROJECT_ROW_CLASS } from './ui/nav-row.js'
-import { usePopupPosition } from './ui/popup-placement.js'
+import { POPUP_EDGE, usePopupPosition } from './ui/popup-placement.js'
 import { usePickerSearch } from './ui/picker-search.js'
 
 /** A row of the menu: every project, or one of them. */
@@ -111,7 +111,8 @@ export function SidebarProjectPicker({
     >
       <Combobox.Trigger disabled={pending} aria-label={name} className={MENU_TRIGGER_OPEN_CLASS} render={button} {...search.trigger} data-project-picker="" />
       <Combobox.Portal>
-        <Combobox.Positioner {...position} sideOffset={6} align="start" className="z-50 outline-none">
+        {/* On the select's left edge: the sidebar's 8 from the window, nearer than a popup's usual 16. */}
+        <Combobox.Positioner {...position} collisionPadding={{ top: POPUP_EDGE, right: POPUP_EDGE, bottom: POPUP_EDGE, left: 8 }} sideOffset={6} align="start" className="z-50 outline-none">
           <Combobox.Popup data-overlay="picker" aria-label={name} className={cn(MENU_POPUP_CLASS, 'w-[22rem] max-w-[var(--available-width)]')}>
             {/* The field one line tall, 16 in from the band's every edge, as the jump's is. */}
             <div className="flex h-13 items-center gap-3 border-b border-hairline px-4">

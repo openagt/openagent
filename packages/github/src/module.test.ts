@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { RunOrder, type GithubFacts, type ProjectRef, type PullRequest, type RunContext, type RunFacts, type RunSummary } from '@openagt/hooks'
 import { fakeRun } from '@openagt/hooks/testing'
 import { homedir } from 'node:os'
-import { githubModule, requestsWaiting, type GithubDeps } from './module.js'
+import { copyRequestsWaiting, githubModule, requestsWaiting, type GithubDeps } from './module.js'
 
 // github as a module: the account a run works as, and the pull request a run's branch has, read
 // back into the run's facts.
@@ -181,6 +181,18 @@ test("the project's open requests wait on the person to merge them: a run's goes
     ],
   )
   assert.deepEqual(items[2], { kind: 'waiting', scope: 'project', id: 'https://github.com/o/r/pull/3', words: 'Needs merge', title: 'Request 3', detail: '#3', mark: 'pull-request', since: '2026-08-21T10:00:00Z', fix: { label: 'Open PR #3', href: 'https://github.com/o/r/pull/3' } })
+})
+
+test("an open request of a session's copy of another repository waits on the person as that session's: its row opens the session", () => {
+  const run: RunSummary = { id: 'r1', host: 'here', status: 'done', startedAt: '2026-11-26T15:59:49Z', endedAt: '2026-11-26T16:05:00Z', prompt: '', title: 'Add PR-flow test lines', copyPrs: [{ repo: 'oa-newuser', number: 11, url: 'https://github.com/me/oa-newuser/pull/11' }, { repo: 'docs', number: 4, url: 'https://github.com/me/docs/pull/4' }, { repo: 'site', number: 2, url: 'https://github.com/me/site/pull/2' }] }
+  const read = [
+    { url: 'https://github.com/me/oa-newuser/pull/11', state: 'open', title: 'Add a line' },
+    { url: 'https://github.com/me/docs/pull/4', state: 'merged' },
+  ]
+  // Open, it waits; merged, it does not; never read here, nothing is said of it.
+  assert.deepEqual(copyRequestsWaiting([run], read), [
+    { kind: 'waiting', scope: 'run', run: 'r1', id: 'https://github.com/me/oa-newuser/pull/11', words: 'Needs merge', title: 'Add PR-flow test lines', detail: 'oa-newuser #11', mark: 'pull-request', since: '2026-11-26T16:05:00Z', fix: { label: 'Open PR #11', href: 'https://github.com/me/oa-newuser/pull/11' } },
+  ])
 })
 
 test("the requests of the run's copies of other repositories are read back off the branch each is on, and kept beside the project's, one per copy", async () => {

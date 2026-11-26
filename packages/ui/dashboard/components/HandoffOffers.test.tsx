@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, test } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { UiOffer } from '../module/index.js'
 import { ModulesContext, mountedOf, type MountedAction } from '../lib/use-modules.js'
 
 const { HandoffOffers } = await import('./Places.js')
+const { WorkRowPlace } = await import('./WorkRow.js')
 
 // A session's next step, as its row draws it: back on a session, the step it last offered.
 
@@ -40,5 +41,82 @@ describe('the next step of a session', () => {
     cleanup()
     draw('r2')
     expect(screen.queryByRole('button', { name: 'Open PR' })).toBeNull()
+  })
+
+  test("its arrow lists every choice, the press too, as Claude Code's Create PR does, a line above the first that loses something", async () => {
+    const action = (id: string, label: string, rank: number, offer: UiOffer = {}): MountedAction<'chat.handoff'> => ({ place: 'chat.handoff', id, label, offer: () => ({ rank, ...offer }), package: '@openagt/github', module: 'github', projects: ['p1'] })
+    render(
+      <ModulesContext.Provider value={mountedOf({ actions: { 'chat.handoff': [action('close-pr', 'Close PR', 70, { danger: true }), action('merge-pr', 'Merge PR', 20), action('pr-page', 'Open on GitHub', 60)] } })}>
+        <HandoffOffers projectId="p1" agentId="r3" />
+      </ModulesContext.Provider>,
+    )
+    expect(await screen.findByRole('button', { name: 'Merge PR' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Other choices' }))
+    const menu = await screen.findByRole('menu')
+    expect([...menu.querySelectorAll('[role="menuitem"], [role="separator"]')].map(one => (one.getAttribute('role') === 'separator' ? '—' : one.textContent))).toEqual(['Merge PR', 'Open on GitHub', '—', 'Close PR'])
+    expect(screen.getByRole('menuitem', { name: 'Close PR' }).className).toContain('text-danger')
+  })
+
+  test("what it says beside its press: drawn on the line above the box; in the Activity panel's one-line row, the press's hover", async () => {
+    answer = { note: 'Nothing committed — README.md left uncommitted.', title: 'Commits README.md' }
+    const draw = (place: 'line' | 'activity') =>
+      render(
+        <ModulesContext.Provider value={mountedOf({ actions: { 'chat.handoff': [openPr] } })}>
+          <WorkRowPlace.Provider value={place}>
+            <HandoffOffers projectId="p1" agentId={`r-${place}`} />
+          </WorkRowPlace.Provider>
+        </ModulesContext.Provider>,
+      )
+    draw('line')
+    expect(await screen.findByText('Nothing committed — README.md left uncommitted.')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Open PR' }).getAttribute('title')).toBe('Commits README.md')
+    cleanup()
+    draw('activity')
+    const press = await screen.findByRole('button', { name: 'Open PR' })
+    expect(screen.queryByText('Nothing committed — README.md left uncommitted.')).toBeNull()
+    expect(press.getAttribute('title')).toBe('Commits README.md\nNothing committed — README.md left uncommitted.')
+  })
+
+  test('a press in one place asks again every place showing the same step: the line above the box after the panel row', async () => {
+    let opened = false
+    const open: MountedAction<'chat.handoff'> = { ...openPr, id: 'open-pr', offer: () => (opened ? { label: 'Merge PR' } : {}), run: async () => ((opened = true), { ok: true }) }
+    render(
+      <ModulesContext.Provider value={mountedOf({ actions: { 'chat.handoff': [open] } })}>
+        <div data-testid="panel"><HandoffOffers projectId="p1" agentId="r-both" repo="oa-newuser" /></div>
+        <div data-testid="line"><HandoffOffers projectId="p1" agentId="r-both" repo="oa-newuser" /></div>
+      </ModulesContext.Provider>,
+    )
+    const [inPanel] = await screen.findAllByRole('button', { name: 'Open PR' })
+    fireEvent.click(inPanel!)
+    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Merge PR' })).toHaveLength(2))
+  })
+
+  test("a press done stays busy until the step after it is known: it never says its old words again meanwhile", async () => {
+    let merged = false
+    let answer: (offer: UiOffer) => void = () => {}
+    const merge: MountedAction<'chat.handoff'> = {
+      ...openPr,
+      id: 'merge-pr',
+      label: 'Merge PR',
+      busyLabel: 'Merging…',
+      // After the merge, the next answer is slow to come.
+      offer: () => (merged ? new Promise<UiOffer>(resolve => (answer = resolve)) : {}),
+      run: async () => ((merged = true), { ok: true }),
+    }
+    render(
+      <ModulesContext.Provider value={mountedOf({ actions: { 'chat.handoff': [merge] } })}>
+        <HandoffOffers projectId="p1" agentId="r-settle" />
+      </ModulesContext.Provider>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Merge PR' }))
+    // Done, and the step after it not known yet: still busy.
+    await waitFor(() => expect(merged).toBe(true))
+    await new Promise(resolve => setTimeout(resolve, 50))
+    expect(screen.queryByRole('button', { name: 'Merge PR' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Merging…' })).toBeTruthy()
+    // Known: what it offers now.
+    answer({ noteOnly: true, note: 'Merged.' })
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Merging…' })).toBeNull())
+    expect(screen.queryByRole('button', { name: 'Merge PR' })).toBeNull()
   })
 })

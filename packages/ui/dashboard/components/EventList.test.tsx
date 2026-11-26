@@ -17,7 +17,7 @@ const shownText = (el: Element): string | null => {
 // The session line names the model as the daemon lists it; no daemon here, so the list never answers.
 vi.mock('../rpc/agents.js', () => ({ onCodingAgents: async () => [{ id: 'claude-code', label: 'Claude Code', models: { models: [] } }, { id: 'codex', label: 'Codex', models: { models: [] } }], onNamesRuns: async () => true }))
 
-const { EventList, askedReplies, quietEnds, replyBeforeEnd } = await import('./EventList.js')
+const { EventList, askedReplies, backgroundWait, quietEnds, replyBeforeEnd } = await import('./EventList.js')
 
 // Every list here is in a page where ask is on, as the distribution starts it: its card asks a
 // question (a stand-in, which keeps what it was given), and the chat leaves its block out of the
@@ -1504,5 +1504,12 @@ describe('EventList an agent waiting on work in the background', () => {
   test('says nothing of it once the run is over', () => {
     render(<EventList events={waiting} stick={false} />)
     expect(screen.queryByText(/Waiting on/)).toBeNull()
+  })
+  test("a subagent the CLI lists among its background tasks is the subagent's row, no command", () => {
+    const subagent: RunEvent = { kind: 'driver', event: { type: 'subagent', id: 'toolu_a', status: 'working', name: 'Review the diff', task: 'aac4' } }
+    const both: RunEvent = { kind: 'driver', event: { type: 'background', tasks: [{ id: 'aac4', description: 'Review the diff', since: '2026-11-21T19:13:10.000Z' }, { id: 'b1', command: 'pnpm test', since: '2026-11-21T19:13:10.000Z' }] } }
+    expect(backgroundWait([...waiting, subagent, both])?.map(task => task.id)).toEqual(['b1'])
+    const onlySubagent: RunEvent = { kind: 'driver', event: { type: 'background', tasks: [{ id: 'aac4', since: '2026-11-21T19:13:10.000Z' }] } }
+    expect(backgroundWait([...waiting, subagent, onlySubagent])).toBeUndefined()
   })
 })

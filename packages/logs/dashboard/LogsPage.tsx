@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { Button, Empty, Facts, FilterChips, MiddleCut, Page, PanelGroup, PanelGroups, PanelRow, PanelShape, PersonMark, RunMark, Skeleton, Slot, WordsShape, formatDateTime, formatDay, formatDuration, personSaid, rpcClient, runName, runLineTone, runState, useCodingAgents, usePeople, useIsMobile, runsAgain, runWord, useModuleHost, usePolled, useWaiting, type CodingAgent, type ModuleAgent, type ModuleHostPerson, type UiPageProps, type UiProject, type ReadState, type WaitingItem } from '@openagt/ui/module'
+import { Button, Empty, Facts, FilterChips, MiddleCut, Page, PanelGroup, PanelGroups, PanelRow, PanelShape, PersonMark, RunMark, Skeleton, Slot, WordsShape, formatDateTime, formatDay, formatDuration, personSaid, rpcClient, runName, runLineTone, runState, waitingTone, useCodingAgents, usePeople, useIsMobile, runsAgain, runWord, useModuleHost, usePolled, useWaiting, type CodingAgent, type ModuleAgent, type ModuleHostPerson, type UiPageProps, type UiProject, type ReadState, type WaitingItem } from '@openagt/ui/module'
 import type { RunCard } from '@openagt/agent-driver'
 
 /** How many runs each project lists: the command's own default page is 20; the page shows more. */
@@ -263,17 +263,20 @@ export function LogsPage({ projects }: UiPageProps) {
               <PanelGroups className="gap-y-8">
                 {days.map(({ day, rows, cost }) => (
                   <PanelGroup key={day} title={day} {...(cost > 0 ? { count: dollars(cost) } : {})}>
-                    {rows.map(row => ({ ...row, standing: standingOf(row), need: needOf(row) })).map(({ project, in: home, card, standing, need }) => (
+                    {rows.map(row => ({ ...row, standing: standingOf(row), need: needOf(row) })).map(({ project, in: home, card, standing, need }) => {
+                      // A run waiting on the person is in the colour of what it needs, as "Waiting on you" and the Overview say it.
+                      const tone = standing.state === 'waiting' && need !== undefined ? waitingTone(need) : undefined
+                      return (
                       <PanelRow
                         key={`${project.id}/${card.id}`}
-                        state={<RunMark status={standing.state} />}
+                        state={<RunMark status={standing.state} className={tone} />}
                         // As every list names a run; a run with none of its names goes by its id. What it was asked, whole, under the pointer.
                         title={runName(card) ?? card.id}
                         titleHint={card.intent?.trim() || undefined}
                         href={host.agentHref(home ?? project.id, card.id)}
                         onClick={() => host.openAgent(home ?? project.id, card.id)}
                         meta={[
-                          <span className={runLineTone(standing.state)}>{standingSaid(card, standing)}</span>,
+                          <span className={tone ?? runLineTone(standing.state)}>{standingSaid(card, standing)}</span>,
                           // On a phone the time stands in the line, so the name has the row's width and the row keeps its two lines.
                           phone && <span title={formatDateTime(card.startedAt)}>{clock(card.startedAt)}</span>,
                           // What its work still needs before it leaves this machine, in the sidebar's words.
@@ -325,7 +328,8 @@ export function LogsPage({ projects }: UiPageProps) {
                               ),
                             })}
                       />
-                    ))}
+                      )
+                    })}
                   </PanelGroup>
                 ))}
               </PanelGroups>

@@ -165,3 +165,31 @@ test('the installed claude idle on a command it left running in the background s
     wire.done()
   }
 })
+
+test("the installed claude idle on a command in the background stops that command on its ■, and its turn goes on to its end", { skip, timeout: 120_000 }, async () => {
+  const wire = await wired('sleep 600', { background: true })
+  try {
+    const turn = wire.session.prompt('Go.', { inbox: wire.inbox })
+    // Idle on it: the driver says the task, by the id its ■ stops it by.
+    const task = await within(
+      new Promise<string>(resolve => {
+        const timer = setInterval(() => {
+          const wait = wire.events.find(e => e.type === 'background' && e.tasks.length > 0)
+          if (wait?.type === 'background') {
+            clearInterval(timer)
+            resolve(wait.tasks[0]!.id)
+          }
+        }, 100)
+      }),
+      'go idle on its command',
+    )
+    const pressed = Date.now()
+    await appendInbox(wire.inbox, { kind: 'stop-task', task })
+    const done = await within(turn, 'end the turn once its command was stopped')
+    assert.equal(done.text, 'Done.')
+    assert.ok(Date.now() - pressed < 15_000, `ended ${Date.now() - pressed} ms after the ■, not after its wait`)
+    assert.ok(!wire.events.some(e => e.type === 'notice' && e.message.includes('still ran')), 'stopped by its ■, not by the wait')
+  } finally {
+    wire.done()
+  }
+})

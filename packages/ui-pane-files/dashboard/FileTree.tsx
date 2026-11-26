@@ -116,8 +116,10 @@ function FileRow({ path, shown, attached, onOpen, onAttach }: {
   )
 }
 
-export function FileTree({ files, caption, shown, context, filter, onOpen }: {
+export function FileTree({ files, first, caption, shown, context, filter, onOpen }: {
   files: string[]
+  /** The top folder drawn before the others, which follow by name: the project's, over its copies. */
+  first?: string | undefined
   /** Where a run's files were read from, said over the tree. */
   caption?: string | undefined
   /** The file the pane shows: its row is lit. */
@@ -138,7 +140,7 @@ export function FileTree({ files, caption, shown, context, filter, onOpen }: {
 
   const renderNode = (node: TreeNode) => (
     <>
-      {[...node.dirs.values()].sort(byName).map(dir => (
+      {[...node.dirs.values()].sort((a, b) => Number(node === tree && b.name === first) - Number(node === tree && a.name === first) || byName(a, b)).map(dir => (
         <Folder key={dir.path} name={dir.name}>
           {() => renderNode(dir)}
         </Folder>

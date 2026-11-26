@@ -28,11 +28,14 @@ test('the inbox: lines appended are taken once, in order, and a torn line is ski
     await appendInbox(path, { kind: 'answer', question: 'Ship it?', answer: 'Approve' })
     // A message may say how far the run takes its work from here on, for the tool that runs it.
     await appendInbox(path, { kind: 'message', text: 'ship it', publish: 'pr' })
-    await (await import('node:fs/promises')).appendFile(path, '{ torn\n{"kind":"nope"}\n{"kind":"message","text":"x","publish":3}\n')
+    // A task's ■ names the task it stops.
+    await appendInbox(path, { kind: 'stop-task', task: 'b6pgvzpj0' })
+    await (await import('node:fs/promises')).appendFile(path, '{ torn\n{"kind":"nope"}\n{"kind":"message","text":"x","publish":3}\n{"kind":"stop-task","task":""}\n')
     assert.deepEqual(await takeInbox(path), [
       { kind: 'message', text: 'first' },
       { kind: 'answer', question: 'Ship it?', answer: 'Approve' },
       { kind: 'message', text: 'ship it', publish: 'pr' },
+      { kind: 'stop-task', task: 'b6pgvzpj0' },
     ])
     assert.deepEqual(await takeInbox(path), [], 'taken once')
     assert.equal(await stat(path).then(() => true, () => false), false, 'the file is gone until the next line')
@@ -202,6 +205,7 @@ test('promptLines keeps messages and answers in order, less what a later line to
     promptLines([
       { kind: 'message', text: 'one', id: 'a' },
       { kind: 'now' },
+      { kind: 'stop-task', task: 'b6pgvzpj0' },
       { kind: 'message', text: 'two', id: 'b' },
       { kind: 'answer', question: 'Which?', answer: 'Blue' },
       { kind: 'cancel', id: 'b' },

@@ -228,6 +228,8 @@ export { cn } from '../lib/utils.js'
 export { PR_MARKS, prStateOf, type PrState } from '../lib/pr-marks.js'
 export { inPlace } from '../lib/in-place.js'
 export { runWord, runSaid, runTone, runLineTone, runState } from '../lib/run-words.js'
+// What a waiting item needs, as its colour says it in every list of what waits (Overview, sidebar, Logs).
+export { waitingTone } from '../components/WaitingList.js'
 export { RunMark } from '../components/RunMark.js'
 export { usePolled, useLoaded, useAskOn, forgetRemembered, type ReadState } from '../lib/use-async.js'
 /** For a read of runs: read again the moment the runs of a project (of every one, `undefined`) change, as the dashboard's own lists are. */

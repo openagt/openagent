@@ -1,4 +1,4 @@
-import { GitBranchPlus, Undo2, Upload } from 'lucide-react'
+import { GitBranchPlus, GitCommitHorizontal, GitMerge, Undo2, Upload } from 'lucide-react'
 import type { UiActionAt, UiActionResult, UiHost, UiOffer } from '@openagt/ui/module'
 import { forgetHandoff, mainBranchName, readHandoff, server, type Handoff, type Pressed, type WorkOn } from './calls.js'
 
@@ -33,7 +33,7 @@ export function nextSteps(handoff: Handoff | null, repo?: string): Partial<Recor
         rank: 90,
         confirm: {
           title: 'Discard the uncommitted changes?',
-          description: `${namePending(paths)} go back to what the branch holds, and new files are deleted. This cannot be undone.`,
+          description: `${namePending(paths)} ${paths.length === 1 ? 'goes' : 'go'} back to what the branch holds, and new files are deleted. This cannot be undone.`,
           confirmLabel: 'Discard',
           danger: true,
         },
@@ -94,10 +94,11 @@ function step(id: StepId, action: Omit<UiActionAt<'chat.handoff'>, 'place' | 'id
 
 /** The bar's steps, the first offered being its press and the others under its arrow. */
 export const handoffActions: UiActionAt<'chat.handoff'>[] = [
-  step('commit', { label: 'Commit', busyLabel: 'Asking…', run: async (host, on) => pressed(on, await server(host).commit(on.projectId, { agentId: on.agentId })) }),
+  step('commit', { label: 'Commit', busyLabel: 'Asking…', icon: GitCommitHorizontal, run: async (host, on) => pressed(on, await server(host).commit(on.projectId, { agentId: on.agentId })) }),
   step('merge', {
     label: 'Merge',
     busyLabel: 'Merging…',
+    icon: GitMerge,
     run: async (host, on) =>
       pressed(on, on.repo === undefined ? await server(host).merge(on.projectId, { agentId: on.agentId }) : await server(host).bring(on.projectId, { agentId: on.agentId, repo: on.repo, merge: true })),
   }),

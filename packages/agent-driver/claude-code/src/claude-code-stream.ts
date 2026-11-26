@@ -118,6 +118,13 @@ function resultText(content: unknown): string {
  */
 export const BACKGROUND_WAIT_MS = 30 * 60_000
 
+/**
+ * How long an agent idle on work in the background is given to wake once the person's ■ stopped the
+ * last of it. Claude Code (2.1.332) wakes the agent when a task ends by itself, never when one is
+ * stopped: past this, nothing is left to wake it, and its turn is over.
+ */
+export const STOPPED_WAKE_MS = 5_000
+
 /** What the person is told when the work in the background outlasted the wait ({@link BACKGROUND_WAIT_MS}). */
 function backgroundStopped(tasks: readonly BackgroundTask[], ms: number): string {
   const named = tasks.map(task => `\`${task.command ?? task.description ?? task.id}\``)
@@ -177,6 +184,8 @@ export class StreamJsonParser {
   private hurrying = false
   /** The tasks the CLI runs in the background now, by their id, as its last `background_tasks_changed` said. */
   private readonly background = new Map<string, BackgroundTask>()
+  /** The tasks the person's ■ stopped ({@link stopTask}). */
+  private readonly stoppedTasks = new Set<string>()
   /** The shell command of each Bash call, by the call's id. */
   private readonly commands = new Map<string, string>()
   /** The shell command each task runs, by the task's id: what it is when it goes in the background. */
@@ -190,7 +199,10 @@ export class StreamJsonParser {
   /** Events to say with the next line read: what happened between two lines, on a timer. */
   private pending: DriverEvent[] = []
 
-  constructor(private readonly backgroundWaitMs: number = BACKGROUND_WAIT_MS) {}
+  constructor(
+    private readonly backgroundWaitMs: number = BACKGROUND_WAIT_MS,
+    private readonly stoppedWakeMs: number = STOPPED_WAKE_MS,
+  ) {}
 
   /** Answer the CLI's requests on `io` from now on, and close it when the turn is over. */
   talk(io: CliIo): void {
@@ -244,6 +256,17 @@ export class StreamJsonParser {
     return true
   }
 
+  /**
+   * The person's ■ on one task: a command in the background or a subagent, by its task id. The CLI
+   * ends it (a subagent with the commands it started), says so in its \`task_notification\`, and the
+   * agent goes on, woken by it when it was idle on that work.
+   */
+  stopTask(task: string): void {
+    if (!this.io || this.answered) return
+    this.stoppedTasks.add(task)
+    this.control(`stop-task-${task}`, { subtype: 'stop_task', task_id: task })
+  }
+
   private foregroundTask(subtype: unknown, task: string, obj: Record<string, unknown>): void {
     const patch = typeof obj['patch'] === 'object' && obj['patch'] !== null ? (obj['patch'] as Record<string, unknown>) : {}
     if (subtype === 'task_started' && obj['is_backgrounded'] !== true) {
@@ -260,8 +283,8 @@ export class StreamJsonParser {
     this.io?.write(JSON.stringify({ type: 'control_request', request_id: id, request }))
   }
 
-  /** The tasks in the background, as the CLI's list says them: one it names for the first time began now. */
-  private backgroundTasks(listed: unknown[]): void {
+  /** The tasks in the background, as the CLI's list says them: one it names for the first time began now. Those gone from it. */
+  private backgroundTasks(listed: unknown[]): BackgroundTask[] {
     const now = new Date().toISOString()
     const ids = new Set<string>()
     for (const item of listed) {
@@ -275,7 +298,25 @@ export class StreamJsonParser {
       const command = this.taskCommands.get(id)
       this.background.set(id, { ...(known ?? { id, since: now }), ...(description !== undefined ? { description } : {}), ...(command !== undefined ? { command } : {}) })
     }
-    for (const id of this.background.keys()) if (!ids.has(id)) this.background.delete(id)
+    const gone = [...this.background.values()].filter(task => !ids.has(task.id))
+    for (const task of gone) this.background.delete(task.id)
+    return gone
+  }
+
+  /**
+   * The person's ■ stopped the last of what the agent idled on: the CLI wakes it for no stopped
+   * task, so unless something else wakes it within {@link stoppedWakeMs}, its turn is over, as its
+   * last answer said it, and stdin is closed so the CLI exits.
+   */
+  private stoppedAll(): void {
+    this.clearWait()
+    this.waitTimer = setTimeout(() => {
+      this.waitTimer = undefined
+      if (!this.idle || this.answered || this.stopping) return
+      this.succeeded = this.idleSucceeded
+      this.answered = this.succeeded
+      this.io?.end()
+    }, this.stoppedWakeMs)
   }
 
   /** The command a task runs, off the Bash call it came from: said on its row in the background, if it is there already. */
@@ -373,7 +414,11 @@ export class StreamJsonParser {
     // is over when its task is or when it goes on in the background.
     if (type === 'system' && typeof obj['task_id'] === 'string') this.foregroundTask(obj['subtype'], obj['task_id'], obj)
     // The call a task runs, which may go in the background now or later (Send now).
-    if (type === 'system' && obj['subtype'] === 'task_started' && typeof obj['task_id'] === 'string' && typeof obj['tool_use_id'] === 'string') this.taskCommand(obj['task_id'], obj['tool_use_id'])
+    if (type === 'system' && obj['subtype'] === 'task_started' && typeof obj['task_id'] === 'string' && typeof obj['tool_use_id'] === 'string') {
+      this.taskCommand(obj['task_id'], obj['tool_use_id'])
+      // A subagent's task: what its row's ■ stops it by.
+      announced.push(...this.subagentTask(obj['tool_use_id'], obj['task_id']))
+    }
     if (type === 'system' && obj['subtype'] === 'task_started' && obj['is_backgrounded'] === true && typeof obj['tool_use_id'] === 'string') {
       this.backgrounded.add(obj['tool_use_id'])
       return announced
@@ -384,7 +429,8 @@ export class StreamJsonParser {
     if (type === 'system' && obj['subtype'] === 'task_notification' && typeof obj['tool_use_id'] === 'string') {
       const report = obj['handback_report']
       this.subagentUsage(obj['tool_use_id'], obj['usage'])
-      return [...announced, ...this.reported(obj['tool_use_id'], typeof report === 'object' && report !== null ? (report as Record<string, unknown>)['text'] : undefined), ...this.endSubagent(obj['tool_use_id'], obj['status'] !== 'completed')]
+      const ended = obj['status'] === 'completed' ? 'ended' : obj['status'] === 'stopped' ? 'stopped' : 'failed'
+      return [...announced, ...this.reported(obj['tool_use_id'], typeof report === 'object' && report !== null ? (report as Record<string, unknown>)['text'] : undefined), ...this.endSubagent(obj['tool_use_id'], ended)]
     }
 
     if (type === 'control_request') return [...announced, ...this.handleRequest(obj)]
@@ -413,7 +459,17 @@ export class StreamJsonParser {
       return limit ? [...announced, { type: 'rate-limit', limit }] : announced
     }
     // The work the CLI runs in the background, as a level: every change says the whole set.
-    if (type === 'system' && obj['subtype'] === 'background_tasks_changed' && Array.isArray(obj['tasks'])) this.backgroundTasks(obj['tasks'])
+    if (type === 'system' && obj['subtype'] === 'background_tasks_changed' && Array.isArray(obj['tasks'])) {
+      const gone = this.backgroundTasks(obj['tasks'])
+      // What the person's ■ stopped is said where the agent's words are: it may never say so itself.
+      const stopped = gone.filter(task => this.stoppedTasks.has(task.id))
+      if (stopped.length > 0) announced.push({ type: 'notice', message: `Stopped ${stopped.map(task => `\`${task.command ?? task.description ?? task.id}\``).join(', ')}.` })
+      // Idle, the agent is woken by no task the person stopped: what it waits on is said as it goes.
+      if (this.idle) {
+        if (this.background.size === 0 && stopped.length > 0) this.stoppedAll()
+        return [...announced, { type: 'background', tasks: [...this.background.values()] }]
+      }
+    }
     if (type === 'result') {
       const result = obj['result']
       if (typeof result === 'string') this.finalText = result
@@ -547,13 +603,22 @@ export class StreamJsonParser {
     return [named]
   }
 
+  /** The task the CLI runs a subagent as, said on its row again whole: what its ■ stops it by. */
+  private subagentTask(id: string, task: string): DriverEvent[] {
+    const subagent = this.subagents.get(id)
+    if (subagent === undefined || subagent.task === task) return []
+    const named = { ...subagent, task }
+    this.subagents.set(id, named)
+    return [named]
+  }
+
   /** A subagent's row over, said again whole, so a reader replaces the row by its id without having to remember what the first one carried. */
-  private endSubagent(id: string, failed: boolean): DriverEvent[] {
+  private endSubagent(id: string, status: 'ended' | 'failed' | 'stopped'): DriverEvent[] {
     const subagent = this.subagents.get(id)
     if (subagent === undefined) return []
     this.subagents.delete(id)
     this.backgrounded.delete(id)
-    return [{ ...subagent, status: failed ? 'failed' : 'ended' }]
+    return [{ ...subagent, status }]
   }
 
   /**
@@ -586,7 +651,7 @@ export class StreamJsonParser {
       // answers that it began and the row ends with its task. One that failed to begin is over.
       // A report in the call's answer, which may come after its task said it was over.
       events.push(...this.reported(block['tool_use_id'], handBack(resultText(block['content']))))
-      if (!this.backgrounded.has(block['tool_use_id']) || failed) events.push(...this.endSubagent(block['tool_use_id'], failed))
+      if (!this.backgrounded.has(block['tool_use_id']) || failed) events.push(...this.endSubagent(block['tool_use_id'], failed ? 'failed' : 'ended'))
     }
     return events
   }

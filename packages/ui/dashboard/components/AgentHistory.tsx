@@ -23,6 +23,7 @@ import { useRailScroll } from '../lib/rail-scroll.js'
 import { useProjectLabel } from '../lib/project-labels.js'
 import { runState } from '../lib/run-words.js'
 import { RunMark } from './RunMark.js'
+import { waitingTone } from './WaitingList.js'
 import { agentOf, modelName, useAgents, useNamesRuns } from '../lib/agents.js'
 import { PackageLogo } from './Logins.js'
 import { PR_MARKS, type PrState } from '../lib/pr-marks.js'
@@ -383,7 +384,7 @@ export function AgentHistory({
             what was left under them. The themed ScrollArea (#913) instead of the sidebar's native
             overflow bar, matching the Overview: SidebarContent's own `overflow-auto` is suppressed. */}
         <SidebarContent className="overflow-hidden">
-          <ScrollArea className="min-h-0 flex-1">
+          <ScrollArea quiet className="min-h-0 flex-1">
             <div ref={list}>
               {/* New/Overview/the modules' pages stack as one nav group, row against row, close under
                   the project select (the select's own section has its room below it), with a little
@@ -509,7 +510,7 @@ export function AgentHistory({
         {/* The person at this dashboard, as one row that opens their menu: the theme and Settings
             (PersonMenu). */}
         {/* At the bottom, under the scroll. */}
-        <SidebarFooter className="mt-auto">
+        <SidebarFooter className="mt-auto border-t border-sidebar-border">
           <PersonMenu onSettings={leave(onSettings)} />
         </SidebarFooter>
         {/* Its right edge, dragged to set its width; a phone's sheet has none. */}
@@ -523,7 +524,7 @@ export function AgentHistory({
 /** Two of the rows below while they are read, in their own shape and height: a {@link Slot}'s `shape`. */
 function NavShapes() {
   return Array.from({ length: 2 }, (_, at) => (
-    <div key={at} className="flex items-center gap-3 px-2 md:h-8 max-md:h-11">
+    <div key={at} className="flex items-center gap-2 px-2 md:h-8 max-md:h-11">
       <Skeleton className="size-4 shrink-0 rounded-sm" />
       <Skeleton className={cn('h-3.5', at === 0 ? 'w-20' : 'w-24')} />
     </div>
@@ -594,7 +595,7 @@ const WAITING_COUNT = 'flex h-4.5 min-w-4.5 items-center justify-center rounded-
 /** A row of the sidebar's lists, the navigation's row (ui/nav-row): 32 high (44 on a phone), corners 8, the picked one filled, the one under the pointer half filled. Placed, so one that travels is drawn over the rows it passes (`useGlide`). */
 const railRowClass = (active: boolean, lines: 1 | 2 = 1): string =>
   cn(
-    'focus-ring rail-row relative flex w-full items-center gap-3 rounded-lg px-2 text-left text-sm text-foreground transition-colors',
+    'focus-ring rail-row relative flex w-full items-center gap-2 rounded-lg px-2 text-left text-sm text-foreground transition-colors',
     // Two lines: 32 (44 on a phone) at the least, grown by its lines.
     lines === 1 ? 'md:h-8 max-md:h-11' : 'py-1.5 md:min-h-8 max-md:min-h-11',
     active ? 'bg-foreground/8' : 'hover:bg-foreground/4 active:bg-foreground/8',
@@ -664,6 +665,7 @@ function WaitingOnYou({
             const href = hrefOf(item)
             // Drawn and said by the rule a run's row is, the Logs' too: what waits on the person, in its item's words.
             const { state, word: need } = runState({ status: 'waiting' }, item)
+            const tone = waitingTone(item)
             const external = item.run === undefined
             const name = item.title ?? item.projectName
             return (
@@ -684,17 +686,19 @@ function WaitingOnYou({
                   >
                     <span className="flex min-w-0 flex-1 flex-col">
                       {/* The mark and the age on the name's line, never between the two (spacing.md 3). */}
-                      <span className="flex min-w-0 items-start gap-3">
+                      <span className="flex min-w-0 items-start gap-2">
+                        {/* In the colour of what it needs, as the Overview's Human Queue says it. */}
                         <span data-glide-new className="flex h-5 w-4 shrink-0 items-center justify-center">
-                          <RunMark status={state} />
+                          <RunMark status={state} className={tone} />
                         </span>
                         <span className="min-w-0 flex-1 truncate">{name}</span>
                         <span aria-hidden className={cn(AGE, 'leading-5')}>
                           {formatSince(item.since)}
                         </span>
                       </span>
-                      {/* Under the name, 16 for the mark and 12 after it: the words start where the name does. */}
-                      <span aria-hidden data-glide-new className="truncate pl-7 text-xs text-warning">
+                      {/* Under the name, 16 for the mark and 8 after it: the words start where the name does. */}
+                      {/* The mark says it in colour; the words are quiet, as the Log's age. */}
+                      <span aria-hidden data-glide-new className="truncate pl-6 text-xs text-muted-foreground">
                         {need}
                       </span>
                     </span>
@@ -744,7 +748,7 @@ function LogViewMenu({ order, show, group, byProject }: { order: RecentsSort; sh
             />
           }
         >
-          <SlidersHorizontal className="size-4 shrink-0" aria-hidden />
+          <SlidersHorizontal className="size-3.5 shrink-0" aria-hidden />
         </TooltipTrigger>
         <TooltipContent>Sort and view</TooltipContent>
       </Tooltip>
@@ -791,7 +795,7 @@ function LogViewMenu({ order, show, group, byProject }: { order: RecentsSort; sh
 const PERSON_MARK = 'size-5 text-xs font-medium'
 
 /** A row's time, in a box as wide as its longest word ("59m", "23h", "now") and set to its right, so it stands on one x down a list. */
-const AGE = 'w-7 shrink-0 text-right text-xs text-muted-foreground tabular-nums'
+const AGE = 'w-7 shrink-0 text-right text-[11px] leading-4 text-muted-foreground tabular-nums'
 
 /** What a row shows beside its name and its age, by the person's picks: whose run it is, and which coding agent ran it. */
 type Showing = { person: boolean; agent: boolean }
@@ -820,7 +824,7 @@ function PrMarks({ prs }: { prs: readonly RunPr[] }) {
     const count = prs.filter(pr => pr.state === state).length
     return (
       <span key={state} data-pr={state} className={cn('relative flex shrink-0 items-center', tone, count > 1 && 'mr-0.5')}>
-        <Icon className="size-3.5" aria-hidden />
+        <Icon className="size-3" aria-hidden />
         {/* The smallest type step, drawn at three quarters: a count at a 14 glyph's corner. */}
         {count > 1 && <span className="absolute -top-2 -right-2.5 scale-75 rounded-full bg-sidebar px-0.5 text-xs leading-none font-bold tabular-nums">{count}</span>}
       </span>
@@ -991,12 +995,12 @@ function AgentHistoryRow({
           computer, a host. Rare, so the row stays a mark and a name nearly always. */}
       {startedOn && (
         <RowMark said={`Started on ${startedOn}`}>
-          <Laptop className="size-3.5 text-muted-foreground" />
+          <Laptop className="size-3 text-muted-foreground" />
         </RowMark>
       )}
       {onHost && (
         <RowMark said={onHost}>
-          <HOST_ICON className="size-3.5 text-muted-foreground" />
+          <HOST_ICON className="size-3 text-muted-foreground" />
         </RowMark>
       )}
       {/* Its pull requests and the work it left on the machine, just before its age. */}
@@ -1009,7 +1013,7 @@ function AgentHistoryRow({
           )}
           {left && (
             <RowMark said={left.said}>
-              <left.Icon className="size-3.5 text-muted-foreground" />
+              <left.Icon className="size-3 text-muted-foreground" />
             </RowMark>
           )}
         </span>
@@ -1042,7 +1046,7 @@ function AgentHistoryRow({
       )}
       {show.agent && !(show.person && (personWords || standIn)) && ran && agentSaid && (
         <RowMark said={agentSaid}>
-          <PackageLogo svg={ran.logo} className="size-3.5 text-muted-foreground" />
+          <PackageLogo svg={ran.logo} className="size-3 text-muted-foreground" />
         </RowMark>
       )}
     </>
@@ -1111,7 +1115,7 @@ function AgentHistoryRow({
 /** One small mark on a row, named for a reader that cannot see it; the row's hover says it in words. */
 function RowMark({ said, children }: { said: string; children: ReactNode }) {
   return (
-    <span role="img" aria-label={said} className="flex shrink-0 items-center">
+    <span role="img" aria-label={said} className="flex shrink-0 items-center gap-1">
       {children}
     </span>
   )

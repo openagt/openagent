@@ -48,6 +48,8 @@ export interface PrRead {
   pr?: LinkedPr
   movedPast: boolean
   onGithub: boolean
+  /** GitHub did not answer for the branch's requests: whether it has one is not known. */
+  unread?: true
 }
 
 /** What the reads go through; the real ones when absent. */
@@ -82,22 +84,24 @@ export async function readRunPr(root: string, agentId: string, run: RunFound | u
   const onGithub = await (deps.onGithub ?? (async cwd => (await homeUrlFor(cwd).catch(() => undefined)) !== undefined))(at.cwd)
   const record = run?.record
   const branch = at.branch
-  const listed = onGithub && branch !== undefined ? await requestsOf(at.cwd, branch, record?.endedAt, deps) : []
+  const asked = onGithub && branch !== undefined ? await requestsOf(at.cwd, branch, record?.endedAt, deps) : []
+  const listed = asked ?? []
   // A copy's request is on no record: the one its branch has is the copy's.
   const recorded = repo === undefined ? record?.pr : undefined
   const live = recorded ? listed.find(pr => pr.number === recorded.number) : undefined
   const pr = recorded ? (live ?? { ...recorded, state: 'UNKNOWN', title: '' }) : pickAgentPr(listed, record?.startedAt)
   const latest = pickAgentPr(listed, record?.startedAt, 'latest') ?? pr
   const movedPast = await commitsPast(at.cwd, latest, handoff.commits, deps.git)
-  return { at, handoff, ...(pr ? { pr } : {}), movedPast, onGithub }
+  return { at, handoff, ...(pr ? { pr } : {}), movedPast, onGithub, ...(asked === undefined ? { unread: true as const } : {}) }
 }
 
 /**
  * The branch's requests, through the cache (`cache.ts`): an answer still out is waited for, since
  * acting on "not known yet" is how a second request gets opened, and one read before the run ended
- * is read again, since it cannot know of a request the run opened on its way out.
+ * is read again, since it cannot know of a request the run opened on its way out. None when GitHub
+ * did not answer: "could not tell" is never "no requests".
  */
-async function requestsOf(cwd: string, branch: string, endedAt: string | undefined, deps: PrDeps): Promise<LinkedPr[]> {
+async function requestsOf(cwd: string, branch: string, endedAt: string | undefined, deps: PrDeps): Promise<LinkedPr[] | undefined> {
   const gitHost = deps.gitHost ?? projectGitHost
   if (deps.fresh) return prsForBranchOrThrow(cwd, branch, gitHost)
   // Waited for through the cache, so what it reads is kept for the next ask: a read of its own
@@ -107,7 +111,7 @@ async function requestsOf(cwd: string, branch: string, endedAt: string | undefin
   const stale = cached?.at !== undefined && Number.isFinite(ended) && cached.at < ended
   if (cached?.value !== undefined && !stale) return cached.value
   forgetRequests(cwd, branch)
-  return (await cachedPrsForBranch(cwd, branch, gitHost, { wait: true }).catch(() => undefined))?.value ?? []
+  return (await cachedPrsForBranch(cwd, branch, gitHost, { wait: true }).catch(() => undefined))?.value
 }
 
 /**
@@ -129,7 +133,7 @@ async function commitsPast(cwd: string, pr: LinkedPr | undefined, commits: Hando
  * What the bar offers for the run's request, from what was read. Work left uncommitted comes
  * first, git-branches' Commit: a push or a request would be refused while the checkout is unclean.
  * A branch with no diff, gone, already merged, with no remote, or not on GitHub has no request to
- * open; what is said of each is git-branches'.
+ * open; what is said of each is git-branches'. Nor has one whose requests GitHub did not list.
  */
 export async function prHandoffOf(read: PrRead | undefined, carriesOf: (read: PrRead) => Promise<Carries | undefined> = carriedToDefault): Promise<PrHandoff> {
   if (!read) return {}
@@ -144,6 +148,8 @@ export async function prHandoffOf(read: PrRead | undefined, carriesOf: (read: Pr
     return { pr, merge: true }
   }
   if (!handoff.exists || handoff.empty || handoff.merged || !handoff.hasRemote || !read.onGithub) return pr ? { pr } : {}
+  // GitHub did not say whether the branch has a request: offering to open one could be offering a second.
+  if (read.unread) return pr ? { pr } : {}
   const carries = await carriesOf(read).catch(() => undefined)
   return { ...(pr ? { pr } : {}), open: { pushed: handoff.pushed, branch: handoff.branch, ...(carries ? { carries } : {}) } }
 }

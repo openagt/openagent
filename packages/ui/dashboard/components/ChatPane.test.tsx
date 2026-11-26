@@ -83,6 +83,12 @@ describe('ChatPane', () => {
     expect(screen.getByTestId('chat-top').className.split(' ')).toEqual(expect.arrayContaining(['right-0']))
     expect(screen.getByTestId('chat-top-row').className).toBe('')
     expect(document.body.textContent).toBe('top barchatmessage boxactivity')
+    // The bar runs over the chat's scroll bar there: the chat starts under it, so its bar is never behind the top bar.
+    heights = { 'chat-top': 44, 'chat-bottom': 96.5 }
+    cleanup()
+    render(<ChatPane top={<b>top bar</b>} bottom={<b>message box</b>} side={<p>activity</p>}><p>chat</p></ChatPane>)
+    expect(screen.getByText('chat').parentElement!.className.split(' ')).toContain('mt-(--chat-head)')
+    expect([room('--chat-head'), room('--chat-top')]).toEqual(['44px', '0px'])
   })
 
   test('the message box\'s bar lies over the chat and stops short of its scroll bar; a scroll bar that lies over the content takes no room, and the bar still leaves it a strip', () => {

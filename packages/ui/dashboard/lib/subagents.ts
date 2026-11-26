@@ -16,8 +16,10 @@ export interface CallSubagent {
   /** How many tokens and tool calls it went through, as far as its coding agent says. */
   tokens?: number
   toolUses?: number
-  /** `stopped`: its run's process ended while it worked, and it with it. */
+  /** `stopped`: its run's process ended while it worked, and it with it, or its ■ stopped it. */
   status: 'working' | 'ended' | 'failed' | 'stopped'
+  /** What its ■ stops it by, once its coding agent named it; none where it cannot be stopped alone. */
+  task?: string
   name?: string
   role?: string
   model?: string

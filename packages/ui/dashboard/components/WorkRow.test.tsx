@@ -24,7 +24,7 @@ describe("a repo's row in the session's changes", () => {
     expect(within(copy).getByRole('alert').textContent).toBe('Could not open the pull request.')
   })
 
-  test("a pull request's mark is in its state's colour: open green, merged purple, closed red", () => {
+  test("a pull request's mark is in its state's colour: open green, merged purple, closed red; a draft, or one not read yet, grey", () => {
     const tone = (state: string) => {
       const { container, unmount } = render(<WorkRow name="r" branch="b" pr={{ number: 1, url: 'u', state }} />)
       const mark = container.querySelector('svg')!.getAttribute('class')!
@@ -34,6 +34,9 @@ describe("a repo's row in the session's changes", () => {
     expect(tone('OPEN')).toContain('text-success')
     expect(tone('MERGED')).toContain('text-merged')
     expect(tone('CLOSED')).toContain('text-danger')
+    // GitHub could not be asked yet: no green that says it is open.
+    expect(tone('UNKNOWN')).toContain('text-muted-foreground')
+    expect(tone('DRAFT')).toContain('text-muted-foreground')
   })
 })
 

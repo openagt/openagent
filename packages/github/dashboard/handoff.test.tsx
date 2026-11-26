@@ -26,11 +26,28 @@ describe('what the bar offers for the run’s request', () => {
   })
 
   test('an open request: its merge; the push of commits it does not have first; armed, said and not pressed; nothing to do, nothing', () => {
-    expect(prPresses({ pr: PR, merge: true })).toEqual({ 'merge-pr': { title: 'Merges PR #7 now, or once its checks pass', rank: 20 } })
-    expect(prPresses({ pr: PR, update: true })).toEqual({ 'update-pr': { note: 'not in the PR yet', rank: 20 } })
-    expect(prPresses({ pr: PR, armed: true })).toEqual({ 'merge-pr': { noteOnly: true, note: 'PR #7 merges when its checks pass.' } })
+    const { 'pr-page': _page, 'close-pr': _close, ...needs } = prPresses({ pr: PR, merge: true })
+    expect(needs).toEqual({ 'merge-pr': { title: 'Merges PR #7 now, or once its checks pass', rank: 20 } })
+    expect(prPresses({ pr: PR, update: true })['update-pr']).toEqual({ note: 'not in the PR yet', rank: 20 })
+    expect(prPresses({ pr: PR, armed: true })['merge-pr']).toEqual({ noteOnly: true, note: 'PR #7 merges when its checks pass.' })
     expect(prPresses({ pr: { ...PR, state: 'MERGED' } })).toEqual({})
     expect(prPresses({})).toEqual({})
+  })
+
+  test('under the arrow of an open request, whatever it needs: its page on GitHub, and its Close, in the danger colour and asked first', () => {
+    for (const read of [{ pr: PR, merge: true as const }, { pr: PR, update: true as const }, { pr: PR, armed: true as const }]) {
+      const offered = prPresses(read)
+      expect(offered['pr-page']).toEqual({ href: 'https://github.com/o/r/pull/7', rank: 60 })
+      expect(offered['close-pr']).toEqual({
+        danger: true,
+        rank: 70,
+        confirm: { title: 'Close PR #7?', description: '“Fix” on o/r is closed without merging. Its branch stays; you can reopen it on GitHub.', confirmLabel: 'Close PR', danger: true },
+      })
+    }
+    // A request whose title no read confirmed is named by its number.
+    expect(prPresses({ pr: { ...PR, title: '' }, merge: true })['close-pr']?.confirm?.description).toBe('PR #7 on o/r is closed without merging. Its branch stays; you can reopen it on GitHub.')
+    // Merged or closed, neither.
+    expect(prPresses({ pr: { ...PR, state: 'CLOSED' } })).toEqual({})
   })
 })
 
@@ -39,6 +56,7 @@ describe('the presses', () => {
   const call = vi.fn(async (_projectId: string, name: string, _input: object): Promise<ModuleCallResult> => {
     if (name === 'pullRequest') return { ok: true, output: read }
     if (name === 'openPr') return { ok: true, output: { ok: true, said: 'Opened PR #7.', number: 7 } }
+    if (name === 'closePr') return { ok: true, output: { ok: true, said: 'Closed PR #7.' } }
     if (name === 'home') return { ok: true, output: { url: 'https://github.com/o/r' } }
     if (name === 'repositoryOffer') return { ok: true, output: { repository: 'octo/shop' } }
     return { ok: false, error: `no ${name} here` }
@@ -51,7 +69,7 @@ describe('the presses', () => {
     read = { open: { pushed: true, branch: 'agent/fix' } }
     const on = { projectId: 'p1', agentId: 'r1' }
     const offers = await Promise.all(handoffActions.map(one => one.offer!(host, on)))
-    expect(offers.map(offer => offer?.rank)).toEqual([30, 40, undefined, undefined])
+    expect(offers.map(offer => offer?.rank)).toEqual([30, 40, undefined, undefined, undefined, undefined])
     expect(call.mock.calls.filter(([, name]) => name === 'pullRequest')).toEqual([['p1', 'pullRequest', { agentId: 'r1' }]])
     await action('draft-pr').offer!(host, { ...on, repo: 'docs' })
     expect(call).toHaveBeenLastCalledWith('p1', 'pullRequest', { agentId: 'r1', repo: 'docs' })
@@ -60,6 +78,13 @@ describe('the presses', () => {
     call.mockClear()
     await action('open-pr').offer!(host, on)
     expect(call).toHaveBeenCalledWith('p1', 'pullRequest', { agentId: 'r1' })
+  })
+
+  test("an open request's Close closes the run's request, or a copy's", async () => {
+    expect(await action('close-pr').run!(host, { projectId: 'p1', agentId: 'r1', repo: 'docs' })).toEqual({ ok: true, said: 'Closed PR #7.' })
+    expect(call).toHaveBeenLastCalledWith('p1', 'closePr', { agentId: 'r1', repo: 'docs' })
+    // Its page is a link, nothing it runs.
+    expect(action('pr-page').run).toBeUndefined()
   })
 
   test("the menus: the project's page on GitHub where its origin is there; a private repository for a project on this computer alone, asked once more", async () => {

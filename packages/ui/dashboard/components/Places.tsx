@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ChevronDown, Loader2 } from 'lucide-react'
 import type { RunOptions } from '@openagt/hooks'
 import { moduleHost, type ActionPlace, type ActionPlaces, type ModuleHost, type OptionPlace, type UiActionResult, type UiComposerControlProps, type UiComposerIn, type UiControlSaid, type UiOffer, type ViewPlace, type ViewPlaces } from '../module/index.js'
@@ -7,7 +7,8 @@ import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.j
 import { SESSIONS_ID } from '../../src/project-address.js'
 import { ModuleSlot } from './ModulePageView.js'
 import { ConfirmDialog } from './ui/confirm-dialog.js'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu.js'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.js'
+import { WorkRowPlace } from './WorkRow.js'
 import { Button, buttonVariants } from './ui/button.js'
 import { ButtonGroup, ButtonGroupSeparator } from './ui/button-group.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
@@ -187,7 +188,8 @@ export function useOffers<P extends ActionPlace>(place: P, on: ActionPlaces[P] |
     // `on` by its value, the actions by their keys: a new object of the same thing asks nothing again.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onKey, actionsKey, services, asked, again])
-  return { offers, reask: () => setAsked(n => n + 1) }
+  const reask = useCallback(() => setAsked(n => n + 1), [])
+  return { offers, reask }
 }
 
 /** Run an offered action: its link, its dialog, or its run, asked first when it asks to be. `overlay` is drawn where it outlives a menu that closed. */
@@ -284,38 +286,76 @@ export function useMenuActions<P extends 'chat.menu' | 'project.menu' | 'person.
   return { items, overlay, offered: items.length }
 }
 
+/** How long a press done waits, busy, for the step after it before its button shows what is offered anyway. */
+const SETTLE_MS = 10_000
+
+/**
+ * The places that show a repo's next step, by the run and the repo: the Activity panel's row and
+ * the line above the box show the same one, and a press in one changes what the other offers.
+ */
+const stepShown = new Map<string, Set<() => void>>()
+
 /** The row's press, as Claude Code's Create PR: grey, 24 high, its words at 13px. Busy, it stays focusable. */
 const NEXT_STEP_CLASS = 'h-6 rounded-md bg-foreground/10 text-xs font-normal hover:bg-foreground/15 aria-disabled:pointer-events-none aria-disabled:opacity-50'
 
 /**
  * The next step of an ended run's work, in the bar above its message box (`chat.handoff`): what
  * the modules offer now for the run's checkout, or for one of its copies (`repo`). The words they
- * say beside it first, then the first press, the others under its arrow; what the last press did
- * is said until the work moves on. Asked again when `again` changes (the run's work moved).
+ * say beside it first, then the first press; its arrow lists them all, the first too, as Claude
+ * Code's Create PR does, a line above the first that loses something; what the last press did
+ * is said until the work moves on. In the Activity panel's one-line rows the words beside the press
+ * are its hover instead. Asked again when `again` changes (the run's work moved).
  */
 export function HandoffOffers({ projectId, agentId, repo, again }: { projectId: string; agentId: string; repo?: string | undefined; again?: unknown }) {
   const on = useMemo(() => ({ projectId, agentId, ...(repo !== undefined ? { repo } : {}) }), [projectId, agentId, repo])
   const { offers, reask } = useOffers('chat.handoff', on, projectId, again)
   const [said, setSaid] = useState<{ text: string; error: boolean } | null>(null)
   useEffect(() => setSaid(null), [again, agentId, repo])
-  const { press, pending, overlay } = useRunOffer<'chat.handoff'>(on, (_offered, result) => {
+  // Every place showing this repo's step asks again after a press in any of them.
+  const shownAs = `${projectId}\n${agentId}\n${repo ?? ''}`
+  useEffect(() => {
+    const places = stepShown.get(shownAs) ?? new Set<() => void>()
+    stepShown.set(shownAs, places)
+    places.add(reask)
+    return () => {
+      places.delete(reask)
+      if (places.size === 0) stepShown.delete(shownAs)
+    }
+  }, [shownAs, reask])
+  // A press done stays busy until the step after it is known: its button never goes back to its old words meanwhile.
+  const [settling, setSettling] = useState<string | null>(null)
+  useEffect(() => setSettling(null), [offers])
+  useEffect(() => {
+    if (settling === null) return
+    const timer = setTimeout(() => setSettling(null), SETTLE_MS)
+    return () => clearTimeout(timer)
+  }, [settling])
+  const { press, pending: running, overlay } = useRunOffer<'chat.handoff'>(on, (offered, result) => {
     setSaid(result.ok ? (result.said !== undefined ? { text: result.said, error: false } : null) : { text: result.error, error: true })
-    reask()
+    setSettling(offered.key)
+    for (const again of stepShown.get(shownAs) ?? []) again()
   })
+  const pending = running ?? settling
   const down = useContext(DaemonDown)
+  const inPanel = useContext(WorkRowPlace) === 'activity'
   const offered = offers ?? []
   const notes = offered.filter(each => each.offer.note !== undefined)
   const [first, ...more] = offered.filter(each => !each.offer.noteOnly)
+  // In the panel, what the bar says beside the press is its hover, after its own.
+  const hover = [first?.offer.title, ...(inPanel ? notes.map(each => each.offer.note) : [])].filter(Boolean).join('\n') || undefined
   const labelOf = (each: Offered<'chat.handoff'>) => (pending === each.key && each.action.busyLabel ? each.action.busyLabel : (each.offer.label ?? each.action.label))
+  // Busy on a choice under the arrow, the button says that choice's work: "Closing PR…".
+  const busy = pending !== null ? offered.find(each => each.key === pending) : undefined
   const step = { disabled: down, 'aria-disabled': pending !== null || undefined }
   return (
     <>
       {said && (
-        <span role={said.error ? 'alert' : 'status'} className={cn('min-w-0 truncate text-xs', said.error ? 'text-danger' : 'text-muted-foreground')}>
+        <span role={said.error ? 'alert' : 'status'} title={said.text} className={cn('min-w-0 truncate text-xs', said.error ? 'text-danger' : 'text-muted-foreground')}>
           {said.text}
         </span>
       )}
       {!said &&
+        !inPanel &&
         notes.map(each => (
           <span key={`${each.key}:note`} className="min-w-0 truncate text-xs text-muted-foreground" {...(each.offer.title !== undefined ? { title: each.offer.title } : {})}>
             {each.offer.note}
@@ -323,9 +363,9 @@ export function HandoffOffers({ projectId, agentId, repo, again }: { projectId: 
         ))}
       {first && (
         <ButtonGroup>
-          <Button size="sm" variant="ghost" className={cn(NEXT_STEP_CLASS, 'min-w-18 justify-center px-3', first.offer.danger && 'text-danger')} data-next-step {...step} {...(first.offer.title !== undefined ? { title: first.offer.title } : {})} onClick={() => press(first)}>
-            {pending === first.key && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
-            {labelOf(first)}
+          <Button size="sm" variant="ghost" className={cn(NEXT_STEP_CLASS, 'min-w-18 justify-center px-3', first.offer.danger && 'text-danger')} data-next-step {...step} {...(hover !== undefined ? { title: hover } : {})} onClick={() => press(first)}>
+            {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
+            {busy?.action.busyLabel ?? labelOf(first)}
           </Button>
           {more.length > 0 && (
             <>
@@ -335,13 +375,16 @@ export function HandoffOffers({ projectId, agentId, repo, again }: { projectId: 
                   <ChevronDown className="h-3.5 w-3.5" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="min-w-[10rem]">
-                  {more.map(each => {
+                  {[first, ...more].map((each, at, all) => {
                     const Icon = each.action.icon
                     return (
-                      <DropdownMenuItem key={each.key} onClick={() => press(each)} className={each.offer.danger ? 'text-danger' : undefined} {...(each.offer.title !== undefined ? { title: each.offer.title } : {})}>
-                        {Icon && <Icon className="h-3.5 w-3.5" aria-hidden />}
-                        {labelOf(each)}
-                      </DropdownMenuItem>
+                      <Fragment key={each.key}>
+                        {each.offer.danger && at > 0 && !all[at - 1]!.offer.danger && <DropdownMenuSeparator />}
+                        <DropdownMenuItem onClick={() => press(each)} className={each.offer.danger ? 'text-danger' : undefined} {...(each.offer.title !== undefined ? { title: each.offer.title } : {})}>
+                          {Icon && <Icon className="h-3.5 w-3.5" aria-hidden />}
+                          {labelOf(each)}
+                        </DropdownMenuItem>
+                      </Fragment>
                     )
                   })}
                 </DropdownMenuContent>

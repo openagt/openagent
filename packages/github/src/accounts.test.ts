@@ -5,7 +5,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wr
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import type { GhRunner } from './gh.js'
-import { accountLogins, ghState, isAccountDir, loginUnderWay, runEnv, runsAccount, settleAdded, startLogin, stopLogin, useForRuns } from './accounts.js'
+import { VERIFIED_MS, accountLogins, ghState, isAccountDir, keepVerified, loginUnderWay, runEnv, runsAccount, settleAdded, startLogin, stopLogin, useForRuns, verifiedToken } from './accounts.js'
 import { jobState, startJob } from './job.js'
 import { gitDirsOf } from './module.js'
 import { sessionFolder } from '@openagt/git-branches'
@@ -116,6 +116,35 @@ test(
     assert.equal(runsAccount([], join(dir, 'none.json')), undefined)
   }),
 )
+
+test(
+  'a command works as an account asking GitHub once a day whose its token is, not once per command, and never asks after every account',
+  withDir(async dir => {
+    const env = { XDG_CONFIG_HOME: dir }
+    const root = join(dir, 'openagent-github')
+    account(root, 'octo', { id: 1 })
+    account(root, 'octo-agent', { id: 42 })
+    const asked: { args: string[] }[] = []
+    const gh = ghWith(asked)
+    for (let n = 0; n < 3; n++) assert.equal((await run(['env'], { gh, env })).out['login'], 'octo')
+    const toGithub = asked.filter(call => (call.args[0] === 'api' && call.args.includes('user')) || (call.args[0] === 'auth' && call.args[1] === 'status'))
+    assert.equal(toGithub.length, 1, 'one check of the token, no status of each account: ' + JSON.stringify(toGithub.map(call => call.args.slice(0, 2))))
+    // The word kept is the token's, by its hash: never the token itself.
+    const kept = readFileSync(join(root, 'octo', 'verified.json'), 'utf8')
+    assert.ok(!kept.includes('tok-octo'))
+  }),
+)
+
+test('a token is taken as its account\'s once GitHub said so, for a day: another token, another login or a day later is asked again', withDir(dir => {
+  const now = Date.parse('2026-11-26T19:00:00Z')
+  assert.equal(verifiedToken(dir, 'tok-a', 'octo', now), false)
+  keepVerified(dir, 'tok-a', 'octo', now)
+  assert.equal(verifiedToken(dir, 'tok-a', 'octo', now + 60_000), true)
+  assert.equal(verifiedToken(dir, 'tok-a', 'Octo', now + 60_000), true, "GitHub's logins are not case-sensitive")
+  assert.equal(verifiedToken(dir, 'tok-b', 'octo', now + 60_000), false)
+  assert.equal(verifiedToken(dir, 'tok-a', 'octo-agent', now + 60_000), false)
+  assert.equal(verifiedToken(dir, 'tok-a', 'octo', now + VERIFIED_MS), false)
+}))
 
 test('runEnv: the account\u2019s folder for gh; git asks the token of the helper set here alone, ssh addresses go over https, settings already given are kept', () => {
   const env = runEnv('tok', '/cfg/openagent-github/octo', { login: 'octo', id: 42, name: 'Octo Cat' }, { GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'core.x', GIT_CONFIG_VALUE_0: 'y' })
@@ -234,7 +263,9 @@ test(
     assert.equal(stranger.code, 1)
     assert.equal(stranger.out['reason'], 'no-account')
     assert.equal((await run(['use', 'stranger'], { gh, env })).out['reason'], 'no-account')
-    // A login kept under one name that GitHub says is another account's: never handed to a run.
+    // A login kept under one name that GitHub says is another account's: never handed to a run. (A
+    // token GitHub said was octo-agent's is that account's for good: this is one it was not asked about.)
+    rmSync(join(root, 'octo-agent', 'verified.json'), { force: true })
     const mixed = await run(['env', '--user', 'octo-agent'], { gh: ghWith([], { whose: { 'octo-agent': 'octo' } }), env })
     assert.equal(mixed.code, 1)
     assert.equal(mixed.out['reason'], 'not-that-account')

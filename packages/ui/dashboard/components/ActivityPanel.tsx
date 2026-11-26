@@ -3,6 +3,7 @@ import { Bot, Folder, GitBranch, List as ListIcon, SquareTerminal } from 'lucide
 import type { BackgroundTask } from '@openagt/hooks'
 import { EnvironmentRow, repoPath } from './EnvironmentRow.js'
 import { lasted, useNow } from './BackgroundTasksPane.js'
+import { StopTask } from './StopTask.js'
 import type { UiWorkProps } from '../module/index.js'
 import { cn } from '../lib/utils.js'
 import { tokenWords } from './ContextCircle.js'
@@ -37,6 +38,8 @@ export interface WorkingSubagent {
   key: string
   name: string
   since?: string
+  /** What its ■ stops it by; none where it cannot be stopped alone. */
+  task?: string
 }
 
 export function ActivityPanel({
@@ -104,17 +107,39 @@ export function ActivityPanel({
       {(background.length > 0 || subagents.length > 0) && (
         <Part name="Background tasks">
           {subagents.map(one => (
-            <button key={one.key} type="button" className="text-left" onClick={() => onOpenSubagent?.(one.key)}>
-              <EnvironmentRow icon={Bot} end={one.since !== undefined ? <span className="shrink-0 text-xs text-muted-foreground">{lasted(now - Date.parse(one.since))}</span> : undefined}>
+            <EnvironmentRow
+              key={one.key}
+              icon={Bot}
+              end={
+                <>
+                  {one.since !== undefined && <span className="shrink-0 text-xs text-muted-foreground">{lasted(now - Date.parse(one.since))}</span>}
+                  {one.task !== undefined && <StopTask projectId={work.projectId} agentId={work.agentId} task={one.task} name={one.name} />}
+                </>
+              }
+            >
+              <button type="button" className="block w-full truncate text-start" onClick={() => onOpenSubagent?.(one.key)}>
                 {one.name}
-              </EnvironmentRow>
-            </button>
-          ))}
-          {background.map(task => (
-            <EnvironmentRow key={task.id} icon={SquareTerminal} title={task.command} end={<span className="shrink-0 text-xs text-muted-foreground">{lasted(now - Date.parse(task.since))}</span>}>
-              {task.description ?? task.command ?? 'A background task'}
+              </button>
             </EnvironmentRow>
           ))}
+          {background.map(task => {
+            const name = task.description ?? task.command ?? 'A background task'
+            return (
+              <EnvironmentRow
+                key={task.id}
+                icon={SquareTerminal}
+                title={task.command}
+                end={
+                  <>
+                    <span className="shrink-0 text-xs text-muted-foreground">{lasted(now - Date.parse(task.since))}</span>
+                    <StopTask projectId={work.projectId} agentId={work.agentId} task={task.id} name={name} />
+                  </>
+                }
+              >
+                {name}
+              </EnvironmentRow>
+            )
+          })}
         </Part>
       )}
       <Part name="Changes">

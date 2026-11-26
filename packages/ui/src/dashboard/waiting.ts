@@ -66,7 +66,9 @@ export async function buildWaiting(projects: ProjectSummary[], deps: WaitingDeps
   const seen = new Set<string>()
   // An item named by an address (a pull request's) is one thing in every project it is listed in.
   const identity = (item: Waiting) => (item.id !== undefined && /^https?:\/\//.test(item.id) ? `${item.module}:${item.id}` : item.scope === 'run' ? `${item.module}:run:${item.run ?? ''}:${item.id ?? ''}` : waitingKey(item))
-  const unique = items.filter(item => (seen.has(identity(item)) ? false : (seen.add(identity(item)), true)))
+  // Said by a run (a session's copy's request) and by its own project with none, the run's is kept: its row opens the session.
+  const ofRuns = new Set(items.flatMap(item => (item.scope === 'run' ? [identity(item)] : [])))
+  const unique = items.filter(item => !(item.scope !== 'run' && ofRuns.has(identity(item))) && (seen.has(identity(item)) ? false : (seen.add(identity(item)), true)))
   return { items: oneStepPerRun(unique), whole }
 }
 

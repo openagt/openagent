@@ -1,11 +1,11 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { SquareTerminal } from 'lucide-react'
 import type { BackgroundTask } from '@openagt/hooks'
+import { StopTask } from './StopTask.js'
 
 // The side panel's Background tasks tab, as Claude Code on the web has it: what the agent leaves
 // running in the background while it waits (a test run, a server), each with how long it has gone
-// on, then the run's subagents (SubagentsPanel). Neither has a Stop of its own: the session's Stop
-// stops all of it.
+// on and its ■ (StopTask), then the run's subagents (SubagentsPanel), each working one with its ■ too.
 
 /** How long something has gone on, as a short count: `34s`, `1m 12s`, `2h 5m`. */
 export function lasted(ms: number): string {
@@ -27,7 +27,7 @@ export function useNow(ticking: boolean): number {
   return now
 }
 
-export function BackgroundTasksPane({ background, subagents }: { background: readonly BackgroundTask[]; /** The run's subagents' pane, when it started any. */ subagents?: ReactNode }) {
+export function BackgroundTasksPane({ projectId, agentId, background, subagents }: { projectId: string; agentId: string; background: readonly BackgroundTask[]; /** The run's subagents' pane, when it started any. */ subagents?: ReactNode }) {
   const now = useNow(background.length > 0)
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -43,6 +43,7 @@ export function BackgroundTasksPane({ background, subagents }: { background: rea
                   {task.command && task.description && <span className="block truncate font-mono text-xs text-muted-foreground">{task.command}</span>}
                 </span>
                 <span className="shrink-0 text-xs text-muted-foreground">{lasted(now - Date.parse(task.since))}</span>
+                <StopTask projectId={projectId} agentId={agentId} task={task.id} name={task.description ?? task.command ?? 'the background task'} />
               </li>
             ))}
           </ul>

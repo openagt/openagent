@@ -226,3 +226,71 @@ test('the wait holds the process until it ends the turn: with nothing else alive
   assert.equal(run.status, 0, run.stderr)
   assert.equal(run.stdout.trim(), 'ended')
 })
+
+test("a task's ■ goes as stop_task with its id; a subagent is said again with the task it runs as, and its end on the ■ is a stop", () => {
+  // As Claude Code 2.1.332 said them: a backgrounded subagent's task, a command's, the ■ on each.
+  const parser = new StreamJsonParser()
+  const io = recordingIo()
+  parser.talk(io)
+  push(parser, { type: 'assistant', message: { id: 'msg1', content: [{ type: 'tool_use', id: 'toolu_a', name: 'Agent', input: { description: 'Run sleep 80 and report output', subagent_type: 'general-purpose', prompt: 'Sleep.' } }] }, session_id: 's1' })
+  const named = push(parser, { type: 'system', subtype: 'task_started', task_id: 'aac4ad94a317d341f', tool_use_id: 'toolu_a', is_backgrounded: true, task_type: 'local_agent', session_id: 's1' })
+  assert.deepEqual(named.map(e => (e.type === 'subagent' ? [e.id, e.status, e.task] : e.type)), [['toolu_a', 'working', 'aac4ad94a317d341f']])
+  // A command's task names no subagent: nothing is said again.
+  assert.deepEqual(push(parser, { type: 'system', subtype: 'task_started', task_id: 'b6pgvzpj0', tool_use_id: 'toolu_b', is_backgrounded: true, task_type: 'local_bash', session_id: 's1' }), [])
+  parser.stopTask('aac4ad94a317d341f')
+  parser.stopTask('b6pgvzpj0')
+  assert.deepEqual(io.lines.map(line => line['request']), [{ subtype: 'stop_task', task_id: 'aac4ad94a317d341f' }, { subtype: 'stop_task', task_id: 'b6pgvzpj0' }])
+  const ended = push(parser, { type: 'system', subtype: 'task_notification', task_id: 'aac4ad94a317d341f', tool_use_id: 'toolu_a', status: 'stopped', session_id: 's1' })
+  assert.deepEqual(ended.flatMap(e => (e.type === 'subagent' ? [e.status] : [])), ['stopped'])
+})
+
+test("a task's ■ after the turn is over asks nothing", () => {
+  const parser = new StreamJsonParser()
+  const io = recordingIo()
+  parser.stopTask('t1')
+  parser.talk(io)
+  push(parser, { type: 'result', subtype: 'success', is_error: false, result: 'Done.', session_id: 's1' })
+  parser.stopTask('t1')
+  assert.deepEqual(io.lines, [])
+})
+
+test("the ■ that stopped the last of what the agent idled on ends its turn when nothing wakes it; a wake in time goes on", async () => {
+  const idleOn = (parser: StreamJsonParser) => {
+    push(parser, { type: 'system', subtype: 'background_tasks_changed', tasks: [{ task_id: 'b1', task_type: 'local_bash', description: 'Wait' }], session_id: 's1' })
+    push(parser, { type: 'result', subtype: 'success', is_error: false, result: 'Waiting on it.', session_id: 's1' })
+  }
+  // Nothing wakes it: stdin is closed, so the CLI exits, and the turn is the answer it gave as it went idle.
+  const quiet = new StreamJsonParser(60_000, 20)
+  let ended = 0
+  quiet.talk({ write: () => {}, end: () => void ended++ })
+  idleOn(quiet)
+  quiet.stopTask('b1')
+  // What it waits on is said as it goes, since nothing wakes it to say so.
+  assert.deepEqual(
+    push(quiet, { type: 'system', subtype: 'background_tasks_changed', tasks: [], session_id: 's1' }).map(e => (e.type === 'notice' ? e.message : e.type === 'background' ? e.tasks : e.type)),
+    ['Stopped `Wait`.', []],
+  )
+  await new Promise(resolve => setTimeout(resolve, 60))
+  assert.equal(ended, 1)
+  assert.equal(quiet.result().text, 'Waiting on it.')
+  // A task that ended by itself wakes the agent: its emptying is no stop of the person's.
+  const natural = new StreamJsonParser(60_000, 20)
+  let closed = 0
+  natural.talk({ write: () => {}, end: () => void closed++ })
+  idleOn(natural)
+  push(natural, { type: 'system', subtype: 'background_tasks_changed', tasks: [], session_id: 's1' })
+  await new Promise(resolve => setTimeout(resolve, 60))
+  assert.equal(closed, 0)
+  natural.over()
+  // Woken in time after the ■: it goes on.
+  const woken = new StreamJsonParser(60_000, 20)
+  let shut = 0
+  woken.talk({ write: () => {}, end: () => void shut++ })
+  idleOn(woken)
+  woken.stopTask('b1')
+  push(woken, { type: 'system', subtype: 'background_tasks_changed', tasks: [], session_id: 's1' })
+  push(woken, { type: 'assistant', message: { id: 'msg2', content: [{ type: 'text', text: 'It was stopped.' }] }, session_id: 's1' })
+  await new Promise(resolve => setTimeout(resolve, 60))
+  assert.equal(shut, 0)
+  woken.over()
+})

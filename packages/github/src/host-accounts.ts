@@ -36,10 +36,19 @@ export const accountsWiring: { read: () => Promise<GithubAccounts>; gitConfig: (
 }
 
 let last: GithubAccounts | undefined
+/** When the last answer was read. */
+let lastAt = 0
 let reading: Promise<GithubAccounts> | undefined
 
-/** OpenAgent's GitHub accounts: the last answer when there is one, the accounts being read again behind it. */
-export async function githubAccounts(): Promise<GithubAccounts> {
+/**
+ * How old the last answer may be before an ask reads the accounts again behind it: a read asks
+ * GitHub once per account, and the asks come every few seconds (each push, each "Send as").
+ */
+export const ACCOUNTS_FRESH_MS = 60_000
+
+/** OpenAgent's GitHub accounts: the last answer when there is one, the accounts read again behind it once it is a minute old. */
+export async function githubAccounts(now: number = Date.now()): Promise<GithubAccounts> {
+  if (last !== undefined && now - lastAt < ACCOUNTS_FRESH_MS) return last
   const read = reading ?? readAgain()
   if (last === undefined) return read
   // Its answer is for the next ask; a read that failed leaves the last answer standing.
@@ -52,7 +61,10 @@ function readAgain(): Promise<GithubAccounts> {
   const read: Promise<GithubAccounts> = accountsWiring
     .read()
     .then(answer => {
-      if (reading === read) last = answer
+      if (reading === read) {
+        last = answer
+        lastAt = Date.now()
+      }
       return answer
     })
     .finally(() => {

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import type { GitRunner, RunFound } from '@openagt/hooks'
 import type { Handoff } from '@openagt/git-branches'
 import { prHandoffOf, readRunPr, requestText, type PrRead } from './handoff.js'
-import type { GitHostFor, GitHostRequest, LinkedPr } from './pulls.js'
+import { HELD_MS, holdRequest, type GitHostFor, type GitHostRequest, type LinkedPr } from './pulls.js'
 
 // The pull request of an ended run's work (#799), in the bar above its message box: which of its
 // branch's requests is the run's, what the bar offers for it, and what a new one says. The
@@ -115,6 +115,39 @@ test('a GitHub slower than the cache waits for is asked once: its answer is kept
   assert.equal((await readRunPr('/repo-slow', 'r1', run({}), undefined, deps(slow)))?.pr?.number, 7)
   assert.equal((await readRunPr('/repo-slow', 'r1', run({}), undefined, deps(slow)))?.pr?.number, 7)
   assert.equal(reads, 1)
+})
+
+test('a GitHub that does not answer is no "none": no request is offered, the read after it asks again, and a good answer is kept over a failed one', async () => {
+  let answer: 'refuse' | 'one' = 'refuse'
+  let reads = 0
+  const flaky: GitHostFor = async () => ({ requests: async () => (reads++, answer === 'refuse' ? { ok: false as const, error: 'gh: connection reset' } : { ok: true as const, requests: [REQUEST] }) })
+  const failed = await readRunPr('/repo-flaky', 'r1', run({}), undefined, deps(flaky))
+  assert.equal(failed?.unread, true)
+  assert.equal(failed?.pr, undefined)
+  // As session 2026-11-26T00-43-44-681Z showed: its copy's open PR #10 read as none, and the bar offered Open PR.
+  assert.deepEqual(await prHandoffOf(failed, noCarries), {})
+  answer = 'one'
+  const next = await readRunPr('/repo-flaky', 'r1', run({}), undefined, deps(flaky))
+  assert.equal(next?.pr?.number, 7)
+  assert.equal(next?.unread, undefined)
+  assert.ok(reads >= 3, 'the failed read was kept for nobody')
+})
+
+test("a request opened here is the branch's at once, though GitHub's list does not have it yet; closed here, it is closed; GitHub's word again once the hold is over", async () => {
+  // As #50 showed on 11-26: opened, and the next read of the list, a second later, had none.
+  const { gitHost } = hostAnswering([])
+  holdRequest('/repo-held', 'agent/fix', OPEN)
+  const opened = await readRunPr('/repo-held', 'r1', run({}), undefined, deps(gitHost))
+  assert.equal(opened?.pr?.number, 7)
+  assert.deepEqual(await prHandoffOf(opened, noCarries), { pr: opened!.pr, merge: true })
+  // Closed here while the list still says open.
+  const listing = hostAnswering([REQUEST])
+  holdRequest('/repo-held-close', 'agent/fix', { ...OPEN, state: 'CLOSED', createdAt: REQUEST.createdAt! })
+  const closed = await readRunPr('/repo-held-close', 'r1', run({ startedAt: '2026-08-21T09:00:00Z' }), undefined, deps(listing.gitHost))
+  assert.equal(closed?.pr?.state, 'CLOSED')
+  // The hold is over: GitHub's list says.
+  holdRequest('/repo-held-over', 'agent/fix', OPEN, Date.now() - HELD_MS - 1)
+  assert.equal((await readRunPr('/repo-held-over', 'r1', run({}), undefined, deps(hostAnswering([]).gitHost)))?.pr, undefined)
 })
 
 test('a request a press opens is read from GitHub there and then, and one it cannot read is a refusal, never "none"', async () => {

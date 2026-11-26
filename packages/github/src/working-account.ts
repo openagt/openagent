@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { Refused } from '@openagt/hooks/command'
 import { errorMessage } from '@openagt/git-branches'
 import type { GhRunner } from './gh.js'
-import { HOST, accountDir, accountsRoot, asAccount, installedAccounts, isAccountDir, picksPath, readFacts, runEnv, runsAccount, whoAmI, type AccountFacts } from './accounts.js'
+import { HOST, accountDir, accountsRoot, asAccount, isAccountDir, keepVerified, listedAccounts, picksPath, readFacts, runEnv, runsAccount, verifiedToken, whoAmI, type AccountFacts } from './accounts.js'
 
 /**
  * The account a command works as: one of OpenAgent's own, never the person's `gh`. Inside a run,
@@ -21,7 +21,7 @@ export async function workingGh({ gh, cwd, env }: { gh: GhRunner; cwd: string; e
   const root = accountsRoot(env)
   const given = env['GH_CONFIG_DIR']
   if (given !== undefined && isAccountDir(root, given)) return asAccount(gh, given)
-  const login = runsAccount(await installedAccounts(root, cwd, gh), picksPath(env))
+  const login = runsAccount(await listedAccounts(root, cwd, gh), picksPath(env))
   if (login === undefined) throw noAccount()
   const dir = accountDir(root, login)
   const working = runEnv(await tokenOf(login, dir, cwd, gh), dir, readFacts(dir), env)
@@ -31,7 +31,7 @@ export async function workingGh({ gh, cwd, env }: { gh: GhRunner; cwd: string; e
 /** One of OpenAgent's accounts: `user`, when named, else the one runs use; refused when OpenAgent has no such account. */
 export async function accountNamed(user: string | undefined, cwd: string, gh: GhRunner, env: NodeJS.ProcessEnv): Promise<{ login: string; dir: string }> {
   const root = accountsRoot(env)
-  const accounts = await installedAccounts(root, cwd, gh)
+  const accounts = await listedAccounts(root, cwd, gh)
   if (user !== undefined && !accounts.some(a => a.login === user)) {
     throw new Refused({ ok: false, reason: 'no-account', login: user }, `OpenAgent has no GitHub account ${user} on this computer: add it in OpenAgent's Permissions`)
   }
@@ -57,7 +57,9 @@ function noAccount(): Refused {
 
 /**
  * `login`'s token as OpenAgent keeps it, once GitHub said it is that account's: a login kept under
- * one name can be another account's, and nothing must go out as someone else than it says.
+ * one name can be another account's, and nothing must go out as someone else than it says. GitHub
+ * is asked once a day per token, not once per command: every command asking it was most of the
+ * account's hourly calls with one page open.
  */
 export async function tokenOf(login: string, dir: string, cwd: string, gh: GhRunner): Promise<string> {
   let token: string
@@ -67,10 +69,13 @@ export async function tokenOf(login: string, dir: string, cwd: string, gh: GhRun
     const detail = errorMessage(err)
     throw new Refused({ ok: false, reason: 'no-token', login, detail }, `OpenAgent has no token for ${login}: ${detail}`)
   }
+  // GitHub said it is this account's not long ago: the same token is still the same account's.
+  if (verifiedToken(dir, token, login)) return token
   const whose = (await factsOfToken(token, cwd, gh, login)).login
   if (whose.toLowerCase() !== login.toLowerCase()) {
     throw new Refused({ ok: false, reason: 'not-that-account', login, whose }, `the login OpenAgent keeps for ${login} is ${whose}'s on GitHub: add ${login} again in OpenAgent's Permissions`)
   }
+  keepVerified(dir, token, login)
   return token
 }
 

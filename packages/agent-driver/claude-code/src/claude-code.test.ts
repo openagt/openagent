@@ -163,8 +163,8 @@ test('StreamJsonParser gives a subagent its own events, its model off its first 
     { type: 'action', label: 'Agent', detail: 'Run echo hi', id: 'toolu_a' },
     { ...named, status: 'working' },
   ])
-  // In the background: the call's answer says only that the subagent began, and ends nothing.
-  assert.deepEqual(p.push(task('task_started', { task_id: 'a9c8', tool_use_id: 'toolu_a', is_backgrounded: true, description: 'Run echo hi' })), [])
+  // In the background: the row is said again with the task its ■ stops it by; the call's answer says only that the subagent began, and ends nothing.
+  assert.deepEqual(p.push(task('task_started', { task_id: 'a9c8', tool_use_id: 'toolu_a', is_backgrounded: true, description: 'Run echo hi' })), [{ ...named, status: 'working', task: 'a9c8' }])
   assert.deepEqual(p.push(result(null, [{ type: 'tool_result', tool_use_id: 'toolu_a', content: 'Async agent launched successfully.' }])), [{ type: 'output', id: 'toolu_a', text: 'Async agent launched successfully.' }])
 
   // The subagent's own message: its model, which the call left unsaid, then its steps, all its own.
@@ -172,7 +172,7 @@ test('StreamJsonParser gives a subagent its own events, its model off its first 
   assert.deepEqual(
     p.push(assistant('toolu_a', [{ type: 'thinking', thinking: 'Run it.' }, { type: 'text', text: 'Running it.' }, { type: 'tool_use', id: 'toolu_b', name: 'Bash', input: { command: 'echo hi' } }], { model: 'claude-haiku-5-5', usage: { input_tokens: 9_000, cache_read_input_tokens: 0, output_tokens: 10 } })),
     [
-      { ...named, status: 'working', model: 'claude-haiku-5-5' },
+      { ...named, status: 'working', task: 'a9c8', model: 'claude-haiku-5-5' },
       { type: 'thought', text: 'Run it.', subagent: 'toolu_a' },
       { type: 'text', text: 'Running it.', subagent: 'toolu_a' },
       { type: 'action', label: 'Bash', detail: 'echo hi', id: 'toolu_b', subagent: 'toolu_a' },
@@ -186,9 +186,9 @@ test('StreamJsonParser gives a subagent its own events, its model off its first 
   assert.deepEqual(p.push(within('toolu_a', { type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'It pr' } } })), [])
 
   // How far it got, as its task says: on its row.
-  assert.deepEqual(p.push(task('task_progress', { tool_use_id: 'toolu_a', usage: { total_tokens: 15379, tool_uses: 1 } })), [{ ...named, status: 'working', model: 'claude-haiku-5-5', tokens: 15379, toolUses: 1 }])
+  assert.deepEqual(p.push(task('task_progress', { tool_use_id: 'toolu_a', usage: { total_tokens: 15379, tool_uses: 1 } })), [{ ...named, status: 'working', task: 'a9c8', model: 'claude-haiku-5-5', tokens: 15379, toolUses: 1 }])
   // Its task is over: the row ends, with all it carried.
-  assert.deepEqual(p.push(task('task_notification', { task_id: 'a9c8', tool_use_id: 'toolu_a', status: 'completed' })), [{ ...named, status: 'ended', model: 'claude-haiku-5-5', tokens: 15379, toolUses: 1 }])
+  assert.deepEqual(p.push(task('task_notification', { task_id: 'a9c8', tool_use_id: 'toolu_a', status: 'completed' })), [{ ...named, status: 'ended', task: 'a9c8', model: 'claude-haiku-5-5', tokens: 15379, toolUses: 1 }])
   // A task of a subagent that is no row of this turn ends nothing.
   assert.deepEqual(p.push(task('task_notification', { task_id: 'zz', tool_use_id: 'toolu_gone', status: 'completed' })), [])
 
@@ -980,8 +980,8 @@ test('a turn the agent ends with a server still running in the background ends o
   assert.equal(turn.stopped, undefined)
   assert.ok(written.some(line => line.includes('"stop_task"')), 'the server was stopped')
   const waits = events.filter(e => e.type === 'background')
-  assert.equal(waits.length, 1)
-  assert.equal(waits[0]!.type === 'background' && waits[0]!.tasks[0]!.command, 'node dist/bin.js')
+  // Idle on it, then none once the wait's stop ended it: said as it goes.
+  assert.deepEqual(waits.map(e => (e.type === 'background' ? e.tasks.map(task => task.command) : [])), [['node dist/bin.js'], []])
   assert.ok(events.some(e => e.type === 'notice' && e.message.includes('`node dist/bin.js` still ran')), JSON.stringify(events))
   assert.equal(events.at(-1)?.type, 'result')
 })

@@ -616,8 +616,12 @@ export type DriverEvent =
    * Emitted **beside** the `action` and `output` events of the same call, which both drivers go on
    * emitting unchanged: whoever renders this event renders one row for the subagent and skips
    * those two for the same call: the one `call` names, else the one of the same `id`.
+   *
+   * `task` is what the person's ■ stops it by ({@link InboxLine} `stop-task`), once its CLI named
+   * one (Claude Code's task id, said a moment after the subagent began): absent where it cannot be
+   * stopped alone. `stopped` is its end on that ■.
    */
-  | { type: 'subagent'; id: string; call?: string; status: 'working' | 'ended' | 'failed'; name?: string; role?: string; model?: string; prompt?: string; tokens?: number; toolUses?: number }
+  | { type: 'subagent'; id: string; call?: string; status: 'working' | 'ended' | 'failed' | 'stopped'; task?: string; name?: string; role?: string; model?: string; prompt?: string; tokens?: number; toolUses?: number }
   /** How many tokens the turn has gone through so far, its subagents' too, when its CLI says. */
   | { type: 'tokens'; tokens: number }
   /** The agent began to think: until what it thinks comes to a message or a call, it is thinking. */
@@ -704,6 +708,12 @@ export type InboxLine =
   | { kind: 'cancel'; id: string }
   /** Hand the waiting messages to the agent now: what it is running goes on in the background, as Claude Code's Send now does. */
   | { kind: 'now' }
+  /**
+   * Stop one task the agent runs while it goes on: a command it left in the background, or a
+   * subagent, by the id its driver said it by (a {@link BackgroundTask}'s `id`, a subagent's
+   * `task`), as the ■ on its row in Claude Code does. The agent is told, and goes on.
+   */
+  | { kind: 'stop-task'; task: string }
 
 /** A line that is a prompt of its own once the turn is over: a message or an answer. */
 export type PromptLine = Extract<InboxLine, { kind: 'message' | 'answer' }>

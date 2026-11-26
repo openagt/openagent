@@ -284,10 +284,41 @@ export async function cachedPrStates(cwd: string, gitHost: GitHostFor = projectG
   }
 }
 
-/** The cached form of {@link prsForBranch}, shared through the same read-through cache (#1028), each request as the newest read of it says. */
+/**
+ * The cached form of {@link prsForBranch}, shared through the same read-through cache (#1028), each
+ * request as the newest read of it says. A read GitHub did not answer is no answer: it is never
+ * kept as "no requests", and the ask that waited for it is answered nothing.
+ */
 export async function cachedPrsForBranch(cwd: string, branch: string, gitHost: GitHostFor = projectGitHost, options: { wait?: true } = {}): Promise<Cached<LinkedPr[]>> {
-  const read = await cachedRead(branchPrsCacheKey(cwd, branch), () => prsForBranch(cwd, branch, gitHost), options)
-  return read.value ? { ...read, value: read.value.map(newestOf) } : read
+  const read = await cachedRead(branchPrsCacheKey(cwd, branch), () => prsForBranchOrThrow(cwd, branch, gitHost), options)
+  return read.value ? { ...read, value: withHeld(cwd, branch, read.value.map(newestOf)) } : read
+}
+
+/** How long a request this machine just acted on is known as it left it, over GitHub's lists: they lag a few seconds behind an open or a close. */
+export const HELD_MS = 30_000
+
+/** The requests this machine just opened, closed or merged, by checkout and branch, until when each is held. */
+const held = new Map<string, { pr: LinkedPr; until: number }>()
+
+/**
+ * A request this machine just opened, closed or merged: the branch's requests say it so for
+ * {@link HELD_MS}, whatever GitHub lists meanwhile, which may not have the new one yet, or may
+ * still say open the one just closed.
+ */
+export function holdRequest(cwd: string, branch: string, pr: LinkedPr, now: number = Date.now()): void {
+  held.set(branchPrsCacheKey(cwd, branch), { pr, until: now + HELD_MS })
+}
+
+/** The branch's requests with the one this machine holds, in its place, or first. */
+function withHeld(cwd: string, branch: string, listed: LinkedPr[], now: number = Date.now()): LinkedPr[] {
+  const key = branchPrsCacheKey(cwd, branch)
+  const hold = held.get(key)
+  if (!hold) return listed
+  if (now >= hold.until) {
+    held.delete(key)
+    return listed
+  }
+  return [hold.pr, ...listed.filter(pr => pr.url !== hold.pr.url)]
 }
 
 /**
