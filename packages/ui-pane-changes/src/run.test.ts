@@ -420,6 +420,7 @@ test("a run's copy of another repository is read in its own folder, measured fro
     git(copy, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '--allow-empty', '-m', 'start')
     const start = git(copy, 'rev-parse', 'HEAD')
     git(copy, 'config', 'openagent.start', start)
+    git(copy, 'checkout', '-q', '-b', 'agent-x')
     await writeFile(join(copy, 'a.txt'), 'a\n')
     git(copy, 'add', '-A')
     git(copy, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'add a')
@@ -427,6 +428,9 @@ test("a run's copy of another repository is read in its own folder, measured fro
     assert.deepEqual(at, { source: 'checkout', path: copy, base: start, merged: false })
     const changes = await readChanges(home, at)
     assert.deepEqual('changes' in changes ? Object.keys(changes.changes) : [], ['a.txt'])
+    // A copy made before copies named their start is measured from where it left its default branch.
+    git(copy, 'config', '--unset', 'openagent.start')
+    assert.deepEqual(await resolveCopyWork('2026-11-26T00-00-00-000Z', 'site', undefined, home), { source: 'checkout', path: copy, base: start, merged: false })
     for (const [agentId, repo] of [['2026-11-26T00-00-00-000Z', '../site'], ['2026-11-26T00-00-00-000Z', '.git'], ['../x', 'site'], ['2026-11-26T00-00-00-000Z', 'gone']])
       assert.deepEqual(await resolveCopyWork(agentId!, repo!, undefined, home), { source: 'gone' }, `${agentId} ${repo}`)
   } finally {
