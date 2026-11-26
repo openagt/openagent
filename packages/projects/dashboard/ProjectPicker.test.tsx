@@ -18,7 +18,7 @@ vi.mock('./calls.js', () => ({
   addFromAddress: (_host: unknown, address: string) => addFromAddress(address),
 }))
 
-const { ProjectControl, ProjectPicker, REPOS_SHOWN, agentPicksDetail, repoDetail, shownAddress } = await import('./ProjectPicker.js')
+const { ProjectControl, ProjectPicker, REPOS_SHOWN, SidebarProject, agentPicksDetail, repoDetail, shownAddress } = await import('./ProjectPicker.js')
 const { default: projectsUi } = await import('./index.js')
 
 const ALPHA: ProjectSummary = { id: 'alpha-1', path: '/home/me/alpha', name: 'alpha' }
@@ -390,5 +390,58 @@ describe('ProjectPicker', () => {
     cleanup()
     control({ pickProject: undefined })
     expect(screen.queryByRole('combobox')).toBeNull()
+  })
+})
+
+describe('SidebarProject', () => {
+  const STRANDED: ProjectSummary = { id: 'p1', path: '/repos/p1', name: 'stranded', errors: [{ id: 'x', title: 'Not syncing with the remote', message: 'Permission denied (publickey)', since: '2026-08-20T10:00:00.000Z' }] }
+
+  function renderSelect(picked: string | null, over: { pending?: boolean; projects?: ProjectSummary[] } = {}) {
+    const onPick = vi.fn()
+    const { projects = [ALPHA, STRANDED], pending = false } = over
+    const ui = (listed: ProjectSummary[]) => (
+      <ShellProjectsContext.Provider value={listed}>
+        <SidebarProject picked={picked} pending={pending} onPick={onPick} />
+      </ShellProjectsContext.Provider>
+    )
+    const view = renderWithHost(ui(projects), fakeHost('@openagt/projects'), modulesWith(GITHUB([{ label: 'suleimansh/agent', address: 'github.com/suleimansh/agent', private: true }])))
+    return { onPick, rerender: (listed: ProjectSummary[]) => view.rerender(ui(listed)) }
+  }
+
+  test('the sidebar\'s select names the picked project, or "All projects"; while the project is not read, a bar where its name goes', () => {
+    renderSelect('p1')
+    expect(screen.getByRole('combobox', { name: 'Project: stranded' }).querySelector('.bg-danger')).toBeTruthy()
+    cleanup()
+    renderSelect(null)
+    expect(screen.getByRole('combobox', { name: 'Project: All projects' }).textContent).toBe('All projects')
+    cleanup()
+    renderSelect(null, { pending: true })
+    const loading = screen.getByRole('combobox', { name: 'Project: loading' })
+    expect(loading.textContent).toBe('')
+    expect(screen.queryByText('All projects')).toBeNull()
+  })
+
+  test('its menu is the launcher\'s: every project first, the projects, the repos on this computer and those on GitHub, and "Search another folder…"; a pick of a project or of all reports it', async () => {
+    const { onPick } = renderSelect('alpha-1')
+    await openMenu(screen.getByRole('combobox', { name: 'Project: alpha' }))
+    await screen.findByRole('option', { name: /suleimansh\/agent/ })
+    expect(options()).toEqual(['All projects', 'alpha', 'strandedNot syncing with the remote', 'vikegithub.com/vikejs/vike', 'notes/home/me/notes', 'suleimansh/agentPrivate·Not on this computer'])
+    expect(screen.getByRole('option', { name: /alpha/ }).getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByRole('button', { name: 'Search another folder…' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('option', { name: /stranded/ }))
+    await openMenu(screen.getByRole('combobox', { name: 'Project: alpha' }))
+    fireEvent.click(screen.getByRole('option', { name: /All projects/ }))
+    expect(onPick.mock.calls).toEqual([['p1'], [null]])
+  })
+
+  test('a repo picked there is asked the trust question, and once it is a project, it is the one shown', async () => {
+    addProject.mockResolvedValue({ ok: true, alreadyActivated: false })
+    const { onPick, rerender } = renderSelect(null)
+    await openMenu(screen.getByRole('combobox', { name: 'Project: All projects' }))
+    fireEvent.click(await screen.findByRole('option', { name: /vike/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'I trust it, add it' }))
+    await waitFor(() => expect(addProject).toHaveBeenCalledWith(VIKE.path))
+    rerender([ALPHA, STRANDED, { id: 'vike-9', path: VIKE.path, name: 'vike' }])
+    await waitFor(() => expect(onPick).toHaveBeenCalledWith('vike-9'))
   })
 })

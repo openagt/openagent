@@ -25,6 +25,12 @@ export const MENU_POPUP_CLASS = cn('min-w-[13rem]', MENU_SURFACE_CLASS, POPUP_MO
  */
 export const MENU_BODY_CLASS = 'p-2'
 
+/**
+ * A picker's search, the band over its list: 40 high (his ask, 2026-11-26: at 52 it stood too
+ * big), its icon 16 in and its words 12 after it, on the items' icons and words below.
+ */
+export const PICKER_SEARCH_CLASS = 'flex h-10 shrink-0 items-center gap-3 border-b border-hairline px-4'
+
 /** The scrolled body every popup shares: caps at the space the positioner allows, pads the items. */
 function PopupBody({ children }: { children: ReactNode }) {
   return (

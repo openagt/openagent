@@ -31,7 +31,7 @@ import { agentLabel, awaitingName } from '../lib/agent-label.js'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuCheckboxItem, DropdownMenuSeparator } from './ui/dropdown-menu.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
-import { SidebarProjectPicker } from './SidebarProjectPicker.js'
+import { SidebarProject } from './SidebarProject.js'
 import { navRowClass } from './ui/nav-row.js'
 import {
   Sidebar,
@@ -377,7 +377,7 @@ export function AgentHistory({
             </span>
           </div>
           {/* The "Landing page | Dashboard" switch (`ViewToggle`) stood here: hidden for now, its code kept. */}
-          <SidebarProjectPicker picked={scope ?? null} pending={scopePending} projects={projects} onPick={onScope} />
+          <SidebarProject picked={scope ?? null} pending={scopePending} onPick={onScope} />
         </SidebarHeader>
         {/* Everything under the project select is one scroll (his pick, 2026-11-24): the pages, what
             waits and the Log. The pages used to stand still over the lists, which left the Log only
@@ -826,10 +826,11 @@ function PrMarks({ prs }: { prs: readonly RunPr[] }) {
     const { Icon, tone } = PR_MARKS[state]
     const count = prs.filter(pr => pr.state === state).length
     return (
-      <span key={state} data-pr={state} className={cn('relative flex shrink-0 items-center', tone, count > 1 && 'mr-0.5')}>
+      // A count hangs past the glyph's corner: the room it takes is kept, so what follows (the age) stands clear of it (his ask, 2026-11-26).
+      <span key={state} data-pr={state} className={cn('relative flex shrink-0 items-center', tone, count > 1 && 'mr-2')}>
         <Icon className="size-3" aria-hidden />
         {/* The smallest type step, drawn at three quarters: a count at a 14 glyph's corner. */}
-        {count > 1 && <span className="absolute -top-2 -right-2.5 scale-75 rounded-full bg-sidebar px-0.5 text-xs leading-none font-bold tabular-nums">{count}</span>}
+        {count > 1 && <span className="absolute -top-2 -right-2 scale-75 rounded-full bg-sidebar px-0.5 text-xs leading-none font-bold tabular-nums">{count}</span>}
       </span>
     )
   })

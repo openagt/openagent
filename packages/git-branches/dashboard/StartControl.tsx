@@ -18,6 +18,7 @@ import {
   MENU_ITEM_CLASS,
   MENU_POPUP_CLASS,
   MENU_TRIGGER_OPEN_CLASS,
+  PICKER_SEARCH_CLASS,
   MenuMark,
   OptionLabel,
   RowChevron,
@@ -272,9 +273,8 @@ function Menu({ projectId, places, busy, onPick }: { projectId: string; places: 
       <Combobox.Portal>
         <Combobox.Positioner {...position} sideOffset={6} align="start" className="z-50 outline-none">
           <Combobox.Popup data-overlay="picker" aria-label="The agent starts from" className={cn(MENU_POPUP_CLASS, 'w-[22rem] max-w-[var(--available-width)]')}>
-            {/* The field one line tall, 16 in from the band's every edge, as the jump's is. */}
-            <div className="flex h-13 items-center gap-3 border-b border-hairline px-4">
-              <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            <div className={PICKER_SEARCH_CLASS}>
+              <Search className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
               <Combobox.Input aria-label="Search branches" placeholder="Search branches" className="h-5 w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
             </div>
             {/* The menu opens upward from the box's row: a list of a set height keeps the search and the first rows where they are as the answer lands, and as the search narrows it. */}

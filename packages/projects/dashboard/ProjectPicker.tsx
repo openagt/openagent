@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Check, Cloud, Folder, FolderGit2, FolderSearch, Layers, Plus, Search, Sparkles } from 'lucide-react'
+import { Check, ChevronsUpDown, Cloud, Folder, FolderGit2, FolderSearch, Layers, Plus, Search, Sparkles } from 'lucide-react'
 import {
   cn,
   Combobox,
@@ -8,12 +8,16 @@ import {
   MENU_ITEM_CLASS,
   MENU_POPUP_CLASS,
   MENU_TRIGGER_OPEN_CLASS,
+  PICKER_SEARCH_CLASS,
+  POPUP_EDGE,
+  PROJECT_ROW_CLASS,
   MenuMark,
   MiddleCut,
   rowButtonClass,
   RowChevron,
   RowSaid,
   ScrollArea,
+  Skeleton,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -24,10 +28,12 @@ import {
   usePopupPosition,
   useProjectLabel,
   useProjects,
+  useSkeleton,
   type ProjectSummary,
   type ModuleHost,
   type UiComposerControlProps,
   type UiHost,
+  type UiSidebarProjectProps,
   type UiWhereRepo,
 } from '@openagt/ui/module'
 import { addressOfRemote, typedRepository } from '@openagt/hooks/repository-address'
@@ -223,7 +229,8 @@ export async function reposHere(host: UiHost): Promise<{ repos: UiWhereRepo[]; l
   }
 }
 
-// The project picker of the launcher, in the row above its box (Rom's "repos are not projects"):
+// The project picker of the launcher, in the row above its box (Rom's "repos are not projects"),
+// and of the sidebar, the project every page shows (`SidebarProject`):
 // where a session works — no project, one of the projects, any repo on this computer, or one a
 // module's accounts reach (`composer.where`). The menu is the first row, the projects with their
 // lines, the repos searchable, "Search another folder…" to look in one more folder, and a
@@ -239,10 +246,19 @@ export function ProjectPicker({
   busy = false,
   none,
   onPick,
+  look = 'row',
+  pending = false,
 }: {
   /** The project picked, or null for none. */
   picked: string | null
   busy?: boolean
+  /**
+   * Where it stands: in the row under a message box (`row`), or at the top of the sidebar
+   * (`sidebar`), the card that picks the project every page shows, its menu on its left edge.
+   */
+  look?: 'row' | 'sidebar'
+  /** In the sidebar: the project the address names is not read yet, a bar where its name goes. */
+  pending?: boolean
   /** The first row: what no project means here. */
   /**
    * The first row: what no project means here. `row` is that row in the list where it says more
@@ -319,8 +335,9 @@ export function ProjectPicker({
   const current = picked === null ? NONE : (projectRows.find(row => row.value === `project:${picked}`) ?? { value: `project:${picked}`, label: '', pick: { kind: 'none' }, search: '' })
   // The button says the pick in its own words: the list's row may say more.
   const shown = picked === null ? none.label : current.label
+  const loading = useSkeleton(pending)
   // No project word until the name is known, never a wrong one.
-  if (!shown) return null
+  if (!shown && !pending) return null
 
   const addFolder = async () => {
     setFolderError(null)
@@ -329,15 +346,25 @@ export function ProjectPicker({
     else if (outcome.added) setFolders(k => k + 1)
   }
 
-  const name = 'The session works in'
-  const button = (
+  const sidebar = look === 'sidebar'
+  const name = sidebar ? `Project: ${pending ? 'loading' : shown}` : 'The session works in'
+  const project = current.pick.kind === 'project' ? current.pick.project : undefined
+  const button = sidebar ? (
+    // A card on the sidebar, as high whatever it shows, so the rows under it never move: the chevrons say it opens.
+    <button type="button" className={PROJECT_ROW_CLASS}>
+      <span className="flex size-4 shrink-0 items-center justify-center">{pending ? null : project ? <ProjectDot project={project} /> : <Layers className="size-4 text-muted-foreground" aria-hidden />}</span>
+      {/* Until the projects are read, the project the address names is not known: a bar where its name goes, rather than "All projects" for a moment. */}
+      {loading ? <Skeleton className="h-4 w-24" /> : <span className="flex-1 truncate text-left">{pending ? '' : shown}</span>}
+      <ChevronsUpDown className="ml-auto" aria-hidden />
+    </button>
+  ) : (
     <button type="button" className={cn(rowButtonClass, 'max-w-[16rem]!')}>
       {picked === null && none.agent ? <Sparkles className="h-3.5 w-3.5 shrink-0" aria-hidden /> : <Folder className="h-3.5 w-3.5 shrink-0" aria-hidden />}
       <span className="truncate">{shown}</span>
       <RowChevron />
     </button>
   )
-  const trigger = <Combobox.Trigger ref={triggerRef} disabled={busy} aria-label={name} className={MENU_TRIGGER_OPEN_CLASS} render={button} {...search.trigger} />
+  const trigger = <Combobox.Trigger ref={triggerRef} disabled={busy || pending} aria-label={name} className={MENU_TRIGGER_OPEN_CLASS} render={button} {...search.trigger} {...(sidebar ? { 'data-project-picker': '' } : {})} />
 
   return (
     <>
@@ -358,16 +385,20 @@ export function ProjectPicker({
           else setAdding({ address: row.pick.typed })
         }}
       >
-        <Tooltip>
-          <TooltipTrigger render={trigger} />
-          <TooltipContent>{picked === null ? none.tip : `The session works in ${shown}`}</TooltipContent>
-        </Tooltip>
+        {sidebar ? (
+          trigger
+        ) : (
+          <Tooltip>
+            <TooltipTrigger render={trigger} />
+            <TooltipContent>{picked === null ? none.tip : `The session works in ${shown}`}</TooltipContent>
+          </Tooltip>
+        )}
         <Combobox.Portal>
-          <Combobox.Positioner {...position} sideOffset={6} align="start" className="z-50 outline-none">
+          {/* In the sidebar, on the select's left edge: the sidebar's 8 from the window, nearer than a popup's usual 16. */}
+          <Combobox.Positioner {...position} {...(sidebar ? { collisionPadding: { top: POPUP_EDGE, right: POPUP_EDGE, bottom: POPUP_EDGE, left: 8 } } : {})} sideOffset={6} align="start" className="z-50 outline-none">
             <Combobox.Popup data-overlay="picker" aria-label={name} className={cn(MENU_POPUP_CLASS, 'w-[22rem] max-w-[var(--available-width)]')}>
-              {/* The field one line tall, 16 in from the band's every edge, as the jump's is. */}
-              <div className="flex h-13 items-center gap-3 border-b border-hairline px-4">
-                <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+              <div className={PICKER_SEARCH_CLASS}>
+                <Search className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
                 <Combobox.Input aria-label="Search projects and repos" placeholder="Search, or paste a GitHub address" className="h-5 w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
               </div>
               <ScrollArea ref={list} style={typed ? { minHeight: untyped.current } : undefined} viewportClassName="max-h-[min(20rem,calc(var(--available-height)-5rem))]">
@@ -468,6 +499,15 @@ export function ProjectPicker({
       )}
     </>
   )
+}
+
+/**
+ * The sidebar's project select (`sidebar.project`): the project every page shows, or every one,
+ * picked from the projects and the repos that could be one, as the launcher's picker offers them
+ * (his ask, 2026-11-26). A repo picked is asked the trust question, made a project, and shown.
+ */
+export function SidebarProject({ picked, pending, onPick }: UiSidebarProjectProps) {
+  return <ProjectPicker look="sidebar" pending={pending} none={{ label: 'All projects', tip: 'Every project' }} picked={picked} onPick={onPick} />
 }
 
 /**

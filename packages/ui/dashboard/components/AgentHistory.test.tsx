@@ -807,7 +807,7 @@ describe('AgentHistory row hover', () => {
   })
 })
 
-describe('the project select (#1513)', () => {
+describe('the rows by project (#1513)', () => {
   const stranded: ProjectSummary = {
     id: 'p1',
     path: '/repos/p1',
@@ -816,15 +816,7 @@ describe('the project select (#1513)', () => {
   }
   const idle: ProjectSummary = { id: 'p2', path: '/repos/p2', name: 'beta' }
 
-  test('it names the picked project, or "All projects" when none is picked', () => {
-    const { unmount } = renderRail(<AgentHistory projectId={null} scope="p2" agents={[]} selectedAgentId={null} onSelect={() => {}} projects={[stranded, idle]} />)
-    expect(screen.getByRole('combobox', { name: 'Project: beta' })).toBeTruthy()
-    unmount()
-    renderRail(<AgentHistory projectId={null} agents={[]} recentAgents={[]} selectedAgentId={null} onSelect={() => {}} projects={[stranded, idle]} />)
-    expect(screen.getByRole('combobox', { name: 'Project: All projects' })).toBeTruthy()
-  })
-
-  test('two projects with the same name say which folder each is in, on the button, in the menu and in the name of each row', async () => {
+  test('two projects with the same name: the Overview\'s rows say which folder each is in', () => {
     const work: ProjectSummary = { id: 'shop-1', path: '/home/me/work/shop', name: 'shop' }
     const clients: ProjectSummary = { id: 'shop-2', path: '/home/me/clients/shop', name: 'shop' }
     const projects = [work, clients, idle]
@@ -832,84 +824,12 @@ describe('the project select (#1513)', () => {
       { projectId: 'shop-2', projectName: 'shop', agent: agent({ id: 'b1', status: 'done', intent: 'second' }) },
       { projectId: 'shop-1', projectName: 'shop', agent: agent({ id: 'a1', status: 'done', intent: 'first' }) },
     ]
-    const rail = (scope: string | null) => (
-      <ProjectLabelsContext.Provider value={projectLabels(projects)}>
-        <AgentHistory projectId={null} scope={scope} agents={[]} recentAgents={recentAgents} selectedAgentId={null} onSelect={() => {}} projects={projects} />
-      </ProjectLabelsContext.Provider>
-    )
-    const { unmount } = renderRail(rail('shop-1'))
-    await openMenu(screen.getByRole('combobox', { name: 'Project: work/shop' }))
-    // The folder is muted, the name as any other's.
-    expect(within(screen.getByRole('option', { name: /clients\/shop/ })).getByText('clients/').className).toContain('text-muted-foreground')
-    expect(screen.getByRole('option', { name: /beta/ })).toBeTruthy()
-    unmount()
-    renderRail(rail(null))
-    // The Overview's rows name their project the same way.
-    expect(screen.getByRole('link', { name: /^second/ }).getAttribute('aria-label')).toContain('clients/shop')
-  })
-
-  test('while the project the address names is not read, neither "All projects" nor "No sessions yet." shows', () => {
-    renderRail(<AgentHistory projectId={null} scopePending listLoaded={false} agents={[]} recentAgents={[]} selectedAgentId={null} onSelect={() => {}} />)
-    expect(screen.getByRole('combobox', { name: 'Project: loading' })).toBeTruthy()
-    expect(screen.queryByText('All projects')).toBeNull()
-    expect(screen.queryByText('No sessions yet.')).toBeNull()
-    // The heading stays, so the column does not jump once the list lands.
-    expect(screen.getByText('Log')).toBeTruthy()
-  })
-
-  test('picking a project, or all of them, reports the pick and marks the current one', async () => {
-    const picks: (string | null)[] = []
     renderRail(
-      <AgentHistory projectId={null} scope="p1" onScope={id => picks.push(id)} agents={[]} selectedAgentId={null} onSelect={() => {}} projects={[stranded, idle]} />,
+      <ProjectLabelsContext.Provider value={projectLabels(projects)}>
+        <AgentHistory projectId={null} scope={null} agents={[]} recentAgents={recentAgents} selectedAgentId={null} onSelect={() => {}} projects={projects} />
+      </ProjectLabelsContext.Provider>,
     )
-    await openMenu(screen.getByRole('combobox', { name: 'Project: alpha' }))
-    expect(screen.getByRole('option', { name: /alpha/ }).getAttribute('aria-selected')).toBe('true')
-    expect(screen.getByRole('option', { name: /beta/ }).getAttribute('aria-selected')).toBe('false')
-    fireEvent.click(screen.getByRole('option', { name: /beta/ }))
-    await openMenu(screen.getByRole('combobox', { name: 'Project: alpha' }))
-    fireEvent.click(screen.getByRole('option', { name: /All projects/ }))
-    expect(picks).toEqual(['p2', null])
-  })
-
-  test('pinned to the window beside a page that scrolls, its project menu is placed against the window too, and does not jump as the page scrolls', async () => {
-    // The menu's positioner: the nearest element above the list placed by Base UI.
-    const positionOf = () => {
-      let at: HTMLElement | null = screen.getByRole('listbox')
-      while (at && at.style.position !== 'fixed' && at.style.position !== 'absolute') at = at.parentElement
-      return at?.style.position
-    }
-    renderRail(<AgentHistory projectId={null} pageScrolls agents={[]} selectedAgentId={null} onSelect={() => {}} projects={[stranded, idle]} />)
-    await openMenu(screen.getByRole('combobox', { name: 'Project: All projects' }))
-    expect(positionOf()).toBe('fixed')
-    cleanup()
-    // In the page's flow, it scrolls with the page: so does its menu.
-    renderRail(<AgentHistory projectId={null} agents={[]} selectedAgentId={null} onSelect={() => {}} projects={[stranded, idle]} />)
-    await openMenu(screen.getByRole('combobox', { name: 'Project: All projects' }))
-    expect(positionOf()).toBe('absolute')
-  })
-
-  test('a project a module says needs fixing gets a red dot and what is wrong in words; one with nothing to fix gets neither', async () => {
-    renderRail(<AgentHistory projectId={null} agents={[]} recentAgents={[]} selectedAgentId={null} onSelect={() => {}} projects={[stranded, idle]} />)
-    await openMenu(screen.getByRole('combobox', { name: 'Project: All projects' }))
-    const broken = screen.getByRole('option', { name: /alpha/ })
-    expect(broken.querySelector('.bg-danger')).toBeTruthy()
-    expect(within(broken).getByText('Not syncing with the remote').getAttribute('title')).toContain('Permission denied (publickey)')
-    const quiet = screen.getByRole('option', { name: /beta/ })
-    expect(quiet.querySelector('.bg-danger')).toBeNull()
-    expect(quiet.querySelector('[data-line2]')).toBeNull()
-  })
-
-  test('what the modules note of a project where nothing is wrong is said under its name in grey, with no red dot', async () => {
-    const local = { ...idle, id: 'p3', name: 'gamma', notes: [{ id: 'store-filesystem:data-here', words: 'Local only, no remote' }] }
-    const kept = { ...idle, id: 'p4', name: 'delta', notes: [{ id: 'store-filesystem:data-here', words: 'Records kept on this machine' }] }
-    renderRail(<AgentHistory projectId={null} agents={[]} recentAgents={[]} selectedAgentId={null} onSelect={() => {}} projects={[stranded, local, kept]} />)
-    await openMenu(screen.getByRole('combobox', { name: 'Project: All projects' }))
-    // A project with a remote whose records the person keeps says that instead, as quietly.
-    expect(within(screen.getByRole('option', { name: /delta/ })).getByText('Records kept on this machine').className).toContain('text-muted-foreground')
-    const item = screen.getByRole('option', { name: /gamma/ })
-    expect(item.querySelector('.bg-danger')).toBeNull()
-    expect(within(item).getByText('Local only, no remote').className).toContain('text-muted-foreground')
-    expect(within(screen.getByRole('option', { name: /alpha/ })).queryByText('Local only, no remote')).toBeNull()
+    expect(screen.getByRole('link', { name: /^second/ }).getAttribute('aria-label')).toContain('clients/shop')
   })
 
   test('with all projects showing, the row of the agent on screen is the highlighted one', () => {

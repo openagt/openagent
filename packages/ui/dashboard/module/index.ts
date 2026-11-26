@@ -271,11 +271,13 @@ export {
   MENU_ITEM_CLASS,
   MENU_POPUP_CLASS,
   MENU_TRIGGER_OPEN_CLASS,
+  PICKER_SEARCH_CLASS,
 } from '../components/ui/dropdown-menu.js'
 // A searchable list in a popup, drawn as the module draws it: the same Base UI as the dashboard's pickers.
 export { Combobox } from '@base-ui/react/combobox'
 export { usePickerSearch } from '../components/ui/picker-search.js'
-export { usePopupPosition } from '../components/ui/popup-placement.js'
+export { POPUP_EDGE, usePopupPosition } from '../components/ui/popup-placement.js'
+export { PROJECT_ROW_CLASS } from '../components/ui/nav-row.js'
 export { OptionLabel } from '../components/ui/option-label.js'
 // The message box's rows, as a control there draws its item (`composer.control`).
 export { rowButtonClass, rowItemClass, RowChevron, RowSaid, RowItem, BoxOfRow } from '../components/ui/row-item.js'

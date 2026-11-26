@@ -186,6 +186,16 @@ export interface UiUsageLineProps {
   Bar: ComponentType<{ offset?: number; onChangeOffset?: (points: number) => Promise<UiActionResult> }>
 }
 
+/** What the sidebar's project select is given: the project every page shows, or none for every one, and the pick of another. */
+export interface UiSidebarProjectProps {
+  /** The project picked, by id, or null for every project. */
+  picked: string | null
+  /** The project the address names is not read yet: the select holds its place, its name not said. */
+  pending: boolean
+  /** Show this project on every page, or every project (null). */
+  onPick: (projectId: string | null) => void
+}
+
 /** Which box a control under the message box is drawn in. */
 export type UiComposerIn =
   /** The launcher's: the picks of the next run, which go with its Start. */
@@ -384,6 +394,12 @@ export interface ViewPlaces {
   }
   /** The line on the usage bar where the module's unattended work stops; the first module's that has one. */
   'usage.line': { entry: { id: string }; props: UiUsageLineProps }
+  /**
+   * The project select at the top of the sidebar: the project every page shows, or every project,
+   * picked from the projects and, as the launcher offers them, the repos that could be one (the
+   * projects module's). The first module's that has one.
+   */
+  'sidebar.project': { entry: { id: string }; props: UiSidebarProjectProps }
 }
 
 export type ViewPlace = keyof ViewPlaces

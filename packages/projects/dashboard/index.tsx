@@ -1,5 +1,6 @@
 // projects' UI part: the package's `./dashboard` export. The project picker in the row above the
-// launcher's box, with the repos on this computer among every module's (`composer.where`); "Remove
+// launcher's box, with the repos on this computer among every module's (`composer.where`), and the
+// same picker as the sidebar's project select (`sidebar.project`); "Remove
 // project…" in a project's menu; what fixes "Add your first project" (`app.attention`); and
 // Settings › Repos, the folders searched for repos. Its reads and writes are its own server part's
 // (`../src/server.ts`), this computer's.
@@ -8,7 +9,7 @@ import { defineUiModule } from '@openagt/ui/module'
 import { FolderSearch, Trash2 } from 'lucide-react'
 import { ADD_PROJECT } from '../src/attention.js'
 import { AddProjectPanel } from './AddProjectPanel.js'
-import { ProjectControl, reposHere } from './ProjectPicker.js'
+import { ProjectControl, SidebarProject, reposHere } from './ProjectPicker.js'
 import { RemoveProjectDialog } from './RemoveProjectDialog.js'
 import { RepoFolders } from './RepoFolders.js'
 
@@ -24,6 +25,7 @@ export default defineUiModule({
     'ui.view': [
       // First in the row above the box: where the session works, before the branch it starts from.
       { place: 'composer.control', id: 'project', at: 'context', order: 0, View: ProjectControl },
+      { place: 'sidebar.project', id: 'project', View: SidebarProject },
       { place: 'settings.section', id: 'repos', title: 'Repos', icon: FolderSearch, order: 60, View: RepoFolders },
     ],
     'ui.action': [
