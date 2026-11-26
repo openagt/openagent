@@ -15,8 +15,8 @@ import { POPUP_MOTION_CLASS, usePopupPosition } from './popup-placement.js'
 // long menu shows our own thin overlay bar (#1046) instead of the OS one, whose grey track read as
 // a second layer beside the border. #710 stands: no native scrollbar comes back.
 // The surface is shadcn create's menu in the theme's colours (`.menu-surface`, tailwind.css):
-// rounded, see-through over a blur, a faint ring for an edge.
-export const MENU_SURFACE_CLASS = 'menu-surface rounded-lg shadow-lg ring-1 ring-foreground/10 backdrop-blur-xl outline-none'
+// rounded, see-through over a blur, its shadow for an edge: no ring around it (his ask, 2026-11-27).
+export const MENU_SURFACE_CLASS = 'menu-surface rounded-lg shadow-lg backdrop-blur-xl outline-none'
 export const MENU_POPUP_CLASS = cn('min-w-[13rem]', MENU_SURFACE_CLASS, POPUP_MOTION_CLASS)
 
 /**
@@ -155,12 +155,16 @@ export function DropdownMenuSubTrigger({ className, children, ...props }: Compon
 }
 
 /** A submenu beside its row: from the row's top down, or with `align="end"` from its foot up, for a menu that stands above what it must not cover. */
+/** How far a submenu stands from the row it opens from: past the menu's padding, then a gap of 4. */
+const SUBMENU_OFFSET = 8 + 4
+
 export function DropdownMenuSubContent({ className, align = 'start', children, ...props }: ComponentProps<typeof Menu.Popup> & { align?: 'start' | 'end' }) {
   const position = usePopupPosition()
   return (
     <Menu.Portal>
       {/* From the foot up, a list too tall for the room above slides down only as far as it must: turned to stand from the row's top, it would cover everything under the row. With no room beside the row, on a phone, it stands over it. */}
-      <Menu.Positioner {...position} side="right" align={align} {...(align === 'end' ? { collisionAvoidance: { side: 'flip' as const, align: 'shift' as const, fallbackAxisSide: 'start' as const } } : {})} sideOffset={2} className="z-50 outline-none">
+      {/* Clear of the menu it opens from, 4 beside its edge, never over it (his ask, 2026-11-27): the row it hangs from is the menu's padding (8) inside that edge. */}
+      <Menu.Positioner {...position} side="right" align={align} {...(align === 'end' ? { collisionAvoidance: { side: 'flip' as const, align: 'shift' as const, fallbackAxisSide: 'start' as const } } : {})} sideOffset={SUBMENU_OFFSET} className="z-50 outline-none">
         <Menu.Popup data-overlay="menu" className={cn(MENU_POPUP_CLASS, className)} {...props}>
           <PopupBody>{children}</PopupBody>
         </Menu.Popup>

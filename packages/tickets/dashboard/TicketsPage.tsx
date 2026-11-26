@@ -226,7 +226,7 @@ function SelectionBar({ leaving, count, onSelectAll, onClear, children }: { leav
         role="region"
         aria-label="Selected tickets"
         className={cn(
-          'pointer-events-auto absolute bottom-0 flex items-center gap-1 menu-surface rounded-lg py-1 pr-1 pl-4 text-sm shadow-lg ring-1 ring-foreground/10 backdrop-blur-xl',
+          'pointer-events-auto absolute bottom-0 flex items-center gap-1 menu-surface rounded-lg py-1 pr-1 pl-4 text-sm shadow-lg backdrop-blur-xl',
           // In the middle of the column, as wide as what it holds. On a phone part of the page's foot, on the column's
           // edges as the list is, and a grid: the count, Select all and the close on its first line, each add on a
           // line of its own under them, its words whole.
