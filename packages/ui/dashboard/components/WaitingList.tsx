@@ -22,6 +22,11 @@ const MARKS: Record<NonNullable<Waiting['mark']>, { Icon: ComponentType<{ classN
 /** An item that names no mark: a plain dot, quiet. */
 const PLAIN = { Icon: CircleDot, tone: 'text-muted-foreground' }
 
+/** What an item needs, as its colour says it, the same in every list of what waits: an answer yellow, a merge green, work left blue. */
+export function waitingTone(item: Waiting): string {
+  return item.mark ? MARKS[item.mark].tone : 'text-warning'
+}
+
 /** Where a click on the row takes the person, said on its hover: the session it is about, else the page that fixes it. */
 function hoverOf(item: Waiting): string {
   if (item.run !== undefined) return 'Open the session'

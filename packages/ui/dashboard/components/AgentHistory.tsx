@@ -23,6 +23,7 @@ import { useRailScroll } from '../lib/rail-scroll.js'
 import { useProjectLabel } from '../lib/project-labels.js'
 import { runState } from '../lib/run-words.js'
 import { RunMark } from './RunMark.js'
+import { waitingTone } from './WaitingList.js'
 import { agentOf, modelName, useAgents, useNamesRuns } from '../lib/agents.js'
 import { PackageLogo } from './Logins.js'
 import { PR_MARKS, type PrState } from '../lib/pr-marks.js'
@@ -523,7 +524,7 @@ export function AgentHistory({
 /** Two of the rows below while they are read, in their own shape and height: a {@link Slot}'s `shape`. */
 function NavShapes() {
   return Array.from({ length: 2 }, (_, at) => (
-    <div key={at} className="flex items-center gap-3 px-2 md:h-8 max-md:h-11">
+    <div key={at} className="flex items-center gap-2 px-2 md:h-8 max-md:h-11">
       <Skeleton className="size-4 shrink-0 rounded-sm" />
       <Skeleton className={cn('h-3.5', at === 0 ? 'w-20' : 'w-24')} />
     </div>
@@ -664,6 +665,7 @@ function WaitingOnYou({
             const href = hrefOf(item)
             // Drawn and said by the rule a run's row is, the Logs' too: what waits on the person, in its item's words.
             const { state, word: need } = runState({ status: 'waiting' }, item)
+            const tone = waitingTone(item)
             const external = item.run === undefined
             const name = item.title ?? item.projectName
             return (
@@ -684,17 +686,18 @@ function WaitingOnYou({
                   >
                     <span className="flex min-w-0 flex-1 flex-col">
                       {/* The mark and the age on the name's line, never between the two (spacing.md 3). */}
-                      <span className="flex min-w-0 items-start gap-3">
+                      <span className="flex min-w-0 items-start gap-2">
+                        {/* In the colour of what it needs, as the Overview's Human Queue says it. */}
                         <span data-glide-new className="flex h-5 w-4 shrink-0 items-center justify-center">
-                          <RunMark status={state} />
+                          <RunMark status={state} className={tone} />
                         </span>
                         <span className="min-w-0 flex-1 truncate">{name}</span>
                         <span aria-hidden className={cn(AGE, 'leading-5')}>
                           {formatSince(item.since)}
                         </span>
                       </span>
-                      {/* Under the name, 16 for the mark and 12 after it: the words start where the name does. */}
-                      <span aria-hidden data-glide-new className="truncate pl-7 text-xs text-warning">
+                      {/* Under the name, 16 for the mark and 8 after it: the words start where the name does. */}
+                      <span aria-hidden data-glide-new className={cn('truncate pl-6 text-xs', tone)}>
                         {need}
                       </span>
                     </span>

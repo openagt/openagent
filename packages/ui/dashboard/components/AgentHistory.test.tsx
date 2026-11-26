@@ -116,6 +116,21 @@ describe('AgentHistory (#785)', () => {
     expect(screen.getByRole('link', { name: /Make the cart/ })).toBeTruthy()
   })
 
+  test('what waits is in the colour of what it needs, its mark and its words, as the Overview\'s Human Queue says it: an answer yellow, a merge green', () => {
+    const base = { projectId: 'p1', projectName: 'p1', kind: 'waiting' as const, module: 'ask', scope: 'run' as const, since: new Date().toISOString() }
+    const asked = { ...base, run: 'run-2', id: 'run-2:q1', words: 'Needs answer', title: 'Pick a colour', mark: 'question' as const }
+    const merge = { ...base, module: 'github', run: 'run-3', id: 'run-3:pr', words: 'Needs merge', title: 'Fix the cart', mark: 'pull-request' as const }
+    renderRail(
+      <AgentHistory projectId="p1" scope="p1" agents={[agent({ id: 'run-2', intent: 'Pick a colour', status: 'waiting' }), agent({ id: 'run-3', intent: 'Fix the cart', status: 'done' })]} selectedAgentId={null} onSelect={() => {}} waiting={[asked, merge]} hrefOf={route => `/${route.projectId}/${route.agentId}`} />,
+    )
+    const tones = (name: string) => {
+      const row = screen.getByRole('link', { name })
+      return [row.querySelector('svg')!.getAttribute('class')!.includes(name.endsWith('answer') ? 'text-warning' : 'text-success'), screen.getAllByText(name.split(' · ')[1]!).some(word => word.className.includes(name.endsWith('answer') ? 'text-warning' : 'text-success'))]
+    }
+    expect(tones('Pick a colour · Needs answer')).toEqual([true, true])
+    expect(tones('Fix the cart · Needs merge')).toEqual([true, true])
+  })
+
   test('everything under the project select is one scroll: the pages, what waits and the Log; scrolled past what waits, the Log\'s label is held, fades the rows under it and says how many wait', () => {
     const asks = (n: number) => ({ projectId: 'p1', projectName: 'p1', kind: 'waiting' as const, module: 'ask', scope: 'run' as const, run: `r${n}`, id: `r${n}:q`, words: 'Needs answer', title: `Run ${n}`, mark: 'question' as const, since: new Date().toISOString() })
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'done' })]} selectedAgentId={null} onSelect={() => {}} waiting={[asks(1), asks(2)]} />)
