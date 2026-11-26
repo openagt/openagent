@@ -467,6 +467,14 @@ describe("a run's copies of other repositories", () => {
     await waitFor(() => expect(readContent).toHaveBeenCalledWith(expect.anything(), 'p1', 'index.html', 'run-1', 'site'))
   })
 
+  test("the project's folder first, then the copies by name", async () => {
+    readTree.mockResolvedValue({ source: 'checkout', files: ['README.md'] })
+    readCopies.mockResolvedValue({ project: 'test-project', copies: [{ name: 'oa-newuser', files: ['a.md'] }, { name: 'zebra', files: ['z.md'] }, { name: 'abc', files: ['b.md'] }] })
+    render(<FilesPane projectId="p1" agentId="run-1" context={context()} />)
+    await waitFor(() => expect(screen.getByText('zebra')).toBeTruthy())
+    expect([...document.querySelectorAll('summary')].map(row => row.textContent)).toEqual(['test-project', 'abc', 'oa-newuser', 'zebra'])
+  })
+
   test('a session with no project has its copies\' folders alone, and no tree of a project is read', async () => {
     readCopies.mockResolvedValue({ project: 'openagent-sessions', copies: [{ name: 'site', files: ['index.html'] }] })
     render(<FilesPane projectId="session" agentId="run-1" copiesOnly context={context()} />)

@@ -251,7 +251,7 @@ export function FilesPane({ projectId, agentId, activity, show, context, copiesO
   }, [pending, reloadTree])
   const own = agentId ? (runTree && 'files' in runTree ? runTree.files : EMPTY_FILES) : projectFiles
   // The run's copies of other repositories: with any, the tree has a folder per repo, the project's
-  // first, named as its folder is, as Claude Code's tree has a top folder per repo.
+  // first, named as its folder is, then the copies by name, as Claude Code's tree has a top folder per repo.
   const { value: copiesRead } = usePolled<CopiesRead | null>(agentId ? () => readCopies(host, projectId, agentId) : null, null, 15_000, [projectId, agentId], agentId ? { remember: `files:copies:${projectId}:${agentId}` } : undefined)
   const repos = useMemo(() => reposOf(copiesRead, copiesOnly === true), [copiesRead, copiesOnly])
   // A session with no project has its copies' folders alone.
@@ -316,7 +316,7 @@ export function FilesPane({ projectId, agentId, activity, show, context, copiesO
       <div ref={setBody} className="flex min-h-0 min-w-0 flex-auto">
         {tree && (
           <div className={cn('flex min-h-0 flex-col', narrow ? 'w-full' : 'w-1/2 max-w-72 min-w-48 shrink-0 border-r border-hairline')}>
-            <FileTree files={files} caption={runTree ? sourceCaption(runTree) : undefined} shown={active} context={shownContext} filter={filter} onOpen={open} />
+            <FileTree files={files} first={repos?.project} caption={runTree ? sourceCaption(runTree) : undefined} shown={active} context={shownContext} filter={filter} onOpen={open} />
           </div>
         )}
         {narrow && tree ? null : active !== undefined ? (
