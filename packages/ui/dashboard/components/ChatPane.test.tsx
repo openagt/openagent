@@ -65,7 +65,8 @@ describe('ChatPane', () => {
     expect(layer.parentElement).toBe(pane())
     expect(top.parentElement).toBe(layer)
     expect(top.className.split(' ')).toEqual(expect.arrayContaining(['absolute', 'top-0', 'left-0', 'right-(--chat-edge)', 'z-20', 'bg-background/80', 'backdrop-blur-md']))
-    // Over the scroll bar's strip only the bar's line goes on, level with it, to the panes' edge.
+    // What is in the bar runs on over the scroll bar's strip, to the window's edge, as the bar's line does, level with it.
+    expect(screen.getByTestId('chat-top-row').className.split(' ')).toEqual(['-mr-(--chat-edge)', 'pointer-coarse:-mr-(--chat-scroll-bar)'])
     expect(screen.getByTestId('chat-top-line').className.split(' ')).toEqual(expect.arrayContaining(['absolute', 'right-0', 'w-(--chat-edge)', 'top-[calc(2.75rem-1px)]', 'h-px', 'bg-border']))
     // The room is a layer of its own: a popup the dashboard opens over the page stays over the message box's bar.
     expect(layer.className.split(' ')).toEqual(expect.arrayContaining(['relative', 'isolate', 'min-h-0', 'flex-1', 'overflow-hidden']))
@@ -76,11 +77,12 @@ describe('ChatPane', () => {
     expect(document.body.textContent).toBe('top barchatmessage box')
   })
 
-  test('a column beside the chat stands under the top bar, which then runs over both, as Claude Code\'s over its details; what is in the bar ends where it does without the column', () => {
+  test('a column beside the chat stands under the top bar, which then runs over both, as Claude Code\'s over its details; what is in the bar runs to the window\'s edge either way', () => {
     render(<ChatPane top={<b>top bar</b>} bottom={<b>message box</b>} side={<p>activity</p>}><p>chat</p></ChatPane>)
     const column = screen.getByRole('complementary', { name: 'Activity panel' })
     expect(column.className.split(' ')).toEqual(expect.arrayContaining(['mt-11', 'w-80', 'border-l']))
-    expect(screen.getByTestId('chat-top').className.split(' ')).toEqual(expect.arrayContaining(['right-0', 'pr-(--chat-edge)', 'pointer-coarse:pr-(--chat-scroll-bar)']))
+    expect(screen.getByTestId('chat-top').className.split(' ')).toEqual(expect.arrayContaining(['right-0']))
+    expect(screen.getByTestId('chat-top-row').className).toBe('')
     expect(screen.queryByTestId('chat-top-line')).toBeNull()
     expect(document.body.textContent).toBe('top barchatmessage boxactivity')
   })

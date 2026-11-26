@@ -310,14 +310,14 @@ function PanelButton({ className }: { className?: string }) {
 /**
  * The end of a page's top bar: what stands before the panel's icon (the project's ⋮, the session's
  * Activity panel), then the panel icon while the panel is closed: open, its icon is at the end of
- * its own tab bar, as Claude Code's. The presses are one kind of button, 4px apart, the last glyph
- * ending 16 from the bar's edge as the title starts 16 from the other (ui/look/spacing.md 4).
+ * its own tab bar, as Claude Code's. The presses are one kind of button, 4px apart, the last one
+ * ending 8 from the bar's edge, as Claude Code's.
  */
 export function PaneToggles({ before }: { before?: ReactNode }) {
   const { enabled, shown } = useContext(PanesContext)
   const isMobile = useIsMobile()
   return (
-    <div className="flex shrink-0 items-center gap-1 pr-0.5">
+    <div className="flex shrink-0 items-center gap-1">
       {before}
       {/* Over the chat (a phone) the panel's way back is its arrow, so the icon stays here to open it again. */}
       {enabled && (!shown || isMobile) && <PanelButton />}
@@ -457,7 +457,7 @@ function SidePanel({ over = false }: { /** Laid over the chat: flush, its way ou
     <div className={fills ? 'absolute inset-0 z-30 flex bg-background' : 'flex h-full min-h-0 min-w-0'}>
       <section aria-label="Side panel" className={cn('flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background', over && 'border-t border-border')}>
         {/* Flush with the page, as Claude Code's: its tab bar as high as the page's top bar, 44, and lined under. */}
-        <header className="flex h-11 shrink-0 items-center gap-1 border-b border-border pr-4 pl-2">
+        <header className="flex h-11 shrink-0 items-center gap-1 border-b border-border px-2">
           {over && (
             <Tooltip>
               <TooltipTrigger render={<Button variant="ghost" size="icon-bar" className="ml-0.5 shrink-0 text-muted-foreground" aria-label="Back to the chat" onClick={() => setPanelShown(page, false)} />}>
@@ -494,8 +494,8 @@ function SidePanel({ over = false }: { /** Laid over the chat: flush, its way ou
               <TooltipContent>{fills ? 'Back to its place' : 'Fill the page'}</TooltipContent>
             </Tooltip>
           )}
-          {/* Where the top bar has it, 22 from the window's edge, so it does not move under the pointer as the panel opens. */}
-          {!over && <PanelButton className="mr-1.5" />}
+          {/* Where the top bar has it, 8 from the window's edge as Claude Code's, so it does not move under the pointer as the panel opens. */}
+          {!over && <PanelButton />}
         </header>
         {active ? <TabBody key={active.id} pane={active} /> : <EmptyPanel />}
       </section>
