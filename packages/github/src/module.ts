@@ -2,7 +2,7 @@ import { realpathSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 import { errorMessage, nodeGitRunner, sessionFolder } from '@openagt/git-branches'
-import { noreplyEmail, sessionsHome, remoteHostOf, defineModule, PICKED_GITHUB_ACCOUNT, RunOrder, runName, type AttentionItem, type GitAccess, type ModuleDefinition, type PullRequest, type RunAccount, type RunSummary, type RunContext } from '@openagt/hooks'
+import { callerNow, noreplyEmail, sessionsHome, remoteHostOf, defineModule, PICKED_GITHUB_ACCOUNT, RunOrder, runName, type AttentionItem, type GitAccess, type ModuleDefinition, type PullRequest, type RunAccount, type RunSummary, type RunContext } from '@openagt/hooks'
 import { cachedOpenPrs, cachedPrStates, mergeLookup, requestsRead, type OpenPr } from './pulls.js'
 
 export type { OpenPr } from './pulls.js'
@@ -135,9 +135,13 @@ async function openagentAccount(dir: string, user: string | undefined, commitsIn
 async function runsAccountAccess(): Promise<GitAccess | undefined> {
   const gh = nodeGhRunner()
   const home = homedir()
+  // On a machine shared by a team, git reaches GitHub as an account of the person's, or a shared one; with none, as nobody: public repositories only.
+  const caller = callerNow()
+  const login = caller ? teamLogin(caller, undefined, accountLogins(accountsRoot(process.env))) : undefined
+  if (caller && login === undefined) return undefined
   try {
-    const { login, dir } = await accountNamed(undefined, home, gh, process.env)
-    return { env: runEnv(await tokenOf(login, dir, home, gh), dir, readFacts(dir), process.env) }
+    const account = await accountNamed(login, home, gh, process.env)
+    return { env: runEnv(await tokenOf(account.login, account.dir, home, gh), account.dir, readFacts(account.dir), process.env) }
   } catch {
     return undefined
   }
