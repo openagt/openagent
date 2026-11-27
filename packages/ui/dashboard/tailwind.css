@@ -735,3 +735,14 @@ html[data-pinned] body {
     animation-timing-function: ease-in-out;
   }
 }
+
+/*
+ * While a dialog's blurred dim is up, the page under it stands still: Chrome on a Mac drops a
+ * blurred layer for a frame while what is under it moves (the sidebar's pulsing marks), and the
+ * dialog flickered. A dialog is drawn outside #root (a portal), so its own motion goes on; a
+ * popover has no dim, and the page moves on under it.
+ */
+:root:has(.dialog-dim) #root * {
+  animation-play-state: paused !important;
+}
+
