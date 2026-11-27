@@ -1,0 +1,70 @@
+{
+  "id": "2026-11-27T16-12-47-962Z",
+  "startedAt": "2026-11-27T16:12:48.249Z",
+  "endedAt": "2026-11-27T16:13:45.711Z",
+  "status": "done",
+  "intent": "fix typos in readme",
+  "title": "Fix README typos",
+  "driver": "claude-code",
+  "model": "claude-opus-5-5",
+  "cost": 0.3494024,
+  "contextTokens": 32864,
+  "caller": {
+    "runner": {
+      "host": "experiment",
+      "pid": 109149,
+      "gitAccount": "suleimansh",
+      "startedFor": {
+        "login": "brillout",
+        "owner": false,
+        "teamOwner": "suleimansh",
+        "name": "Rom",
+        "id": 1005638,
+        "avatar": "https://avatars.githubusercontent.com/u/1005638?v=4"
+      },
+      "repos": [
+        {
+          "name": "openagent",
+          "from": "/home/openagent/projects/openagent"
+        }
+      ]
+    },
+    "pid": 109149,
+    "host": "experiment",
+    "options": {
+      "agent-driver": {
+        "driver": "claude-code",
+        "model": "claude-opus-5-5"
+      },
+      "github": {
+        "account": "suleimansh"
+      },
+      "caller": {
+        "login": "brillout",
+        "owner": false,
+        "teamOwner": "suleimansh",
+        "name": "Rom",
+        "id": 1005638,
+        "avatar": "https://avatars.githubusercontent.com/u/1005638?v=4"
+      }
+    },
+    "gitAccount": "suleimansh",
+    "startedFor": {
+      "login": "brillout",
+      "owner": false,
+      "teamOwner": "suleimansh",
+      "name": "Rom",
+      "id": 1005638,
+      "avatar": "https://avatars.githubusercontent.com/u/1005638?v=4"
+    },
+    "kind": "prompt",
+    "workspace": "/home/openagent/.openagent-sessions/2026-11-27T16-12-47-962Z",
+    "sessionId": "3a4d69ba-5991-4129-af98-9d8d4c331fbd",
+    "repos": [
+      {
+        "name": "openagent",
+        "from": "/home/openagent/projects/openagent"
+      }
+    ]
+  }
+}
