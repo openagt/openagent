@@ -124,9 +124,9 @@ interface WhereRead {
   unreached?: string
 }
 
-/** A project's state as a dot: red when a module says something needs fixing there (#1500). */
+/** A project's state as a dot: red when a module says something is wrong there (#1500); not for what one press brings up, a folder behind main (his ask, 2026-11-27). */
 export function ProjectDot({ project }: { project: ProjectSummary }) {
-  return <span aria-hidden className={cn('h-2 w-2 shrink-0 rounded-full', project.errors?.length ? 'bg-danger' : 'bg-primary')} />
+  return <span aria-hidden className={cn('h-2 w-2 shrink-0 rounded-full', project.errors?.some(e => !e.fixed) ? 'bg-danger' : 'bg-primary')} />
 }
 
 /** A project's name, after the folders that tell it from another of the same name, muted, so the names line up. */
@@ -150,9 +150,10 @@ function ProjectLine({ project, label }: { project: ProjectSummary; label: strin
       </MenuMark>
       <span className="min-w-0 flex-1 leading-5">
         <ProjectName name={project.name} label={label} />
-        {/* What the person has to fix there, in words: the project's own page carries the detail. */}
+        {/* What the person has to fix there, in words: the project's own page carries the detail. What one press there
+            brings up (a folder behind main) is said quietly, as a note is: nothing is wrong with the project. */}
         {project.errors?.map(e => (
-          <span key={e.id} data-line2 title={e.message} className="block truncate text-xs leading-4 text-danger">
+          <span key={e.id} data-line2 title={e.message} className={cn('block truncate text-xs leading-4', e.fixed ? 'text-muted-foreground' : 'text-danger')}>
             {e.title}
           </span>
         ))}

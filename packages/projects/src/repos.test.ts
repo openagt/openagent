@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { CRAWL_BEHIND_LIMIT_MS, CRAWL_LIMIT_MS, crawlRepos, originUrlOf, repoIndex, type Crawl, type CrawlFs, type FoundRepo } from './repos.js'
+import { CRAWL_BEHIND_LIMIT_MS, CRAWL_LIMIT_MS, crawlRepos, originUrlOf, ownCheckout, repoIndex, type Crawl, type CrawlFs, type FoundRepo } from './repos.js'
 
 // The repos on this computer: a crawl of folders, shallowest first, that stops at a repository and
 // at a strict time limit, and a kept list read again once it is old.
@@ -152,4 +152,25 @@ test('a crawl with time enough that is still cut short is the list: it is not lo
   assert.deepEqual(await index.read(), { repos: [{ path: '/h/near', name: 'near' }], looking: false })
   await new Promise(resolve => setImmediate(resolve))
   assert.equal(crawls, 2)
+})
+
+test("a folder left out (OpenAgent's own checkout) is neither listed nor looked through; the project's clone of the same repository still is", async () => {
+  const root = await tree({
+    'projects/openagent/.git/config': ORIGIN,
+    'openagent-main/.git/config': ORIGIN,
+    'openagent-main/inside/.git': null,
+  })
+  try {
+    const found = await crawlRepos([root], { without: [join(root, 'openagent-main')] })
+    assert.deepEqual(found.repos.map(repo => repo.path), [join(root, 'projects/openagent')])
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test("OpenAgent's own checkout is the Git folder its code is in; an installed package has none", () => {
+  const there = (folders: string[]) => (path: string) => folders.some(folder => path === join(folder, '.git'))
+  assert.equal(ownCheckout('/home/me/openagent-main/packages/projects/dist', there(['/home/me/openagent-main'])), '/home/me/openagent-main')
+  assert.equal(ownCheckout('/opt/node/lib/node_modules/@openagt/projects/dist', there(['/opt'])), undefined)
+  assert.equal(ownCheckout('/somewhere/dist', there([])), undefined)
 })

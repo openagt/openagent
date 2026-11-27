@@ -445,3 +445,15 @@ describe('SidebarProject', () => {
     await waitFor(() => expect(onPick).toHaveBeenCalledWith('vike-9'))
   })
 })
+
+test("what one press brings up (a folder behind main) is said quietly, with the plain dot; what is wrong stays red", async () => {
+  const behind: ProjectSummary = { id: 'b', path: '/home/me/behind', name: 'behind', errors: [{ id: 'git-branches:folder-behind', title: 'This project’s folder is 25 commits behind main.', fixed: true }] }
+  const broken: ProjectSummary = { id: 'x', path: '/home/me/broken', name: 'broken', errors: [{ id: 'store:sync', title: 'Not syncing with the remote' }] }
+  renderPicker({ projects: [behind, broken] })
+  await openMenu(trigger())
+  const quiet = await screen.findByText('This project’s folder is 25 commits behind main.')
+  expect(quiet.className).toContain('text-muted-foreground')
+  expect(screen.getByRole('option', { name: /behind/ }).querySelector('.bg-danger')).toBeNull()
+  expect(screen.getByText('Not syncing with the remote').className).toContain('text-danger')
+  expect(screen.getByRole('option', { name: /broken/ }).querySelector('.bg-danger')).not.toBeNull()
+})
