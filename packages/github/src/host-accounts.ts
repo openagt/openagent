@@ -1,11 +1,12 @@
 import { homedir } from 'node:os'
 import { errorMessage, noAccountSentence } from '@openagt/git-branches'
-import type { HostAccounts, RepositoryAccount } from '@openagt/hooks'
+import { callerNow, type HostAccounts, type RepositoryAccount } from '@openagt/hooks'
 import { HOST, gitConfig } from './accounts.js'
 import { readAccounts, runCli, type GithubAccounts } from './cli.js'
 import { nodeGhRunner } from './gh.js'
 import { accountNamed } from './working-account.js'
 import { ADD_ACCOUNT } from './ids.js'
+import { accountsFor, loginsFor } from './team.js'
 
 // OpenAgent's GitHub accounts as the dashboard and the other modules ask for them outside a run:
 // the Permissions page's list, the accounts a git store's "Send as" offers, and the git settings
@@ -83,7 +84,8 @@ export function accountsChanged(): void {
 
 /** OpenAgent's GitHub accounts that GitHub still takes, and the one runs use: what a "Send as" offers; with none, the press that adds one. */
 export async function hostAccounts(): Promise<HostAccounts[]> {
-  const read = await githubAccounts()
+  // On a machine shared by a team, the person's accounts and the shared ones, their runs' one first among them (team.ts).
+  const read = accountsFor(await githubAccounts(), callerNow())
   const accounts = read.accounts.filter(account => account.ok)
   const runs = accounts.find(account => account.runs)?.login
   return [{ host: HOST, logins: accounts.map(account => account.login), ...(runs !== undefined ? { runs } : {}), add: { module: 'github', action: ADD_ACCOUNT, label: 'Add a GitHub account' } }]
@@ -102,6 +104,9 @@ export async function sendAs(host: string, login?: string): Promise<{ ok: true; 
   if (host !== HOST) return undefined
   if (login === undefined) return { ok: false, error: `${noAccountSentence(host)}: add one in Permissions › Git hosts.` }
   if (typeof login !== 'string' || !/^\S+$/.test(login)) return { ok: false, error: `${String(login)} is no account.` }
+  // On a machine shared by a team, nothing is sent as an account its person may not use.
+  const caller = callerNow()
+  if (caller && !loginsFor(caller, (await githubAccounts()).accounts.map(account => account.login)).includes(login)) return { ok: false, error: `@${login} is not your GitHub account here, and nobody shared it with the team.` }
   const known = sendingAs.get(login)
   if (known && Date.now() - known.at < SEND_AS_KEEP_MS) return { ok: true, account: known.account }
   try {

@@ -1,6 +1,10 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { ACCOUNTS_FRESH_MS, accountsChanged, accountsWiring, githubAccounts } from './host-accounts.js'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { readCallersWith } from '@openagt/hooks'
+import { ACCOUNTS_FRESH_MS, accountsChanged, accountsWiring, githubAccounts, hostAccounts, sendAs } from './host-accounts.js'
 import type { GithubAccounts } from './cli.js'
 
 // OpenAgent's GitHub accounts as the server keeps them: a read asks GitHub once per account, so the
@@ -25,5 +29,29 @@ test('the accounts are read again at most once a minute, and at once after a pre
   } finally {
     accountsWiring.read = real
     accountsChanged()
+  }
+})
+
+test('on a machine shared by a team, “Send as” offers a person their accounts and the shared ones, and sends as no other', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'send-as-team-'))
+  const env = process.env['XDG_CONFIG_HOME']
+  process.env['XDG_CONFIG_HOME'] = dir
+  const real = accountsWiring.read
+  accountsWiring.read = async () => ({ accounts: [{ login: 'owner-bot', ok: true, runs: true }, { login: 'rom-bot', ok: true, runs: false }] }) as unknown as GithubAccounts
+  accountsChanged()
+  writeFileSync(join(dir, 'openagent-github.json'), JSON.stringify({ runs: {}, team: { owners: { 'rom-bot': 'brillout' }, shared: [], runsFor: {} } }))
+  try {
+    readCallersWith(() => ({ login: 'brillout', owner: false, teamOwner: 'suleimansh' }))
+    assert.deepEqual((await hostAccounts())[0]?.logins, ['rom-bot'])
+    assert.deepEqual(await sendAs('github.com', 'owner-bot'), { ok: false, error: '@owner-bot is not your GitHub account here, and nobody shared it with the team.' })
+    readCallersWith(() => ({ login: 'suleimansh', owner: true, teamOwner: 'suleimansh' }))
+    assert.deepEqual((await hostAccounts())[0]?.logins, ['owner-bot'])
+  } finally {
+    readCallersWith(() => undefined)
+    accountsWiring.read = real
+    accountsChanged()
+    if (env === undefined) delete process.env['XDG_CONFIG_HOME']
+    else process.env['XDG_CONFIG_HOME'] = env
+    rmSync(dir, { recursive: true, force: true })
   }
 })

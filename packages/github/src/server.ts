@@ -98,16 +98,16 @@ export const stopLogin = act(async (): Promise<Pressed> => press(['stop-login'])
 export const install = act(async (): Promise<Pressed> => press(['install']))
 
 /** The repositories OpenAgent's accounts and the owners the person named have on GitHub: what the project picker offers to add (`composer.where`). */
-export const repos = read(async (): Promise<HostedRead> => readHosted())
+export const repos = read(async (host: RpcHost): Promise<HostedRead> => readHosted(host.caller))
 
 /** The users and organizations on GitHub whose repositories the picker lists, by name. */
-export const owners = read(async (): Promise<string[]> => readOwners())
+export const owners = read(async (host: RpcHost): Promise<string[]> => readOwners(host.caller))
 
 /** List one more user's or organization's repositories, as a person types it. */
-export const addRepoOwner = act(async (_host: RpcHost, { owner }: { owner: string }): Promise<Pressed> => addOwner(owner))
+export const addRepoOwner = act(async (host: RpcHost, { owner }: { owner: string }): Promise<Pressed> => addOwner(owner, host.caller))
 
 /** Stop listing an owner's repositories. */
-export const removeRepoOwner = act(async (_host: RpcHost, { owner }: { owner: string }): Promise<Pressed> => removeOwner(owner))
+export const removeRepoOwner = act(async (host: RpcHost, { owner }: { owner: string }): Promise<Pressed> => removeOwner(owner, host.caller))
 
 /**
  * The GitHub account the next run started on this computer works as where its options name none,

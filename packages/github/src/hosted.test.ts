@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { HOSTED_MAX_AGE_MS, addOwner, forgetHosted, hostedWiring, readHosted, readOwners, removeOwner } from './hosted.js'
@@ -18,6 +18,7 @@ async function withHosts(body: (asked: string[][], clock: { now: number }) => Pr
   Object.assign(hostedWiring, {
     hosts: async () => [{ host: 'github.com', logins: ['octo', 'octo-agent'], runs: 'octo' }],
     owners: async () => ['github.com/vikejs', 'gitlab.com/elsewhere'],
+    teammatesOwners: async () => [],
     now: () => clock.now,
     run: async (_host: string, args: string[]) => {
       asked.push(args)
@@ -105,6 +106,41 @@ test('Settings › GitHub names an owner as a person types it, kept in their own
     forgetHosted()
     if (previous === undefined) delete process.env.XDG_CONFIG_HOME
     else process.env.XDG_CONFIG_HOME = previous
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('on a machine shared by a team, each person is shown what their accounts and the shared ones list, and the owners they named', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'hosted-team-'))
+  const before = process.env['XDG_CONFIG_HOME']
+  process.env['XDG_CONFIG_HOME'] = dir
+  try {
+    await withHosts(async asked => {
+      hostedWiring.teammatesOwners = async () => ['github.com/brillout']
+      hostedWiring.run = async (_host: string, args: string[]) => {
+        asked.push(args)
+        if (args[1] === '--user') return listing(args[2]!, args[2] === 'octo' ? ['shop', 'secret-notes'] : ['shop'])
+        return listing(args[2]!, args[2] === 'brillout' ? ['vike-plus', 'secret-plans'] : ['vike', 'bati'])
+      }
+      const owner = { login: 'suleimansh', owner: true, teamOwner: 'suleimansh' }
+      const rom = { login: 'brillout', owner: false, teamOwner: 'suleimansh' }
+      const shown = async (caller: typeof owner) => (await readHosted(caller)).repos.map(repo => repo.address)
+      // The machine's accounts, from before Team mode, are its owner's, and so are the owners kept with the machine's person.
+      assert.deepEqual(await shown(owner), ['github.com/octo/shop', 'github.com/octo/secret-notes', 'github.com/octo-agent/shop', 'github.com/vikejs/vike', 'github.com/vikejs/bati'])
+      // Rom has no account here: none of the owner's repositories; the owner he named, its public repositories.
+      assert.equal((await addOwner('brillout', rom)).ok, true)
+      assert.deepEqual(await readOwners(rom), ['brillout'])
+      assert.deepEqual(await readOwners(owner), ['vikejs'], 'his owners are his own, the machine’s untouched')
+      assert.deepEqual(await shown(rom), ['github.com/brillout/vike-plus'])
+      // An account its owner shares: listed for him too.
+      writeFileSync(join(dir, 'openagent-github.json'), JSON.stringify({ runs: {}, team: { owners: {}, shared: ['octo-agent'], runsFor: {} } }))
+      assert.deepEqual(await shown(rom), ['github.com/octo-agent/shop', 'github.com/brillout/vike-plus'])
+      // With no team, every row, as before.
+      assert.equal((await readHosted()).repos.length, 7)
+    })
+  } finally {
+    if (before === undefined) delete process.env['XDG_CONFIG_HOME']
+    else process.env['XDG_CONFIG_HOME'] = before
     rmSync(dir, { recursive: true, force: true })
   }
 })

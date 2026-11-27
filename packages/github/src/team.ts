@@ -1,4 +1,8 @@
+import { readFile, writeFile, mkdir } from 'node:fs/promises'
+import { join } from 'node:path'
 import { ownedFor, ownerOf, ownsIt, sameLogin, type TeamCaller } from '@openagt/hooks'
+import { isRepoOwner } from '@openagt/projects'
+import { homedir } from 'node:os'
 import { changeTeamPicks, picksPath, readTeamPicks, type TeamPicks } from './accounts.js'
 import type { GithubAccount, GithubAccounts } from './cli.js'
 
@@ -80,4 +84,34 @@ export function mayForget(caller: TeamCaller | undefined, login: string, path: s
 export function addingFor(caller: TeamCaller | undefined, path: string = picksPath()): void {
   if (!caller) return
   changeTeamPicks(team => ({ ...team, adding: caller.login }), path)
+}
+
+/**
+ * Where a teammate's own things are kept on a machine shared by a team: beside the machine's
+ * person folder, which is the owner's and synced with their data, never in it. The dashboard's
+ * preferences of theirs are there too (ui's team/preferences.ts).
+ */
+export function teammateFolder(login: string, env: NodeJS.ProcessEnv = process.env): string {
+  return join(env['XDG_CONFIG_HOME'] || env['HOME'] || homedir(), 'openagent-people', login.toLowerCase())
+}
+
+/** The users and organizations a teammate named, whose repositories their pickers list: theirs alone, as `github.com/<name>`. */
+export async function readTeammateOwners(login: string, env?: NodeJS.ProcessEnv): Promise<string[]> {
+  try {
+    const { owners } = JSON.parse(await readFile(join(teammateFolder(login, env), 'repo-owners.json'), 'utf8')) as { owners?: unknown }
+    return Array.isArray(owners) ? [...new Set(owners.filter(isRepoOwner))] : []
+  } catch {
+    return []
+  }
+}
+
+export async function writeTeammateOwners(login: string, owners: readonly string[], env?: NodeJS.ProcessEnv): Promise<void> {
+  const dir = teammateFolder(login, env)
+  await mkdir(dir, { recursive: true })
+  await writeFile(join(dir, 'repo-owners.json'), `${JSON.stringify({ owners: [...new Set(owners.filter(isRepoOwner))] }, null, 2)}\n`, { mode: 0o600 })
+}
+
+/** Whether `caller` is a teammate: on a machine shared by a team, and not its owner, whose are the machine's. */
+export function isTeammate(caller: TeamCaller | undefined): caller is TeamCaller {
+  return caller !== undefined && !caller.owner
 }
