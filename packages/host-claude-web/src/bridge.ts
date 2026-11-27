@@ -80,6 +80,7 @@ export function bridgeLifecycle(deps: BridgeDeps = {}): AppLifecycle {
 /** The extension's address (`/_bridge`): every call shows the bridge's key, and none is answered while the plugin is off. */
 export const bridgeRoute: AppRoute = {
   path: BRIDGE_PREFIX,
+  callers: 'own',
   handle: (req, res) => {
     const pathname = new URL(req.url ?? '/', 'http://bridge.invalid').pathname
     return handleBridgeRequest(req, res, pathname, running ? handlersOf(running) : undefined)

@@ -1,5 +1,6 @@
 import type { StartedInResult } from './dashboard/types.js'
 import { readSecureAddress } from './secure-address.js'
+import { readTeam, teamPath } from './team/team-file.js'
 
 /**
  * A second `openagent` on a port a dashboard already listens on (#2141): it asks that port whether
@@ -7,7 +8,8 @@ import { readSecureAddress } from './secure-address.js'
  * only on `EADDRINUSE` leaves the common start as it was, with no race between a look and a bind.
  *
  * The call is a plain RPC: with no `Origin` and a loopback `Host`, the dashboard's guards let it
- * by, as they let any program on this computer call any of its RPCs.
+ * by, as they let any program on this computer call any of its RPCs; in Team mode it shows the
+ * team file's key, which only this computer's person can read.
  */
 
 /**
@@ -24,19 +26,22 @@ export async function joinRunningDashboard(port: number, folder: string | undefi
   const url = `http://127.0.0.1:${port}`
   // Asked first with no folder, which a dashboard answers at once, so a program that holds the port
   // and never answers is given up on; adding a folder runs its open hooks, however long they take.
-  const running = await startedAgain(url, null, AbortSignal.timeout(3000))
-  const answer = running && folder !== undefined ? await startedAgain(url, folder) : running
+  // In Team mode the dashboard lets a program of this computer's by with the team file's key.
+  const team = await readTeam(teamPath(env))
+  const key = team.on ? team.localKey : undefined
+  const running = await startedAgain(url, null, key, AbortSignal.timeout(3000))
+  const answer = running && folder !== undefined ? await startedAgain(url, folder, key) : running
   if (!answer) return { joined: false }
   const secure = await readSecureAddress(env).catch(() => undefined)
   return { joined: true, url: secure ? `https://${secure.name}` : url, version: answer.version, ...(answer.project ? { project: answer.project } : {}) }
 }
 
 /** What the dashboard at `url` answers when handed `folder`; undefined when no OpenAgent dashboard answers there. */
-async function startedAgain(url: string, folder: string | null, signal?: AbortSignal): Promise<{ version: string; project?: StartedInResult } | undefined> {
+async function startedAgain(url: string, folder: string | null, key: string | undefined, signal?: AbortSignal): Promise<{ version: string; project?: StartedInResult } | undefined> {
   try {
     const res = await fetch(`${url}/_rpc/sendStartedAgain`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...(key ? { authorization: `Bearer ${key}` } : {}) },
       body: JSON.stringify([folder]),
       signal: signal ?? null,
     })

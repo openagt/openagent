@@ -132,3 +132,19 @@ describe('PersonMenu: what a module offers here', () => {
     expect(document.querySelector('[data-testid="missing-dot"]')!.className).toContain('bg-warning')
   })
 })
+
+describe('PersonMenu on a machine shared by a team', () => {
+  test('the person is who signed in with GitHub, and the menu signs them out', async () => {
+    onPerson.mockResolvedValue({ name: 'Computer Owner' })
+    const { TeamContext } = await import('../lib/team.js')
+    const team = { on: true as const, name: 'experiment', owner: { login: 'nitedani', id: 1 }, person: { login: 'suleimansh', id: 2, name: 'Suleiman Shahbari' }, members: [] }
+    render(
+      <TeamContext.Provider value={{ team, reload: async () => {} }}>
+        <PersonMenu onSettings={() => {}} />
+      </TeamContext.Provider>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Suleiman Shahbari: settings' }))
+    expect(screen.getByText('@suleimansh')).toBeTruthy()
+    expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual(['Theme', 'Settings', 'Sign out of experiment'])
+  })
+})

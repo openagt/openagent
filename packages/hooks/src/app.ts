@@ -127,6 +127,12 @@ export interface AppRoute {
   path: string
   /** Answer a request at the path or below it. */
   handle(req: IncomingMessage, res: ServerResponse): void | Promise<void>
+  /**
+   * `'own'`: the route checks every caller itself (a token it gave out), so in Team mode a caller
+   * that is not signed in reaches it too (a browser extension's). Absent, it answers in Team mode
+   * only those signed in, as the dashboard's own calls do: a page's images, say.
+   */
+  callers?: 'own'
 }
 
 /** What a route's path may be: `/_`, then a name of lower-case words joined by dashes. */

@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
-import { ArrowLeft, Blocks, ChevronRight, ChevronsUpDown, Keyboard, Layers, Palette, X } from 'lucide-react'
+import { ArrowLeft, Blocks, ChevronRight, ChevronsUpDown, Keyboard, Layers, Palette, Users, X } from 'lucide-react'
 import type { ProjectSummary } from '../../src/index.js'
 import { DEFAULT_ORDER, useMountedModules, type MountedView } from '../lib/use-modules.js'
 
 import { useIsMobile } from '../lib/use-mobile.js'
 import { AppearanceSettings } from './AppearanceSettings.js'
+import { TEAM_ENTRY, TeamSettings } from './TeamSettings.js'
 import { SHORTCUTS_ENTRY, ShortcutList } from './ShortcutList.js'
 import { PickProject } from './PickProject.js'
 import { ProjectDot } from './SidebarProject.js'
@@ -292,7 +293,7 @@ function ProjectSelect({ projects, value, onChange }: { projects: ProjectSummary
   )
 }
 
-/** The dashboard's own entries: how it looks, the plugins, your agent data, where repos come from, the keys. */
+/** The dashboard's own entries: how it looks, the team that shares this machine, the plugins, the keys. */
 function useOwnEntries(): Entry[] {
   return [
     {
@@ -301,6 +302,13 @@ function useOwnEntries(): Entry[] {
       title: 'Appearance',
       icon: Palette,
       body: <AppearanceSettings />,
+    },
+    {
+      id: TEAM_ENTRY,
+      order: 42,
+      title: 'Team',
+      icon: Users,
+      body: <TeamSettings />,
     },
     {
       id: COMPUTER_PLUGINS_ENTRY,
