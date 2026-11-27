@@ -1,5 +1,6 @@
 import type { ProjectRef } from './project.js'
 import { COMPUTER, PERSON, projectScope, type Scope, type Store } from './store.js'
+import { callerNow } from './team.js'
 
 /** Where a setting is kept: with the person, on this computer, or in one project. */
 export type SettingScope = 'person' | 'computer' | 'project'
@@ -19,6 +20,11 @@ export interface Setting<T> {
   readonly default: T
   /** A saved value read back; none for one that is not valid, and the default applies then. */
   parse(value: unknown): T | undefined
+  /**
+   * A pick each person makes for themselves (the coding agent of their next session): on a machine
+   * shared by a team, a teammate's is kept apart from the machine's, which stays its owner's.
+   */
+  readonly perPerson?: true
 }
 
 const SETTING_KEY = /^[a-z][a-z0-9-]*(\.[a-z][a-zA-Z0-9-]*)+$/
@@ -48,7 +54,7 @@ export interface Settings {
 export function settingsIn(store: Store): Settings {
   return {
     async get<T>(setting: Setting<T>, project?: ProjectRef): Promise<T> {
-      const saved = parseSettings(await store.read(scopeOf(setting, project), SETTINGS_FILE))[setting.key]
+      const saved = parseSettings(await store.read(scopeOf(setting, project), SETTINGS_FILE))[keyOf(setting)]
       if (saved === undefined) return setting.default
       const value = setting.parse(saved)
       return value === undefined ? setting.default : value
@@ -57,7 +63,7 @@ export function settingsIn(store: Store): Settings {
       await store.save(
         scopeOf(setting, project),
         async files => {
-          const saved = { ...parseSettings(await files.read(SETTINGS_FILE)), [setting.key]: value }
+          const saved = { ...parseSettings(await files.read(SETTINGS_FILE)), [keyOf(setting)]: value }
           const sorted = Object.fromEntries(Object.entries(saved).sort(([a], [b]) => a.localeCompare(b)))
           return { [SETTINGS_FILE]: `${JSON.stringify(sorted, null, 2)}\n` }
         },
@@ -65,6 +71,16 @@ export function settingsIn(store: Store): Settings {
       )
     },
   }
+}
+
+/**
+ * The key a setting is saved under: its own, or for a pick kept per person, a teammate's on a
+ * machine shared by a team, `<key>@<their GitHub username>`, beside the owner's.
+ */
+function keyOf(setting: Setting<unknown>): string {
+  if (!setting.perPerson) return setting.key
+  const caller = callerNow()
+  return caller && !caller.owner ? `${setting.key}@${caller.login.toLowerCase()}` : setting.key
 }
 
 /** A scope's settings file, read: nothing set when it is missing or not a JSON object. */

@@ -82,3 +82,19 @@ export function ownerOf(caller: TeamCaller, owned: { owner?: string }): string {
 export function noreplyEmail(caller: Pick<TeamCaller, 'login' | 'id'>): string {
   return caller.id !== undefined ? `${caller.id}+${caller.login}@users.noreply.github.com` : `${caller.login}@users.noreply.github.com`
 }
+
+/**
+ * Who this process acts for now. In a session's own process and a module's command, the one its
+ * environment says ({@link CALLER_ENV}); the dashboard, which acts for each request's caller in
+ * turn, tells it where to ask ({@link readCallersWith}). What a setting kept per person reads.
+ */
+let callerNowIs: () => TeamCaller | undefined = () => callerFromEnv(process.env)
+
+export function callerNow(): TeamCaller | undefined {
+  return callerNowIs()
+}
+
+/** Ask `read` who this process acts for now: the dashboard's request at work. */
+export function readCallersWith(read: () => TeamCaller | undefined): void {
+  callerNowIs = read
+}

@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { COMPUTER, PERSON, SETTINGS_FILE, chainStore, settingsIn } from './index.js'
-import { DEFAULT_PROFILE, PERSON_INFO, PROFILES, SCHEDULED_COMMANDS, START_FROM, isPersonName, isProfileName, profileIdOf, profileOf, profilesIn } from './catalog.js'
+import { DEFAULT_PROFILE, NAME_RUNS, PERSON_INFO, PICKED_AGENT, PICKED_GITHUB_ACCOUNT, PICKED_PROFILE, PROFILES, PROJECTS, SCHEDULED_COMMANDS, START_FROM, isPersonName, isProfileName, profileIdOf, profileOf, profilesIn } from './catalog.js'
 import { memoryStore } from './testing.js'
 
 test("the person's name and picture: saved with the person, each part read strictly, and none set is the computer's", async () => {
@@ -71,4 +71,16 @@ test('where every next run of a project starts, by its id: the local branch or a
   assert.equal(START_FROM.parse('local'), undefined)
   const many = Object.fromEntries(Array.from({ length: 250 }, (_, i) => [`p-${i}`, local]))
   assert.equal(Object.keys(START_FROM.parse(many) ?? {}).length, 200, 'bounded')
+})
+
+test('on a machine shared by a team, the picks for one’s own next sessions are each person’s; the machine’s setup is shared', () => {
+  const perPerson = [PICKED_AGENT, PICKED_PROFILE, PICKED_GITHUB_ACCOUNT, START_FROM, NAME_RUNS].map(setting => [setting.key, setting.perPerson])
+  assert.deepEqual(perPerson, [
+    ['agent-driver.picked', true],
+    ['profiles.picked', true],
+    ['github.account', true],
+    ['git-branches.startFrom', true],
+    ['agent-driver.name-runs', true],
+  ])
+  for (const shared of [PROJECTS, SCHEDULED_COMMANDS, PROFILES, PERSON_INFO]) assert.equal(shared.perPerson, undefined, shared.key)
 })

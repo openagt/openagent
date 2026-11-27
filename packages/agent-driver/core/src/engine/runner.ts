@@ -4,7 +4,7 @@ import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { codingAgent } from '../agents.js'
 import { findRun } from '../record-store.js'
-import { CALLER_ENV, createHooks, DISTRIBUTION_ENV, loadHandedDown, type DistributionEntry, type TeamCaller, type Driver, type DriverReadiness, type PersonalSetup, type Profile, type RunAgent } from '@openagt/hooks'
+import { CALLER_ENV, callerEnv, createHooks, DISTRIBUTION_ENV, loadHandedDown, type DistributionEntry, type TeamCaller, type Driver, type DriverReadiness, type PersonalSetup, type Profile, type RunAgent } from '@openagt/hooks'
 import { readPersonal } from './config.js'
 import { runProfile, type SessionPicks } from './profile.js'
 import { gitHostEnv, hasGitHost } from './git-host.js'
@@ -267,6 +267,8 @@ export async function resumeProject(
   const log = opts.log ?? (() => {})
   const setup = await readPersonal(repo, log)
   const previous = card ? runnerMark(card) : undefined
+  // On a machine shared by a team, the run goes on for its person: what is read of their picks is theirs (`callerNow`).
+  if (previous?.startedFor) Object.assign(process.env, callerEnv(previous.startedFor))
   // The profile the record names, as it stands now: its accounts on this computer. The session's picks are the record's (`run.ts` optionsOf).
   const profile = await runProfile(previous?.profile, createHooks(modules).settings, log)
   const accounts = accountsOn(profile, agent)

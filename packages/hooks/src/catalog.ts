@@ -108,6 +108,7 @@ export const PROFILES = defineSetting<Profile[]>({
 export const PICKED_PROFILE = defineSetting<string | undefined>({
   key: 'profiles.picked',
   scope: 'computer',
+  perPerson: true,
   default: undefined,
   parse: value => (isProfileId(value) && value !== DEFAULT_PROFILE ? value : undefined),
 })
@@ -120,6 +121,7 @@ export const PICKED_PROFILE = defineSetting<string | undefined>({
 export const PICKED_GITHUB_ACCOUNT = defineSetting<string | undefined>({
   key: 'github.account',
   scope: 'computer',
+  perPerson: true,
   default: undefined,
   parse: value => (typeof value === 'string' && /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/.test(value) ? value : undefined),
 })
@@ -192,6 +194,7 @@ export type AgentPick = Pick<AgentDriverOptions, 'driver' | 'model' | 'effort'>
 export const PICKED_AGENT = defineSetting<AgentPick>({
   key: 'agent-driver.picked',
   scope: 'computer',
+  perPerson: true,
   default: {},
   parse: value => {
     if (!isMap(value)) return undefined
@@ -210,6 +213,7 @@ export const PICKED_AGENT = defineSetting<AgentPick>({
 export const NAME_RUNS = defineSetting<boolean>({
   key: 'agent-driver.name-runs',
   scope: 'computer',
+  perPerson: true,
   default: true,
   parse: value => (typeof value === 'boolean' ? value : undefined),
 })
@@ -285,6 +289,7 @@ const START_FROM_LIMIT = 200
 export const START_FROM = defineSetting<Record<string, StartFrom>>({
   key: 'git-branches.startFrom',
   scope: 'computer',
+  perPerson: true,
   default: {},
   parse: value => {
     if (!isMap(value)) return undefined

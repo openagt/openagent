@@ -8,11 +8,12 @@ import { resolveDashboardBundle } from './dashboard/bundle.js'
 import { resolveWebsite } from './dashboard/website.js'
 import { readySessionsHome } from './sessions-home.js'
 import { distributionHooks, localHostOf } from './distribution-hooks.js'
-import { type Hooks, type ProjectRef, type RunHost, sessionsHome } from '@openagt/hooks'
+import { readCallersWith, type Hooks, type ProjectRef, type RunHost, sessionsHome } from '@openagt/hooks'
 import { readSecureAddress, SECURE_PORT, type SecureAddress } from './secure-address.js'
 import type { StartedProject } from './dashboard/types.js'
 import { teamGate } from './team/team-gate.js'
 import { teamPreferencesStore } from './team/preferences.js'
+import { currentCaller } from './team/caller.js'
 import { teamPath, teamStore } from './team/team-file.js'
 import { githubSignIn } from './team/github-sign-in.js'
 
@@ -84,6 +85,8 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   const env = opts.env ?? process.env
   // What a press installs is found at once, by the checks and by every run started from here.
   withLocalBin(process.env)
+  // On a machine shared by a team, a pick kept per person is the request's caller's (team/caller.ts).
+  readCallersWith(currentCaller)
   // What the person's terminal runs is found by the checks and by every run started from here: the
   // service's own PATH is the one its install's terminal had.
   await refreshLoginShellPath()

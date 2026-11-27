@@ -4,6 +4,7 @@ import { defineSetting, enabledSetting, SETTINGS_FILE, settingsIn } from './sett
 import type { ProjectRef } from './project.js'
 import { chainStore, COMPUTER, PERSON, projectScope } from './store.js'
 import { memoryStore } from './testing.js'
+import { readCallersWith, type TeamCaller } from './team.js'
 
 // Settings through the store: each scope's own file, the default until something is set, and a
 // file a person broke by hand that never stops a module.
@@ -83,4 +84,26 @@ test("a plugin's Enabled row is off unless the distribution starts the plugin on
   assert.equal(await settings.get(on), true)
   assert.equal(off.parse('yes'), undefined)
   assert.equal(off.parse(false), false)
+})
+
+test('on a machine shared by a team, a pick kept per person is each teammate’s own; the owner’s is the machine’s', async () => {
+  const store = chainStore([memoryStore()])
+  const settings = settingsIn(store)
+  const agent = defineSetting<string>({ key: 'agent-driver.picked', scope: 'computer', default: 'claude', perPerson: true, parse: value => (typeof value === 'string' ? value : undefined) })
+  let caller: TeamCaller | undefined
+  readCallersWith(() => caller)
+  try {
+    caller = { login: 'suleimansh', owner: true, teamOwner: 'suleimansh' }
+    await settings.set(agent, 'codex')
+    await settings.set(editor, 'zed')
+    caller = { login: 'BrillOut', owner: false, teamOwner: 'suleimansh' }
+    assert.equal(await settings.get(agent), 'claude', 'a teammate starts from the default, not the owner’s pick')
+    await settings.set(agent, 'claude-opus')
+    assert.equal(await settings.get(editor), 'zed', 'a setting not kept per person is the machine’s for everyone')
+    caller = undefined
+    assert.equal(await settings.get(agent), 'codex', 'with no team, the machine’s')
+    assert.deepEqual(JSON.parse((await store.read(COMPUTER, SETTINGS_FILE))!), { 'agent-driver.picked': 'codex', 'agent-driver.picked@brillout': 'claude-opus', 'projects.editor': 'zed' })
+  } finally {
+    readCallersWith(() => undefined)
+  }
 })
