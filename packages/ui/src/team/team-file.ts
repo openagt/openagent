@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { sameLogin } from '@openagt/hooks'
 
 // Team mode (a machine shared by a team, each person signed in as themselves with GitHub): what it
 // keeps, in one file of the computer's own beside the registry, mode 0600. Whether it is on, whose
@@ -162,11 +163,6 @@ export function newKey(): string {
 
 export function hashKey(key: string): string {
   return createHash('sha256').update(key).digest('hex')
-}
-
-/** Logins compare as GitHub compares them: case does not count. */
-export function sameLogin(a: string, b: string): boolean {
-  return a.toLowerCase() === b.toLowerCase()
 }
 
 /** Whether `login` may sign in: the owner or a member. */

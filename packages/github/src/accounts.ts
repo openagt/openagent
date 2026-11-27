@@ -108,7 +108,7 @@ export async function whoAmI(gh: GhRunner, cwd: string): Promise<AccountFacts> {
  * an account of that name before it replaced. Nothing while the login is still waiting, or when
  * none was started. Answers the login added.
  */
-export async function settleAdded(root: string, gh: GhRunner, cwd: string, files: JobFiles = jobFiles('login')): Promise<string | undefined> {
+export async function settleAdded(root: string, gh: GhRunner, cwd: string, files: JobFiles = jobFiles('login'), picks: string = picksPath()): Promise<string | undefined> {
   const adding = join(root, ADDING)
   if (!existsSync(join(adding, 'hosts.yml'))) return undefined
   const state = jobState(files)
@@ -122,6 +122,9 @@ export async function settleAdded(root: string, gh: GhRunner, cwd: string, files
   rmSync(dir, { recursive: true, force: true })
   renameSync(adding, dir)
   writeFile600(join(dir, 'account.json'), `${JSON.stringify(facts, null, 2)}\n`)
+  // On a machine shared by a team, the account is the one's who started its login.
+  const team = readPicks(picks).team
+  if (team?.adding !== undefined) changeTeamPicks(({ adding, ...rest }) => ({ ...rest, owners: { ...rest.owners, [facts.login]: adding! } }), picks)
   return facts.login
 }
 
@@ -134,18 +137,59 @@ export function picksPath(env: NodeJS.ProcessEnv = process.env): string {
 interface PicksFile {
   /** The account runs use, by host. */
   runs: Record<string, string>
+  /** On a machine shared by a team: whose each account is, which are shared, and each person's own pick for runs. */
+  team?: TeamPicks
 }
+
+/**
+ * The team's word on the accounts (Team mode): who added each one, by GitHub username (one with
+ * none is from before, the team owner's), the ones their owners share, each person's pick for
+ * their runs, and who the login under way is for.
+ */
+export interface TeamPicks {
+  owners: Record<string, string>
+  shared: string[]
+  runsFor: Record<string, string>
+  adding?: string
+}
+
+const strings = (value: unknown): Record<string, string> =>
+  value && typeof value === 'object' && !Array.isArray(value) ? Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string')) : {}
 
 function readPicks(path: string): PicksFile {
   try {
-    const file = JSON.parse(readFileSync(path, 'utf8')) as Partial<PicksFile>
-    if (file.runs && typeof file.runs === 'object' && !Array.isArray(file.runs)) {
-      return { runs: Object.fromEntries(Object.entries(file.runs).filter(([, login]) => typeof login === 'string')) }
+    const file = JSON.parse(readFileSync(path, 'utf8')) as Partial<PicksFile> & { team?: Partial<TeamPicks> }
+    const team = file.team && typeof file.team === 'object' ? file.team : undefined
+    return {
+      runs: strings(file.runs),
+      ...(team
+        ? {
+            team: {
+              owners: strings(team.owners),
+              shared: Array.isArray(team.shared) ? team.shared.filter((login): login is string => typeof login === 'string') : [],
+              runsFor: strings(team.runsFor),
+              ...(typeof team.adding === 'string' ? { adding: team.adding } : {}),
+            },
+          }
+        : {}),
     }
   } catch {
     // No file yet, or one that does not read: no pick.
   }
   return { runs: {} }
+}
+
+/** The team's word on the accounts: none said yet is an empty one. */
+export function readTeamPicks(path: string = picksPath()): TeamPicks {
+  return readPicks(path).team ?? { owners: {}, shared: [], runsFor: {} }
+}
+
+/** Change the team's word on the accounts, the rest of the file as it is. */
+export function changeTeamPicks(change: (team: TeamPicks) => TeamPicks, path: string = picksPath()): TeamPicks {
+  const picks = readPicks(path)
+  const team = change(picks.team ?? { owners: {}, shared: [], runsFor: {} })
+  writePicks(path, { ...picks, team })
+  return team
 }
 
 function writePicks(path: string, file: PicksFile): void {
@@ -226,7 +270,7 @@ export function runsAccount(accounts: readonly GhAccount[], path: string = picks
   const picked = picks.runs[HOST]
   if (picked !== undefined && accounts.some(a => a.login === picked)) return picked
   const first = accounts[0]?.login
-  if (first !== undefined) writePicks(path, { runs: { ...picks.runs, [HOST]: first } })
+  if (first !== undefined) writePicks(path, { ...picks, runs: { ...picks.runs, [HOST]: first } })
   return first
 }
 
@@ -244,7 +288,7 @@ export function runsAccountDir(env: NodeJS.ProcessEnv = process.env): { login: s
 export function useForRuns(login: string, accounts: readonly GhAccount[], path: string = picksPath()): void {
   if (!accounts.some(a => a.login === login)) throw new Error(`OpenAgent has no GitHub account ${login}: add it in Permissions first`)
   const picks = readPicks(path)
-  writePicks(path, { runs: { ...picks.runs, [HOST]: login } })
+  writePicks(path, { ...picks, runs: { ...picks.runs, [HOST]: login } })
 }
 
 /** A login in the browser, under way: the code the person types, and where. */
@@ -302,10 +346,15 @@ export async function startLogin(root: string, files = jobFiles('login'), waitMs
 export function forgetAccount(root: string, login: string, path: string = picksPath()): void {
   rmSync(accountDir(root, login), { recursive: true, force: true })
   const picks = readPicks(path)
-  if (picks.runs[HOST] === login) {
-    const { [HOST]: _gone, ...rest } = picks.runs
-    writePicks(path, { runs: rest })
+  const runs = picks.runs[HOST] === login ? Object.fromEntries(Object.entries(picks.runs).filter(([host]) => host !== HOST)) : picks.runs
+  // On a machine shared by a team, nothing of it is kept: whose it was, its sharing, the picks that named it.
+  const team = picks.team && {
+    ...picks.team,
+    owners: Object.fromEntries(Object.entries(picks.team.owners).filter(([one]) => one !== login)),
+    shared: picks.team.shared.filter(one => one !== login),
+    runsFor: Object.fromEntries(Object.entries(picks.team.runsFor).filter(([, one]) => one !== login)),
   }
+  writePicks(path, { runs, ...(team ? { team } : {}) })
 }
 
 /** Give up the login under way: its `gh` stops waiting, and nothing of it is kept. */

@@ -11,6 +11,7 @@ import type { ProjectsLifecycle } from './app.js'
 import type { ProjectRef } from './project.js'
 import type { PullRequestRead, RunFacts, RunFound, RunQuestion } from './run.js'
 import type { Settings } from './settings.js'
+import type { TeamCaller } from './team.js'
 
 /** Where a pull request stands on the git host: still being asked, or answered (with its merge commit when merged, and the last commit of the branch it merged, when the git host says it). */
 export type MergeLookup = { pending: true } | { pending: false; commit?: string; head?: string }
@@ -28,6 +29,8 @@ export interface RpcComputerHost {
   gitAccess(remote: string): Promise<GitAccess | undefined>
   /** Tell the modules the list of projects changed: what the module that keeps the list does. */
   readonly lifecycle: ProjectsLifecycle
+  /** Who called, on a machine shared by a team (Team mode): what is theirs, and shared with them, is what they see and change. None on a machine of one person. */
+  readonly caller?: TeamCaller
 }
 
 /** What a function of a project's module is handed: also the project it is called in, and where its runs have their work. */

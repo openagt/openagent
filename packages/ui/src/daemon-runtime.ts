@@ -1,4 +1,5 @@
 import { basename, resolve } from 'node:path'
+import { currentCaller } from './team/caller.js'
 import { stat } from 'node:fs/promises'
 import { MODULE_NAME, type Hooks, type ProjectRef, type RunHost, type RunOptions, sessionsHome } from '@openagt/hooks'
 import { readRunEvents } from './store/index.js'
@@ -167,7 +168,13 @@ function withPicked(flat: RunOptions, picked: RunOptions | undefined): RunOption
   return merged as RunOptions
 }
 
-/** A Start's picks as the run's options: one slice per module that acts on them (#2394), with the level the Start decided. */
-function runOptionsOf(options: StartAgentOptions, publish: RunOptions['publish']): RunOptions {
-  return withPicked(publish !== undefined ? { publish } : {}, options.options)
+/**
+ * A Start's picks as the run's options: one slice per module that acts on them (#2394), with the
+ * level the Start decided. Who the run is for is the signed-in caller's, never a page's word: on a
+ * machine shared by a team, their logins and the shared ones are the ones it takes.
+ */
+export function runOptionsOf(options: StartAgentOptions, publish: RunOptions['publish']): RunOptions {
+  const { caller: _said, ...picked } = withPicked(publish !== undefined ? { publish } : {}, options.options)
+  const caller = currentCaller()
+  return caller ? { ...picked, caller } : picked
 }

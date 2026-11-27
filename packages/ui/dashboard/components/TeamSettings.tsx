@@ -71,7 +71,7 @@ export function TeamSettings() {
       />
       <Members owner={team.owner} members={team.members ?? []} isOwner={isOwner} onChanged={reload} />
       {isOwner && <AddTeammate onAdded={reload} />}
-      <p className="text-xs text-faint-foreground">Locked out? On this machine, delete ~/.openagent-team.json: Team mode is then off.</p>
+      {isOwner && <p className="text-xs text-faint-foreground">Locked out? On this machine, delete ~/.openagent-team.json: Team mode is then off.</p>}
     </SettingsSection>
   )
 }

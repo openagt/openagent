@@ -1,5 +1,5 @@
 import { hostname } from 'node:os'
-import type { AgentLogins } from '@openagt/hooks'
+import { callerFromEnv, type AgentLogins } from '@openagt/hooks'
 import { OWN_NAME, readAccounts, shownAccounts, type ShownAccount } from './accounts.js'
 import { addingNow, type AddingNow } from './adding.js'
 import type { LoginWiring } from './wiring.js'
@@ -16,7 +16,7 @@ export type ListedAccount = ShownAccount & { who?: string; signedOut?: true; com
  * of theirs: runs skip it then. Commands still take its `name`.
  */
 export async function listed(logins: AgentLogins, wiring: LoginWiring): Promise<ListedAccount[]> {
-  const accounts = shownAccounts(readAccounts(wiring.path(logins.list)))
+  const accounts = shownAccounts(readAccounts(wiring.path(logins.list)), callerFromEnv(wiring.env))
   const there = logins.ownLoginThere(wiring.env)
   const unnamed = (a: ShownAccount): boolean => a.name === OWN_NAME
   const who = accounts.some(a => a.own && unnamed(a)) ? await logins.ownName(wiring.env) : undefined

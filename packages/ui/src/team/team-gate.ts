@@ -4,7 +4,8 @@ import { randomBytes } from 'node:crypto'
 import { isExpectedHost, isJsonRequest, isSameOriginRequest } from '../dashboard/rpc-serve.js'
 import type { GitHubSignIn } from './github-sign-in.js'
 import { computerName } from '../computer-name.js'
-import { hashKey, mayEnter, newKey, personOfKey, sameLogin, SESSION_DAYS, signedIn, type Team, type TeamPerson, type TeamStore } from './team-file.js'
+import { sameLogin, type TeamCaller } from '@openagt/hooks'
+import { hashKey, mayEnter, newKey, personOfKey, SESSION_DAYS, signedIn, type Team, type TeamPerson, type TeamStore } from './team-file.js'
 
 // Team mode's door (team-file.ts): with it on, what the dashboard knows (its calls, a run's screen,
 // a module's route) answers only a browser signed in as the owner or one of the people they added,
@@ -46,9 +47,12 @@ export type SignInWait =
   | { state: 'not-member'; login: string; owner: string }
   | { state: 'done'; person: TeamPerson }
 
+/** Whether a request may reach what the dashboard knows, and who it is for. */
+export type Admission = { admitted: false } | { admitted: true; caller?: TeamCaller }
+
 export interface TeamGate {
-  /** Whether `req` may reach what the dashboard knows: Team mode off, a browser signed in, or this computer's key. */
-  admits(req: IncomingMessage): Promise<boolean>
+  /** Whether `req` may reach what the dashboard knows: Team mode off (no caller), a browser signed in, or this computer's key (the owner). */
+  admits(req: IncomingMessage): Promise<Admission>
   /** Answer a request at {@link TEAM_PREFIX} or below. */
   handle(req: IncomingMessage, res: ServerResponse, pathname: string): Promise<void>
 }
@@ -85,9 +89,12 @@ export function teamGate(store: TeamStore, github: GitHubSignIn, now: () => numb
     return person !== undefined && team.owner !== undefined && sameLogin(person.login, team.owner.login)
   }
 
-  const admits = async (req: IncomingMessage): Promise<boolean> => {
+  const admits = async (req: IncomingMessage): Promise<Admission> => {
     const team = await store.read()
-    return !team.on || local(team, req) || personOf(team, req) !== undefined
+    if (!team.on || !team.owner) return { admitted: true }
+    const person = local(team, req) ? team.owner : personOf(team, req)
+    if (!person) return { admitted: false }
+    return { admitted: true, caller: callerOf(team.owner, person) }
   }
 
   const state = async (req: IncomingMessage): Promise<TeamState> => {
@@ -216,6 +223,11 @@ export function teamGate(store: TeamStore, github: GitHubSignIn, now: () => numb
   }
 
   return { admits, handle }
+}
+
+/** Who a person signed in is for the modules: their GitHub account, and whether they own the team. */
+function callerOf(owner: TeamPerson, person: TeamPerson): TeamCaller {
+  return { login: person.login, ...(person.name ? { name: person.name } : {}), ...(person.id ? { id: person.id } : {}), owner: sameLogin(owner.login, person.login), teamOwner: owner.login }
 }
 
 /** The session's cookie: the browser's alone (no script reads it), sent on this site's own pages, on HTTPS only when it came over HTTPS. */

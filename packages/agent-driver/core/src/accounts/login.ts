@@ -1,3 +1,4 @@
+import { callerFromEnv } from '@openagt/hooks'
 import { addAccount, nameRefused, OWN_NAME, readAccounts, removeAccount, replaceLogin } from './accounts.js'
 import type { LoginWiring } from './wiring.js'
 import type { AgentAccount, AgentLogins, SignInSaid } from '@openagt/hooks'
@@ -49,7 +50,7 @@ export async function signIn(logins: AgentLogins, name: string, wiring: LoginWir
     return undefined
   }
   try {
-    addAccount(name, signed.login, path, new Date(wiring.now()))
+    addAccount(name, signed.login, path, new Date(wiring.now()), undefined, callerFromEnv(wiring.env)?.login)
   } catch (err) {
     // Not on the list, so nothing of it is kept beside it either.
     await logins.forget({ name, login: signed.login }, wiring.env)

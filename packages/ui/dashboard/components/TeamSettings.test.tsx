@@ -122,5 +122,6 @@ describe('Settings › Team', () => {
     expect(screen.queryByRole('textbox', { name: 'GitHub username' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'More for @suleimansh' })).toBeNull()
     expect(screen.getByText('Only @nitedani changes this.')).toBeTruthy()
+    expect(screen.queryByText(/Locked out\?/)).toBeNull()
   })
 })

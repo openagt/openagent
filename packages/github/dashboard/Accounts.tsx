@@ -70,8 +70,8 @@ function Accounts({ accounts: p, onChanged }: { accounts: AccountsRead; onChange
   const [error, setError] = useState<string | undefined>()
   // The account whose removal waits for the person's yes, and the press under way: its words say so until the answer.
   const [removing, setRemoving] = useState<string | undefined>()
-  const [pending, setPending] = useState<{ login: string; press: 'use' | 'remove' } | undefined>()
-  const act = async (login: string, press: 'use' | 'remove', go: () => Promise<Pressed>) => {
+  const [pending, setPending] = useState<{ login: string; press: 'use' | 'remove' | 'share' } | undefined>()
+  const act = async (login: string, press: 'use' | 'remove' | 'share', go: () => Promise<Pressed>) => {
     setPending({ login, press })
     setError(undefined)
     try {
@@ -97,7 +97,9 @@ function Accounts({ accounts: p, onChanged }: { accounts: AccountsRead; onChange
                 state={<Avatar src={account.avatar} login={account.login} />}
                 title={`@${account.login}`}
                 meta={[
-                  <span className={cn(!account.ok && 'text-warning')}>{!account.ok ? `${p.name} no longer takes this login: add it again` : 'Added to OpenAgent'}</span>,
+                  // On a machine shared by a team, whose it is first, and whether it is shared.
+                  account.of !== undefined && <span>{account.mine ? 'yours' : `@${account.of}'s`}</span>,
+                  <span className={cn(!account.ok && 'text-warning')}>{!account.ok ? `${p.name} no longer takes this login: add it again` : account.shared ? 'shared with the team' : 'Added to OpenAgent'}</span>,
                   account.runs && <span className="text-success">Runs use this</span>,
                 ]}
                 under={
@@ -132,9 +134,16 @@ function Accounts({ accounts: p, onChanged }: { accounts: AccountsRead; onChange
                           Use for runs
                         </DropdownMenuItem>
                       )}
-                      <DropdownMenuItem className="text-danger" onClick={() => setRemoving(account.login)}>
-                        Remove
-                      </DropdownMenuItem>
+                      {account.of !== undefined && account.mine && (
+                        <DropdownMenuItem onClick={() => void act(account.login, 'share', () => server(host).share(NO_PROJECT, { login: account.login, on: !account.shared }))}>
+                          {account.shared ? 'Stop sharing' : 'Share with the team'}
+                        </DropdownMenuItem>
+                      )}
+                      {account.mine !== false && (
+                        <DropdownMenuItem className="text-danger" onClick={() => setRemoving(account.login)}>
+                          Remove
+                        </DropdownMenuItem>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 }

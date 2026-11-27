@@ -101,6 +101,21 @@ test("a run that works as an account is recorded under the person who started it
   }
 })
 
+test('on a machine shared by a team, a run is recorded under its person, as GitHub knows them, not under the machine’s git user', async () => {
+  const { root, cleanup } = await repo('Machine@Example.com')
+  try {
+    const startedFor = { login: 'suleimansh', id: 13323859, owner: false, teamOwner: 'nitedani' }
+    assert.equal((await writeRun(root, card(R1, { caller: { runner: { host: 'h', startedFor } } }), [])).ok, true)
+    assert.equal((await writeRun(root, card(R2), [])).ok, true)
+    assert.deepEqual((await listRuns(root)).map(c => [c.id, c.person]), [
+      [R2, 'machine@example.com'],
+      [R1, '13323859+suleimansh@users.noreply.github.com'],
+    ])
+  } finally {
+    await cleanup()
+  }
+})
+
 test('a run recorded again stays where it sits, even under another person; a card that does not parse is skipped', async () => {
   const { root, cleanup } = await repo('me@example.com')
   try {

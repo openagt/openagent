@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import { basename, dirname, join, resolve } from 'node:path'
 import { nodeBranchFileFs, projectDataDir, withProjectData, type BranchFileFs, type CommitMessage, type FileBranchWrite } from '@openagt/store-filesystem'
 import { nodeGitRunner, sessionsHomeOf } from '@openagt/git-branches'
-import type { GitRunner } from '@openagt/hooks'
+import { noreplyEmail, teamCallerOf, type GitRunner, type TeamCaller } from '@openagt/hooks'
 import {
   COPIES_DIR,
   RUNS_DIR,
@@ -142,6 +142,12 @@ function ownEmail(root: string): Promise<string> {
   return new Promise(resolve => execFile('git', ['config', 'user.email'], { cwd: root, env, timeout: 10_000 }, (err, stdout) => resolve(err ? '' : String(stdout).trim())))
 }
 
+/** Whom a run was started for on a machine shared by a team, as its runner's mark keeps it. */
+function startedForOf(card: RunCard): TeamCaller | undefined {
+  const mark = card.caller?.['runner']
+  return mark && typeof mark === 'object' ? teamCallerOf((mark as Record<string, unknown>)['startedFor']) : undefined
+}
+
 /**
  * Record a run: its card and its diary, as one commit, under the directory of the person who
  * started it, the one the repository commits as by the person's own settings (an account the run
@@ -152,7 +158,9 @@ function ownEmail(root: string): Promise<string> {
 export async function writeRun(root: string, card: RunCard, diary: readonly AnyDiaryLine[], deps: RecordDeps = {}): Promise<FileBranchWrite> {
   const r = resolveRecordDeps(deps)
   if (!isRunId(card.id)) return { ok: false, committed: false, error: `not a run id: ${card.id}` }
-  const person = personDir((await ownEmail(root)) || (await r.git(['config', 'user.email'], root).catch(() => '')))
+  // On a machine shared by a team, the run is its person's, under their address at GitHub: not the machine's git user's.
+  const startedFor = startedForOf(card)
+  const person = personDir(startedFor ? noreplyEmail(startedFor) : (await ownEmail(root)) || (await r.git(['config', 'user.email'], root).catch(() => '')))
   kept.delete(root)
   let keptUnder = person
   const written = await r.funnel(root, `logs: record run ${card.id}`, async checkout => {

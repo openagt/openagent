@@ -2,7 +2,9 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { RunOrder, type GithubFacts, type ProjectRef, type PullRequest, type RunContext, type RunFacts, type RunSummary } from '@openagt/hooks'
 import { fakeRun } from '@openagt/hooks/testing'
-import { homedir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { copyRequestsWaiting, githubModule, requestsWaiting, type GithubDeps } from './module.js'
 
 // github as a module: the account a run works as, and the pull request a run's branch has, read
@@ -213,5 +215,31 @@ test("the requests of the run's copies of other repositories are read back off t
     assert.deepEqual(asked.filter(one => one.startsWith('/')).sort(), ['/api agent-api', '/site agent-site'])
   } finally {
     await rm(folder, { recursive: true, force: true })
+  }
+})
+
+test('on a machine shared by a team, a run works as its person’s account or a shared one, never another’s, and its commits are by its person', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'github-team-step-'))
+  const before = process.env['XDG_CONFIG_HOME']
+  process.env['XDG_CONFIG_HOME'] = dir
+  try {
+    for (const login of ['dani-bot', 'suleiman-bot']) {
+      mkdirSync(join(dir, 'openagent-github', login), { recursive: true })
+      writeFileSync(join(dir, 'openagent-github', login, 'hosts.yml'), '')
+    }
+    writeFileSync(join(dir, 'openagent-github.json'), JSON.stringify({ runs: {}, team: { owners: { 'dani-bot': 'nitedani', 'suleiman-bot': 'suleimansh' }, shared: [], runsFor: {} } }))
+    const step = accountStep([SHOP.dir], { 'dani-bot': 'dani-token', 'suleiman-bot': 'suleiman-token' }, 'dani-bot')
+    const caller = { login: 'suleimansh', id: 7, name: 'Suleiman', owner: false, teamOwner: 'nitedani' }
+    const run = fakeRun({ project: SHOP, options: { caller } })
+    await step.run(run)
+    assert.deepEqual(run.env, { GH_TOKEN: 'suleiman-token', GIT_AUTHOR_NAME: 'Suleiman', GIT_AUTHOR_EMAIL: '7+suleimansh@users.noreply.github.com' })
+    assert.deepEqual(run.facts.github, { account: 'suleiman-bot' })
+    await assert.rejects(async () => step.run(fakeRun({ project: SHOP, options: { caller, github: { account: 'dani-bot' } } })), /@dani-bot is not your GitHub account here/)
+    const stranger = { login: 'jo-dev', owner: false, teamOwner: 'nitedani' }
+    await assert.rejects(async () => step.run(fakeRun({ project: SHOP, options: { caller: stranger } })), /You have no GitHub account on this machine: add yours in Permissions, or ask @nitedani to share one/)
+  } finally {
+    if (before === undefined) delete process.env['XDG_CONFIG_HOME']
+    else process.env['XDG_CONFIG_HOME'] = before
+    rmSync(dir, { recursive: true, force: true })
   }
 })

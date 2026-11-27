@@ -1,4 +1,6 @@
 import { realpath, stat } from 'node:fs/promises'
+import { callerEnv } from '@openagt/hooks'
+import { currentCaller } from './team/caller.js'
 import { dirname, join, normalize, sep } from 'node:path'
 import { packageBins, runPackageCommand, type PackageCommandResult, type ProjectPackage } from './package-command.js'
 import { computerPackages, packagesOf, projectsPackages } from './distribution-packages.js'
@@ -115,7 +117,9 @@ export async function runModuleCommand(
     return { ok: false, error: command !== undefined ? `${module.package} has no command ${command}` : `${module.package} has ${names.length === 0 ? 'no command' : 'several commands; name one'}` }
   if (args.length > MAX_ARGS || args.some(arg => typeof arg !== 'string' || arg.length > MAX_ARG_LENGTH))
     return { ok: false, error: 'too many or too long arguments' }
-  return runPackageCommand(root, { name: name!, bin }, args, undefined, input)
+  // A command run for a person of a team knows whom for (`callerFromEnv`): what it lists and changes is theirs.
+  const caller = currentCaller()
+  return runPackageCommand(root, { name: name!, bin }, args, caller ? callerEnv(caller) : undefined, input)
 }
 
 /**

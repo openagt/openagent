@@ -150,6 +150,10 @@ export interface GithubAccount {
   ok: boolean
   /** Its public picture: an https address. */
   avatar: string
+  /** On a machine shared by a team: whose it is (a GitHub username), whether it is the caller's, and whether its owner shares it. */
+  of?: string
+  mine?: boolean
+  shared?: boolean
 }
 
 /** OpenAgent's GitHub accounts and what is missing for them: what `accounts` answers, and what the Permissions page is drawn from. */
@@ -179,7 +183,7 @@ export async function readAccounts(cwd: string, deps: CliDeps = {}): Promise<Git
 
 async function accountsOf({ cwd, gh, env, hasBrew, underWay, installing }: Context): Promise<GithubAccounts> {
   const root = accountsRoot(env)
-  await settleAdded(root, gh, cwd).catch(() => undefined)
+  await settleAdded(root, gh, cwd, undefined, picksPath(env)).catch(() => undefined)
   const state = await ghState(root, cwd, gh)
   const accounts = state.installed ? state.accounts : []
   const runs = runsAccount(accounts, picksPath(env))

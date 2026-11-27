@@ -11,6 +11,7 @@ import { BROUGHT_MODULES_PREFIX, COMPUTER_MODULES_PREFIX, MODULES_PREFIX, PAGE_S
 import { handleScreenRequest, kept, SCREEN_PREFIX, type ScreenOf } from './screen.js'
 import { SECURE_PORT, type SecureAddress } from '../secure-address.js'
 import { TEAM_PREFIX, type TeamGate } from '../team/team-gate.js'
+import { asCaller } from '../team/caller.js'
 
 /** Options for {@link startDashboard}. */
 export interface DashboardOptions {
@@ -117,7 +118,8 @@ export async function startDashboard(opts: DashboardOptions): Promise<Dashboard>
       if (!team) return then()
       void team
         .admits(req)
-        .then(ok => (ok ? then() : void res.writeHead(401, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end(JSON.stringify({ error: 'Sign in first.' }))))
+        // What it calls, a module's function or a run it starts, knows whom it is for (team/caller.ts).
+        .then(admission => (admission.admitted ? asCaller(admission.caller, then) : void res.writeHead(401, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end(JSON.stringify({ error: 'Sign in first.' }))))
         .catch(() => {
           if (!res.headersSent) res.writeHead(500, { 'content-type': 'text/plain' }).end('the team failed')
         })

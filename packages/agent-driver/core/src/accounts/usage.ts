@@ -1,4 +1,5 @@
-import { readAccounts } from './accounts.js'
+import { accountsFor, readAccounts } from './accounts.js'
+import { callerFromEnv } from '@openagt/hooks'
 import type { LoginWiring } from './wiring.js'
 import type { AgentAccount, AgentLogins, UsageWindow } from '@openagt/hooks'
 
@@ -29,9 +30,10 @@ async function accountUsage(logins: AgentLogins, account: AgentAccount, wiring: 
   return { name: account.name, windows: shown(account.windows ?? [], now), ...(account.windowsAt !== undefined ? { at: account.windowsAt } : {}) }
 }
 
-/** How full each account of each list is, in the order runs try them. */
+/** How full each account of each list is, in the order runs try them: on a machine shared by a team, the caller's and the shared ones. */
 export async function readUsage(wiring: LoginWiring): Promise<Record<string, AccountUsage[]>> {
   const all = await wiring.logins()
-  const read = await Promise.all(all.map(logins => Promise.all(readAccounts(wiring.path(logins.list)).map(account => accountUsage(logins, account, wiring)))))
+  const caller = callerFromEnv(wiring.env)
+  const read = await Promise.all(all.map(logins => Promise.all(accountsFor(readAccounts(wiring.path(logins.list)), caller).map(account => accountUsage(logins, account, wiring)))))
   return Object.fromEntries(all.map((logins, at) => [logins.list, read[at]!]))
 }

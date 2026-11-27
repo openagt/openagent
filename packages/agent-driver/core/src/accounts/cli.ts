@@ -1,4 +1,5 @@
-import { readAccounts, shownAccounts, useFirst } from './accounts.js'
+import { readAccounts, shareAccount, shownAccounts, useFirst } from './accounts.js'
+import { callerFromEnv, ownsIt } from '@openagt/hooks'
 import { addingNow, beginAdding, bringCode, cancelAdding, runAdding } from './adding.js'
 import { logOut, removeAdded } from './login.js'
 import { addingAll, listed, listing } from './reads.js'
@@ -25,6 +26,7 @@ ${helpRows([
   ['remove <claude|codex> <name>', 'take an added account off the list'],
   ['logout <claude|codex>', `log the person's own login out, their terminal too`],
   ['use-first <claude|codex> <name>', 'the account runs try first from now on'],
+  ['share <claude|codex> <name> <on|off>', "on a machine shared by a team, let everyone's runs use your account, or stop"],
 ])}`
 
 export interface CliIo {
@@ -46,7 +48,7 @@ async function readStdin(): Promise<string> {
 }
 
 /** Every command, `add`'s own sign-in process included. */
-const COMMANDS = new Set(['list', 'usage', 'add', 'adding', 'add-code', 'add-cancel', 'remove', 'logout', 'use-first', 'add-worker'])
+const COMMANDS = new Set(['list', 'usage', 'add', 'adding', 'add-code', 'add-cancel', 'remove', 'logout', 'use-first', 'share', 'add-worker'])
 
 export async function runCli(argv: readonly string[], io: CliIo): Promise<number> {
   const env = io.env ?? process.env
@@ -77,6 +79,21 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<number
   const logins = agent === undefined || !COMMANDS.has(command ?? '') ? undefined : (await wiring.logins()).find(one => one.list === agent)
   if (!logins) return misread()
   const list = logins.list
+  // On a machine shared by a team, the command runs for one person: it changes only what is theirs.
+  const caller = callerFromEnv(env)
+  const theirs = (named: string | undefined): boolean => {
+    const account = readAccounts(wiring.path(list)).find(a => (named === undefined ? a.login === undefined : a.name === named))
+    return account === undefined || ownsIt(caller, account)
+  }
+  const notTheirs = (named: string | undefined): number => refuse(`That ${list} account is ${named === undefined ? 'the team owner’s' : 'someone else’s'}: only they change it.`)
+  if (command === 'share' && argv.length === 4 && name !== undefined && (argv[3] === 'on' || argv[3] === 'off')) {
+    if (!caller) return refuse('Sharing is for a machine shared by a team.')
+    try {
+      return answer(shownAccounts(shareAccount(name, argv[3] === 'on', caller, wiring.path(list)), caller))
+    } catch (err) {
+      return refuse(err instanceof Error ? err.message : String(err))
+    }
+  }
   if (command === 'add-code' && argv.length === 2) {
     const brought = bringCode(logins, await (io.stdin ?? readStdin)(), wiring)
     return brought.ok ? answer(addingNow(list, wiring)) : refuse(brought.error)
@@ -86,6 +103,7 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<number
     return answer(addingNow(list, wiring))
   }
   if (command === 'logout' && argv.length === 2) {
+    if (!theirs(undefined)) return notTheirs(undefined)
     const failed = await logOut(logins, wiring)
     return failed === undefined ? answer(await listed(logins, wiring)) : refuse(failed)
   }
@@ -103,12 +121,13 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<number
   }
   if (command === 'use-first') {
     if (!readAccounts(wiring.path(list)).some(a => a.name === name)) return refuse(`There is no ${list} account named ${name}.`)
-    return answer(shownAccounts(useFirst(name, wiring.path(list))))
+    return answer(shownAccounts(useFirst(name, wiring.path(list)), caller))
   }
   if (command === 'remove') {
+    if (!theirs(name)) return notTheirs(name)
     const gone = await removeAdded(logins, name, wiring)
     if (!gone) return refuse(`There is no added ${list} account named ${name}.`)
-    return answer(shownAccounts(readAccounts(wiring.path(list))))
+    return answer(shownAccounts(readAccounts(wiring.path(list)), caller))
   }
   return misread()
 }

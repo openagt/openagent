@@ -70,6 +70,10 @@ interface Account {
   /** When an added one was added. */
   added?: string
   limitedUntil?: number
+  /** On a machine shared by a team: whose it is (a GitHub username), whether it is the caller's, and whether its owner shares it. */
+  of?: string
+  mine?: boolean
+  shared?: true
 }
 
 /** How full an account is, as `account-rotation usage` prints it. */
@@ -127,10 +131,18 @@ const WINDOWS: Record<string, { label: string; said: string }> = {
   thirty_day: { label: 'month', said: 'this month' },
 }
 
-/** Where an account comes from, in a line. */
+/** Where an account comes from, in a line; on a machine shared by a team, whose it is first, and whether it is shared. */
 function source(account: Account): string {
-  if (account.own) return account.computer !== undefined ? `login on ${account.computer}` : 'your login'
-  return account.added !== undefined ? `added ${new Date(account.added).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : 'added'
+  const where = account.own
+    ? account.computer !== undefined
+      ? `login on ${account.computer}`
+      : 'your login'
+    : account.added !== undefined
+      ? `added ${new Date(account.added).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
+      : 'added'
+  if (account.of === undefined) return where
+  const whose = account.mine ? 'yours' : `@${account.of}'s`
+  return [whose, account.shared ? 'shared with the team' : where].join(' · ')
 }
 
 /** What is known of an account past its row: what it opens on. */
@@ -461,12 +473,18 @@ function AccountRow({
                     Use first
                   </Button>
                 )}
-                {account.own && (
+                {/* On a machine shared by a team, the owner lets everyone's runs use it, or stops. */}
+                {account.of !== undefined && account.mine && (
+                  <Button variant="ghost" size="sm" disabled={busy} aria-label={account.shared ? `Stop sharing ${shown}` : `Share ${shown} with the team`} onClick={() => onPress(['share', agent.id, account.name, account.shared ? 'off' : 'on'])}>
+                    {account.shared ? 'Stop sharing' : 'Share with the team'}
+                  </Button>
+                )}
+                {account.own && account.mine !== false && (
                   <Button variant="ghost" size="sm" className="hover:text-danger" disabled={busy} aria-label={`Log out ${shown}`} onClick={() => onOpen({ asking: 'logout' })}>
                     Log out
                   </Button>
                 )}
-                {!account.own && (
+                {!account.own && account.mine !== false && (
                   <Button variant="ghost" size="sm" className="hover:text-danger" disabled={busy} aria-label={`Remove ${shown}'s account`} onClick={() => onOpen({ asking: 'remove' })}>
                     Remove
                   </Button>

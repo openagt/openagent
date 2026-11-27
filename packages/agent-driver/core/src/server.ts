@@ -1,5 +1,5 @@
 import { act, read, type RpcComputerHost } from '@openagt/hooks/rpc'
-import { NAME_RUNS, PICKED_AGENT, PICKED_PROFILE, PROFILES, profileOf, type AgentPick } from '@openagt/hooks'
+import { callerEnv, NAME_RUNS, PICKED_AGENT, PICKED_PROFILE, PROFILES, profileOf, type AgentPick } from '@openagt/hooks'
 import { codingAgents } from './agents.js'
 import { keepImage as keepImageHere } from './images.js'
 import { addingAll, listing } from './accounts/reads.js'
@@ -72,10 +72,15 @@ export const setNaming = act(async (host: RpcComputerHost, input: { on: boolean 
 })
 
 /** Each list's accounts in the order runs try them, never a login, and the lists whose agent is not installed: `list`. */
-export const list = read((_host: RpcComputerHost, _input: object) => listing(loginWiring()))
+export const list = read((host: RpcComputerHost, _input: object) => listing(wiringFor(host)))
 
 /** How full each account is, read now where it can be: `usage`. */
-export const usage = read((_host: RpcComputerHost, _input: object) => readUsage(loginWiring()))
+export const usage = read((host: RpcComputerHost, _input: object) => readUsage(wiringFor(host)))
+
+/** The logins as the caller has them: on a machine shared by a team, theirs and the shared ones. */
+function wiringFor(host: RpcComputerHost) {
+  return loginWiring({ ...process.env, ...callerEnv(host.caller) })
+}
 
 /** How adding stands for each list, where to sign in and why the last one did not go through: `adding`. */
 export const adding = read((_host: RpcComputerHost, _input: object) => addingAll(loginWiring()))
