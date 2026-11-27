@@ -6,13 +6,13 @@ import { openAgentUpdates } from './dashboard/openagent-update.js'
 import { projectStateReader } from './project-state.js'
 import { resolveDashboardBundle } from './dashboard/bundle.js'
 import { resolveWebsite } from './dashboard/website.js'
-import { registryPreferencesStore } from './registry.js'
 import { readySessionsHome } from './sessions-home.js'
 import { distributionHooks, localHostOf } from './distribution-hooks.js'
 import { type Hooks, type ProjectRef, type RunHost, sessionsHome } from '@openagt/hooks'
 import { readSecureAddress, SECURE_PORT, type SecureAddress } from './secure-address.js'
 import type { StartedProject } from './dashboard/types.js'
 import { teamGate } from './team/team-gate.js'
+import { teamPreferencesStore } from './team/preferences.js'
 import { teamPath, teamStore } from './team/team-file.js'
 import { githubSignIn } from './team/github-sign-in.js'
 
@@ -114,7 +114,8 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
       startedIn: runtime.onStartedIn,
       host,
       otherHosts,
-      preferences: registryPreferencesStore(env),
+      // Each person's own, on a machine shared by a team (team/preferences.ts).
+      preferences: teamPreferencesStore(env),
       openAgentUpdate: openAgentUpdates(),
       // What a project's page and row say of it beside its runs: the modules on in it say what needs setting up.
       projectState: projectStateReader({ hooks: async () => hooks }),

@@ -10,6 +10,8 @@ export interface TeamCaller {
   name?: string
   /** GitHub's number for them: their commits' address (`<id>+<login>@users.noreply.github.com`). */
   id?: number
+  /** Their picture on GitHub, as of their last sign-in: an https address. */
+  avatar?: string
   /** Whether they own the machine's team: what was on the machine before Team mode is theirs. */
   owner: boolean
   /** The team owner's GitHub username: whose what has no owner is. */
@@ -56,7 +58,14 @@ export function teamCallerOf(value: unknown): TeamCaller | undefined {
   if (typeof value !== 'object' || value === null) return undefined
   const parsed = value as Partial<TeamCaller>
   if (typeof parsed.login !== 'string' || typeof parsed.owner !== 'boolean' || typeof parsed.teamOwner !== 'string') return undefined
-  return { login: parsed.login, owner: parsed.owner, teamOwner: parsed.teamOwner, ...(typeof parsed.name === 'string' ? { name: parsed.name } : {}), ...(typeof parsed.id === 'number' ? { id: parsed.id } : {}) }
+  return {
+    login: parsed.login,
+    owner: parsed.owner,
+    teamOwner: parsed.teamOwner,
+    ...(typeof parsed.name === 'string' ? { name: parsed.name } : {}),
+    ...(typeof parsed.id === 'number' ? { id: parsed.id } : {}),
+    ...(typeof parsed.avatar === 'string' && parsed.avatar.startsWith('https://') ? { avatar: parsed.avatar } : {}),
+  }
 }
 
 /** The environment that says `caller` to a command: none for no caller. */

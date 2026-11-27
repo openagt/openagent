@@ -22,6 +22,14 @@ export function ProfileSettings() {
   // The name just saved, said until it is typed into again.
   const [savedName, setSavedName] = useState(false)
   if (!person) return null
+  // On a machine shared by a team: who signed in, as GitHub says, refreshed at each sign-in. Nothing to type here.
+  if (person.team)
+    return (
+      <SettingsSection description="Your name and picture on this shared machine: your GitHub account’s, as of your sign-in.">
+        <SettingsRow label="Name" description={person.login ? `Signed in with GitHub as @${person.login}.` : 'From your GitHub sign-in.'} control={<span className="text-sm">{person.name}</span>} />
+        <SettingsRow label="Picture" description="From GitHub. It changes there, and here at your next sign-in." control={<Avatar person={person} size="h-8 w-8 text-xs" />} />
+      </SettingsSection>
+    )
   const name = typedName ?? person.name
   const github = typedGithub ?? person.login ?? ''
 

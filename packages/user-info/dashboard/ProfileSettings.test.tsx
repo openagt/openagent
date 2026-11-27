@@ -5,7 +5,7 @@ import { fakeHost, renderWithHost } from '@openagt/ui/module/testing'
 
 // The person as the shell reads them: `person` is what is saved, and the page shows it once it
 // reads them again. The module's own calls as a test answers them.
-type Person = { name: string; avatar?: string; login?: string; own?: true }
+type Person = { name: string; avatar?: string; login?: string; own?: true; team?: true }
 const shell = vi.hoisted(() => ({ person: { name: '' } as Person, shown: { name: '' } as Person, personChanged: vi.fn() }))
 vi.mock('@openagt/ui/module', async original => ({
   ...(await original<typeof import('@openagt/ui/module')>()),
@@ -82,5 +82,15 @@ describe('Settings › Profile', () => {
     fireEvent.change(await screen.findByLabelText('Sync from GitHub'), { target: { value: 'nobody-here' } })
     fireEvent.click(screen.getByRole('button', { name: 'Sync' }))
     expect(await screen.findByText('GitHub has no user nobody-here')).toBeTruthy()
+  })
+
+  test('on a machine shared by a team: the name and picture of the GitHub sign-in, nothing to type', async () => {
+    shell.person = shell.shown = { name: 'Rom', login: 'brillout', avatar: 'https://avatars.githubusercontent.com/u/1005638?v=4', team: true }
+    render()
+    expect(await screen.findByText('Signed in with GitHub as @brillout.')).toBeTruthy()
+    expect(screen.getByText('Rom')).toBeTruthy()
+    expect(screen.queryByRole('textbox')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Sync' })).toBeNull()
   })
 })

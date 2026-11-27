@@ -227,7 +227,14 @@ export function teamGate(store: TeamStore, github: GitHubSignIn, now: () => numb
 
 /** Who a person signed in is for the modules: their GitHub account, and whether they own the team. */
 function callerOf(owner: TeamPerson, person: TeamPerson): TeamCaller {
-  return { login: person.login, ...(person.name ? { name: person.name } : {}), ...(person.id ? { id: person.id } : {}), owner: sameLogin(owner.login, person.login), teamOwner: owner.login }
+  return {
+    login: person.login,
+    ...(person.name ? { name: person.name } : {}),
+    ...(person.id ? { id: person.id } : {}),
+    ...(person.avatar ? { avatar: person.avatar } : {}),
+    owner: sameLogin(owner.login, person.login),
+    teamOwner: owner.login,
+  }
 }
 
 /** The session's cookie: the browser's alone (no script reads it), sent on this site's own pages, on HTTPS only when it came over HTTPS. */
