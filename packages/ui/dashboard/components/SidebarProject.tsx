@@ -4,9 +4,9 @@ import { cn } from '../lib/utils.js'
 import { ModuleSlot } from './ModulePageView.js'
 import { useViewsAt } from './Places.js'
 
-/** A project's state as a dot: red when a module says something needs fixing there (#1500). */
+/** A project's state as a dot: red when a module says something is wrong there (#1500); not for what one press brings up, a folder behind main. */
 export function ProjectDot({ project }: { project: ProjectSummary }) {
-  return <span aria-hidden className={cn('h-2 w-2 shrink-0 rounded-full', project.errors?.length ? 'bg-danger' : 'bg-primary')} />
+  return <span aria-hidden className={cn('h-2 w-2 shrink-0 rounded-full', project.errors?.some(e => !e.fixed) ? 'bg-danger' : 'bg-primary')} />
 }
 
 // The project every page shows, at the top of the sidebar (#1513): the select a module draws there
