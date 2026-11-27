@@ -1,4 +1,5 @@
 import type { RunFeedEvent } from '@openagt/hooks'
+import { signedOutByServer } from './team.js'
 
 // The dashboard's whole transport (F3): `POST /_rpc/<name>` for calls, `GET /_rpc/events` for the
 // live feed. Same-origin, so there is nothing to configure.
@@ -63,6 +64,8 @@ export function rpc<F extends (...args: never[]) => unknown>(
     } catch {
       throw new Error(`${name} got a non-JSON reply (${res.status})`)
     }
+    // Signed out of a shared machine meanwhile: the page starts again, at the sign-in.
+    if (res.status === 401) signedOutByServer()
     if (!res.ok) throw new Error(body.error ?? `${name} failed (${res.status})`)
     return body.ret
   }

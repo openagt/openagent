@@ -1,8 +1,9 @@
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import { useState, useContext } from 'react'
-import { ChevronDown, CircleAlert, CircleArrowUp, Settings } from 'lucide-react'
+import { ChevronDown, CircleAlert, CircleArrowUp, LogOut, Settings } from 'lucide-react'
 import type { Person } from '../rpc/person.js'
 import { usePerson } from '../lib/use-person.js'
+import { signOut, useTeam } from '../lib/team.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.js'
 import { ThemeSubmenu } from './ThemeSubmenu.js'
 import { personLetters } from './PersonMark.js'
@@ -41,7 +42,11 @@ export function Avatar({ person, dot = false, size = 'size-5 text-xs', className
 
 export function PersonMenu({ onSettings }: { onSettings: (entry?: string) => void }) {
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
-  const { person } = usePerson()
+  const own = usePerson().person
+  // On a machine shared by a team, the person is who signed in with GitHub.
+  const { team } = useTeam()
+  const signedIn = team.on ? team.person : undefined
+  const person: Person | null = signedIn ? { name: signedIn.name ?? signedIn.login, login: signedIn.login, ...(signedIn.avatar ? { avatar: signedIn.avatar } : {}) } : own
   // What the modules say needs the person on this computer (`app.attention`): listed here, each opening its fix, and the dot on the picture.
   // Beside them, what a module offers on this computer: a note with a press (a coding agent's newer version, and its update).
   const about = (useAttention(null) ?? []).filter(item => item.scope === 'computer')
@@ -105,6 +110,15 @@ export function PersonMenu({ onSettings }: { onSettings: (entry?: string) => voi
           <Settings className="size-4 shrink-0 text-muted-foreground" aria-hidden />
           Settings
         </DropdownMenuItem>
+        {signedIn && team.on && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => void signOut()}>
+              <LogOut className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+              Sign out of {team.name}
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
     {offered.overlay}

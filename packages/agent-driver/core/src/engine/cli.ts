@@ -2,7 +2,7 @@ import { isAbsolute, resolve } from 'node:path'
 import { PLUGINS_WITHOUT_ENV, PROFILE_ENV, PROJECT_SKILLS_ENV } from './names.js'
 import { Refused, UsageError, inRepo, parseCommandArgs, runCommandLine, helpRows, helpText, type Command } from '@openagt/hooks/command'
 import { errorMessage, nodeGitRunner, sessionsHomeOf, projectRoot, sessionRepos, type SessionProject } from '@openagt/git-branches'
-import type { GitRunner } from '@openagt/hooks'
+import { CALLER_ENV, callerFromEnv, type GitRunner } from '@openagt/hooks'
 import { UnknownAgent, agentNames, codingAgents } from '../agents.js'
 import { GIT_ACCOUNT_ENV, detachResume, detachRun, profileLoginFor, readyToRun, resumeProject, runProject, type SpawnedResume } from './runner.js'
 import type { RunOutcome, RunRequest } from './run.js'
@@ -170,6 +170,9 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     if (process.env[PROFILE_ENV]?.trim() && values.resume !== undefined) throw new UsageError(`${PROFILE_ENV} is for a new run: a run continues on the profile its record names`)
     // The session's picks, in the environment the same way; a resumed run goes on with the ones its record keeps.
     const picks = fromEnvironment(sessionPicksNamed)
+    // On a machine shared by a team, who the run is for, by whoever started it ({@link CALLER_ENV}); a resumed run goes on for the one its record names.
+    const caller = callerFromEnv(process.env)
+    if (caller !== undefined && values.resume !== undefined) throw new UsageError(`${CALLER_ENV} is for a new run: a run goes on for the person its record names`)
     if (anyPick(picks) && values.resume !== undefined) throw new UsageError(`${PLUGINS_WITHOUT_ENV} and ${PROJECT_SKILLS_ENV} are for a new run: a run continues with the picks its record names`)
     if (picks.project !== undefined && noProject) throw new UsageError(`${PROJECT_SKILLS_ENV} is for a run in a project: a session with no project has no project skills`)
     // A person's run is refused before it spends a checkout when its coding agent cannot start;
@@ -225,6 +228,7 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
         ...(values.started !== undefined ? { startedAt: new Date(values.started).toISOString() } : {}),
         ...(values.mark ? { mark: true } : {}),
         ...(gitAccount !== undefined ? { gitAccount } : {}),
+        ...(caller !== undefined ? { caller } : {}),
         ...(profile !== undefined ? { profile } : {}),
         log: io.stderr,
       }),

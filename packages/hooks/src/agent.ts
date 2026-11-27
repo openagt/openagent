@@ -828,6 +828,10 @@ export interface AgentAccount {
   windows?: DriverRateWindow[]
   /** When those were said, epoch milliseconds. */
   windowsAt?: number
+  /** On a machine shared by a team, who added it, by GitHub username; none: from before, the team owner's. */
+  owner?: string
+  /** Shared with the team by its owner: everyone's runs may use it. */
+  shared?: true
 }
 
 /** What a turn's own output said of the account it ran on, read once the turn is over. */

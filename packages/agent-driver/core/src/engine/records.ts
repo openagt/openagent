@@ -1,6 +1,6 @@
 import { isSkillName } from './names.js'
 import type { FileBranchWrite } from '@openagt/store-filesystem'
-import { isProfileId, MODULE_NAME, PROJECTS, type AgentDriverOptions, type RunOptions, type Settings } from '@openagt/hooks'
+import { isProfileId, MODULE_NAME, PROJECTS, teamCallerOf, type AgentDriverOptions, type RunOptions, type Settings, type TeamCaller } from '@openagt/hooks'
 import type { ProjectSkillsPick } from './profile.js'
 import { publishedBranch, type SessionProject, type SessionRepo } from '@openagt/git-branches'
 import { deleteRun, writeRun, type RecordDeps } from '../record-store.js'
@@ -75,6 +75,8 @@ export interface Lasting {
   pluginsWithout?: string[]
   /** Which of the project's own skills stay in the run's checkout (`OPENAGENT_PROJECT_SKILLS`), the session's pick: every one, none, or the ones named; its profile's when absent, and every one when that names none. */
   projectSkills?: ProjectSkillsPick
+  /** On a machine shared by a team, who the run was started for (`OPENAGENT_CALLER`): every leg takes their logins, and the shared ones. */
+  startedFor?: TeamCaller
 }
 
 /** The repos a mark names, as far as they are repos: anything else there is left out. */
@@ -122,6 +124,7 @@ export function lasting(mark: { [K in keyof Lasting]?: unknown }): Lasting {
   const projects = projectsOf(mark.projects)
   const pluginsWithout = pluginsOf(mark.pluginsWithout)
   const projectSkills = mark.projectSkills === 'all' || mark.projectSkills === 'none' ? mark.projectSkills : namesOf(mark.projectSkills, isSkillName)
+  const startedFor = teamCallerOf(mark.startedFor)
   return {
     ...(isPublish(mark.publish) ? { publish: mark.publish } : {}),
     ...(typeof mark.base === 'string' ? { base: mark.base } : {}),
@@ -134,6 +137,7 @@ export function lasting(mark: { [K in keyof Lasting]?: unknown }): Lasting {
     ...(isProfileId(mark.profile) ? { profile: mark.profile } : {}),
     ...(pluginsWithout ? { pluginsWithout } : {}),
     ...(projectSkills !== undefined ? { projectSkills } : {}),
+    ...(startedFor !== undefined ? { startedFor } : {}),
   }
 }
 
@@ -173,6 +177,7 @@ export function forReaders(mark: Lasting, agent: AgentDriverOptions = {}): Lasti
     ...(mark.profile !== undefined ? { profile: mark.profile } : {}),
     ...(mark.pluginsWithout !== undefined ? { pluginsWithout: mark.pluginsWithout } : {}),
     ...(mark.projectSkills !== undefined ? { projectSkills: mark.projectSkills } : {}),
+    ...(mark.startedFor !== undefined ? { startedFor: mark.startedFor } : {}),
   }
 }
 
@@ -196,6 +201,8 @@ export function markOptions(mark: Lasting): RunOptions {
     ...(mark.projectSkills !== undefined ? { skills: { project: mark.projectSkills } } : {}),
     ...(mark.pluginsWithout !== undefined ? { plugins: { without: mark.pluginsWithout } } : {}),
     ...(mark.profile !== undefined ? { profiles: { profile: mark.profile } } : {}),
+    // On a machine shared by a team, whom the run is for: every step reads it (the account it works as at the git host).
+    ...(mark.startedFor !== undefined ? { caller: mark.startedFor } : {}),
   }
 }
 

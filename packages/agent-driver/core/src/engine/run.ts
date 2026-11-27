@@ -1,6 +1,6 @@
 import { errorMessage, moreRepos, sessionsHomeOf, type SessionProject, type SessionRepo } from '@openagt/git-branches'
 import { projectId } from '@openagt/projects'
-import { projectNameOf, repositoryAddress, sessionsHome, type GitRunner, continuationPrompt, createHooks, type DistributionEntry, type ProjectRef, type RunFacts, type RunInput, type RunOptions as ModuleOptions } from '@openagt/hooks'
+import { projectNameOf, repositoryAddress, sessionsHome, type GitRunner, continuationPrompt, createHooks, type DistributionEntry, type ProjectRef, type RunFacts, type RunInput, type RunOptions as ModuleOptions, type TeamCaller } from '@openagt/hooks'
 import { findRun, readDiary } from '../record-store.js'
 import { type RunCard, type RunStatus } from '../record.js'
 import { runProcess, withLeg, type Leg, type RunDeps } from './leg.js'
@@ -117,6 +117,8 @@ export interface RunOptions extends RunRequest, RunDeps, OnProfile {
   /** The session's picks, kept on its mark (`profile.ts` SessionPicks): the enabled plugins it goes without, which of the project's own skills stay in its checkout. */
   pluginsWithout?: string[]
   projectSkills?: ProjectSkillsPick
+  /** On a machine shared by a team, who the run is for, kept on its mark: every leg takes their logins, and the shared ones. */
+  startedFor?: TeamCaller
 }
 
 export interface RunOutcome {

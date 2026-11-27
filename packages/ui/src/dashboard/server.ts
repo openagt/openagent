@@ -10,6 +10,8 @@ import { requestPathname } from '../request-path.js'
 import { BROUGHT_MODULES_PREFIX, COMPUTER_MODULES_PREFIX, MODULES_PREFIX, PAGE_SHEET_PATH, serveModuleFile, servePageSheet } from './module-serve.js'
 import { handleScreenRequest, kept, SCREEN_PREFIX, type ScreenOf } from './screen.js'
 import { SECURE_PORT, type SecureAddress } from '../secure-address.js'
+import { TEAM_PREFIX, type TeamGate } from '../team/team-gate.js'
+import { asCaller } from '../team/caller.js'
 
 /** Options for {@link startDashboard}. */
 export interface DashboardOptions {
@@ -49,6 +51,12 @@ export interface DashboardOptions {
    * page at `/` when the person picks it, and its other pages at their own paths.
    */
   websiteDir?: string
+  /**
+   * Team mode's door (team/team-gate.ts): with it on, the calls, a run's screen and a module's
+   * route answer only a browser signed in, or a program of this computer's with its key. Absent,
+   * as in a test, every caller is let by.
+   */
+  team?: TeamGate
 }
 
 /** A running localhost dashboard: the built SPA + its RPC mount. */
@@ -90,6 +98,7 @@ export async function startDashboard(opts: DashboardOptions): Promise<Dashboard>
   }
 
   const screenOf = opts.screen ? kept(opts.screen) : undefined
+  const team = opts.team
 
   const handle = (req: IncomingMessage, res: ServerResponse): void => {
     const pathname = requestPathname(req)
@@ -97,18 +106,39 @@ export async function startDashboard(opts: DashboardOptions): Promise<Dashboard>
       res.writeHead(400, { 'content-type': 'text/plain' }).end('bad request')
       return
     }
+    // Team mode's sign-in and its changes: open to all, each answering who may do what itself.
+    if (team && (pathname === TEAM_PREFIX || pathname.startsWith(`${TEAM_PREFIX}/`))) {
+      void team.handle(req, res, pathname).catch(() => {
+        if (!res.headersSent) res.writeHead(500, { 'content-type': 'text/plain' }).end('the team failed')
+      })
+      return
+    }
+    // What the dashboard knows, in Team mode only for those signed in: the page asks again after a 401, and shows the sign-in.
+    const signedIn = (then: () => void): void => {
+      if (!team) return then()
+      void team
+        .admits(req)
+        // What it calls, a module's function or a run it starts, knows whom it is for (team/caller.ts).
+        .then(admission => (admission.admitted ? asCaller(admission.caller, then) : void res.writeHead(401, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end(JSON.stringify({ error: 'Sign in first.' }))))
+        .catch(() => {
+          if (!res.headersSent) res.writeHead(500, { 'content-type': 'text/plain' }).end('the team failed')
+        })
+    }
     // A run's live screen (screen.ts): a click on it acts in the agent's browser, so it carries
     // the same guard as the RPC mount.
     if (pathname === SCREEN_PREFIX || pathname.startsWith(`${SCREEN_PREFIX}/`)) {
       if (!guardBrowserOrigin(req, res) || !guardOwnPageFetch(req, res)) return
-      void handleScreenRequest(req, res, pathname, screenOf).catch(() => {
-        if (!res.headersSent) res.writeHead(500, { 'content-type': 'text/plain' }).end('the screen failed')
-        else res.destroy()
-      })
+      signedIn(
+        () =>
+          void handleScreenRequest(req, res, pathname, screenOf).catch(() => {
+            if (!res.headersSent) res.writeHead(500, { 'content-type': 'text/plain' }).end('the screen failed')
+            else res.destroy()
+          }),
+      )
       return
     }
     if (pathname === RPC_PREFIX || pathname.startsWith(`${RPC_PREFIX}/`)) {
-      void rpcMount(req, res)
+      signedIn(() => void rpcMount(req, res))
       return
     }
     // A project's dashboard modules (#1774): only the files of a package the project brings as a module.
@@ -139,8 +169,10 @@ export async function startDashboard(opts: DashboardOptions): Promise<Dashboard>
       void routes()
         .then(async known => {
           const route = known.find(one => pathname === one.path || pathname.startsWith(`${one.path}/`))
-          if (route) await route.handle(req, res)
-          else servePage(req, res, pathname)
+          if (!route) return servePage(req, res, pathname)
+          // A route that checks every caller itself (a token it gave out) is reached signed in or not.
+          if (route.callers === 'own') return void (await route.handle(req, res))
+          signedIn(() => void Promise.resolve(route.handle(req, res)).catch(() => (res.headersSent ? res.destroy() : res.writeHead(500).end())))
         })
         .catch(() => {
           if (!res.headersSent) res.writeHead(500, { 'content-type': 'text/plain' }).end('the route failed')

@@ -4,7 +4,7 @@ import { appendInbox, givenRepos, imagesOf, promptLines, takeInbox } from '../in
 import { deleteRun, findRun, patchRun } from '../record-store.js'
 import { isRunId, type RunCard, type RunPatch } from '../record.js'
 import { PLUGINS_WITHOUT_ENV, PROFILE_ENV, PROJECT_SKILLS_ENV, isSkillName } from './names.js'
-import { originUrl, LOCAL_HOST, MODULE_NAME, PUBLISH_LEVELS, isBranchName, NAME_RUNS, PICKED_AGENT, PICKED_PROFILE, isProfileId, type AgentPick, type ProjectRef, type Settings, type RunFacts, type RunFound, type RunHost, type RunInput, type RunOptions, type RunReadiness, type RunRef, type RunRequest, type InboxLine, type PromptLine, type RunAgent, sessionsHome } from '@openagt/hooks'
+import { callerEnv, originUrl, LOCAL_HOST, MODULE_NAME, PUBLISH_LEVELS, isBranchName, NAME_RUNS, PICKED_AGENT, PICKED_PROFILE, isProfileId, type AgentPick, type ProjectRef, type Settings, type RunFacts, type RunFound, type RunHost, type RunInput, type RunOptions, type RunReadiness, type RunRef, type RunRequest, type InboxLine, type PromptLine, type RunAgent, sessionsHome } from '@openagt/hooks'
 import { sessionFolder, sessionsHomeOf, discardWorktree, worktreePath } from '@openagt/git-branches'
 import { listedRuns, liveCard, ownFolder, runEvents, standing, type RunReadsDeps } from '../reads/run-reads.js'
 import { handedDownSettings, runProfile } from './profile.js'
@@ -429,6 +429,8 @@ function picks(options: RunOptions): Record<string, string> {
   const without = options.plugins?.without
   const project = options.skills?.project
   return {
+    // On a machine shared by a team, who the run is for: the run keeps it on its record.
+    ...callerEnv(options.caller),
     ...(options.github?.account !== undefined ? { [GIT_ACCOUNT_ENV]: options.github.account } : {}),
     ...(profile !== undefined ? { [PROFILE_ENV]: profile } : {}),
     // Set, even to nothing: a session that goes without none of them, where its profile leaves some out.

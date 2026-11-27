@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { configFile, writePrivate } from '../private-files.js'
-import type { AgentAccount, DriverRateWindow } from '@openagt/hooks'
+import { ownedFor, ownerOf, ownsIt, type AgentAccount, type DriverRateWindow, type TeamCaller } from '@openagt/hooks'
 
 // The accounts an agent's runs may use, when a person has more than one: their own login, which the
 // agent keeps where it always does, and the ones added beside it. What an added account's login is,
@@ -65,18 +65,26 @@ export function nameRefused(name: string, accounts: AgentAccount[]): string | un
   return undefined
 }
 
-/** An added account, last in the order, with who it is when that is known. Refused when the name is taken or empty. */
-export function addAccount(name: string, login: string, path: string, now: Date = new Date(), accountId?: string): AgentAccount[] {
+/** An added account, last in the order, with who it is when that is known, and whose (`owner`, on a machine shared by a team). Refused when the name is taken or empty. */
+export function addAccount(name: string, login: string, path: string, now: Date = new Date(), accountId?: string, owner?: string): AgentAccount[] {
   return changeAccounts(accounts => {
     const refused = nameRefused(name, accounts)
     if (refused) throw new Error(refused)
-    return [...accounts, { name: name.trim(), login: login.trim(), ...(accountId !== undefined ? { accountId } : {}), added: now.toISOString() }]
+    return [...accounts, { name: name.trim(), login: login.trim(), ...(accountId !== undefined ? { accountId } : {}), added: now.toISOString(), ...(owner !== undefined ? { owner } : {}) }]
   }, path)
 }
 
 /** The added account named `name` with a new login: signed in to again, it keeps its place and its name. */
 export function replaceLogin(name: string, login: string, path: string): AgentAccount[] {
-  return changeAccounts(accounts => accounts.map(a => (a.name === name && a.login !== undefined ? { name: a.name, login: login.trim(), ...(a.added !== undefined ? { added: a.added } : {}) } : a)), path)
+  return changeAccounts(
+    accounts =>
+      accounts.map(a =>
+        a.name === name && a.login !== undefined
+          ? { name: a.name, login: login.trim(), ...(a.added !== undefined ? { added: a.added } : {}), ...(a.owner !== undefined ? { owner: a.owner } : {}), ...(a.shared ? { shared: a.shared } : {}) }
+          : a,
+      ),
+    path,
+  )
 }
 
 /** The accounts without the added one named `name`. The person's own cannot be removed: the agent has it. */
@@ -153,11 +161,35 @@ export function freesIn(until: number, now: number): string {
   return hours === 0 ? `${rest} min` : rest === 0 ? `${hours} h` : `${hours} h ${rest} min`
 }
 
-/** The accounts as a page shows them: everything but the logins. */
-export type ShownAccount = Omit<AgentAccount, 'login'> & { own: boolean }
+/**
+ * The accounts as a page shows them: everything but the logins. On a machine shared by a team,
+ * only the caller's and the shared ones, each saying whose it is (`of`) and whether the caller
+ * may change it (`mine`).
+ */
+export type ShownAccount = Omit<AgentAccount, 'login'> & { own: boolean; of?: string; mine?: boolean }
 
-export function shownAccounts(accounts: AgentAccount[]): ShownAccount[] {
-  return accounts.map(({ login, ...rest }) => ({ ...rest, own: login === undefined }))
+export function shownAccounts(accounts: AgentAccount[], caller?: TeamCaller): ShownAccount[] {
+  return accounts
+    .filter(a => ownedFor(caller, a))
+    .map(({ login, ...rest }) => ({ ...rest, own: login === undefined, ...(caller ? { of: ownerOf(caller, rest), mine: ownsIt(caller, rest) } : {}) }))
+}
+
+/** The account named `name` shared with the team, or not. Only its owner shares it. */
+export function shareAccount(name: string, shared: boolean, caller: TeamCaller, path: string): AgentAccount[] {
+  return changeAccounts(accounts => {
+    const account = accounts.find(a => a.name === name)
+    if (!account || !ownsIt(caller, account)) throw new Error(`There is no account of yours named ${name}.`)
+    return accounts.map(a => {
+      if (a !== account) return a
+      const { shared: _was, ...rest } = a
+      return shared ? { ...rest, shared: true as const } : rest
+    })
+  }, path)
+}
+
+/** The accounts a run started for `caller` may use: theirs and the shared ones. All of them, with no caller. */
+export function accountsFor(accounts: AgentAccount[], caller: TeamCaller | undefined): AgentAccount[] {
+  return accounts.filter(a => ownedFor(caller, a))
 }
 
 /** Whether the person added an account to `list` beside the login its agent keeps. */

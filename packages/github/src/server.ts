@@ -4,7 +4,8 @@ import { nodeGitRunner, originDefaultBranch, currentBranch, isSafeAgentId, origi
 import { forgetRequests, isWorking, prHandoffOf, readRunPr, requestText, type PrHandoff } from './handoff.js'
 import { homeUrlFor } from './home.js'
 import { cachedPrStates, holdRequest, requestsRead } from './pulls.js'
-import { HOST } from './accounts.js'
+import { HOST, picksPath } from './accounts.js'
+import { accountsFor, addingFor, mayForget, shareAs, useForRunsAs } from './team.js'
 import type { GithubAccounts } from './cli.js'
 import { accountsChanged, cliAnswer, githubAccounts } from './host-accounts.js'
 import { addOwner, readHosted, readOwners, removeOwner, type HostedRead } from './hosted.js'
@@ -30,7 +31,8 @@ export interface AccountsRead extends GithubAccounts {
 /** OpenAgent's GitHub accounts and what is missing for them: the last answer, the accounts read again behind it. */
 export const accounts = read(async (host: RpcHost): Promise<AccountsRead> => {
   const [read, projects] = await Promise.all([githubAccounts(), host.projects().catch(() => [])])
-  return { ...read, projects: projects.filter(project => project.remote?.split('/')[0] === HOST).map(project => project.name) }
+  // On a machine shared by a team, the caller's and the shared ones (team.ts).
+  return { ...accountsFor(read, host.caller), projects: projects.filter(project => project.remote?.split('/')[0] === HOST).map(project => project.name) }
 })
 
 /** A press of the accounts' own commands: what is read of them after it is read after it. */
@@ -41,20 +43,47 @@ async function press(args: string[]): Promise<Pressed> {
 }
 
 /** Runs use `login`, one of OpenAgent's own accounts, from now on. */
-export const useForRuns = act(async (_host: RpcHost, { login }: { login: string }): Promise<Pressed> => press(['use', String(login)]))
+export const useForRuns = act(async (host: RpcHost, { login }: { login: string }): Promise<Pressed> => {
+  // On a machine shared by a team, each person picks for their own runs.
+  if (host.caller) {
+    const all = (await githubAccounts()).accounts.map(account => account.login)
+    return teamPress(() => useForRunsAs(host.caller!, String(login), all, picksPath()))
+  }
+  return press(['use', String(login)])
+})
+
+/** On a machine shared by a team: whose an account is the caller's to share, or not. */
+export const share = act(async (host: RpcHost, { login, on }: { login: string; on: boolean }): Promise<Pressed> => {
+  if (!host.caller) return { ok: false, error: 'Sharing is for a machine shared by a team.' }
+  return teamPress(() => shareAs(host.caller!, String(login), on === true, picksPath()))
+})
+
+/** A change of the team's word on the accounts: what is read of them after it is read after it. */
+function teamPress(change: () => void): Pressed {
+  try {
+    change()
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+  accountsChanged()
+  return { ok: true }
+}
 
 /**
  * Take an account off, on this computer: gh forgets it, and its token goes on working wherever
  * else it is. The account runs use is not taken off: another is picked first.
  */
-export const forget = act(async (_host: RpcHost, { login }: { login: string }): Promise<Pressed> => {
-  const runs = (await githubAccounts()).accounts.find(account => account.runs)
+export const forget = act(async (host: RpcHost, { login }: { login: string }): Promise<Pressed> => {
+  if (!mayForget(host.caller, String(login))) return { ok: false, error: `@${login} is someone else’s: only they take it off.` }
+  const runs = accountsFor(await githubAccounts(), host.caller).accounts.find(account => account.runs)
   if (runs?.login === login) return { ok: false, error: `Runs use @${login}: pick another account for runs first.` }
   return press(['forget', String(login)])
 })
 
 /** Log another account in, in the browser: the code the person types, and where. */
-export const login = act(async (): Promise<{ ok: true; code: string; url: string } | { ok: false; error: string }> => {
+export const login = act(async (host: RpcHost): Promise<{ ok: true; code: string; url: string } | { ok: false; error: string }> => {
+  // On a machine shared by a team, the account this login adds is the caller's.
+  addingFor(host.caller)
   const done = await cliAnswer(['login'])
   accountsChanged()
   if (!done.ok) return done

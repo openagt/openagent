@@ -12,6 +12,9 @@ import { distributionHooks, localHostOf } from './distribution-hooks.js'
 import { type Hooks, type ProjectRef, type RunHost, sessionsHome } from '@openagt/hooks'
 import { readSecureAddress, SECURE_PORT, type SecureAddress } from './secure-address.js'
 import type { StartedProject } from './dashboard/types.js'
+import { teamGate } from './team/team-gate.js'
+import { teamPath, teamStore } from './team/team-file.js'
+import { githubSignIn } from './team/github-sign-in.js'
 
 /**
  * The dashboard process (#302). It is a pure projection of files: a run's tool keeps the run's
@@ -117,6 +120,8 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
       projectState: projectStateReader({ hooks: async () => hooks }),
     },
     screen: runtime.screenOf,
+    // Team mode (a machine shared by a team): off until its owner turns it on in Settings › Team.
+    team: teamGate(teamStore(teamPath(env)), githubSignIn()),
     // What the modules on answer on the dashboard's address (`app.route`): a host's bridge, say.
     routes: () => hooks.routes(),
     ...(clientBundleDir ? { clientBundleDir } : {}),

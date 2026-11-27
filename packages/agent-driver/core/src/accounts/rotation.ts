@@ -1,5 +1,5 @@
-import { accountsPath, freesIn, isLimited, markLimited, noteWindows, pickAccount, readAccounts, usableAccounts, withLogin } from './accounts.js'
-import type { AccountRotation, AccountTurn, AgentAccount, AgentLogins, DriverTurn, RotatedTurn } from '@openagt/hooks'
+import { accountsFor, accountsPath, freesIn, isLimited, markLimited, noteWindows, pickAccount, readAccounts, usableAccounts, withLogin } from './accounts.js'
+import type { AccountRotation, AccountTurn, AgentAccount, AgentLogins, DriverTurn, RotatedTurn, TeamCaller } from '@openagt/hooks'
 
 // The rotation a driver is handed (`AccountRotation` in `agent-driver`): a turn runs on the first
 // free account of the list, and one its account's limit stops goes on, the same conversation, with
@@ -14,6 +14,8 @@ export interface AccountsOption {
   prefer?: string
   /** The accounts this session may use, by name, in the file's order: a project's own few. All of them when unsaid, or when none of these is there any more. */
   only?: readonly string[]
+  /** On a machine shared by a team, who the run is for: only their accounts and the shared ones are taken. */
+  caller?: TeamCaller
   /** The clock, for tests. */
   now?: () => number
   /** Whether the agent has a login of the person's own here. Default what it keeps in the session's environment ({@link AgentLogins.ownLoginThere}). */
@@ -59,7 +61,7 @@ function allLimited(accounts: AgentAccount[], agent: string, now: number): strin
  */
 export async function turnOnAccounts(on: TurnOnAccounts): Promise<DriverTurn> {
   const now = on.option.now ?? Date.now
-  const usable = (all: AgentAccount[]): AgentAccount[] => withLogin(usableAccounts(all, on.option.only), on.ownThere ?? true, on.addedThere)
+  const usable = (all: AgentAccount[]): AgentAccount[] => withLogin(usableAccounts(accountsFor(all, on.option.caller), on.option.only), on.ownThere ?? true, on.addedThere)
   const ended = (result: AccountTurn): DriverTurn => {
     if (result.turn === undefined) throw result.failure
     return result.turn
@@ -97,7 +99,8 @@ export function accountRotation(logins: Pick<AgentLogins, 'list' | 'service' | '
   const ownThere = (env: NodeJS.ProcessEnv): boolean => (option.ownLoginThere ?? logins.ownLoginThere)(env)
   const addedThere = (env: NodeJS.ProcessEnv) => (account: AgentAccount): boolean => logins.addedLoginThere?.(account, env) !== false
   return {
-    first: env => pickAccount(withLogin(readAccounts(path(env)), ownThere(env), addedThere(env)), (option.now ?? Date.now)(), option.prefer),
+    // The one a session starts on, among the ones it may take: its person's and the shared ones, of the ones its profile names.
+    first: env => pickAccount(withLogin(usableAccounts(accountsFor(readAccounts(path(env)), option.caller), option.only), ownThere(env), addedThere(env)), (option.now ?? Date.now)(), option.prefer),
     turn: (env, on) => turnOnAccounts({ ...on, option, path: path(env), agent: logins.service, ownThere: ownThere(env), addedThere: addedThere(env) }),
   }
 }

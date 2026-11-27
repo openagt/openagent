@@ -1,3 +1,4 @@
+import type { TeamCaller } from './team.js'
 import type { DriverReadiness, InboxLine, Question, RunAgent } from './agent.js'
 import type { RunFeedEvent } from './run-event.js'
 import type { ProjectRef } from './project.js'
@@ -24,6 +25,8 @@ export interface RunOptions {
   publish?: Publish
   plugins?: PluginsOptions
   profiles?: ProfilesOptions
+  /** On a machine shared by a team, who the run is for: their logins, and the shared ones, are the ones it uses. Set by the app, never picked. */
+  caller?: TeamCaller
 }
 
 /** agent-driver's slice: the coding agent, its model and effort, and the accounts its turns take. */

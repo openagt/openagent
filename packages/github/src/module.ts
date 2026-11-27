@@ -2,11 +2,12 @@ import { realpathSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 import { errorMessage, nodeGitRunner, sessionFolder } from '@openagt/git-branches'
-import { sessionsHome, remoteHostOf, defineModule, PICKED_GITHUB_ACCOUNT, RunOrder, runName, type AttentionItem, type GitAccess, type ModuleDefinition, type PullRequest, type RunAccount, type RunSummary, type RunContext } from '@openagt/hooks'
+import { noreplyEmail, sessionsHome, remoteHostOf, defineModule, PICKED_GITHUB_ACCOUNT, RunOrder, runName, type AttentionItem, type GitAccess, type ModuleDefinition, type PullRequest, type RunAccount, type RunSummary, type RunContext } from '@openagt/hooks'
 import { cachedOpenPrs, cachedPrStates, mergeLookup, requestsRead, type OpenPr } from './pulls.js'
 
 export type { OpenPr } from './pulls.js'
-import { HOST, readFacts, runEnv } from './accounts.js'
+import { HOST, accountLogins, accountsRoot, readFacts, runEnv } from './accounts.js'
+import { loginsFor, teamLogin } from './team.js'
 import { nodeGhRunner } from './gh.js'
 import { homeUrlFor } from './home.js'
 import { ADD_ACCOUNT } from './ids.js'
@@ -190,6 +191,22 @@ async function workAsAccount(ctx: RunContext, onGithub: (dir: string) => Promise
   const dir = ctx.project?.dir ?? homedir()
   const commitsIn: CommitsIn = ctx.project ? { project: ctx.project.dir, ...(ctx.options['git-branches']?.repos?.length ? { session: ctx.id } : {}) } : { session: ctx.id }
   const kept = picked === undefined ? await ctx.settings.get(PICKED_GITHUB_ACCOUNT).catch(() => undefined) : undefined
+  // On a machine shared by a team, the run works as an account of its person's, or a shared one (team.ts): never someone else's.
+  const caller = ctx.options.caller
+  if (caller) {
+    const all = accountLogins(accountsRoot(process.env))
+    const keptOk = kept !== undefined && loginsFor(caller, all).includes(kept) ? kept : undefined
+    const login = teamLogin(caller, picked ?? keptOk, all)
+    if (login === undefined) {
+      if (!ctx.project) return
+      throw new Error(`You have no GitHub account on this machine: add yours in Permissions, or ask @${caller.teamOwner} to share one.`)
+    }
+    const working = await workAs(dir, login, commitsIn)
+    // Its commits are by its person, as GitHub knows them; the account they go out as commits them.
+    Object.assign(ctx.env, working.env, { GIT_AUTHOR_NAME: caller.name ?? caller.login, GIT_AUTHOR_EMAIL: noreplyEmail(caller) })
+    ctx.facts.github = { ...ctx.facts.github, account: working.login }
+    return
+  }
   let working: WorkingAs
   try {
     working = await workAs(dir, picked ?? kept, commitsIn).catch(err => (kept !== undefined ? workAs(dir, undefined, commitsIn) : Promise.reject(err)))

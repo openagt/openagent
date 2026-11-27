@@ -4,7 +4,7 @@ import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { codingAgent } from '../agents.js'
 import { findRun } from '../record-store.js'
-import { createHooks, DISTRIBUTION_ENV, loadHandedDown, type DistributionEntry, type Driver, type DriverReadiness, type PersonalSetup, type Profile, type RunAgent } from '@openagt/hooks'
+import { CALLER_ENV, createHooks, DISTRIBUTION_ENV, loadHandedDown, type DistributionEntry, type TeamCaller, type Driver, type DriverReadiness, type PersonalSetup, type Profile, type RunAgent } from '@openagt/hooks'
 import { readPersonal } from './config.js'
 import { runProfile, type SessionPicks } from './profile.js'
 import { gitHostEnv, hasGitHost } from './git-host.js'
@@ -207,6 +207,8 @@ export interface ProjectRun extends RunRequest {
   profile?: string
   /** The session's picks: the plugins the run goes without, the project's skills it gets. */
   picks?: SessionPicks
+  /** On a machine shared by a team, who the run is for ({@link CALLER_ENV}): their logins and the shared ones are the ones it takes. */
+  caller?: TeamCaller
   log?: (line: string) => void
 }
 
@@ -219,7 +221,7 @@ export interface ProjectRun extends RunRequest {
 export async function runProject(repo: string, opts: ProjectRun, deps: { modules?: readonly DistributionEntry[] } = {}): Promise<RunOutcome> {
   const modules = deps.modules ?? (await distributionModules())
   // What the run is asked, its start, its profile and its log go on to it as they are; the rest is read here.
-  const { id: given, mark, driver, gitAccount, picks = {}, ...rest } = opts
+  const { id: given, mark, driver, gitAccount, picks = {}, caller, ...rest } = opts
   const id = given ?? runIdFrom(new Date().toISOString())
   const log = rest.log ?? (() => {})
   const agent = await codingAgent(driver, modules)
@@ -231,7 +233,7 @@ export async function runProject(repo: string, opts: ProjectRun, deps: { modules
   const marked = given !== undefined && mark !== true
   // The name is asked for first of all: the run's account at the git host is read by its first
   // step, which takes a second or more, and is nothing the small model naming the run needs.
-  const naming = namedAtStart({ ...rest, marked }) ? askName(driverFor(agent, undefined, setup, accounts), rest.prompt) : undefined
+  const naming = namedAtStart({ ...rest, marked }) ? askName(driverFor(agent, undefined, setup, accounts, caller), rest.prompt) : undefined
   const asked = gitAccount ?? (await profileLoginFor(repo, profile))
   return runCommand(repo, {
     ...rest,
@@ -239,8 +241,9 @@ export async function runProject(repo: string, opts: ProjectRun, deps: { modules
     id,
     modules,
     marked,
-    driver: driverFor(agent, id, setup, accounts),
+    driver: driverFor(agent, id, setup, accounts, caller),
     profileOptions: profile.options,
+    ...(caller !== undefined ? { startedFor: caller } : {}),
     ...(asked !== undefined ? { gitAccount: asked } : {}),
     ...(picks.without !== undefined ? { pluginsWithout: picks.without } : {}),
     ...(picks.project !== undefined ? { projectSkills: picks.project } : {}),
@@ -278,7 +281,7 @@ export async function resumeProject(
     ...(opts.by !== undefined ? { by: opts.by } : {}),
     ...(opts.publish !== undefined ? { publish: publishChange(opts.publish) ?? null } : {}),
     ...(opts.repos !== undefined && opts.repos.length > 0 ? { repos: opts.repos } : {}),
-    driver: (deps.driverFor ?? driverFor)(agent, opts.id, setup, accounts),
+    driver: (deps.driverFor ?? driverFor)(agent, opts.id, setup, accounts, previous?.startedFor),
     profileOptions: profile.options,
     ...(opts.log ? { log: opts.log } : {}),
   })
@@ -342,7 +345,7 @@ export function accountsOn(profile: Pick<Profile, 'options'>, agent: Pick<RunAge
  * its checkout (a dashboard to try its change) would take them for its own runs' picks, and
  * refuse to continue any of them.
  */
-export const RUN_PICKS_ENV: readonly string[] = [ACCOUNT_ENV, GIT_ACCOUNT_ENV, PROFILE_ENV, PLUGINS_WITHOUT_ENV, PROJECT_SKILLS_ENV, NAME_FILE_ENV]
+export const RUN_PICKS_ENV: readonly string[] = [ACCOUNT_ENV, GIT_ACCOUNT_ENV, PROFILE_ENV, PLUGINS_WITHOUT_ENV, PROJECT_SKILLS_ENV, NAME_FILE_ENV, CALLER_ENV]
 
 /**
  * The driver of a run on `agent`, as the agent builds it for a run: unrestricted, as nobody is
@@ -352,14 +355,15 @@ export const RUN_PICKS_ENV: readonly string[] = [ACCOUNT_ENV, GIT_ACCOUNT_ENV, P
  *
  * The coding agent starts with the person's own setup, as when started by hand, less the parts
  * this machine's config turns off (`personal:` in `config.ts`). How a part is turned off is the
- * agent's own business. `only` is the accounts of its list the run takes, all of them when absent.
+ * agent's own business. `only` is the accounts of its list the run takes, all of them when absent;
+ * `caller`, on a machine shared by a team, whom the run is for: only theirs and the shared ones.
  */
-export function driverFor(agent: RunAgent, id: string | undefined, personal: PersonalSetup, only?: string[]): Driver {
+export function driverFor(agent: RunAgent, id: string | undefined, personal: PersonalSetup, only?: string[], caller?: TeamCaller): Driver {
   // Without an id, a driver for no run's agent: a session that only names one.
   const env: NodeJS.ProcessEnv = Object.fromEntries(Object.entries(process.env).filter(([name]) => !RUN_PICKS_ENV.includes(name)))
   if (id !== undefined) env[AGENT_ID_ENV] = id
   // On the computer's accounts of the agent's list, or the few the run's profile names, the next free one taking over at a limit; the one to start on, when whoever started the run said.
   const prefer = process.env[ACCOUNT_ENV]?.trim()
-  const accounts = agent.accounts ? accountRotation(agent.accounts, { ...(prefer ? { prefer } : {}), ...(only ? { only } : {}) }) : undefined
+  const accounts = agent.accounts ? accountRotation(agent.accounts, { ...(prefer ? { prefer } : {}), ...(only ? { only } : {}), ...(caller ? { caller } : {}) }) : undefined
   return agent.driver({ env, personal, ...(accounts ? { accounts } : {}) })
 }

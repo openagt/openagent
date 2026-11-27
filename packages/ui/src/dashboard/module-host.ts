@@ -1,4 +1,5 @@
 import { pathToFileURL } from 'node:url'
+import { currentCaller } from '../team/caller.js'
 import { isRunId } from '../store/index.js'
 import { pullRequestsRead } from './pr-states.js'
 import type { GitAccounts, Hooks, ProjectRef, RunFacts, RunFound, RunQuestion, InboxLine } from '@openagt/hooks'
@@ -48,6 +49,8 @@ export function computerHost(app: AppOfHost, deps: ComputerHostDeps): RpcCompute
     projects: deps.projects,
     accounts: deps.accounts,
     gitAccess: remote => app.gitAccess(remote),
+    // Who the call is for, on a machine shared by a team (team/caller.ts).
+    ...(currentCaller() ? { caller: currentCaller()! } : {}),
     lifecycle: {
       added: project => app.lifecycle.added(project),
       refusal: project => app.lifecycle.refusal(project),
