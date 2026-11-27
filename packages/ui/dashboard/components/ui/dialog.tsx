@@ -19,9 +19,13 @@ import { InSection } from './section.js'
 // A field the dialog opens on is `initialFocus`, never `autoFocus`: React focuses an `autoFocus`
 // field before Base UI notes the press that opened the dialog, which it gives the focus back to.
 
-/** The dim behind a dialog, which fades in and out with it. */
+/**
+ * The dim behind a dialog, which fades in and out with it: shadcn's, a light dim over the page
+ * blurred. Chrome on a Mac drops a blurred layer for a frame while what is under it moves: the
+ * page's own motion stands still while a dialog's dim is up (tailwind.css, `.dialog-dim`).
+ */
 export const BACKDROP_CLASS =
-  'fixed inset-0 z-50 bg-black/40 transition-opacity duration-180 data-[ending-style]:duration-120 data-[starting-style]:opacity-0 data-[ending-style]:opacity-0'
+  'dialog-dim fixed inset-0 isolate z-50 bg-black/10 supports-backdrop-filter:backdrop-blur-xs transition-opacity duration-180 data-[ending-style]:duration-120 data-[starting-style]:opacity-0 data-[ending-style]:opacity-0'
 
 /**
  * Where a dialog stands: in the window's middle, grown in 180ms and gone in 120ms; on a phone, a
