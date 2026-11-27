@@ -42,11 +42,10 @@ export function Avatar({ person, dot = false, size = 'size-5 text-xs', className
 
 export function PersonMenu({ onSettings }: { onSettings: (entry?: string) => void }) {
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
-  const own = usePerson().person
-  // On a machine shared by a team, the person is who signed in with GitHub.
+  // On a machine shared by a team, the person is who signed in with GitHub (`onPerson`), and the menu signs them out.
+  const { person } = usePerson()
   const { team } = useTeam()
   const signedIn = team.on ? team.person : undefined
-  const person: Person | null = signedIn ? { name: signedIn.name ?? signedIn.login, login: signedIn.login, ...(signedIn.avatar ? { avatar: signedIn.avatar } : {}) } : own
   // What the modules say needs the person on this computer (`app.attention`): listed here, each opening its fix, and the dot on the picture.
   // Beside them, what a module offers on this computer: a note with a press (a coding agent's newer version, and its update).
   const about = (useAttention(null) ?? []).filter(item => item.scope === 'computer')

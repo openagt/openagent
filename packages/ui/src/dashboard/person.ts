@@ -20,6 +20,8 @@ export interface Person {
   login?: string
   /** Whether the person set their name in OpenAgent, rather than it being the computer's. */
   own?: true
+  /** On a machine shared by a team: they are who signed in with GitHub, whose name and picture are GitHub's, as of their last sign-in. */
+  team?: true
 }
 
 /** The person this computer's OpenAgent knows: their own name and picture, else git's name or this computer's user; and git's email, which their runs are kept under. */

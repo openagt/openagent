@@ -135,7 +135,8 @@ describe('PersonMenu: what a module offers here', () => {
 
 describe('PersonMenu on a machine shared by a team', () => {
   test('the person is who signed in with GitHub, and the menu signs them out', async () => {
-    onPerson.mockResolvedValue({ name: 'Computer Owner' })
+    // The shell reads the person signed in (`onPerson`); the team says where they are signed in, for Sign out.
+    onPerson.mockResolvedValue({ name: 'Suleiman Shahbari', login: 'suleimansh', team: true })
     const { TeamContext } = await import('../lib/team.js')
     const team = { on: true as const, name: 'experiment', owner: { login: 'nitedani', id: 1 }, person: { login: 'suleimansh', id: 2, name: 'Suleiman Shahbari' }, members: [] }
     render(

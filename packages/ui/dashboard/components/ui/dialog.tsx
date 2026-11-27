@@ -21,7 +21,7 @@ import { InSection } from './section.js'
 
 /** The dim behind a dialog, which fades in and out with it. */
 export const BACKDROP_CLASS =
-  'fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px] transition-opacity duration-180 data-[ending-style]:duration-120 data-[starting-style]:opacity-0 data-[ending-style]:opacity-0'
+  'fixed inset-0 z-50 bg-black/40 transition-opacity duration-180 data-[ending-style]:duration-120 data-[starting-style]:opacity-0 data-[ending-style]:opacity-0'
 
 /**
  * Where a dialog stands: in the window's middle, grown in 180ms and gone in 120ms; on a phone, a

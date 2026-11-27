@@ -10,6 +10,8 @@ export interface TeamCaller {
   name?: string
   /** GitHub's number for them: their commits' address (`<id>+<login>@users.noreply.github.com`). */
   id?: number
+  /** Their picture on GitHub, as of their last sign-in: an https address. */
+  avatar?: string
   /** Whether they own the machine's team: what was on the machine before Team mode is theirs. */
   owner: boolean
   /** The team owner's GitHub username: whose what has no owner is. */
@@ -56,7 +58,14 @@ export function teamCallerOf(value: unknown): TeamCaller | undefined {
   if (typeof value !== 'object' || value === null) return undefined
   const parsed = value as Partial<TeamCaller>
   if (typeof parsed.login !== 'string' || typeof parsed.owner !== 'boolean' || typeof parsed.teamOwner !== 'string') return undefined
-  return { login: parsed.login, owner: parsed.owner, teamOwner: parsed.teamOwner, ...(typeof parsed.name === 'string' ? { name: parsed.name } : {}), ...(typeof parsed.id === 'number' ? { id: parsed.id } : {}) }
+  return {
+    login: parsed.login,
+    owner: parsed.owner,
+    teamOwner: parsed.teamOwner,
+    ...(typeof parsed.name === 'string' ? { name: parsed.name } : {}),
+    ...(typeof parsed.id === 'number' ? { id: parsed.id } : {}),
+    ...(typeof parsed.avatar === 'string' && parsed.avatar.startsWith('https://') ? { avatar: parsed.avatar } : {}),
+  }
 }
 
 /** The environment that says `caller` to a command: none for no caller. */
@@ -72,4 +81,20 @@ export function ownerOf(caller: TeamCaller, owned: { owner?: string }): string {
 /** GitHub's own address for a person: what their runs are kept under and their commits are by, on a machine shared by a team. */
 export function noreplyEmail(caller: Pick<TeamCaller, 'login' | 'id'>): string {
   return caller.id !== undefined ? `${caller.id}+${caller.login}@users.noreply.github.com` : `${caller.login}@users.noreply.github.com`
+}
+
+/**
+ * Who this process acts for now. In a session's own process and a module's command, the one its
+ * environment says ({@link CALLER_ENV}); the dashboard, which acts for each request's caller in
+ * turn, tells it where to ask ({@link readCallersWith}). What a setting kept per person reads.
+ */
+let callerNowIs: () => TeamCaller | undefined = () => callerFromEnv(process.env)
+
+export function callerNow(): TeamCaller | undefined {
+  return callerNowIs()
+}
+
+/** Ask `read` who this process acts for now: the dashboard's request at work. */
+export function readCallersWith(read: () => TeamCaller | undefined): void {
+  callerNowIs = read
 }

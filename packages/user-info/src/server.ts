@@ -10,6 +10,7 @@ import { publicProfile, type ProfileOutcome } from '@openagt/github'
 
 /** Call the person `name` in OpenAgent, on every computer of theirs: the picture stays as it was. */
 export const saveName = act(async (host: RpcComputerHost, input: { name: string }): Promise<void> => {
+  fromGitHub(host)
   if (!isPersonName(input.name)) throw new Error('A name is one line of at most 60 characters.')
   const kept = await host.settings.get(PERSON_INFO)
   await host.settings.set(PERSON_INFO, { ...kept, name: input.name.trim() })
@@ -17,9 +18,18 @@ export const saveName = act(async (host: RpcComputerHost, input: { name: string 
 
 /** Show no picture of the person: their initials instead. */
 export const removePicture = act(async (host: RpcComputerHost, _input: object): Promise<void> => {
+  fromGitHub(host)
   const { picture, ...kept } = await host.settings.get(PERSON_INFO)
   if (picture !== undefined) await host.settings.set(PERSON_INFO, kept)
 })
+
+/**
+ * On a machine shared by a team, a person's name and picture are their GitHub account's, from
+ * their sign-in: the one kept here is the machine owner's, and nobody signed in changes it.
+ */
+function fromGitHub(host: RpcComputerHost): void {
+  if (host.caller) throw new Error('On a shared machine, your name and picture are your GitHub account’s.')
+}
 
 /** What copying a GitHub profile did: whether the person's name or picture changed, and the login GitHub answered for. */
 export interface Copied {
@@ -33,6 +43,7 @@ export interface Copied {
  */
 export function copyingFrom(profile: (login: string) => Promise<ProfileOutcome>) {
   return async (host: RpcComputerHost, input: { login: string }): Promise<Copied> => {
+    fromGitHub(host)
     const login = typeof input.login === 'string' ? input.login.trim().replace(/^@/, '') : ''
     if (!login) throw new Error('Type a GitHub login.')
     const said = await profile(login)

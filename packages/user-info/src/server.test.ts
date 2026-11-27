@@ -57,3 +57,11 @@ test('a profile with no name keeps the name the person set, and one with no pict
   assert.deepEqual(await copy(host, { login: 'ada' }), { changed: true, login: 'Ada' })
   assert.deepEqual(await host.settings.get(PERSON_INFO), { name: 'Ada', picture: 'https://avatars.example/ada.png', login: 'Ada' })
 })
+
+test('on a machine shared by a team, nobody signed in changes the name and picture kept here: theirs are GitHub’s', async () => {
+  const host = { ...computer(), caller: { login: 'brillout', owner: false, teamOwner: 'suleimansh' } }
+  await assert.rejects(async () => saveName(host, { name: 'Rom' }), /your name and picture are your GitHub account’s/)
+  await assert.rejects(async () => removePicture(host, {}), /GitHub account’s/)
+  await assert.rejects(async () => github({}).copy(host, { login: 'brillout' }), /GitHub account’s/)
+  assert.deepEqual(await host.settings.get(PERSON_INFO), {})
+})
